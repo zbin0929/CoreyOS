@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Caduceus",
+    "name": "Corey",
     "tagline": "Control plane for AI agents"
   },
   "nav": {
@@ -19,9 +19,12 @@
   },
   "topbar": {
     "profile": "Profile",
+    "model_unknown": "no model",
+    "change_model": "Change default model",
     "gateway_connected": "Gateway online",
     "gateway_disconnected": "Gateway offline",
     "gateway_unknown": "Gateway unknown",
+    "gateway_click_to_refresh": "click to re-probe",
     "open_palette": "Open command palette",
     "toggle_theme": "Toggle theme"
   },
@@ -38,7 +41,7 @@
     }
   },
   "home": {
-    "title": "Welcome to Caduceus",
+    "title": "Welcome to Corey",
     "subtitle": "A control plane for AI agents — beautiful, fast, and not locked to one.",
     "cta_connect": "Connect to Hermes",
     "cta_docs": "Read the docs"

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Caduceus",
+  "productName": "Corey",
   "version": "0.0.1",
   "identifier": "com.caduceus.app",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Caduceus",
+        "title": "Corey",
         "width": 1280,
         "height": 820,
         "minWidth": 800,
@@ -42,6 +42,6 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "Control plane for AI agents",
-    "longDescription": "Caduceus is a desktop control plane for AI agents. Phase 0 dev build."
+    "longDescription": "Corey is a desktop control plane for AI agents. Phase 0 dev build."
   }
 }

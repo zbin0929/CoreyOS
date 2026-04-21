@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@/lib/i18n';
 import { useChatStore } from '@/stores/chat';
 import { useUIStore } from '@/stores/ui';
+import { useAppStatusStore } from '@/stores/appStatus';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,15 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
     const s = useChatStore.getState();
     if (!s.hydrated) void s.hydrateFromDb();
+  }, []);
+
+  // Resolve the current default model + start the gateway-health poll so the
+  // topbar badge flips from "unknown" to online/offline within a second of
+  // boot. Cleanup on unmount (StrictMode double-mount is fine — start is
+  // idempotent, and the cleanup just clears our single interval).
+  useEffect(() => {
+    useAppStatusStore.getState().startBackgroundRefresh();
+    return () => useAppStatusStore.getState().stopBackgroundRefresh();
   }, []);
 
   // Apply theme on mount

@@ -4,7 +4,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { NAV } from '@/app/nav-config';
-import { CaduceusMark } from '@/components/ui/caduceus-mark';
+import { CoreyMark } from '@/components/ui/corey-mark';
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -20,8 +20,8 @@ export function Sidebar() {
         data-tauri-drag-region
         className="flex h-12 items-center gap-2 border-b border-border pl-20 pr-4 select-none"
       >
-        <CaduceusMark className="h-5 w-5 text-gold-500" />
-        <span className="text-md font-semibold text-fg tracking-tight">Caduceus</span>
+        <CoreyMark className="h-5 w-5" />
+        <span className="text-md font-semibold text-fg tracking-tight">{t('app.name')}</span>
       </div>
 
       {/* Primary nav */}
@@ -52,7 +52,7 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto p-3 text-[10px] text-fg-subtle">
-        <div>Caduceus dev build</div>
+        <div>{t('app.name')} dev build</div>
         <div className="mt-0.5 font-mono">Phase 0 · foundation</div>
       </div>
     </aside>

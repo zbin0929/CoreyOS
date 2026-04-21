@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, Plug, Sparkles, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { CaduceusMark } from '@/components/ui/caduceus-mark';
+import { CoreyMark } from '@/components/ui/corey-mark';
 import { homeStats, type HomeStats } from '@/lib/ipc';
 
 export function HomeRoute() {
@@ -28,7 +28,7 @@ export function HomeRoute() {
       />
 
       <div className="relative z-10 flex max-w-2xl flex-col items-center gap-6 text-center">
-        <CaduceusMark className="h-14 w-14 text-gold-500" />
+        <CoreyMark className="h-20 w-20 shadow-lg ring-1 ring-white/10" />
         <div className="flex flex-col gap-3">
           <h1 className="text-display font-semibold leading-tight tracking-tight text-fg">
             {t('home.title')}

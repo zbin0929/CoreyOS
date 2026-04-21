@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Caduceus",
+    "name": "科里",
     "tagline": "AI Agent 控制台"
   },
   "nav": {
@@ -19,9 +19,12 @@
   },
   "topbar": {
     "profile": "Profile",
+    "model_unknown": "未指定模型",
+    "change_model": "更改默认模型",
     "gateway_connected": "Gateway 在线",
     "gateway_disconnected": "Gateway 离线",
     "gateway_unknown": "Gateway 未知",
+    "gateway_click_to_refresh": "点击重新探测",
     "open_palette": "打开命令面板",
     "toggle_theme": "切换主题"
   },
@@ -69,7 +72,7 @@
     }
   },
   "home": {
-    "title": "欢迎来到 Caduceus",
+    "title": "欢迎来到 科里",
     "subtitle": "一个面向 AI Agent 的控制台 —— 美观、迅捷、不绑定单一 agent。",
     "cta_connect": "连接到 Hermes",
     "cta_docs": "阅读文档"

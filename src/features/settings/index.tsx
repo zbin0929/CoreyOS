@@ -138,7 +138,7 @@ export function SettingsRoute() {
             <form onSubmit={onSubmit} className="flex flex-col gap-6">
               <Section
                 title="Gateway"
-                description="Where Caduceus sends chat requests. Changes take effect immediately — no restart needed."
+                description="Where Corey sends chat requests. Changes take effect immediately — no restart needed."
               >
                 <Field label="Base URL" hint="Example: http://127.0.0.1:8642">
                   <input

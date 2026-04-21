@@ -7,6 +7,7 @@ import {
   dbToolCallAppend,
   type DbSessionWithMessages,
 } from '@/lib/ipc';
+import { useAppStatusStore } from './appStatus';
 
 export interface UiMessage {
   id: string;
@@ -175,9 +176,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   newSession: () => {
     const id = newId('s');
     const now = Date.now();
+    // Stamp the current default model onto the session row so Analytics can
+    // group by `model` instead of lumping everything under `unknown`. This
+    // reads the cached value populated by `appStatus.refreshModel` at boot;
+    // if the app hasn't resolved a model yet we still write `null` (which
+    // SQL's `COALESCE(NULLIF(...), 'unknown')` catches cleanly).
+    const defaultModel = useAppStatusStore.getState().currentModel;
     const session: ChatSession = {
       id,
       title: 'New chat',
+      model: defaultModel,
       messages: [],
       createdAt: now,
       updatedAt: now,
@@ -191,7 +199,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       dbSessionUpsert({
         id,
         title: session.title,
-        model: null,
+        model: defaultModel,
         created_at: now,
         updated_at: now,
       }),
