@@ -12,6 +12,7 @@
 mod adapters;
 mod config;
 mod error;
+mod hermes_config;
 mod ipc;
 mod sandbox;
 mod state;
@@ -62,6 +63,8 @@ pub fn run() {
             ipc::config::config_get,
             ipc::config::config_set,
             ipc::config::config_test,
+            ipc::hermes_config::hermes_config_read,
+            ipc::hermes_config::hermes_config_write_model,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

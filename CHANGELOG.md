@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 4: Hermes config integration (the real LLM knob)
+
+### Context
+
+Hermes Gateway's `/v1/models` returns only `hermes-agent` — the gateway wraps itself as a single virtual model. The actual LLM (DeepSeek, OpenAI, etc.) is configured inside Hermes at `~/.hermes/config.yaml` and its API keys live in `~/.hermes/.env`. Sprint 3's Models page showed `/v1/models` output, which was technically correct but practically useless for switching the underlying LLM.
+
+### Shipped
+
+- **Rust `hermes_config.rs`**: reads `~/.hermes/config.yaml` via `serde_yaml::Value` (preserving all non-`model` fields verbatim so user-edited bits like `fallback_providers`, `auxiliary.*`, etc. survive a round-trip). `HermesModelSection { default, provider, base_url }` is the subset we expose. `write_model()` does atomic tmp+rename. Also parses `~/.hermes/.env` and returns the KEY NAMES of any non-empty `*_API_KEY=` lines — **never the values** (secrets stay out of the IPC channel). 3 new unit tests.
+- **IPC**: `hermes_config_read` / `hermes_config_write_model` in `src-tauri/src/ipc/hermes_config.rs`.
+- **LLMs page rewritten** (`src/features/models/index.tsx`):
+  - **Current card**: shows the file path + current `provider`, `model`, `base_url`.
+  - **Change model form**: provider dropdown with 7 pre-populated options (DeepSeek, OpenAI, Anthropic, OpenRouter, Z.AI, Kimi, MiniMax), model id input with per-provider datalist suggestions, optional base_url. Auto-fills base_url when switching between known providers.
+  - **API-key presence indicator**: reads `~/.hermes/.env` and shows a green check if the selected provider's key env var is set, or an amber warning telling the user which key to add.
+  - **Restart banner**: after saving, shows a prominent instruction to run `hermes gateway restart` (Hermes does NOT hot-reload model config).
+  - **Not-present state**: if `~/.hermes/config.yaml` is missing, shows a clear warning rather than failing silently.
+- **Frontend ipc.ts**: `hermesConfigRead()` + `hermesConfigWriteModel()` wrappers.
+
+### Trade-offs / deferred
+
+- **No gateway-restart button yet**: Caduceus can't shell out to `hermes gateway restart` without Tauri capability config. Kept as a manual step for this sprint; automation is a clean follow-up.
+- **API keys are still hand-edited in `.env`**: we only READ the presence of `*_API_KEY` names. Write support needs careful UX around secrets + atomic updates to an env file — deferred.
+- **Chat per-session ModelPicker** (Sprint 3) now shows `hermes-agent` only because `/v1/models` always returns that one entry. Left in place as a status indicator; it'll become useful again in Phase 5 when multiple adapters can register.
+
+### Verified
+
+- 9 cargo tests (3 new) + 11 vitest tests all green. clippy + fmt clean. typecheck + lint clean.
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 3: Models page + per-session model picker
 
 ### Shipped

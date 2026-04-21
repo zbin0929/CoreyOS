@@ -166,6 +166,42 @@ export function modelList(): Promise<ModelInfo[]> {
   return invoke<ModelInfo[]>('model_list');
 }
 
+// ───────────────────────── Hermes's own config.yaml ─────────────────────────
+
+export interface HermesModelSection {
+  default?: string | null;
+  provider?: string | null;
+  base_url?: string | null;
+}
+
+export interface HermesConfigView {
+  /** Absolute path on disk, for display + error messages. */
+  config_path: string;
+  /** `true` if the file existed and parsed. */
+  present: boolean;
+  model: HermesModelSection;
+  /** Names of `*_API_KEY` env vars with non-empty values in ~/.hermes/.env. */
+  env_keys_present: string[];
+}
+
+/** Current `model` section from `~/.hermes/config.yaml`. */
+export function hermesConfigRead(): Promise<HermesConfigView> {
+  return invoke<HermesConfigView>('hermes_config_read');
+}
+
+/**
+ * Persist a new `model` section to `~/.hermes/config.yaml`. Other fields are
+ * preserved. Returns the re-read view for UI reconciliation.
+ *
+ * NOTE: The Hermes gateway does NOT hot-reload this file. Changes take effect
+ * only after `hermes gateway restart`. The UI should surface this.
+ */
+export function hermesConfigWriteModel(
+  model: HermesModelSection,
+): Promise<HermesConfigView> {
+  return invoke<HermesConfigView>('hermes_config_write_model', { model });
+}
+
 // ───────────────────────── Settings / config ─────────────────────────
 
 export interface GatewayConfigDto {
