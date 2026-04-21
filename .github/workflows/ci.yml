@@ -118,6 +118,18 @@ jobs:
             libsoup-3.0-dev \
             patchelf
 
+      # tauri::generate_context!() reads frontendDist from tauri.conf.json
+      # (= "../dist") at proc-macro expansion time and panics if the path
+      # doesn't exist. The Rust job doesn't need a real bundle — we're only
+      # running clippy + unit tests — so a placeholder is enough to let the
+      # macro pass its existence check.
+      - name: Stub frontend dist for tauri::generate_context!
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p dist
+          echo '<!doctype html><title>ci stub</title>' > dist/index.html
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
