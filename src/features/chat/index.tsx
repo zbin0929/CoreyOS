@@ -22,31 +22,31 @@ import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { MessageBubble } from './MessageBubble';
 import { SessionsPanel } from './SessionsPanel';
 
+/**
+ * Module-level empty array so the `sessionMessages` selector returns a
+ * STABLE reference when the current session has no messages (or when there
+ * is no current session at all). Creating `[]` inline inside the selector
+ * produced a fresh array each call — with `useSyncExternalStore` that made
+ * React think the store snapshot had changed on every render, leading to
+ * "Maximum update depth exceeded" loops on startup.
+ */
+const EMPTY_MESSAGES: UiMessage[] = [];
+
 export function ChatRoute() {
   const currentId = useChatStore((s) => s.currentId);
   const hydrated = useChatStore((s) => s.hydrated);
   const newSession = useChatStore((s) => s.newSession);
   const sessionMessages = useChatStore((s) =>
-    s.currentId ? (s.sessions[s.currentId]?.messages ?? []) : [],
+    s.currentId ? (s.sessions[s.currentId]?.messages ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
   );
   const appendMessage = useChatStore((s) => s.appendMessage);
   const patchMessage = useChatStore((s) => s.patchMessage);
   const appendToolCall = useChatStore((s) => s.appendToolCall);
   const renameSession = useChatStore((s) => s.renameSession);
 
-  // One-shot SQLite hydration. We read `hydrated` via `getState()` (not the
-  // subscribed selector) so this effect has no reactive deps — it fires
-  // exactly once per mount. The store itself idempotent-guards repeated
-  // calls against StrictMode's remount by checking `hydrated` internally.
-  useEffect(() => {
-    if (!useChatStore.getState().hydrated) {
-      void useChatStore.getState().hydrateFromDb();
-    }
-  }, []);
-
   // Once hydrated, ensure there's always a current session. If the DB came
-  // back empty, spin up a fresh one; otherwise the hydrate already restored
-  // the MRU session as `currentId`.
+  // back empty, spin up a fresh one; otherwise the hydrate (dispatched
+  // once at app boot by `Providers`) has already restored the MRU session.
   useLayoutEffect(() => {
     if (hydrated && !currentId) newSession();
   }, [hydrated, currentId, newSession]);
