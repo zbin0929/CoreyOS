@@ -17,7 +17,7 @@ import {
   type ChatMessageDto,
   type ChatStreamHandle,
 } from '@/lib/ipc';
-import { newMessageId, useChatStore, type UiMessage } from '@/stores/chat';
+import { newMessageId, useChatStore, type UiMessage, type UiToolCall } from '@/stores/chat';
 import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { MessageBubble } from './MessageBubble';
 import { SessionsPanel } from './SessionsPanel';
@@ -30,6 +30,7 @@ export function ChatRoute() {
   );
   const appendMessage = useChatStore((s) => s.appendMessage);
   const patchMessage = useChatStore((s) => s.patchMessage);
+  const appendToolCall = useChatStore((s) => s.appendToolCall);
   const renameSession = useChatStore((s) => s.renameSession);
 
   // Ensure there's always a current session on mount.
@@ -46,6 +47,7 @@ export function ChatRoute() {
           messages={sessionMessages}
           appendMessage={appendMessage}
           patchMessage={patchMessage}
+          appendToolCall={appendToolCall}
           renameSession={renameSession}
         />
       ) : (
@@ -66,6 +68,7 @@ interface ChatPaneProps {
     msgId: string,
     patch: Partial<Omit<UiMessage, 'id'>>,
   ) => void;
+  appendToolCall: (sessionId: string, msgId: string, call: UiToolCall) => void;
   renameSession: (id: string, title: string) => void;
 }
 
@@ -74,6 +77,7 @@ function ChatPane({
   messages,
   appendMessage,
   patchMessage,
+  appendToolCall,
   renameSession,
 }: ChatPaneProps) {
   const [draft, setDraft] = useState('');
@@ -147,6 +151,21 @@ function ChatPane({
               content: (current?.content ?? '') + chunk,
               pending: false,
             });
+          },
+          onTool: (progress) => {
+            appendToolCall(sessionId, pendingId, {
+              id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+              tool: progress.tool,
+              emoji: progress.emoji,
+              label: progress.label,
+              at: Date.now(),
+            });
+            // A tool event proves the stream is alive — clear the pending spinner.
+            const sess = useChatStore.getState().sessions[sessionId];
+            const current = sess?.messages.find((m) => m.id === pendingId);
+            if (current?.pending) {
+              patchMessage(sessionId, pendingId, { pending: false });
+            }
           },
           onDone: () => {
             patchMessage(sessionId, pendingId, { pending: false });

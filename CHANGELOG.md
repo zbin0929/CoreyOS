@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 5B: tool call rendering (agent visibility)
+
+### Context
+
+Hermes is an *agent*, not just a chat model: it invokes `terminal`, `file_read`, `web_search`, etc. while composing its response. Phase 1 Sprint 1–2's SSE parser captured only the default `chat.completion.chunk` stream, silently dropping Hermes's custom `event: hermes.tool.progress` markers. Users saw the prose but had no idea work was being done on their behalf.
+
+### Investigation
+
+Reverse-engineered Hermes's SSE by triggering a prompt that forced a tool call. Hermes emits `event: hermes.tool.progress\ndata: {"tool": "terminal", "emoji": "💻", "label": "pwd"}` once per tool invocation. The tool's OUTPUT is baked into subsequent assistant `content` deltas by the agent itself (no separate "tool result" event needed).
+
+### Shipped
+
+- **Rust `gateway.rs`**: SSE loop now branches on the `event:` line. Default / `message` events continue as `chat.completion.chunk`; `hermes.tool.progress` events parse as the new `HermesToolProgress` struct. The mpsc channel payload changed from `String` to a new `ChatStreamEvent` enum (`Delta(String) | Tool(HermesToolProgress)`) so deltas and annotations share one ordered stream — preserving their relative sequence for UI rendering.
+- **IPC `chat_stream_start`**: emits `chat:tool:{handle}` in addition to the existing `chat:delta:{handle}`. Listeners subscribe to whichever they care about.
+- **Frontend `ipc.ts`**: `ChatStreamCallbacks.onTool?` callback + `ChatToolProgress` type. Listener is only registered when the caller provides `onTool`.
+- **Chat store**: `UiMessage.toolCalls: UiToolCall[]` + `appendToolCall` action (race-free separation from `patchMessage` since tool events and content deltas may interleave). Persisted across restarts via existing zustand/persist.
+- **`MessageBubble`**: new `ToolCallsStrip` rendering a row of pills ABOVE the prose showing `<emoji> <tool> · <label>` (e.g. `💻 terminal · pwd`). Pills are read-only signals — clicking them does nothing for now since the output is already in the text below.
+- **ChatRoute**: `onTool` handler on `chatStream()` appends to the assistant message's `toolCalls` and proactively clears the `pending` spinner (the tool event itself proves the stream is alive before any content lands).
+
+### Deferred
+
+- **Expandable tool panels with input/output/duration**: would require Hermes to emit a "tool complete" event with the output payload. Not available in the current Hermes build. Current pills cover the "what did the agent do" question; a proper trajectory view is a Phase 4 feature.
+- **Tool-specific renderings** (file viewer, diff, web search results list): same dependency as above.
+
+### Verified
+
+- `pnpm {typecheck,lint,test}` + `cargo {check,clippy,test,fmt --check}` green. 11 vitest + 11 cargo tests still passing.
+- Manual: prompt `"Use bash to run pwd and tell me the output"` — pill appears above the response reading `💻 terminal · pwd`.
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 5A: closed-loop LLM switching (.env + restart)
 
 ### Context

@@ -176,17 +176,16 @@ impl HermesGateway {
         })
     }
 
-    /// `POST /v1/chat/completions` with `stream=true` — forwards each delta
-    /// chunk (`choices[0].delta.content`) through `tx`. Returns a summary when
-    /// the server sends `data: [DONE]` or the stream closes.
-    ///
-    /// Sends that fail because the receiver dropped are silently ignored — it
-    /// means the caller cancelled the stream.
+    /// Streaming variant of `chat_once`. Forwards assistant content deltas
+    /// AND Hermes-specific tool progress events over `tx` as they arrive from
+    /// the gateway's SSE stream (`/v1/chat/completions` with `stream=true`).
+    /// Resolves with the final metadata (finish_reason, usage) once the
+    /// `[DONE]` marker arrives or the server closes the stream.
     pub async fn chat_stream(
         &self,
         model: &str,
         messages: Vec<ChatMessage>,
-        tx: mpsc::Sender<String>,
+        tx: mpsc::Sender<ChatStreamEvent>,
     ) -> AdapterResult<ChatStreamDone> {
         let body = ChatCompletionRequest {
             model: model.to_string(),
@@ -244,38 +243,69 @@ impl HermesGateway {
             if data.is_empty() {
                 continue;
             }
-            let chunk: StreamChunk = match serde_json::from_str(&data) {
-                Ok(c) => c,
-                Err(e) => {
-                    // Some gateways emit keep-alive or non-JSON events; log and skip.
-                    tracing::debug!(error = %e, raw = %data, "skipping unparseable SSE chunk");
-                    continue;
+
+            // Branch on the SSE `event:` name. Default (empty) is standard
+            // OpenAI-style completion chunks. Named events like
+            // `hermes.tool.progress` carry agent-specific annotations.
+            match event.event.as_str() {
+                "hermes.tool.progress" => {
+                    let progress: HermesToolProgress = match serde_json::from_str(&data) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            tracing::debug!(error = %e, raw = %data, "bad hermes.tool.progress");
+                            continue;
+                        }
+                    };
+                    if tx.send(ChatStreamEvent::Tool(progress)).await.is_err() {
+                        return Ok(ChatStreamDone {
+                            finish_reason: Some("cancelled".into()),
+                            model: resolved_model,
+                            latency_ms: started.elapsed().as_millis() as u32,
+                            prompt_tokens,
+                            completion_tokens,
+                        });
+                    }
                 }
-            };
-            if !chunk.model.is_empty() {
-                resolved_model = chunk.model;
-            }
-            if let Some(usage) = chunk.usage {
-                prompt_tokens = Some(usage.prompt_tokens);
-                completion_tokens = Some(usage.completion_tokens);
-            }
-            for choice in chunk.choices {
-                if let Some(reason) = choice.finish_reason {
-                    finish_reason = Some(reason);
-                }
-                if let Some(delta_content) = choice.delta.content {
-                    if !delta_content.is_empty() {
-                        // Silently drop if receiver is gone (caller cancelled).
-                        if tx.send(delta_content).await.is_err() {
-                            return Ok(ChatStreamDone {
-                                finish_reason: Some("cancelled".into()),
-                                model: resolved_model,
-                                latency_ms: started.elapsed().as_millis() as u32,
-                                prompt_tokens,
-                                completion_tokens,
-                            });
+                // Default event: OpenAI-compatible chat.completion.chunk.
+                "" | "message" => {
+                    let chunk: StreamChunk = match serde_json::from_str(&data) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            tracing::debug!(error = %e, raw = %data, "skipping unparseable SSE chunk");
+                            continue;
+                        }
+                    };
+                    if !chunk.model.is_empty() {
+                        resolved_model = chunk.model;
+                    }
+                    if let Some(usage) = chunk.usage {
+                        prompt_tokens = Some(usage.prompt_tokens);
+                        completion_tokens = Some(usage.completion_tokens);
+                    }
+                    for choice in chunk.choices {
+                        if let Some(reason) = choice.finish_reason {
+                            finish_reason = Some(reason);
+                        }
+                        if let Some(delta_content) = choice.delta.content {
+                            if !delta_content.is_empty()
+                                && tx
+                                    .send(ChatStreamEvent::Delta(delta_content))
+                                    .await
+                                    .is_err()
+                            {
+                                return Ok(ChatStreamDone {
+                                    finish_reason: Some("cancelled".into()),
+                                    model: resolved_model,
+                                    latency_ms: started.elapsed().as_millis() as u32,
+                                    prompt_tokens,
+                                    completion_tokens,
+                                });
+                            }
                         }
                     }
+                }
+                other => {
+                    tracing::debug!(event = other, raw = %data, "ignoring unknown SSE event");
                 }
             }
         }
@@ -370,6 +400,37 @@ pub struct ModelListEntry {
 }
 
 // ───────────────────────── Streaming DTOs ─────────────────────────
+
+/// A single item forwarded from the SSE loop to the IPC layer. Hermes
+/// interleaves plain content deltas with agent annotations like tool-progress
+/// markers — they share the same ordered channel so the UI can render them
+/// in the correct sequence relative to the surrounding text.
+#[derive(Debug, Clone)]
+pub enum ChatStreamEvent {
+    /// Assistant content chunk (appended to the message body).
+    Delta(String),
+    /// Hermes-specific tool progress annotation. Emitted once when Hermes
+    /// kicks off a tool invocation. The tool's OUTPUT is typically baked
+    /// into subsequent `Delta` chunks by the agent, so we don't need a
+    /// separate "tool complete" event to render results.
+    Tool(HermesToolProgress),
+}
+
+/// Payload of a `hermes.tool.progress` SSE event. Hermes emits the agent's
+/// short description of what it's doing (e.g. `label: "pwd"` for a `terminal`
+/// call). All fields may be absent in principle; we accept them defensively.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HermesToolProgress {
+    /// Tool kind slug (e.g. `"terminal"`, `"file_read"`, `"web_search"`).
+    #[serde(default)]
+    pub tool: String,
+    /// Emoji the Hermes agent picked to decorate this tool call.
+    #[serde(default)]
+    pub emoji: Option<String>,
+    /// Short label — usually the command or arg summary.
+    #[serde(default)]
+    pub label: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatStreamDone {

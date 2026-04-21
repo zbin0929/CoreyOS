@@ -156,13 +156,14 @@ pub trait AgentAdapter: Send + Sync + 'static {
         })
     }
 
-    /// Streaming single-turn completion. Forwards delta content chunks through
-    /// `tx` as they arrive, resolves with a summary (usage, model, finish
-    /// reason) when the upstream stream closes.
+    /// Streaming single-turn completion. Forwards both content deltas and
+    /// adapter-specific annotations (e.g. Hermes `tool.progress` events)
+    /// through `tx` as they arrive, resolves with a summary (usage, model,
+    /// finish reason) when the upstream stream closes.
     async fn chat_stream(
         &self,
         _turn: ChatTurn,
-        _tx: tokio::sync::mpsc::Sender<String>,
+        _tx: tokio::sync::mpsc::Sender<crate::adapters::hermes::gateway::ChatStreamEvent>,
     ) -> AdapterResult<crate::adapters::hermes::gateway::ChatStreamDone> {
         Err(AdapterError::Unsupported {
             capability: "chat_stream",

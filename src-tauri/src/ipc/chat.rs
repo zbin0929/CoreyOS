@@ -3,6 +3,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use crate::adapters::hermes::gateway::ChatStreamEvent;
 use crate::adapters::{ChatMessageDto, ChatTurn};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
@@ -76,14 +77,23 @@ pub async fn chat_stream_start(
     let handle = args.handle.unwrap_or_else(|| Uuid::new_v4().to_string());
 
     // Channel: gateway → pump → frontend. Buffer small; backpressure is fine.
-    let (tx, mut rx) = mpsc::channel::<String>(64);
+    let (tx, mut rx) = mpsc::channel::<ChatStreamEvent>(64);
 
-    // Pump: relay deltas. Exits when `tx` is dropped (i.e. stream ends).
+    // Pump: relay deltas + tool events on distinct Tauri events. Exits when
+    // `tx` is dropped (i.e. stream ends).
     let delta_event = format!("chat:delta:{handle}");
+    let tool_event = format!("chat:tool:{handle}");
     let pump_app = app.clone();
     tokio::spawn(async move {
-        while let Some(delta) = rx.recv().await {
-            let _ = pump_app.emit(&delta_event, delta);
+        while let Some(ev) = rx.recv().await {
+            match ev {
+                ChatStreamEvent::Delta(text) => {
+                    let _ = pump_app.emit(&delta_event, text);
+                }
+                ChatStreamEvent::Tool(progress) => {
+                    let _ = pump_app.emit(&tool_event, progress);
+                }
+            }
         }
     });
 

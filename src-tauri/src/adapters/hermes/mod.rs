@@ -18,7 +18,7 @@ use crate::adapters::{
 };
 use crate::error::{AdapterError, AdapterResult};
 
-use gateway::{ChatMessage, ChatStreamDone, HermesGateway};
+use gateway::{ChatMessage, ChatStreamDone, ChatStreamEvent, HermesGateway};
 use tokio::sync::mpsc;
 
 const ADAPTER_ID: &str = "hermes";
@@ -164,7 +164,7 @@ impl AgentAdapter for HermesAdapter {
     async fn chat_stream(
         &self,
         turn: ChatTurn,
-        tx: mpsc::Sender<String>,
+        tx: mpsc::Sender<ChatStreamEvent>,
     ) -> AdapterResult<ChatStreamDone> {
         match &self.mode {
             Mode::Stub => Err(AdapterError::Unsupported {

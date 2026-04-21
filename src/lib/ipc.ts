@@ -54,8 +54,19 @@ export interface ChatStreamHandle {
   cancel: () => Promise<void>;
 }
 
+/** Agent-annotated tool-progress marker. Emitted by Hermes as a
+ *  `hermes.tool.progress` SSE event when the agent kicks off a tool call
+ *  (terminal, file_read, web_search, etc.). The tool's OUTPUT lands in
+ *  subsequent `onDelta` chunks — this marker is purely a UI hint. */
+export interface ChatToolProgress {
+  tool: string;
+  emoji: string | null;
+  label: string | null;
+}
+
 export interface ChatStreamCallbacks {
   onDelta: (chunk: string) => void;
+  onTool?: (progress: ChatToolProgress) => void;
   onDone: (summary: ChatStreamDone) => void;
   onError: (err: unknown) => void;
 }
@@ -75,6 +86,12 @@ export async function chatStream(
   unlistens.push(
     await listen<string>(`chat:delta:${handle}`, (e) => cbs.onDelta(e.payload)),
   );
+  if (cbs.onTool) {
+    const onTool = cbs.onTool;
+    unlistens.push(
+      await listen<ChatToolProgress>(`chat:tool:${handle}`, (e) => onTool(e.payload)),
+    );
+  }
   unlistens.push(
     await listen<ChatStreamDone>(`chat:done:${handle}`, async (e) => {
       cbs.onDone(e.payload);

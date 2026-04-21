@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { AlertCircle, Check, Copy, Loader2, Sparkles, User } from 'lucide-react';
+import { AlertCircle, Check, Copy, Loader2, Sparkles, User, Wrench } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { cn } from '@/lib/cn';
-import type { UiMessage } from '@/stores/chat';
+import type { UiMessage, UiToolCall } from '@/stores/chat';
 
 export function MessageBubble({ msg }: { msg: UiMessage }) {
   const isUser = msg.role === 'user';
@@ -36,6 +36,9 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
             msg.error && 'border-danger/40 bg-danger/5 text-danger',
           )}
         >
+          {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
+            <ToolCallsStrip calls={msg.toolCalls} />
+          )}
           {msg.pending && !msg.content ? (
             <span className="inline-flex items-center gap-2 text-fg-muted">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -48,9 +51,9 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
             </span>
           ) : isUser ? (
             <span className="whitespace-pre-wrap">{msg.content}</span>
-          ) : (
+          ) : msg.content ? (
             <Markdown>{msg.content}</Markdown>
-          )}
+          ) : null}
         </div>
         {canCopy && <CopyButton text={msg.content} />}
       </div>
@@ -102,6 +105,44 @@ function CopyButton({ text }: { text: string }) {
         </>
       )}
     </button>
+  );
+}
+
+/**
+ * Small strip of tool-call pills rendered ABOVE the assistant's prose. Each
+ * pill shows what the agent did (e.g. `terminal · pwd`). Hermes bakes the
+ * tool's OUTPUT into the subsequent text, so we don't need an expandable
+ * output panel here — the pill is a signal, not a full trace viewer.
+ */
+function ToolCallsStrip({ calls }: { calls: UiToolCall[] }) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5">
+      {calls.map((c) => (
+        <div
+          key={c.id}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elev-2 px-2 py-1',
+            'text-[11px] text-fg-muted',
+          )}
+          title={c.label ?? c.tool}
+        >
+          {c.emoji ? (
+            <span className="text-sm leading-none">{c.emoji}</span>
+          ) : (
+            <Wrench className="h-3 w-3 text-fg-subtle" />
+          )}
+          <span className="font-semibold text-fg">{c.tool}</span>
+          {c.label && (
+            <>
+              <span className="text-fg-subtle">·</span>
+              <code className="max-w-[240px] truncate font-mono text-[11px]">
+                {c.label}
+              </code>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 

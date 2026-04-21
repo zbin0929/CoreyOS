@@ -9,7 +9,18 @@ export interface UiMessage {
   pending?: boolean;
   /** Frontend-only error text (shown inline as a red bubble). */
   error?: string;
+  /** Tool-progress markers emitted by the agent during this turn. */
+  toolCalls?: UiToolCall[];
   createdAt: number;
+}
+
+export interface UiToolCall {
+  /** Stable id so React can key the list. */
+  id: string;
+  tool: string;
+  emoji?: string | null;
+  label?: string | null;
+  at: number;
 }
 
 export interface ChatSession {
@@ -49,6 +60,8 @@ interface ChatState {
     msgId: string,
     patch: Partial<Omit<UiMessage, 'id'>>,
   ) => void;
+  /** Append a tool-progress marker to a message (race-free vs content updates). */
+  appendToolCall: (sessionId: string, msgId: string, call: UiToolCall) => void;
 
   /** True when at least one session exists. Used to gate rendering. */
   hasSessions: () => boolean;
@@ -170,6 +183,26 @@ export const useChatStore = create<ChatState>()(
               },
             },
             orderedIds: nextOrder,
+          };
+        });
+      },
+
+      appendToolCall: (sessionId, msgId, call) => {
+        set((s) => {
+          const sess = s.sessions[sessionId];
+          if (!sess) return s;
+          let touched = false;
+          const nextMessages = sess.messages.map((m) => {
+            if (m.id !== msgId) return m;
+            touched = true;
+            return { ...m, toolCalls: [...(m.toolCalls ?? []), call] };
+          });
+          if (!touched) return s;
+          return {
+            sessions: {
+              ...s.sessions,
+              [sessionId]: { ...sess, messages: nextMessages, updatedAt: Date.now() },
+            },
           };
         });
       },
