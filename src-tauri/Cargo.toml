@@ -37,6 +37,12 @@ eventsource-stream = "0.2"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
+# Windows `\\?\` verbatim-prefix stripping so canonicalized paths match
+# the hard denylist (which uses human-readable `C:\...` form).
+# On non-Windows targets `dunce::canonicalize` delegates straight to
+# `std::fs::canonicalize`, so it's zero-cost elsewhere.
+dunce = "1"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

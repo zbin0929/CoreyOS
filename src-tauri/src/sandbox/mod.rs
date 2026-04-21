@@ -219,12 +219,14 @@ impl PathAuthority {
     pub fn set_roots(&self, roots: Vec<WorkspaceRoot>) {
         let mut canon = Vec::with_capacity(roots.len());
         for mut r in roots {
-            match std::fs::canonicalize(&r.path) {
+            match dunce::canonicalize(&r.path) {
                 Ok(c) => {
                     r.path = c;
                     canon.push(r);
                 }
-                Err(e) => tracing::warn!(path = %r.path.display(), error = %e, "dropping invalid root"),
+                Err(e) => {
+                    tracing::warn!(path = %r.path.display(), error = %e, "dropping invalid root")
+                }
             }
         }
         *self.roots.write().expect("poisoned") = canon;
@@ -235,7 +237,7 @@ impl PathAuthority {
     }
 
     pub fn grant_once(&self, path: PathBuf) {
-        if let Ok(canon) = std::fs::canonicalize(&path) {
+        if let Ok(canon) = dunce::canonicalize(&path) {
             self.session_grants.write().expect("poisoned").insert(canon);
         }
     }
@@ -267,7 +269,12 @@ impl PathAuthority {
         }
 
         // Session one-shot grant?
-        if self.session_grants.read().expect("poisoned").contains(&canonical) {
+        if self
+            .session_grants
+            .read()
+            .expect("poisoned")
+            .contains(&canonical)
+        {
             return Ok(canonical);
         }
 
@@ -316,7 +323,10 @@ impl Default for PathAuthority {
 /// Canonicalize `path` if it exists; otherwise canonicalize its parent and
 /// append the file name, which allows gating writes of not-yet-existing files.
 fn canonicalize_or_parent(path: &Path) -> std::io::Result<PathBuf> {
-    match std::fs::canonicalize(path) {
+    // `dunce::canonicalize` is a drop-in for `std::fs::canonicalize` that
+    // strips Windows `\\?\` verbatim prefixes so denylist string-matching
+    // works. On Unix it delegates straight to std, so it's a no-op cost.
+    match dunce::canonicalize(path) {
         Ok(p) => Ok(p),
         Err(_) => {
             let parent = path.parent().ok_or_else(|| {
@@ -325,7 +335,7 @@ fn canonicalize_or_parent(path: &Path) -> std::io::Result<PathBuf> {
             let file_name = path.file_name().ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, "no file component")
             })?;
-            let parent_canon = std::fs::canonicalize(parent)?;
+            let parent_canon = dunce::canonicalize(parent)?;
             Ok(parent_canon.join(file_name))
         }
     }

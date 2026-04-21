@@ -5,7 +5,7 @@
 | Phase | Title                 | Exit criteria                                          | Est.      | Status |
 |------:|-----------------------|--------------------------------------------------------|-----------|--------|
 | 0     | Foundation            | App shell + palette + Hermes stub adapter + CI green   | 1–2 days  | **Core shipped** (2026-04-21), 7/10 exit criteria |
-| 0.5   | Hardening             | CI matrix + Storybook + Playwright + Windows sandbox fixes | 1–2 days | **Open** — see `phases/phase-0-foundation.md` §Phase 0.5 backlog |
+| 0.5   | Hardening             | CI matrix + lint/format/test gates + Windows sandbox fix + nav shortcuts | 1–2 days | **Shipped** (2026-04-21) — Playwright + Storybook deferred; see CHANGELOG |
 | 1     | Chat core             | Real SSE chat, sessions, tool calls, attachments       | 3–4 days  | Planned |
 | 2     | Config & Ops          | Models, Analytics, Logs, Settings, Profiles            | ~1 week   | Planned |
 | 3     | Platform channels     | 8 channels + gateway restart + WeChat QR               | ~1 week   | Planned |

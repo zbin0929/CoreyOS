@@ -220,6 +220,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "dunce",
  "eventsource-stream",
  "futures",
  "once_cell",

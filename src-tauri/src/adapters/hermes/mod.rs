@@ -79,10 +79,8 @@ impl AgentAdapter for HermesAdapter {
     }
 
     async fn list_sessions(&self, _query: SessionQuery) -> AdapterResult<Vec<Session>> {
-        serde_json::from_str::<Vec<Session>>(FIXTURE_SESSIONS).map_err(|e| {
-            AdapterError::Internal {
-                source: anyhow::anyhow!("failed to parse session fixtures: {e}"),
-            }
+        serde_json::from_str::<Vec<Session>>(FIXTURE_SESSIONS).map_err(|e| AdapterError::Internal {
+            source: anyhow::anyhow!("failed to parse session fixtures: {e}"),
         })
     }
 
@@ -96,11 +94,8 @@ impl AgentAdapter for HermesAdapter {
     }
 
     async fn list_models(&self) -> AdapterResult<Vec<ModelInfo>> {
-        serde_json::from_str::<Vec<ModelInfo>>(FIXTURE_MODELS).map_err(|e| {
-            AdapterError::Internal {
-                source: anyhow::anyhow!("failed to parse model fixtures: {e}"),
-            }
+        serde_json::from_str::<Vec<ModelInfo>>(FIXTURE_MODELS).map_err(|e| AdapterError::Internal {
+            source: anyhow::anyhow!("failed to parse model fixtures: {e}"),
         })
     }
 }
-

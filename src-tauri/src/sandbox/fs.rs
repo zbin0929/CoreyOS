@@ -22,12 +22,13 @@ pub async fn read_to_string(authority: &PathAuthority, path: &Path) -> SandboxRe
 /// List directory entries, gated by the sandbox.
 pub async fn read_dir_count(authority: &PathAuthority, path: &Path) -> SandboxResult<usize> {
     let canonical = authority.check(path, AccessOp::List)?;
-    let mut rd = tokio::fs::read_dir(&canonical)
-        .await
-        .map_err(|e| super::SandboxError::Canonicalize {
-            path: canonical.display().to_string(),
-            source: e,
-        })?;
+    let mut rd =
+        tokio::fs::read_dir(&canonical)
+            .await
+            .map_err(|e| super::SandboxError::Canonicalize {
+                path: canonical.display().to_string(),
+                source: e,
+            })?;
     let mut count = 0usize;
     while rd
         .next_entry()

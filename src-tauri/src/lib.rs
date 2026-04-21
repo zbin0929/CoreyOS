@@ -3,6 +3,12 @@
 //! See `docs/01-architecture.md` for the high-level layout and
 //! `docs/03-agent-adapter.md` for the adapter abstraction.
 
+// Phase 0 ships the full scaffold (adapter trait surface, sandbox APIs,
+// error taxonomy) but only a subset is wired to IPC. The remaining items
+// are consumed starting Phase 1. TODO(phase-1-end): remove this allow
+// once every symbol has at least one production call site.
+#![allow(dead_code)]
+
 mod adapters;
 mod error;
 mod ipc;
@@ -24,7 +30,9 @@ pub fn run() {
 
     let mut registry = AdapterRegistry::new();
     registry.register(Arc::new(HermesAdapter::new_stub()));
-    registry.set_default("hermes").expect("hermes is registered");
+    registry
+        .set_default("hermes")
+        .expect("hermes is registered");
 
     let app_state = AppState::new(registry);
 

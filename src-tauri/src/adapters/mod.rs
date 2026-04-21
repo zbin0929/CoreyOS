@@ -90,7 +90,7 @@ pub struct Health {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Capabilities {
     pub streaming: bool,
     pub tool_calls: bool,
@@ -106,27 +106,6 @@ pub struct Capabilities {
     pub vector_search: bool,
     pub trajectory_export: bool,
     pub cost_accounting: bool,
-}
-
-impl Default for Capabilities {
-    fn default() -> Self {
-        Self {
-            streaming: false,
-            tool_calls: false,
-            attachments: false,
-            multiple_sessions: false,
-            session_search: false,
-            skills: false,
-            memory: false,
-            scheduler: false,
-            channels: Vec::new(),
-            logs: false,
-            terminal: false,
-            vector_search: false,
-            trajectory_export: false,
-            cost_accounting: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -45,19 +45,42 @@ impl AdapterError {
 #[derive(Debug, Serialize, Clone)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum IpcError {
-    NotConfigured { hint: String },
-    Unreachable { endpoint: String, message: String },
-    Unauthorized { detail: String },
-    RateLimited { retry_after_s: Option<u32> },
-    Upstream { status: u16, body: String },
-    Protocol { detail: String },
-    Unsupported { capability: String },
-    Internal { message: String },
+    NotConfigured {
+        hint: String,
+    },
+    Unreachable {
+        endpoint: String,
+        message: String,
+    },
+    Unauthorized {
+        detail: String,
+    },
+    RateLimited {
+        retry_after_s: Option<u32>,
+    },
+    Upstream {
+        status: u16,
+        body: String,
+    },
+    Protocol {
+        detail: String,
+    },
+    Unsupported {
+        capability: String,
+    },
+    Internal {
+        message: String,
+    },
     /// Sandbox denied access to a system-critical path.
-    SandboxDenied { path: String, reason: String },
+    SandboxDenied {
+        path: String,
+        reason: String,
+    },
     /// Sandbox would allow with user consent. In Phase 0 this is terminal
     /// (no consent UI yet); in Phase 2 it resolves via an interactive prompt.
-    SandboxConsentRequired { path: String },
+    SandboxConsentRequired {
+        path: String,
+    },
 }
 
 impl From<AdapterError> for IpcError {
