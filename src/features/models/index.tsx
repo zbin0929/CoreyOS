@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { cn } from '@/lib/cn';
 import {
   hermesConfigRead,
@@ -251,18 +252,16 @@ export function ModelsRoute() {
                   description="Pick a provider, set the model id, and save. The gateway must be restarted for changes to take effect."
                 >
                   <Field label="Provider">
-                    <select
+                    <Combobox
                       value={provider}
-                      onChange={(e) => onProviderChange(e.target.value)}
-                      className={inputCls}
-                    >
-                      <option value="">(unset — free text below)</option>
-                      {PROVIDER_CATALOG.map((p) => (
-                        <option key={p.slug} value={p.slug}>
-                          {p.label} ({p.slug})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={onProviderChange}
+                      placeholder="e.g. deepseek"
+                      options={PROVIDER_CATALOG.map((p) => ({
+                        value: p.slug,
+                        label: p.label,
+                        hint: p.slug,
+                      }))}
+                    />
                     {provider && !providerMeta && (
                       <span className="text-xs text-fg-subtle">
                         Custom provider slug. Make sure Hermes recognizes it.
@@ -281,19 +280,14 @@ export function ModelsRoute() {
                   )}
 
                   <Field label="Model id" hint="The exact id the provider accepts.">
-                    <input
-                      type="text"
+                    <Combobox
                       value={model}
-                      onChange={(e) => setModel(e.target.value)}
+                      onChange={setModel}
                       placeholder={providerMeta?.sampleModels[0] ?? 'e.g. deepseek-reasoner'}
-                      list="model-suggestions"
-                      className={inputCls}
+                      options={(providerMeta?.sampleModels ?? []).map((m) => ({
+                        value: m,
+                      }))}
                     />
-                    <datalist id="model-suggestions">
-                      {providerMeta?.sampleModels.map((m) => (
-                        <option key={m} value={m} />
-                      ))}
-                    </datalist>
                   </Field>
 
                   <Field

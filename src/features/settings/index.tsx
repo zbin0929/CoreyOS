@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { cn } from '@/lib/cn';
 import {
   configGet,
@@ -187,19 +188,12 @@ export function SettingsRoute() {
                 description="Which LLM the Hermes agent uses when a chat doesn't specify one. Individual chats can override this from the composer."
               >
                 <Field label="Model id">
-                  <input
-                    type="text"
+                  <Combobox
                     value={defaultModel}
-                    onChange={(e) => setDefaultModel(e.target.value)}
+                    onChange={setDefaultModel}
                     placeholder="deepseek-reasoner"
-                    list="model-suggestions"
-                    className={inputCls}
+                    options={MODEL_SUGGESTIONS.map((m) => ({ value: m }))}
                   />
-                  <datalist id="model-suggestions">
-                    {MODEL_SUGGESTIONS.map((m) => (
-                      <option key={m} value={m} />
-                    ))}
-                  </datalist>
                 </Field>
               </Section>
 
