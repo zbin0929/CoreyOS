@@ -54,8 +54,8 @@ export function ModelsRoute() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Models"
-        subtitle="Available models from the configured gateway"
+        title="Language models"
+        subtitle="LLMs the Hermes agent can use as its brain · from the gateway's /v1/models"
         actions={
           <Button
             variant="secondary"
@@ -159,9 +159,12 @@ function ModelTable({
                       {m.id}
                     </code>
                     {m.is_default && (
-                      <span className="inline-flex items-center gap-1 rounded-sm bg-gold-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-gold-600">
+                      <span
+                        className="inline-flex items-center gap-1 rounded-sm bg-gold-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-gold-600"
+                        title="Used when a chat doesn't specify a model"
+                      >
                         <Star className="h-2.5 w-2.5" fill="currentColor" />
-                        DEFAULT
+                        DEFAULT LLM
                       </span>
                     )}
                   </div>
@@ -188,13 +191,14 @@ function ModelTable({
                     variant="secondary"
                     onClick={() => onSetDefault(m.id)}
                     disabled={settingDefault !== null}
+                    title="Use this LLM for new chats that don't override the model"
                   >
                     {settingDefault === m.id ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
                       <Star className="h-3 w-3" />
                     )}
-                    Set default
+                    Use as default
                   </Button>
                 )}
               </td>

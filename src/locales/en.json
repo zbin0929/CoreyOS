@@ -14,7 +14,7 @@
     "terminal": "Terminal",
     "scheduler": "Scheduler",
     "channels": "Channels",
-    "models": "Models",
+    "models": "LLMs",
     "settings": "Settings"
   },
   "topbar": {

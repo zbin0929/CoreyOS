@@ -183,10 +183,10 @@ export function SettingsRoute() {
               </Section>
 
               <Section
-                title="Model"
-                description="Default model id for new chats. Can be overridden per request later."
+                title="Default language model"
+                description="Which LLM the Hermes agent uses when a chat doesn't specify one. Individual chats can override this from the composer."
               >
-                <Field label="Default model">
+                <Field label="Model id">
                   <input
                     type="text"
                     value={defaultModel}

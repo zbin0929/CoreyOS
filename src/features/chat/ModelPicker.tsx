@@ -75,7 +75,7 @@ export function ModelPicker({ activeId, hasOverride, onPick }: ModelPickerProps)
           'bg-bg-elev-1 text-fg transition',
           'hover:border-gold-500/40 hover:bg-bg-elev-2',
         )}
-        title={hasOverride ? 'Session model' : 'Using gateway default'}
+        title={hasOverride ? 'Session LLM override' : 'Using gateway default LLM'}
       >
         <code className="font-mono">{activeId}</code>
         {hasOverride && (
@@ -97,7 +97,7 @@ export function ModelPicker({ activeId, hasOverride, onPick }: ModelPickerProps)
           {/* Header + reset row */}
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
-              Model for this session
+              LLM for this session
             </span>
             {hasOverride && (
               <button
