@@ -36,3 +36,4 @@ src-tauri/gen/schemas
 
 # Generated
 src/lib/ipc/bindings.ts
+tsconfig.tsbuildinfo

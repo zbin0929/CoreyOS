@@ -6,6 +6,29 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 2: sessions, stop, syntax highlighting
+
+### Shipped
+
+- **Stop button**: Send button swaps to a Stop icon while streaming. Click (or submit) cancels the client-side `ChatStreamHandle` — event subscriptions tear down immediately; backend task runs to completion but its events are ignored. Already-streamed content is kept; the `thinking…` state clears.
+- **Client-side session management** (`src/stores/chat.ts`): zustand store with `persist` middleware to `localStorage` (key `caduceus.chat.v1`). State: `sessions: Record<id, ChatSession>`, `orderedIds` (MRU), `currentId`. Actions: `newSession()`, `switchTo()`, `deleteSession()`, `renameSession()`, `appendMessage()`, `patchMessage()`. Titles auto-derive from the first user message (truncated to 40 chars). Bumping a session via `appendMessage` moves it to MRU top.
+- **Sessions side panel** (`src/features/chat/SessionsPanel.tsx`): 240px left pane inside the Chat route. Header row with **New** button; scrollable MRU list with hover-revealed delete (with confirm). Active session highlighted in `gold-500/10`.
+- **Chat page refactor**: `ChatRoute` now mounts `SessionsPanel` + a `ChatPane` bound to the current session. Composer state (`draft`, `sending`, `streamRef`, `pendingRef`) resets on session switch so switching mid-stream is clean. Message render still uses `MessageBubble` — extracted to its own file to keep `index.tsx` focused on orchestration.
+- **Code syntax highlighting**: `rehype-highlight@7` + `highlight.js@11` integrated into the Markdown renderer. Auto language detection on block code. `highlight.js/styles/github-dark.css` loaded globally; block code renders on a fixed `#0d1117` backdrop + `#e6edf3` ink so colors read correctly under both light and dark app themes. Inline code unaffected.
+- **Message DTO change (breaking, internal only)**: `UiMessage` moved from Chat page to `src/stores/chat.ts`, added `createdAt: number`. IPC payload still maps down to `{ role, content }`.
+
+### Verified
+
+- `pnpm {typecheck,lint,test,build}` all green. 11 vitest tests still passing. Bundle grew to ~238 KB gzip (from react-markdown + remark-gfm + highlight.js); Phase 2 code-splitting candidate.
+
+### Deferred to Sprint 2B / Phase 2
+
+- **Server-side (Rust) session storage** in SQLite — still frontend-only.
+- **Tool call rendering** (folded cards for Hermes `tool_call` events).
+- **Attachments** (drag-drop files + image preview).
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 1: real Hermes chat (streaming)
 
 ### Shipped

@@ -1,31 +1,82 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Send, Loader2, AlertCircle, Sparkles, User } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react';
+import { Send, Sparkles, Square } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
-import { chatStream, ipcErrorMessage, type ChatMessageDto } from '@/lib/ipc';
-
-interface UiMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  pending?: boolean;
-  error?: string;
-}
-
-function newId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
+import { chatStream, ipcErrorMessage, type ChatMessageDto, type ChatStreamHandle } from '@/lib/ipc';
+import { newMessageId, useChatStore, type UiMessage } from '@/stores/chat';
+import { MessageBubble } from './MessageBubble';
+import { SessionsPanel } from './SessionsPanel';
 
 export function ChatRoute() {
-  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const currentId = useChatStore((s) => s.currentId);
+  const newSession = useChatStore((s) => s.newSession);
+  const sessionMessages = useChatStore((s) =>
+    s.currentId ? (s.sessions[s.currentId]?.messages ?? []) : [],
+  );
+  const appendMessage = useChatStore((s) => s.appendMessage);
+  const patchMessage = useChatStore((s) => s.patchMessage);
+
+  // Ensure there's always a current session on mount.
+  useLayoutEffect(() => {
+    if (!currentId) newSession();
+  }, [currentId, newSession]);
+
+  return (
+    <div className="flex h-full min-h-0 w-full">
+      <SessionsPanel />
+      {currentId ? (
+        <ChatPane
+          sessionId={currentId}
+          messages={sessionMessages}
+          appendMessage={appendMessage}
+          patchMessage={patchMessage}
+        />
+      ) : (
+        <div className="flex flex-1 items-center justify-center text-fg-muted">
+          Initializing…
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ChatPaneProps {
+  sessionId: string;
+  messages: UiMessage[];
+  appendMessage: (sessionId: string, msg: UiMessage) => void;
+  patchMessage: (
+    sessionId: string,
+    msgId: string,
+    patch: Partial<Omit<UiMessage, 'id'>>,
+  ) => void;
+}
+
+function ChatPane({ sessionId, messages, appendMessage, patchMessage }: ChatPaneProps) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Live handle for the current stream, so Stop can cancel it.
+  const streamRef = useRef<ChatStreamHandle | null>(null);
+  // Also track the pending id to null-out the spinner on stop.
+  const pendingRef = useRef<string | null>(null);
 
-  // Auto-scroll on new messages.
+  // Reset composer when switching sessions.
+  useEffect(() => {
+    setDraft('');
+    setSending(false);
+    streamRef.current = null;
+    pendingRef.current = null;
+  }, [sessionId]);
+
+  // Auto-scroll on new messages / growing content.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -36,13 +87,27 @@ export function ChatRoute() {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
 
-    const userMsg: UiMessage = { id: newId(), role: 'user', content: trimmed };
-    const pendingId = newId();
-    const pendingMsg: UiMessage = { id: pendingId, role: 'assistant', content: '', pending: true };
+    const userMsg: UiMessage = {
+      id: newMessageId(),
+      role: 'user',
+      content: trimmed,
+      createdAt: Date.now(),
+    };
+    const pendingId = newMessageId();
+    const pendingMsg: UiMessage = {
+      id: pendingId,
+      role: 'assistant',
+      content: '',
+      pending: true,
+      createdAt: Date.now(),
+    };
 
-    setMessages((prev) => [...prev, userMsg, pendingMsg]);
+    appendMessage(sessionId, userMsg);
+    appendMessage(sessionId, pendingMsg);
+
     setDraft('');
     setSending(true);
+    pendingRef.current = pendingId;
 
     const historyForIpc: ChatMessageDto[] = [
       ...messages
@@ -52,68 +117,82 @@ export function ChatRoute() {
     ];
 
     try {
-      await chatStream(
+      const handle = await chatStream(
         { messages: historyForIpc },
         {
           onDelta: (chunk) => {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === pendingId
-                  ? { ...m, content: m.content + chunk, pending: false }
-                  : m,
-              ),
-            );
+            // Read current content from store to append — avoids stale closures.
+            const sess = useChatStore.getState().sessions[sessionId];
+            const current = sess?.messages.find((m) => m.id === pendingId);
+            patchMessage(sessionId, pendingId, {
+              content: (current?.content ?? '') + chunk,
+              pending: false,
+            });
           },
           onDone: () => {
+            patchMessage(sessionId, pendingId, { pending: false });
             setSending(false);
-            // Ensure pending flag cleared even if no deltas arrived (edge case).
-            setMessages((prev) =>
-              prev.map((m) => (m.id === pendingId ? { ...m, pending: false } : m)),
-            );
+            streamRef.current = null;
+            pendingRef.current = null;
           },
           onError: (err) => {
-            const msg = ipcErrorMessage(err);
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === pendingId
-                  ? { ...m, content: '', pending: false, error: msg }
-                  : m,
-              ),
-            );
+            patchMessage(sessionId, pendingId, {
+              content: '',
+              pending: false,
+              error: ipcErrorMessage(err),
+            });
             setSending(false);
+            streamRef.current = null;
+            pendingRef.current = null;
           },
         },
       );
+      streamRef.current = handle;
     } catch (e) {
-      // Invoke failed (before stream even started).
-      const msg = ipcErrorMessage(e);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === pendingId ? { ...m, content: '', pending: false, error: msg } : m,
-        ),
-      );
+      patchMessage(sessionId, pendingId, {
+        content: '',
+        pending: false,
+        error: ipcErrorMessage(e),
+      });
       setSending(false);
+      streamRef.current = null;
+      pendingRef.current = null;
+    }
+  }
+
+  async function stop() {
+    const handle = streamRef.current;
+    const pendingId = pendingRef.current;
+    streamRef.current = null;
+    pendingRef.current = null;
+    setSending(false);
+    if (handle) await handle.cancel();
+    // Keep whatever content we got; drop the "thinking" state.
+    if (pendingId) {
+      patchMessage(sessionId, pendingId, { pending: false });
     }
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    void send(draft);
-  }
-
-  function onTextareaKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter sends; Shift+Enter inserts a newline.
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
+    if (sending) {
+      void stop();
+    } else {
       void send(draft);
     }
   }
 
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title="Chat" subtitle="Hermes · streaming · Sprint 1" />
+  function onTextareaKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      if (!sending) void send(draft);
+    }
+  }
 
-      {/* Scrollable transcript */}
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <PageHeader title="Chat" subtitle="Hermes · streaming · Sprint 2" />
+
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-6">
           {messages.length === 0 ? (
@@ -124,7 +203,6 @@ export function ChatRoute() {
         </div>
       </div>
 
-      {/* Composer */}
       <div className="border-t border-border bg-bg/80 backdrop-blur">
         <form onSubmit={onSubmit} className="mx-auto flex max-w-3xl items-end gap-2 px-6 py-4">
           <textarea
@@ -141,9 +219,28 @@ export function ChatRoute() {
               'disabled:opacity-60',
             )}
           />
-          <Button type="submit" disabled={sending || !draft.trim()} className="h-11 px-4">
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          {sending ? (
+            <Button
+              type="submit"
+              variant="secondary"
+              className="h-11 px-4"
+              aria-label="Stop generating"
+              title="Stop"
+            >
+              <Square className="h-4 w-4" fill="currentColor" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!draft.trim()}
+              className="h-11 px-4"
+              aria-label="Send message"
+              title="Send"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </form>
       </div>
     </div>
@@ -182,138 +279,3 @@ function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: UiMessage }) {
-  const isUser = msg.role === 'user';
-  return (
-    <div className={cn('flex gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
-      <div
-        className={cn(
-          'flex h-8 w-8 flex-none items-center justify-center rounded-full',
-          isUser ? 'bg-gold-500/15 text-gold-500' : 'bg-bg-elev-1 text-fg',
-        )}
-        aria-hidden
-      >
-        {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-      </div>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
-          // Fixed dark ink for the gold bubble — independent of theme.
-          isUser
-            ? 'bg-gold-500 text-[hsl(225_30%_10%)]'
-            : 'border border-border bg-bg-elev-1 text-fg',
-          msg.error && 'border-danger/40 bg-danger/5 text-danger',
-        )}
-      >
-        {msg.pending && !msg.content ? (
-          <span className="inline-flex items-center gap-2 text-fg-muted">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            thinking…
-          </span>
-        ) : msg.error ? (
-          <span className="inline-flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
-            <span>{msg.error}</span>
-          </span>
-        ) : isUser ? (
-          // Users type plain text — preserve newlines, don't render MD.
-          <span className="whitespace-pre-wrap">{msg.content}</span>
-        ) : (
-          <Markdown>{msg.content}</Markdown>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Minimal Markdown renderer scoped for chat bubbles. Styles everything
- * via design tokens so it inherits light/dark themes. No raw HTML, no
- * custom rehype — safe by default (react-markdown escapes by design).
- */
-function Markdown({ children }: { children: string }) {
-  return (
-    <div className="prose-chat">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-          h1: ({ children }) => (
-            <h1 className="mb-2 mt-3 text-base font-semibold first:mt-0">{children}</h1>
-          ),
-          h2: ({ children }) => (
-            <h2 className="mb-2 mt-3 text-[15px] font-semibold first:mt-0">{children}</h2>
-          ),
-          h3: ({ children }) => (
-            <h3 className="mb-2 mt-3 text-sm font-semibold first:mt-0">{children}</h3>
-          ),
-          ul: ({ children }) => (
-            <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>
-          ),
-          li: ({ children }) => <li>{children}</li>,
-          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-          em: ({ children }) => <em className="italic">{children}</em>,
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-gold-600 underline decoration-gold-500/40 underline-offset-2 hover:decoration-gold-500"
-            >
-              {children}
-            </a>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className="my-2 border-l-2 border-border pl-3 text-fg-muted">
-              {children}
-            </blockquote>
-          ),
-          code: ({ className, children, ...rest }) => {
-            const isBlock = /language-/.test(className ?? '');
-            if (isBlock) {
-              return (
-                <code
-                  className={cn(
-                    'block overflow-x-auto rounded-md bg-bg-elev-2 px-3 py-2 font-mono text-xs',
-                    className,
-                  )}
-                  {...rest}
-                >
-                  {children}
-                </code>
-              );
-            }
-            return (
-              <code
-                className="rounded bg-bg-elev-2 px-1 py-[1px] font-mono text-[0.85em]"
-                {...rest}
-              >
-                {children}
-              </code>
-            );
-          },
-          pre: ({ children }) => <pre className="my-2">{children}</pre>,
-          table: ({ children }) => (
-            <div className="my-2 overflow-x-auto">
-              <table className="min-w-full border-collapse text-xs">{children}</table>
-            </div>
-          ),
-          th: ({ children }) => (
-            <th className="border border-border bg-bg-elev-2 px-2 py-1 text-left font-semibold">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="border border-border px-2 py-1 align-top">{children}</td>
-          ),
-          hr: () => <hr className="my-3 border-border" />,
-        }}
-      >
-        {children}
-      </ReactMarkdown>
-    </div>
-  );
-}
