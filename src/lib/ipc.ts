@@ -202,6 +202,28 @@ export function hermesConfigWriteModel(
   return invoke<HermesConfigView>('hermes_config_write_model', { model });
 }
 
+/**
+ * Upsert or delete a `*_API_KEY` entry in `~/.hermes/.env`. Pass `null` or
+ * an empty string to remove. Only `*_API_KEY` suffixes are permitted
+ * server-side. Returns the refreshed config view.
+ */
+export function hermesEnvSetKey(
+  key: string,
+  value: string | null,
+): Promise<HermesConfigView> {
+  return invoke<HermesConfigView>('hermes_env_set_key', { key, value });
+}
+
+/**
+ * Run `hermes gateway restart`. Resolves with the process's combined stdout
+ * (or stderr on empty stdout). Rejects with the process's error output on
+ * non-zero exit. The call is long — typically a few seconds while the
+ * gateway shuts down and re-binds port 8642.
+ */
+export function hermesGatewayRestart(): Promise<string> {
+  return invoke<string>('hermes_gateway_restart');
+}
+
 // ───────────────────────── Settings / config ─────────────────────────
 
 export interface GatewayConfigDto {

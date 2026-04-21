@@ -65,6 +65,8 @@ pub fn run() {
             ipc::config::config_test,
             ipc::hermes_config::hermes_config_read,
             ipc::hermes_config::hermes_config_write_model,
+            ipc::hermes_config::hermes_env_set_key,
+            ipc::hermes_config::hermes_gateway_restart,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

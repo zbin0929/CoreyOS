@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import {
   AlertCircle,
   CheckCircle2,
+  Eye,
+  EyeOff,
   FileText,
   Info,
   Key,
@@ -10,6 +12,7 @@ import {
   RotateCcw,
   Save,
   Terminal as TerminalIcon,
+  Zap,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -17,6 +20,8 @@ import { cn } from '@/lib/cn';
 import {
   hermesConfigRead,
   hermesConfigWriteModel,
+  hermesEnvSetKey,
+  hermesGatewayRestart,
   ipcErrorMessage,
   type HermesConfigView,
   type HermesModelSection,
@@ -229,7 +234,13 @@ export function ModelsRoute() {
           {loaded && (
             <>
               {needsRestart && (
-                <RestartBanner onDismiss={() => setNeedsRestart(false)} />
+                <RestartBanner
+                  onDismiss={() => setNeedsRestart(false)}
+                  onRestarted={(view) => {
+                    if (view) setState({ kind: 'loaded', view });
+                    setNeedsRestart(false);
+                  }}
+                />
               )}
 
               <CurrentCard view={loaded} />
@@ -260,33 +271,13 @@ export function ModelsRoute() {
                   </Field>
 
                   {providerMeta && (
-                    <div className="flex items-start gap-2 rounded-md border border-border bg-bg-elev-2 px-3 py-2 text-xs">
-                      <Key
-                        className={cn(
-                          'mt-0.5 h-3.5 w-3.5 flex-none',
-                          envKeyPresent ? 'text-emerald-500' : 'text-amber-500',
-                        )}
-                      />
-                      <div className="flex-1">
-                        {envKeyPresent ? (
-                          <>
-                            <span className="text-emerald-600">
-                              <code className="font-mono">{providerMeta.envKey}</code> is set
-                            </span>{' '}
-                            <span className="text-fg-muted">in ~/.hermes/.env</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-amber-600">
-                              Missing <code className="font-mono">{providerMeta.envKey}</code>
-                            </span>{' '}
-                            <span className="text-fg-muted">
-                              in ~/.hermes/.env — add it before restarting the gateway.
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                    <ApiKeyPanel
+                      envKey={providerMeta.envKey}
+                      present={envKeyPresent}
+                      onSaved={(view) => {
+                        setState({ kind: 'loaded', view });
+                      }}
+                    />
                   )}
 
                   <Field label="Model id" hint="The exact id the provider accepts.">
@@ -396,19 +387,83 @@ function Value({ value, mono }: { value?: string | null; mono?: boolean }) {
   );
 }
 
-function RestartBanner({ onDismiss }: { onDismiss: () => void }) {
+function RestartBanner({
+  onDismiss,
+  onRestarted,
+}: {
+  onDismiss: () => void;
+  onRestarted: (view: HermesConfigView | null) => void;
+}) {
+  const [status, setStatus] = useState<
+    | { kind: 'idle' }
+    | { kind: 'running' }
+    | { kind: 'done'; output: string }
+    | { kind: 'err'; message: string }
+  >({ kind: 'idle' });
+
+  async function doRestart() {
+    if (status.kind === 'running') return;
+    setStatus({ kind: 'running' });
+    try {
+      const output = await hermesGatewayRestart();
+      setStatus({ kind: 'done', output });
+      // Give Hermes a moment to finish binding port 8642, then refresh.
+      window.setTimeout(async () => {
+        try {
+          const view = await hermesConfigRead();
+          onRestarted(view);
+        } catch {
+          onRestarted(null);
+        }
+      }, 1200);
+    } catch (e) {
+      setStatus({ kind: 'err', message: ipcErrorMessage(e) });
+    }
+  }
+
   return (
     <div className="flex items-start gap-2 rounded-md border border-gold-500/40 bg-gold-500/5 p-3 text-sm">
       <TerminalIcon className="mt-0.5 h-4 w-4 flex-none text-gold-500" />
       <div className="flex-1">
         <div className="font-medium text-fg">Restart the gateway to apply</div>
         <div className="mt-1 text-xs text-fg-muted">
-          Hermes doesn't hot-reload <code className="font-mono">config.yaml</code>. Run this in
-          a terminal:
+          Hermes doesn't hot-reload <code className="font-mono">config.yaml</code>. Click below,
+          or run <code className="font-mono">hermes gateway restart</code> manually.
         </div>
-        <pre className="mt-2 overflow-x-auto rounded bg-[#0d1117] px-3 py-2 font-mono text-xs text-[#e6edf3]">
-          hermes gateway restart
-        </pre>
+
+        <div className="mt-3 flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={doRestart}
+            disabled={status.kind === 'running'}
+          >
+            {status.kind === 'running' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Zap className="h-3.5 w-3.5" />
+            )}
+            Restart now
+          </Button>
+          {status.kind === 'done' && (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Gateway restarted.
+            </span>
+          )}
+          {status.kind === 'err' && (
+            <span className="inline-flex items-start gap-1 text-xs text-danger">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+              <span className="break-all">{status.message}</span>
+            </span>
+          )}
+        </div>
+
+        {status.kind === 'done' && status.output.trim() && (
+          <pre className="mt-2 max-h-32 overflow-y-auto rounded bg-[#0d1117] px-3 py-2 font-mono text-[11px] text-[#e6edf3]">
+            {status.output.trim()}
+          </pre>
+        )}
       </div>
       <button
         onClick={onDismiss}
@@ -417,6 +472,178 @@ function RestartBanner({ onDismiss }: { onDismiss: () => void }) {
       >
         ×
       </button>
+    </div>
+  );
+}
+
+/**
+ * Inline API-key form shown below the provider dropdown. Collapsed when the
+ * key is already present; expandable for rotation. The value never leaves
+ * this component as state — it's sent straight to `hermesEnvSetKey` which
+ * writes to `~/.hermes/.env` (mode 0600) and then cleared.
+ */
+function ApiKeyPanel({
+  envKey,
+  present,
+  onSaved,
+}: {
+  envKey: string;
+  present: boolean;
+  onSaved: (view: HermesConfigView) => void;
+}) {
+  const [expanded, setExpanded] = useState(!present);
+  const [value, setValue] = useState('');
+  const [show, setShow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // If the prop flips (e.g. after a save), collapse + clear.
+  useEffect(() => {
+    if (present && !saving) {
+      setExpanded(false);
+      setValue('');
+    }
+  }, [present, saving]);
+
+  async function save() {
+    if (!value.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const view = await hermesEnvSetKey(envKey, value.trim());
+      setValue('');
+      onSaved(view);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!expanded) {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-border bg-bg-elev-2 px-3 py-2 text-xs">
+        <Key className="mt-0.5 h-3.5 w-3.5 flex-none text-emerald-500" />
+        <div className="flex-1">
+          <span className="text-emerald-600">
+            <code className="font-mono">{envKey}</code> is set
+          </span>{' '}
+          <span className="text-fg-muted">in ~/.hermes/.env</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="text-xs text-fg-subtle transition hover:text-fg"
+        >
+          Rotate
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-2 rounded-md border px-3 py-2.5 text-xs',
+        present
+          ? 'border-border bg-bg-elev-2'
+          : 'border-amber-500/40 bg-amber-500/5',
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <Key
+          className={cn(
+            'mt-0.5 h-3.5 w-3.5 flex-none',
+            present ? 'text-emerald-500' : 'text-amber-500',
+          )}
+        />
+        <div className="flex-1">
+          {present ? (
+            <>
+              <span className="font-medium text-fg">Rotate API key</span>
+              <span className="ml-1 text-fg-muted">
+                — new value replaces the current <code className="font-mono">{envKey}</code>.
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-amber-600">
+                Missing <code className="font-mono">{envKey}</code>
+              </span>
+              <span className="ml-1 text-fg-muted">
+                — add it so Hermes can talk to this provider.
+              </span>
+            </>
+          )}
+        </div>
+        {present && (
+          <button
+            type="button"
+            onClick={() => {
+              setExpanded(false);
+              setValue('');
+              setError(null);
+            }}
+            className="text-xs text-fg-subtle transition hover:text-fg"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="sk-…"
+          autoComplete="off"
+          spellCheck={false}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void save();
+            }
+          }}
+          className={cn(inputCls, 'pr-9 font-mono text-xs')}
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-fg-subtle transition hover:bg-bg-elev-1 hover:text-fg"
+          aria-label={show ? 'Hide' : 'Show'}
+          tabIndex={-1}
+        >
+          {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-fg-subtle">
+          Stored only in <code className="font-mono">~/.hermes/.env</code> (mode 0600).
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          onClick={save}
+          disabled={!value.trim() || saving}
+        >
+          {saving ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Save className="h-3 w-3" />
+          )}
+          Save key
+        </Button>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-1 text-xs text-danger">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+          <span className="break-all">{error}</span>
+        </div>
+      )}
     </div>
   );
 }

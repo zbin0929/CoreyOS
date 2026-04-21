@@ -196,6 +196,147 @@ fn read_env_key_names() -> io::Result<Vec<String>> {
     Ok(out)
 }
 
+/// Upsert or delete a key in `~/.hermes/.env`, preserving every other line
+/// (comments, blanks, order). If `value` is `None` or empty, the existing
+/// line is removed. If the key doesn't exist yet, it's appended at the end.
+///
+/// Only `*_API_KEY` names are permitted to avoid accidental corruption of
+/// non-secret config via this endpoint.
+pub fn write_env_key(key: &str, value: Option<&str>) -> io::Result<()> {
+    if !is_allowed_env_key(key) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("refusing to write non-API-key env var: {key}"),
+        ));
+    }
+
+    let path = env_path()?;
+    let raw = fs::read_to_string(&path).unwrap_or_default();
+    let mut out = String::with_capacity(raw.len() + 64);
+
+    let mut found = false;
+    let should_delete = value.map(str::is_empty).unwrap_or(true);
+    let target_value = value.unwrap_or("");
+
+    for line in raw.lines() {
+        if line_matches_key(line, key) {
+            found = true;
+            if !should_delete {
+                out.push_str(key);
+                out.push('=');
+                out.push_str(target_value);
+                out.push('\n');
+            }
+            // else: skip, effectively deleting the line
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+
+    // Trim trailing newlines to avoid accumulating blanks over many edits.
+    while out.ends_with("\n\n") {
+        out.pop();
+    }
+
+    if !found && !should_delete {
+        // Append, with a separating newline if the file didn't end with one.
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(key);
+        out.push('=');
+        out.push_str(target_value);
+        out.push('\n');
+    }
+
+    // Atomic write via tmp + rename. Also tighten perms to 0600 on Unix
+    // since this file now carries secrets.
+    let tmp = path.with_extension("env.caduceus.tmp");
+    fs::write(&tmp, &out)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+    }
+    fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
+fn is_allowed_env_key(key: &str) -> bool {
+    !key.is_empty()
+        && key.ends_with("_API_KEY")
+        && key
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// Returns `true` when `line` (after trimming leading whitespace, ignoring
+/// comments) assigns `key`. Handles `  KEY=value`, `KEY =value`, etc.
+fn line_matches_key(line: &str, key: &str) -> bool {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') {
+        return false;
+    }
+    let Some(eq) = trimmed.find('=') else {
+        return false;
+    };
+    trimmed[..eq].trim() == key
+}
+
+/// Shell out to `hermes gateway restart`. Tries `$PATH` first, then falls back
+/// to `~/.local/bin/hermes` (where Hermes installs by default on macOS). The
+/// command is synchronous — callers should run this off the Tokio runtime's
+/// main thread (i.e. via `spawn_blocking` or in an async IPC handler).
+pub fn gateway_restart() -> io::Result<String> {
+    let binary = resolve_hermes_binary()?;
+    let output = std::process::Command::new(&binary)
+        .args(["gateway", "restart"])
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "hermes gateway restart failed (status {:?}): {}{}",
+            output.status.code(),
+            stderr,
+            stdout
+        )));
+    }
+    Ok(if stdout.trim().is_empty() {
+        stderr
+    } else {
+        stdout
+    })
+}
+
+fn resolve_hermes_binary() -> io::Result<PathBuf> {
+    // 1) $PATH lookup. `which` is portable but we avoid spawning; just walk.
+    if let Some(path_env) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_env) {
+            let candidate = dir.join("hermes");
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    // 2) Fallback to the canonical install path.
+    if let Some(home) = std::env::var_os("HOME") {
+        let candidate = PathBuf::from(home).join(".local/bin/hermes");
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        "hermes CLI not found in $PATH or ~/.local/bin/. Install Hermes or add it to PATH.",
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +406,29 @@ NOT_A_KEY=hello
         } else {
             std::env::remove_var("HOME");
         }
+    }
+
+    #[test]
+    fn is_allowed_env_key_gates_non_api_keys() {
+        assert!(is_allowed_env_key("OPENAI_API_KEY"));
+        assert!(is_allowed_env_key("FOO_BAR_API_KEY"));
+        assert!(!is_allowed_env_key("OPENAI_KEY"));
+        assert!(!is_allowed_env_key("API_SERVER_ENABLED"));
+        assert!(!is_allowed_env_key("openai_api_key")); // lowercase rejected
+        assert!(!is_allowed_env_key(""));
+        assert!(!is_allowed_env_key("EVIL $() _API_KEY"));
+    }
+
+    #[test]
+    fn line_matches_key_handles_whitespace_and_comments() {
+        assert!(line_matches_key("OPENAI_API_KEY=sk-x", "OPENAI_API_KEY"));
+        assert!(line_matches_key("  OPENAI_API_KEY=sk-x", "OPENAI_API_KEY"));
+        assert!(line_matches_key("OPENAI_API_KEY =sk-x", "OPENAI_API_KEY"));
+        assert!(!line_matches_key("# OPENAI_API_KEY=sk-x", "OPENAI_API_KEY"));
+        assert!(!line_matches_key(
+            "OPENAI_API_KEY_V2=sk-x",
+            "OPENAI_API_KEY"
+        ));
+        assert!(!line_matches_key("other line", "OPENAI_API_KEY"));
     }
 }

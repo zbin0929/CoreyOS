@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 5A: closed-loop LLM switching (.env + restart)
+
+### Context
+
+Sprint 4 let users change the provider/model in `config.yaml`, but adding a new provider still required (1) hand-editing `~/.hermes/.env` for the API key and (2) shelling out to `hermes gateway restart`. This sprint closes that loop.
+
+### Shipped
+
+- **Rust `hermes_config.rs`**: `write_env_key(key, value)` does an upsert-or-delete on `~/.hermes/.env` while preserving every other line (comments, blanks, order). Only `*_API_KEY` names are permitted (server-side allowlist via `is_allowed_env_key`). Writes atomically via tmp + rename, and `chmod 0600`s the file on Unix since it now holds secrets. `gateway_restart()` shells out to `hermes gateway restart`, resolving the binary from `$PATH` → `~/.local/bin/hermes` fallback.
+- **IPC**: `hermes_env_set_key(key, value)` + `hermes_gateway_restart()`. The restart IPC runs the blocking `Command::output()` via `tokio::task::spawn_blocking` so it doesn't stall the runtime. Returns the combined stdout/stderr on success.
+- **LLMs page — `ApiKeyPanel`**: inline form rendered below the provider dropdown. Collapsed "✓ set" state with a **Rotate** affordance; expanded form is a password input with show/hide, Enter-to-submit, 0600 reminder, and an error row. The key value exists only in local component state — sent directly to the IPC, never persisted elsewhere, cleared on save.
+- **LLMs page — restart banner upgraded**: new **Restart now** button calls `hermesGatewayRestart()`, shows a spinner while running, then waits ~1.2s and re-reads Hermes config. Output from the CLI is displayed in a monospaced box when non-empty. Fallback instruction to run it manually is retained.
+- **Frontend ipc.ts**: `hermesEnvSetKey()` + `hermesGatewayRestart()` wrappers.
+- **Tests**: 2 new cargo unit tests (`is_allowed_env_key_gates_non_api_keys`, `line_matches_key_handles_whitespace_and_comments`) bringing total to 11.
+
+### Safety notes
+
+- **API keys never round-trip through Caduceus**: the read path returns only key NAMES; values live only in `~/.hermes/.env`. The write path is one-way (`hermesEnvSetKey(key, value)` sends, backend stores, UI clears).
+- **Allowlist on the write endpoint**: `is_allowed_env_key` rejects anything not matching `/^[A-Z0-9_]+_API_KEY$/`, so this IPC can't be abused to corrupt `API_SERVER_PORT`, `GATEWAY_ALLOW_ALL_USERS`, etc.
+- **File perms**: `0600` on Unix after write. The existing file may have already been 0600 (Hermes installer sets that); we preserve the intent.
+
+### Verified
+
+- 11 cargo tests (2 new) + 11 vitest tests green. typecheck + lint + clippy + fmt clean.
+
+### Deferred
+
+- **Gateway health verification after restart**: we re-read Hermes config but don't actively probe `/health`. Hermes's restart is usually < 2s but could fail; a retry loop with exponential backoff is a clean follow-up.
+- **Batch API-key import**: no UI for pasting an entire `.env` file at once. Not needed for single-provider flow.
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 4: Hermes config integration (the real LLM knob)
 
 ### Context
