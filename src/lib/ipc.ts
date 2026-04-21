@@ -142,6 +142,37 @@ export async function generateTitle(
   }
 }
 
+// ───────────────────────── Settings / config ─────────────────────────
+
+export interface GatewayConfigDto {
+  base_url: string;
+  api_key?: string | null;
+  default_model?: string | null;
+}
+
+export interface HealthProbe {
+  latency_ms: number;
+  body: string;
+}
+
+/** Current in-memory gateway config (synced with `~/.../gateway.json`). */
+export function configGet(): Promise<GatewayConfigDto> {
+  return invoke<GatewayConfigDto>('config_get');
+}
+
+/** Persist + hot-swap the adapter. Rejects with `IpcError` on invalid URL. */
+export function configSet(config: GatewayConfigDto): Promise<void> {
+  return invoke<void>('config_set', { config });
+}
+
+/**
+ * Dry-run a config by hitting `/health`. Does NOT save. Used by the Settings
+ * page's "Test" button to give feedback before the user commits.
+ */
+export function configTest(config: GatewayConfigDto): Promise<HealthProbe> {
+  return invoke<HealthProbe>('config_test', { config });
+}
+
 // ───────────────────────── Error envelope ─────────────────────────
 
 export type IpcErrorKind =

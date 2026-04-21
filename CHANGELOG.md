@@ -6,6 +6,28 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 2B: Settings page + runtime gateway config
+
+### Shipped
+
+- **Settings page, real** (`src/features/settings/index.tsx`): replaces the Phase-0 placeholder. Form with **Base URL**, **API key** (password input with show/hide toggle), **Default model** (with datalist suggestions). **Test connection** button probes `/health` without persisting. **Save** applies atomically. Reset button reverts to loaded snapshot. Unsaved-change indicator + inline success/error states.
+- **Rust `config.rs`**: new `GatewayConfig` type with `load_or_default(dir)` + atomic `save(dir)`. File lives at `<app_config_dir>/gateway.json` (platform-native, macOS `~/Library/Application Support/com.caduceus.app/`). Env vars (`HERMES_GATEWAY_URL` / `_KEY` / `_MODEL`) remain as a fallback for bootstrap. 3 unit tests covering defaults, roundtrip, missing-file fallback.
+- **`AdapterRegistry` hot-swap**: internal `HashMap` moved behind `RwLock` so `register()` takes `&self`. Lets the IPC `config_set` command swap the Hermes adapter without app restart. In-flight streams finish against the old `Arc<HermesAdapter>`; subsequent requests pick up the new one.
+- **IPC `config_get` / `config_set` / `config_test`** (`src-tauri/src/ipc/config.rs`): **set** validates URL → builds adapter → persists JSON → hot-swaps atomically. **test** builds a throwaway `HermesGateway` and hits `/health` — zero side effects.
+- **`AppState` extension**: now holds `Arc<RwLock<GatewayConfig>>` + `config_dir: PathBuf`. Initialization moved into Tauri's `setup()` hook so `app.path().app_config_dir()` can resolve the platform-native path.
+- **Frontend IPC wrappers**: `configGet()`, `configSet()`, `configTest()` in `src/lib/ipc.ts`. `HealthProbe` now `Serialize`-able.
+
+### Verified
+
+- `pnpm {typecheck,lint,test,build}` all green. 11 vitest + 6 cargo tests passing (3 new config tests). `cargo clippy -- -D warnings` clean. `cargo fmt --check` clean.
+
+### Deferred
+
+- **Encrypted API key storage** (keychain / stronghold): current impl is plaintext JSON under user-level app data. Acceptable local-desktop trust boundary for Phase 1; hardening in Phase 2+.
+- **Multi-adapter Settings**: only Hermes is registered today. Profiles (multiple saved gateway configs you can switch between) are a Phase 4 dependency for the multi-model compare feature.
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 2: sessions, stop, syntax highlighting
 
 ### Shipped

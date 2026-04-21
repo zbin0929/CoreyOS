@@ -70,10 +70,7 @@ impl HermesGateway {
                 body,
             });
         }
-        Ok(HealthProbe {
-            latency_ms,
-            body,
-        })
+        Ok(HealthProbe { latency_ms, body })
     }
 
     /// `POST /v1/chat/completions` with `stream=false` — returns the assistant
@@ -111,7 +108,9 @@ impl HermesGateway {
             });
         }
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return Err(AdapterError::RateLimited { retry_after_s: None });
+            return Err(AdapterError::RateLimited {
+                retry_after_s: None,
+            });
         }
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
@@ -121,9 +120,10 @@ impl HermesGateway {
             });
         }
 
-        let parsed: ChatCompletionResponse = resp.json().await.map_err(|e| AdapterError::Protocol {
-            detail: format!("malformed chat completion body: {e}"),
-        })?;
+        let parsed: ChatCompletionResponse =
+            resp.json().await.map_err(|e| AdapterError::Protocol {
+                detail: format!("malformed chat completion body: {e}"),
+            })?;
 
         let first = parsed
             .choices
@@ -182,7 +182,9 @@ impl HermesGateway {
             });
         }
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return Err(AdapterError::RateLimited { retry_after_s: None });
+            return Err(AdapterError::RateLimited {
+                retry_after_s: None,
+            });
         }
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
@@ -257,7 +259,7 @@ impl HermesGateway {
 
 // ───────────────────────── DTOs ─────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct HealthProbe {
     pub latency_ms: u32,
     pub body: String,

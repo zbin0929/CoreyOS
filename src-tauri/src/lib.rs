@@ -10,6 +10,7 @@
 #![allow(dead_code)]
 
 mod adapters;
+mod config;
 mod error;
 mod ipc;
 mod sandbox;
@@ -22,22 +23,20 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::adapters::{hermes::HermesAdapter, AdapterRegistry};
+use crate::config::GatewayConfig;
 use crate::state::AppState;
 
-/// Gateway defaults. Phase 2 will surface these in Settings; for Sprint 1
-/// we read env overrides and fall back to the documented defaults.
-/// - `HERMES_GATEWAY_URL`  — base URL (default `http://127.0.0.1:8642`)
-/// - `HERMES_GATEWAY_KEY`  — bearer token (matches `API_SERVER_KEY`)
-/// - `HERMES_DEFAULT_MODEL`— model id (falls back to adapter default)
-fn build_hermes_adapter() -> Arc<HermesAdapter> {
-    let base_url =
-        std::env::var("HERMES_GATEWAY_URL").unwrap_or_else(|_| "http://127.0.0.1:8642".to_string());
-    let api_key = std::env::var("HERMES_GATEWAY_KEY").ok().filter(|k| !k.is_empty());
-    let default_model = std::env::var("HERMES_DEFAULT_MODEL").ok().filter(|k| !k.is_empty());
-
-    match HermesAdapter::new_live(base_url.clone(), api_key, default_model) {
+/// Build a live Hermes adapter from the given config. Falls back to a stub
+/// on construction failure so the app stays usable (the user can still open
+/// Settings and fix the URL).
+fn build_hermes_adapter(cfg: &GatewayConfig) -> Arc<HermesAdapter> {
+    match HermesAdapter::new_live(
+        cfg.base_url.clone(),
+        cfg.api_key.clone(),
+        cfg.default_model.clone(),
+    ) {
         Ok(adapter) => {
-            info!(base_url, "Hermes adapter: live mode");
+            info!(base_url = %cfg.base_url, "Hermes adapter: live mode");
             Arc::new(adapter)
         }
         Err(e) => {
@@ -51,17 +50,8 @@ fn build_hermes_adapter() -> Arc<HermesAdapter> {
 pub fn run() {
     init_tracing();
 
-    let mut registry = AdapterRegistry::new();
-    registry.register(build_hermes_adapter());
-    registry
-        .set_default("hermes")
-        .expect("hermes is registered");
-
-    let app_state = AppState::new(registry);
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             ipc::health::health_check,
             ipc::session::session_list,
@@ -69,10 +59,36 @@ pub fn run() {
             ipc::model::model_list,
             ipc::chat::chat_send,
             ipc::chat::chat_stream_start,
+            ipc::config::config_get,
+            ipc::config::config_set,
+            ipc::config::config_test,
             ipc::demo::home_stats,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Caduceus booting");
+
+            // Resolve the config directory AFTER Tauri has initialized —
+            // `app.path().app_config_dir()` is only available here.
+            let config_dir = app
+                .path()
+                .app_config_dir()
+                .expect("failed to resolve app_config_dir");
+            let cfg = GatewayConfig::load_or_default(&config_dir);
+            info!(
+                base_url = %cfg.base_url,
+                dir = %config_dir.display(),
+                "gateway config loaded",
+            );
+
+            // Build the registry + state with the resolved config.
+            let registry = AdapterRegistry::new();
+            registry.register(build_hermes_adapter(&cfg));
+            registry
+                .set_default("hermes")
+                .expect("hermes is registered");
+
+            app.manage(AppState::new(registry, cfg, config_dir));
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
             }

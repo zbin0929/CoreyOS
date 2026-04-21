@@ -173,29 +173,45 @@ pub trait AgentAdapter: Send + Sync + 'static {
 // ───────────────────────── Registry ─────────────────────────
 
 pub struct AdapterRegistry {
-    adapters: HashMap<&'static str, Arc<dyn AgentAdapter>>,
+    /// RwLock so adapters can be hot-swapped at runtime (e.g. when the
+    /// user saves new gateway settings in the UI).
+    adapters: RwLock<HashMap<&'static str, Arc<dyn AgentAdapter>>>,
     default: RwLock<Option<String>>,
 }
 
 impl AdapterRegistry {
     pub fn new() -> Self {
         Self {
-            adapters: HashMap::new(),
+            adapters: RwLock::new(HashMap::new()),
             default: RwLock::new(None),
         }
     }
 
-    pub fn register(&mut self, adapter: Arc<dyn AgentAdapter>) {
+    /// Insert-or-replace. Takes `&self` so it can be called on an `Arc`
+    /// shared into Tauri state.
+    pub fn register(&self, adapter: Arc<dyn AgentAdapter>) {
         let id = adapter.id();
-        self.adapters.insert(id, adapter);
+        self.adapters
+            .write()
+            .expect("registry poisoned")
+            .insert(id, adapter);
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn AgentAdapter>> {
-        self.adapters.get(id).cloned()
+        self.adapters
+            .read()
+            .expect("registry poisoned")
+            .get(id)
+            .cloned()
     }
 
     pub fn set_default(&self, id: &str) -> AdapterResult<()> {
-        if !self.adapters.contains_key(id) {
+        if !self
+            .adapters
+            .read()
+            .expect("registry poisoned")
+            .contains_key(id)
+        {
             return Err(AdapterError::NotConfigured {
                 hint: format!("adapter '{id}' is not registered"),
             });
@@ -206,12 +222,18 @@ impl AdapterRegistry {
 
     pub fn default_adapter(&self) -> Option<Arc<dyn AgentAdapter>> {
         let default_id = self.default.read().expect("registry poisoned").clone()?;
-        self.adapters.get(default_id.as_str()).cloned()
+        self.adapters
+            .read()
+            .expect("registry poisoned")
+            .get(default_id.as_str())
+            .cloned()
     }
 
     pub fn all(&self) -> Vec<AdapterInfo> {
         let default_id = self.default.read().expect("registry poisoned").clone();
         self.adapters
+            .read()
+            .expect("registry poisoned")
             .values()
             .map(|a| AdapterInfo {
                 id: a.id().to_string(),

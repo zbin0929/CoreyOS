@@ -14,11 +14,11 @@ import {
   Clock,
   Radio,
   Boxes,
-  Settings as SettingsIcon,
 } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
+import { SettingsRoute } from '@/features/settings';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -170,15 +170,7 @@ const modelsRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: () => (
-    <Placeholder
-      titleKey="nav.settings"
-      emptyTitleKey="empty.settings.title"
-      emptyDescKey="empty.settings.desc"
-      icon={SettingsIcon}
-      phase={2}
-    />
-  ),
+  component: SettingsRoute,
 });
 
 const routeTree = rootRoute.addChildren([

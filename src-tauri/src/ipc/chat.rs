@@ -25,10 +25,7 @@ pub struct ChatSendReply {
 /// Phase 1 Sprint 1 non-streaming send. Calls the default adapter's
 /// `chat_once`. Streaming (`chat:delta:{handle}` events) lands in Sprint 2.
 #[tauri::command]
-pub async fn chat_send(
-    state: State<'_, AppState>,
-    args: ChatSendArgs,
-) -> IpcResult<ChatSendReply> {
+pub async fn chat_send(state: State<'_, AppState>, args: ChatSendArgs) -> IpcResult<ChatSendReply> {
     let adapter = state
         .adapters
         .default_adapter()
