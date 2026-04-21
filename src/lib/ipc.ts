@@ -183,6 +183,71 @@ export function modelList(): Promise<ModelInfo[]> {
   return invoke<ModelInfo[]>('model_list');
 }
 
+// ───────────────────────── SQLite persistence ─────────────────────────
+
+export interface DbSessionRow {
+  id: string;
+  title: string;
+  model: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface DbMessageRow {
+  id: string;
+  session_id: string;
+  role: string;
+  content: string;
+  error: string | null;
+  position: number;
+  created_at: number;
+}
+
+export interface DbToolCallRow {
+  id: string;
+  message_id: string;
+  tool: string;
+  emoji: string | null;
+  label: string | null;
+  at: number;
+}
+
+export interface DbMessageWithTools extends DbMessageRow {
+  tool_calls: DbToolCallRow[];
+}
+
+export interface DbSessionWithMessages extends DbSessionRow {
+  messages: DbMessageWithTools[];
+}
+
+/** Bulk load everything for app-startup hydration. Returns sessions in
+ *  `updated_at DESC` order (MRU first). */
+export function dbLoadAll(): Promise<DbSessionWithMessages[]> {
+  return invoke<DbSessionWithMessages[]>('db_load_all');
+}
+
+/** Upsert a session row. Fire-and-forget on mutations. */
+export function dbSessionUpsert(session: DbSessionRow): Promise<void> {
+  return invoke<void>('db_session_upsert', { session });
+}
+
+/** Delete a session. Cascades to messages + tool_calls. */
+export function dbSessionDelete(id: string): Promise<void> {
+  return invoke<void>('db_session_delete', { id });
+}
+
+/** Upsert a message row. Used both for initial append and for streaming
+ *  content accumulation (content field rewritten each delta). */
+export function dbMessageUpsert(message: DbMessageRow): Promise<void> {
+  return invoke<void>('db_message_upsert', { message });
+}
+
+/** Append a tool-call annotation. Primary-key conflicts are silently
+ *  ignored so duplicate emissions don't blow up. */
+export function dbToolCallAppend(call: DbToolCallRow): Promise<void> {
+  return invoke<void>('db_tool_call_append', { call });
+}
+
 // ───────────────────────── Hermes's own config.yaml ─────────────────────────
 
 export interface HermesModelSection {

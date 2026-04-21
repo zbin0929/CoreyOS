@@ -24,6 +24,8 @@ import { SessionsPanel } from './SessionsPanel';
 
 export function ChatRoute() {
   const currentId = useChatStore((s) => s.currentId);
+  const hydrated = useChatStore((s) => s.hydrated);
+  const hydrateFromDb = useChatStore((s) => s.hydrateFromDb);
   const newSession = useChatStore((s) => s.newSession);
   const sessionMessages = useChatStore((s) =>
     s.currentId ? (s.sessions[s.currentId]?.messages ?? []) : [],
@@ -33,15 +35,26 @@ export function ChatRoute() {
   const appendToolCall = useChatStore((s) => s.appendToolCall);
   const renameSession = useChatStore((s) => s.renameSession);
 
-  // Ensure there's always a current session on mount.
+  // Kick off the one-time SQLite hydration. `hydrateFromDb` is idempotent —
+  // the store guard ensures we don't double-load even under StrictMode's
+  // effect-twice semantics (the second call just re-sets the same data).
+  useEffect(() => {
+    if (!hydrated) {
+      void hydrateFromDb();
+    }
+  }, [hydrated, hydrateFromDb]);
+
+  // Once hydrated, ensure there's always a current session. If the DB came
+  // back empty, spin up a fresh one; otherwise the hydrate already restored
+  // the MRU session as `currentId`.
   useLayoutEffect(() => {
-    if (!currentId) newSession();
-  }, [currentId, newSession]);
+    if (hydrated && !currentId) newSession();
+  }, [hydrated, currentId, newSession]);
 
   return (
     <div className="flex h-full min-h-0 w-full">
       <SessionsPanel />
-      {currentId ? (
+      {hydrated && currentId ? (
         <ChatPane
           sessionId={currentId}
           messages={sessionMessages}
@@ -52,7 +65,7 @@ export function ChatRoute() {
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
-          Initializing…
+          {hydrated ? 'Initializing…' : 'Loading sessions…'}
         </div>
       )}
     </div>

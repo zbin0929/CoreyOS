@@ -37,6 +37,12 @@ eventsource-stream = "0.2"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
+# Bundled SQLite — no system dependency. Used for session/message persistence
+# (see src/db.rs). Kept behind `parking_lot` for fast mutex and `chrono` for
+# timestamp round-trips.
+rusqlite = { version = "0.31", features = ["bundled"] }
+parking_lot = "0.12"
+
 # Windows `\\?\` verbatim-prefix stripping so canonicalized paths match
 # the hard denylist (which uses human-readable `C:\...` form).
 # On non-Windows targets `dunce::canonicalize` delegates straight to

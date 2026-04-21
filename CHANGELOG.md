@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 5C: SQLite persistence (end of Phase 1)
+
+### Context
+
+Up through Sprint 5B, chat state lived in `localStorage` via `zustand/persist`. That works but has two problems: (1) clearing browser cache or reinstalling wipes every session, and (2) Phase 2's Analytics page needs SQL-queryable structured data, not a JSON blob. This sprint migrates persistence to SQLite, keeping zustand as the in-memory cache and using async IPC for the hot path.
+
+### Shipped
+
+- **Rust `db.rs`**: bundled-sqlite (`rusqlite` with `bundled` feature, zero system deps). Three normalized tables with FK cascades and indices: `sessions(id, title, model, created_at, updated_at)`, `messages(id, session_id, role, content, error, position, created_at)`, `tool_calls(id, message_id, tool, emoji, label, at)`. `Db::load_all()` returns the full tree in one call for app-startup hydration, folding joins into a nested `SessionWithMessages` shape. WAL + NORMAL sync + foreign_keys ON as pragmas.
+- **IPC `ipc/db.rs`**: five commands — `db_load_all`, `db_session_upsert`, `db_session_delete`, `db_message_upsert`, `db_tool_call_append`. Each wraps the blocking `rusqlite` call in `tokio::task::spawn_blocking` so the Tokio runtime stays non-blocking.
+- **Startup**: `Db::open` runs in the Tauri `setup()` hook against `<app_data_dir>/caduceus.db`. Failure to open (e.g. read-only home) logs loudly and sets `state.db = None` — the UI still works, just without persistence.
+- **Frontend**:
+  - `dbLoadAll()`, `dbSessionUpsert()`, `dbSessionDelete()`, `dbMessageUpsert()`, `dbToolCallAppend()` wrappers in `src/lib/ipc.ts`.
+  - `zustand/persist` middleware removed from `src/stores/chat.ts`. Replaced with:
+    - `hydrateFromDb()` action — called once from `ChatRoute` on mount; reads the tree, seeds the store, sets `hydrated: true`. Selects the MRU session as `currentId` automatically.
+    - Every mutating action (`newSession`, `deleteSession`, `renameSession`, `setSessionModel`, `appendMessage`, `patchMessage`, `appendToolCall`) now mirrors its change to the DB via a fire-and-forget `fireWrite()` helper that logs failures. The UI stays synchronous; DB writes happen in the background.
+  - `ChatRoute` gates the UI on `hydrated` — shows "Loading sessions…" until the first `dbLoadAll` returns, then either creates a fresh session or picks up where the user left off.
+- **Tests**: 4 new cargo unit tests (round-trip, MRU ordering, cascade delete, upsert update) bringing total to 15.
+
+### Design notes
+
+- **No transaction batching yet**: each streaming delta currently triggers a `db_message_upsert` — one IPC + one SQLite write per chunk. Fine for human typing speed (hundreds of writes/sec with WAL is cheap) but wasteful. A debounced write or a dedicated "streaming" IPC that batches could cut this by 10×. Left for a future optimization pass.
+- **`pending` flag is UI-only**: not mirrored to the DB because it's ephemeral ("waiting on first delta"). Messages that were pending when the app crashed will reload as non-pending (correct — the stream is gone either way).
+- **Race-free tool calls**: `appendToolCall` uses a separate store action from `patchMessage` (content accumulation) because SSE interleaves tool events and content deltas; combining them in one patch could drop one of the two updates.
+
+### Verified
+
+- `pnpm {typecheck,lint,test,build}` + `cargo {check,clippy,test,fmt --check}` green. 15 cargo tests + 11 vitest tests passing.
+- Manual: create a session, chat, quit the app, relaunch → session + messages + tool calls all restored.
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 5B: tool call rendering (agent visibility)
 
 ### Context

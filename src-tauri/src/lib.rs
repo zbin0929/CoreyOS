@@ -11,6 +11,7 @@
 
 mod adapters;
 mod config;
+mod db;
 mod error;
 mod hermes_config;
 mod ipc;
@@ -67,6 +68,11 @@ pub fn run() {
             ipc::hermes_config::hermes_config_write_model,
             ipc::hermes_config::hermes_env_set_key,
             ipc::hermes_config::hermes_gateway_restart,
+            ipc::db::db_load_all,
+            ipc::db::db_session_upsert,
+            ipc::db::db_session_delete,
+            ipc::db::db_message_upsert,
+            ipc::db::db_tool_call_append,
             ipc::demo::home_stats,
         ])
         .setup(|app| {
@@ -92,7 +98,26 @@ pub fn run() {
                 .set_default("hermes")
                 .expect("hermes is registered");
 
-            app.manage(AppState::new(registry, cfg, config_dir));
+            // Open the SQLite DB under <app_data_dir>/caduceus.db. Missing
+            // parent dirs are created by `Db::open`. If it fails we log loudly
+            // and start without persistence — the UI still functions.
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app_data_dir");
+            let db_path = db::db_path(&app_data_dir);
+            let db = match db::Db::open(&db_path) {
+                Ok(d) => {
+                    info!(path = %db_path.display(), "SQLite DB opened");
+                    Some(Arc::new(d))
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, path = %db_path.display(), "failed to open DB; persistence disabled");
+                    None
+                }
+            };
+
+            app.manage(AppState::new(registry, cfg, config_dir, db));
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();

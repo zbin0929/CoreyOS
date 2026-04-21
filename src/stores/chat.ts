@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import {
+  dbLoadAll,
+  dbMessageUpsert,
+  dbSessionDelete,
+  dbSessionUpsert,
+  dbToolCallAppend,
+  type DbSessionWithMessages,
+} from '@/lib/ipc';
 
 export interface UiMessage {
   id: string;
@@ -43,8 +50,14 @@ interface ChatState {
   sessions: Record<string, ChatSession>;
   /** Most-recently-used first. */
   orderedIds: string[];
+  /** `true` once `hydrateFromDb` has run. Prevents the Chat view from
+   *  creating a throwaway session before we know what's on disk. */
+  hydrated: boolean;
 
   // actions
+  /** Called once on app start. Reads all sessions from SQLite into zustand. */
+  hydrateFromDb: () => Promise<void>;
+
   newSession: () => string;
   switchTo: (id: string) => void;
   deleteSession: (id: string) => void;
@@ -67,6 +80,43 @@ interface ChatState {
   hasSessions: () => boolean;
 }
 
+/** Fire-and-forget DB write. Logs to console on failure — data loss is
+ *  acceptable here since zustand is the hot source of truth while the app
+ *  is open; the DB is for persistence across restarts. */
+function fireWrite(p: Promise<unknown>, label: string): void {
+  p.catch((e) => {
+    console.error(`db write failed [${label}]:`, e);
+  });
+}
+
+/** Serialize one hydrated SQL row into our zustand schema. */
+function sessionFromDb(s: DbSessionWithMessages): ChatSession {
+  return {
+    id: s.id,
+    title: s.title,
+    model: s.model,
+    createdAt: s.created_at,
+    updatedAt: s.updated_at,
+    messages: s.messages.map((m) => ({
+      id: m.id,
+      role: (m.role === 'user' ? 'user' : 'assistant') as UiMessage['role'],
+      content: m.content,
+      error: m.error ?? undefined,
+      createdAt: m.created_at,
+      toolCalls:
+        m.tool_calls.length > 0
+          ? m.tool_calls.map<UiToolCall>((t) => ({
+              id: t.id,
+              tool: t.tool,
+              emoji: t.emoji,
+              label: t.label,
+              at: t.at,
+            }))
+          : undefined,
+    })),
+  };
+}
+
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -86,159 +136,277 @@ function deriveTitle(messages: UiMessage[]): string {
   return head.length < normalized.length ? head + '…' : head;
 }
 
-export const useChatStore = create<ChatState>()(
-  persist(
-    (set, get) => ({
-      currentId: null,
-      sessions: {},
-      orderedIds: [],
+export const useChatStore = create<ChatState>()((set, get) => ({
+  currentId: null,
+  sessions: {},
+  orderedIds: [],
+  hydrated: false,
 
-      newSession: () => {
-        const id = newId('s');
-        const now = Date.now();
-        const session: ChatSession = {
-          id,
-          title: 'New chat',
-          messages: [],
-          createdAt: now,
-          updatedAt: now,
-        };
-        set((s) => ({
-          sessions: { ...s.sessions, [id]: session },
-          orderedIds: [id, ...s.orderedIds],
-          currentId: id,
-        }));
-        return id;
-      },
+  hydrateFromDb: async () => {
+    try {
+      const rows = await dbLoadAll();
+      const sessions: Record<string, ChatSession> = {};
+      const orderedIds: string[] = [];
+      for (const row of rows) {
+        sessions[row.id] = sessionFromDb(row);
+        orderedIds.push(row.id);
+      }
+      set({
+        sessions,
+        orderedIds,
+        // Restore the MRU session if one exists; otherwise null so the UI
+        // creates a fresh one.
+        currentId: orderedIds[0] ?? null,
+        hydrated: true,
+      });
+    } catch (e) {
+      console.error('db hydrate failed:', e);
+      // Still mark as hydrated so the UI unblocks — users start fresh.
+      set({ hydrated: true });
+    }
+  },
 
-      switchTo: (id) => {
-        const state = get();
-        if (!state.sessions[id]) return;
-        set({ currentId: id });
-      },
-
-      deleteSession: (id) => {
-        set((s) => {
-          if (!s.sessions[id]) return s;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { [id]: _removed, ...rest } = s.sessions;
-          const nextOrder = s.orderedIds.filter((x) => x !== id);
-          const nextCurrent =
-            s.currentId === id ? (nextOrder[0] ?? null) : s.currentId;
-          return {
-            sessions: rest,
-            orderedIds: nextOrder,
-            currentId: nextCurrent,
-          };
-        });
-      },
-
-      renameSession: (id, title) => {
-        set((s) => {
-          const sess = s.sessions[id];
-          if (!sess) return s;
-          return {
-            sessions: {
-              ...s.sessions,
-              [id]: { ...sess, title: title.trim() || sess.title, updatedAt: Date.now() },
-            },
-          };
-        });
-      },
-
-      setSessionModel: (id, model) => {
-        set((s) => {
-          const sess = s.sessions[id];
-          if (!sess) return s;
-          return {
-            sessions: {
-              ...s.sessions,
-              [id]: { ...sess, model, updatedAt: Date.now() },
-            },
-          };
-        });
-      },
-
-      appendMessage: (sessionId, msg) => {
-        set((s) => {
-          const sess = s.sessions[sessionId];
-          if (!sess) return s;
-          const nextMessages = [...sess.messages, msg];
-          const nextTitle =
-            sess.title === 'New chat' ? deriveTitle(nextMessages) : sess.title;
-          const updatedAt = Date.now();
-          // Bump to top of the MRU list.
-          const nextOrder = [
-            sessionId,
-            ...s.orderedIds.filter((x) => x !== sessionId),
-          ];
-          return {
-            sessions: {
-              ...s.sessions,
-              [sessionId]: {
-                ...sess,
-                messages: nextMessages,
-                title: nextTitle,
-                updatedAt,
-              },
-            },
-            orderedIds: nextOrder,
-          };
-        });
-      },
-
-      appendToolCall: (sessionId, msgId, call) => {
-        set((s) => {
-          const sess = s.sessions[sessionId];
-          if (!sess) return s;
-          let touched = false;
-          const nextMessages = sess.messages.map((m) => {
-            if (m.id !== msgId) return m;
-            touched = true;
-            return { ...m, toolCalls: [...(m.toolCalls ?? []), call] };
-          });
-          if (!touched) return s;
-          return {
-            sessions: {
-              ...s.sessions,
-              [sessionId]: { ...sess, messages: nextMessages, updatedAt: Date.now() },
-            },
-          };
-        });
-      },
-
-      patchMessage: (sessionId, msgId, patch) => {
-        set((s) => {
-          const sess = s.sessions[sessionId];
-          if (!sess) return s;
-          let touched = false;
-          const nextMessages = sess.messages.map((m) => {
-            if (m.id !== msgId) return m;
-            touched = true;
-            return { ...m, ...patch };
-          });
-          if (!touched) return s;
-          return {
-            sessions: {
-              ...s.sessions,
-              [sessionId]: { ...sess, messages: nextMessages, updatedAt: Date.now() },
-            },
-          };
-        });
-      },
-
-      hasSessions: () => get().orderedIds.length > 0,
-    }),
-    {
-      name: 'caduceus.chat.v1',
-      // Full state is persisted; payload is small for Sprint 2 (pure text).
-      partialize: (s) => ({
-        currentId: s.currentId,
-        sessions: s.sessions,
-        orderedIds: s.orderedIds,
+  newSession: () => {
+    const id = newId('s');
+    const now = Date.now();
+    const session: ChatSession = {
+      id,
+      title: 'New chat',
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    set((s) => ({
+      sessions: { ...s.sessions, [id]: session },
+      orderedIds: [id, ...s.orderedIds],
+      currentId: id,
+    }));
+    fireWrite(
+      dbSessionUpsert({
+        id,
+        title: session.title,
+        model: null,
+        created_at: now,
+        updated_at: now,
       }),
-    },
-  ),
-);
+      'newSession',
+    );
+    return id;
+  },
+
+  switchTo: (id) => {
+    const state = get();
+    if (!state.sessions[id]) return;
+    set({ currentId: id });
+  },
+
+  deleteSession: (id) => {
+    set((s) => {
+      if (!s.sessions[id]) return s;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [id]: _removed, ...rest } = s.sessions;
+      const nextOrder = s.orderedIds.filter((x) => x !== id);
+      const nextCurrent =
+        s.currentId === id ? (nextOrder[0] ?? null) : s.currentId;
+      return {
+        sessions: rest,
+        orderedIds: nextOrder,
+        currentId: nextCurrent,
+      };
+    });
+    fireWrite(dbSessionDelete(id), 'deleteSession');
+  },
+
+  renameSession: (id, title) => {
+    const now = Date.now();
+    let nextTitle: string | null = null;
+    set((s) => {
+      const sess = s.sessions[id];
+      if (!sess) return s;
+      nextTitle = title.trim() || sess.title;
+      return {
+        sessions: {
+          ...s.sessions,
+          [id]: { ...sess, title: nextTitle, updatedAt: now },
+        },
+      };
+    });
+    const sess = get().sessions[id];
+    if (sess && nextTitle !== null) {
+      fireWrite(
+        dbSessionUpsert({
+          id,
+          title: nextTitle,
+          model: sess.model ?? null,
+          created_at: sess.createdAt,
+          updated_at: now,
+        }),
+        'renameSession',
+      );
+    }
+  },
+
+  setSessionModel: (id, model) => {
+    const now = Date.now();
+    set((s) => {
+      const sess = s.sessions[id];
+      if (!sess) return s;
+      return {
+        sessions: {
+          ...s.sessions,
+          [id]: { ...sess, model, updatedAt: now },
+        },
+      };
+    });
+    const sess = get().sessions[id];
+    if (sess) {
+      fireWrite(
+        dbSessionUpsert({
+          id,
+          title: sess.title,
+          model,
+          created_at: sess.createdAt,
+          updated_at: now,
+        }),
+        'setSessionModel',
+      );
+    }
+  },
+
+  appendMessage: (sessionId, msg) => {
+    let position = 0;
+    let sessSnapshot: ChatSession | null = null;
+    let nextTitle = '';
+    const updatedAt = Date.now();
+    set((s) => {
+      const sess = s.sessions[sessionId];
+      if (!sess) return s;
+      const nextMessages = [...sess.messages, msg];
+      nextTitle =
+        sess.title === 'New chat' ? deriveTitle(nextMessages) : sess.title;
+      position = sess.messages.length;
+      const nextOrder = [
+        sessionId,
+        ...s.orderedIds.filter((x) => x !== sessionId),
+      ];
+      const updatedSess: ChatSession = {
+        ...sess,
+        messages: nextMessages,
+        title: nextTitle,
+        updatedAt,
+      };
+      sessSnapshot = updatedSess;
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: updatedSess,
+        },
+        orderedIds: nextOrder,
+      };
+    });
+    if (sessSnapshot) {
+      const sess = sessSnapshot as ChatSession;
+      fireWrite(
+        dbSessionUpsert({
+          id: sessionId,
+          title: sess.title,
+          model: sess.model ?? null,
+          created_at: sess.createdAt,
+          updated_at: sess.updatedAt,
+        }),
+        'appendMessage.session',
+      );
+      fireWrite(
+        dbMessageUpsert({
+          id: msg.id,
+          session_id: sessionId,
+          role: msg.role,
+          content: msg.content,
+          error: msg.error ?? null,
+          position,
+          created_at: msg.createdAt,
+        }),
+        'appendMessage.message',
+      );
+    }
+  },
+
+  appendToolCall: (sessionId, msgId, call) => {
+    set((s) => {
+      const sess = s.sessions[sessionId];
+      if (!sess) return s;
+      let touched = false;
+      const nextMessages = sess.messages.map((m) => {
+        if (m.id !== msgId) return m;
+        touched = true;
+        return { ...m, toolCalls: [...(m.toolCalls ?? []), call] };
+      });
+      if (!touched) return s;
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...sess, messages: nextMessages, updatedAt: Date.now() },
+        },
+      };
+    });
+    fireWrite(
+      dbToolCallAppend({
+        id: call.id,
+        message_id: msgId,
+        tool: call.tool,
+        emoji: call.emoji ?? null,
+        label: call.label ?? null,
+        at: call.at,
+      }),
+      'appendToolCall',
+    );
+  },
+
+  patchMessage: (sessionId, msgId, patch) => {
+    // Track the final state of the message so we can mirror it to the DB
+    // outside the setter.
+    let updated: UiMessage | null = null;
+    let position = -1;
+    set((s) => {
+      const sess = s.sessions[sessionId];
+      if (!sess) return s;
+      let touched = false;
+      const nextMessages = sess.messages.map((m, idx) => {
+        if (m.id !== msgId) return m;
+        touched = true;
+        const merged = { ...m, ...patch };
+        updated = merged;
+        position = idx;
+        return merged;
+      });
+      if (!touched) return s;
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...sess, messages: nextMessages, updatedAt: Date.now() },
+        },
+      };
+    });
+    // Only mirror content/error/role — `pending` is a UI-only flag and isn't
+    // stored. Skip the write if the message doesn't exist.
+    if (updated) {
+      const u = updated as UiMessage;
+      fireWrite(
+        dbMessageUpsert({
+          id: u.id,
+          session_id: sessionId,
+          role: u.role,
+          content: u.content,
+          error: u.error ?? null,
+          position,
+          created_at: u.createdAt,
+        }),
+        'patchMessage',
+      );
+    }
+  },
+
+  hasSessions: () => get().orderedIds.length > 0,
+}));
 
 export const newMessageId = () => newId('m');
