@@ -19,6 +19,11 @@ export interface ChatSession {
   messages: UiMessage[];
   createdAt: number;
   updatedAt: number;
+  /**
+   * Per-session model override. `null` (or missing) means "use the gateway's
+   * configured default" (read from Settings).
+   */
+  model?: string | null;
 }
 
 interface ChatState {
@@ -33,6 +38,8 @@ interface ChatState {
   switchTo: (id: string) => void;
   deleteSession: (id: string) => void;
   renameSession: (id: string, title: string) => void;
+  /** Set `null` to clear the override (revert to default). */
+  setSessionModel: (id: string, model: string | null) => void;
 
   /** Append a fully-formed message (user or assistant). */
   appendMessage: (sessionId: string, msg: UiMessage) => void;
@@ -121,6 +128,19 @@ export const useChatStore = create<ChatState>()(
             sessions: {
               ...s.sessions,
               [id]: { ...sess, title: title.trim() || sess.title, updatedAt: Date.now() },
+            },
+          };
+        });
+      },
+
+      setSessionModel: (id, model) => {
+        set((s) => {
+          const sess = s.sessions[id];
+          if (!sess) return s;
+          return {
+            sessions: {
+              ...s.sessions,
+              [id]: { ...sess, model, updatedAt: Date.now() },
             },
           };
         });

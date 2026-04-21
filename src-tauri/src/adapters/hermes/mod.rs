@@ -13,7 +13,8 @@ pub mod gateway;
 use async_trait::async_trait;
 
 use crate::adapters::{
-    AgentAdapter, Capabilities, ChatTurn, Health, ModelInfo, Session, SessionId, SessionQuery,
+    AgentAdapter, Capabilities, ChatTurn, Health, ModelCapabilities, ModelInfo, Session, SessionId,
+    SessionQuery,
 };
 use crate::error::{AdapterError, AdapterResult};
 
@@ -195,8 +196,29 @@ impl AgentAdapter for HermesAdapter {
     }
 
     async fn list_models(&self) -> AdapterResult<Vec<ModelInfo>> {
-        serde_json::from_str::<Vec<ModelInfo>>(FIXTURE_MODELS).map_err(|e| AdapterError::Internal {
-            source: anyhow::anyhow!("failed to parse model fixtures: {e}"),
-        })
+        match &self.mode {
+            Mode::Stub => serde_json::from_str::<Vec<ModelInfo>>(FIXTURE_MODELS).map_err(|e| {
+                AdapterError::Internal {
+                    source: anyhow::anyhow!("failed to parse model fixtures: {e}"),
+                }
+            }),
+            Mode::Live {
+                gateway,
+                default_model,
+            } => {
+                let entries = gateway.list_models().await?;
+                Ok(entries
+                    .into_iter()
+                    .map(|e| ModelInfo {
+                        is_default: &e.id == default_model,
+                        provider: e.owned_by.unwrap_or_else(|| "unknown".to_string()),
+                        display_name: None,
+                        context_window: None,
+                        capabilities: ModelCapabilities::default(),
+                        id: e.id,
+                    })
+                    .collect())
+            }
+        }
     }
 }

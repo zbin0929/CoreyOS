@@ -142,6 +142,30 @@ export async function generateTitle(
   }
 }
 
+// ───────────────────────── Models ─────────────────────────
+
+export interface ModelCapabilities {
+  vision: boolean;
+  tool_use: boolean;
+  reasoning: boolean;
+  audio?: boolean | null;
+  max_output_tokens?: number | null;
+}
+
+export interface ModelInfo {
+  id: string;
+  provider: string;
+  display_name: string | null;
+  context_window: number | null;
+  is_default: boolean;
+  capabilities: ModelCapabilities;
+}
+
+/** Query the default adapter's `/v1/models` (or fixture in stub mode). */
+export function modelList(): Promise<ModelInfo[]> {
+  return invoke<ModelInfo[]>('model_list');
+}
+
 // ───────────────────────── Settings / config ─────────────────────────
 
 export interface GatewayConfigDto {

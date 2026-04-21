@@ -13,11 +13,11 @@ import {
   Terminal,
   Clock,
   Radio,
-  Boxes,
 } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
+import { ModelsRoute } from '@/features/models';
 import { SettingsRoute } from '@/features/settings';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
@@ -156,15 +156,7 @@ const channelsRoute = createRoute({
 const modelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/models',
-  component: () => (
-    <Placeholder
-      titleKey="nav.models"
-      emptyTitleKey="empty.models.title"
-      emptyDescKey="empty.models.desc"
-      icon={Boxes}
-      phase={2}
-    />
-  ),
+  component: ModelsRoute,
 });
 
 const settingsRoute = createRoute({

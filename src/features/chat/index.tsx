@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import {
   chatStream,
+  configGet,
   generateTitle,
   ipcErrorMessage,
   type ChatMessageDto,
@@ -19,6 +20,7 @@ import {
 } from '@/lib/ipc';
 import { newMessageId, useChatStore, type UiMessage } from '@/stores/chat';
 import { MessageBubble } from './MessageBubble';
+import { ModelPicker } from './ModelPicker';
 import { SessionsPanel } from './SessionsPanel';
 
 export function ChatRoute() {
@@ -27,9 +29,31 @@ export function ChatRoute() {
   const sessionMessages = useChatStore((s) =>
     s.currentId ? (s.sessions[s.currentId]?.messages ?? []) : [],
   );
+  const sessionModel = useChatStore((s) =>
+    s.currentId ? s.sessions[s.currentId]?.model ?? null : null,
+  );
   const appendMessage = useChatStore((s) => s.appendMessage);
   const patchMessage = useChatStore((s) => s.patchMessage);
   const renameSession = useChatStore((s) => s.renameSession);
+  const setSessionModel = useChatStore((s) => s.setSessionModel);
+
+  // Gateway default model — displayed in the picker when no session override.
+  // Loaded once on mount; refreshed when the user might have changed Settings
+  // (we refetch whenever a session switches to cover that path cheaply).
+  const [defaultModel, setDefaultModel] = useState<string>('');
+  useEffect(() => {
+    let alive = true;
+    configGet()
+      .then((cfg) => {
+        if (alive) setDefaultModel(cfg.default_model ?? '');
+      })
+      .catch(() => {
+        // Non-fatal — picker just shows '(default)' as a placeholder.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [currentId]);
 
   // Ensure there's always a current session on mount.
   useLayoutEffect(() => {
@@ -43,9 +67,12 @@ export function ChatRoute() {
         <ChatPane
           sessionId={currentId}
           messages={sessionMessages}
+          sessionModel={sessionModel}
+          defaultModel={defaultModel}
           appendMessage={appendMessage}
           patchMessage={patchMessage}
           renameSession={renameSession}
+          setSessionModel={setSessionModel}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
@@ -59,6 +86,10 @@ export function ChatRoute() {
 interface ChatPaneProps {
   sessionId: string;
   messages: UiMessage[];
+  /** Per-session model override, or `null` to use the gateway default. */
+  sessionModel: string | null;
+  /** The gateway's `config.default_model`, for display when no override. */
+  defaultModel: string;
   appendMessage: (sessionId: string, msg: UiMessage) => void;
   patchMessage: (
     sessionId: string,
@@ -66,14 +97,18 @@ interface ChatPaneProps {
     patch: Partial<Omit<UiMessage, 'id'>>,
   ) => void;
   renameSession: (id: string, title: string) => void;
+  setSessionModel: (id: string, model: string | null) => void;
 }
 
 function ChatPane({
   sessionId,
   messages,
+  sessionModel,
+  defaultModel,
   appendMessage,
   patchMessage,
   renameSession,
+  setSessionModel,
 }: ChatPaneProps) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -133,7 +168,12 @@ function ChatPane({
 
     try {
       const handle = await chatStream(
-        { messages: historyForIpc },
+        {
+          messages: historyForIpc,
+          // Only pass `model` when the session has an explicit override —
+          // otherwise the backend falls through to the gateway default.
+          ...(sessionModel ? { model: sessionModel } : {}),
+        },
         {
           onDelta: (chunk) => {
             // Read current content from store to append — avoids stale closures.
@@ -233,7 +273,14 @@ function ChatPane({
       </div>
 
       <div className="border-t border-border bg-bg/80 backdrop-blur">
-        <form onSubmit={onSubmit} className="mx-auto flex max-w-3xl items-end gap-2 px-6 py-4">
+        <div className="mx-auto flex max-w-3xl items-center px-6 pt-3">
+          <ModelPicker
+            activeId={sessionModel || defaultModel || '(unset)'}
+            hasOverride={sessionModel !== null}
+            onPick={(modelId) => setSessionModel(sessionId, modelId)}
+          />
+        </div>
+        <form onSubmit={onSubmit} className="mx-auto flex max-w-3xl items-end gap-2 px-6 pb-4 pt-2">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

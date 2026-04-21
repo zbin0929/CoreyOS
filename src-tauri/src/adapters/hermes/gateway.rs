@@ -73,6 +73,39 @@ impl HermesGateway {
         Ok(HealthProbe { latency_ms, body })
     }
 
+    /// `GET /v1/models` — returns the OpenAI-compatible model list. The gateway's
+    /// response is sparse (just `id` + `owned_by`); the adapter enriches it into
+    /// `ModelInfo` by synthesizing missing fields.
+    pub async fn list_models(&self) -> AdapterResult<Vec<ModelListEntry>> {
+        let mut req = self.http.get(format!("{}/v1/models", self.base_url));
+        if let Some(key) = &self.api_key {
+            req = req.bearer_auth(key);
+        }
+        let resp = req.send().await.map_err(|e| AdapterError::Unreachable {
+            endpoint: self.base_url.clone(),
+            source: anyhow::anyhow!(e),
+        })?;
+
+        let status = resp.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(AdapterError::Unauthorized {
+                detail: "gateway rejected credentials".into(),
+            });
+        }
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AdapterError::Upstream {
+                status: status.as_u16(),
+                body,
+            });
+        }
+
+        let parsed: ModelListResponse = resp.json().await.map_err(|e| AdapterError::Protocol {
+            detail: format!("parse /v1/models: {e}"),
+        })?;
+        Ok(parsed.data)
+    }
+
     /// `POST /v1/chat/completions` with `stream=false` — returns the assistant
     /// message content as a single string. Single-turn only for Sprint 1;
     /// caller supplies full message history on each call.
@@ -314,6 +347,26 @@ struct ChatUsage {
     prompt_tokens: u32,
     #[serde(default)]
     completion_tokens: u32,
+}
+
+// ───────────────────────── /v1/models DTOs ─────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct ModelListResponse {
+    #[serde(default)]
+    data: Vec<ModelListEntry>,
+}
+
+/// Minimal fields the OpenAI-compatible `/v1/models` endpoint is guaranteed
+/// to return. Hermes may emit extra fields (e.g. provider-specific metadata)
+/// which we ignore.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ModelListEntry {
+    pub id: String,
+    #[serde(default)]
+    pub owned_by: Option<String>,
+    #[serde(default)]
+    pub created: Option<i64>,
 }
 
 // ───────────────────────── Streaming DTOs ─────────────────────────

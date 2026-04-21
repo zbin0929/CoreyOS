@@ -6,6 +6,27 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 3: Models page + per-session model picker
+
+### Shipped
+
+- **Real `/v1/models`**: `HermesGateway::list_models()` hits the OpenAI-compatible endpoint (`GET /v1/models`) and returns `Vec<ModelListEntry>` (id + owned_by + created). `HermesAdapter::list_models()` in live mode maps these to the richer `ModelInfo`, synthesizing `is_default` by comparing the entry id against the adapter's current `default_model`. Stub mode still returns the fixtures for offline dev.
+- **Models page** (`src/features/models/index.tsx`): replaces the Phase-0 placeholder. Table of model id / provider / context window with a **DEFAULT** badge on the active one. **Set default** button calls `config_set` (reuses the Settings hot-swap path) and reloads. **Refresh** action in the header. Error state with retry.
+- **Per-session model picker** (`src/features/chat/ModelPicker.tsx`): compact dropdown above the composer showing the effective model id. Lazy-fetches the model list on first open (not mount) so idle sessions don't hit the gateway. **SESSION** badge highlights when the session has an override; **Clear** reverts to the gateway default. Outside-click + Escape close.
+- **Chat store extension**: `ChatSession.model?: string | null` + `setSessionModel(id, model)` action. Persistent across restarts (zustand/persist). Chat pane passes `model` in the `chatStream` payload only when an override is set — otherwise the Rust side falls through to `HermesAdapter`'s `default_model`.
+- **`ModelInfo` + `modelList()` wrappers** in `src/lib/ipc.ts`.
+
+### Verified
+
+- `pnpm {typecheck,lint,test,build}` + `cargo {check,clippy,test,fmt --check}` all green. 11 vitest + 6 cargo tests still passing; bundle grew ~4 KB gzip.
+
+### Notes
+
+- Gateway `/v1/models` is sparse (usually just `id` + `owned_by`). Fields like `context_window`, `display_name`, or tool-use capability need provider-specific enrichment; deferred to a Phase 2 "Model registry" feature that can cross-reference a local manifest.
+- Chat picker shows the literal model id as the label. Once display names are enriched, the picker will use the human-readable form.
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 2B: Settings page + runtime gateway config
 
 ### Shipped
