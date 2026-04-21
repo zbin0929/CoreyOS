@@ -143,8 +143,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   hydrated: false,
 
   hydrateFromDb: async () => {
+    // Idempotent guard: if a previous call already completed (or is in-flight
+    // but the flag hasn't flipped yet), don't re-enter. Safe under React
+    // StrictMode's double-mount in dev.
+    if (get().hydrated) return;
     try {
       const rows = await dbLoadAll();
+      // Re-check after the await in case a concurrent call beat us.
+      if (get().hydrated) return;
       const sessions: Record<string, ChatSession> = {};
       const orderedIds: string[] = [];
       for (const row of rows) {

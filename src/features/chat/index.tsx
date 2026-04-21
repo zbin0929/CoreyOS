@@ -25,7 +25,6 @@ import { SessionsPanel } from './SessionsPanel';
 export function ChatRoute() {
   const currentId = useChatStore((s) => s.currentId);
   const hydrated = useChatStore((s) => s.hydrated);
-  const hydrateFromDb = useChatStore((s) => s.hydrateFromDb);
   const newSession = useChatStore((s) => s.newSession);
   const sessionMessages = useChatStore((s) =>
     s.currentId ? (s.sessions[s.currentId]?.messages ?? []) : [],
@@ -35,14 +34,15 @@ export function ChatRoute() {
   const appendToolCall = useChatStore((s) => s.appendToolCall);
   const renameSession = useChatStore((s) => s.renameSession);
 
-  // Kick off the one-time SQLite hydration. `hydrateFromDb` is idempotent —
-  // the store guard ensures we don't double-load even under StrictMode's
-  // effect-twice semantics (the second call just re-sets the same data).
+  // One-shot SQLite hydration. We read `hydrated` via `getState()` (not the
+  // subscribed selector) so this effect has no reactive deps — it fires
+  // exactly once per mount. The store itself idempotent-guards repeated
+  // calls against StrictMode's remount by checking `hydrated` internally.
   useEffect(() => {
-    if (!hydrated) {
-      void hydrateFromDb();
+    if (!useChatStore.getState().hydrated) {
+      void useChatStore.getState().hydrateFromDb();
     }
-  }, [hydrated, hydrateFromDb]);
+  }, []);
 
   // Once hydrated, ensure there's always a current session. If the DB came
   // back empty, spin up a fresh one; otherwise the hydrate already restored
