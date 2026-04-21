@@ -37,3 +37,8 @@ src-tauri/gen/schemas
 # Generated
 src/lib/ipc/bindings.ts
 tsconfig.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+/playwright/.cache/

@@ -5,7 +5,19 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'src-tauri/target', 'src/lib/ipc/bindings.ts'] },
+  {
+    ignores: [
+      'dist',
+      'src-tauri/target',
+      'src/lib/ipc/bindings.ts',
+      // Playwright config + e2e tests run under Node, not in the app bundle;
+      // keep them out of the React-tuned lint pass.
+      'playwright.config.ts',
+      'e2e/**',
+      'playwright-report/**',
+      'test-results/**',
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

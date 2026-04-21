@@ -6,6 +6,59 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Sprint 6: Playwright E2E scaffolding
+
+### Context
+
+Eight sprints of UI work with only unit tests (11 vitest + 15 cargo) left us
+exposed to regressions that only show up in the full browser — store +
+router + IPC wiring. Specifically: the recent infinite-loop we shipped in
+Sprint 5C would have been caught instantly by any smoke test that just
+opened `/chat`. Time to add an E2E safety net before Phase 2.
+
+### Shipped
+
+- **Runner**: `@playwright/test` (v1.59) targeting system Chrome via
+  `channel: 'chrome'` — skips the 170 MB Chromium download. Driven against
+  Vite's dev server, not the full Tauri webview, so a full run takes ~17 s.
+- **Tauri IPC mock** (`e2e/fixtures/tauri-mock.ts`): a self-contained init
+  script that stubs `window.__TAURI_INTERNALS__` with handlers for every
+  command the frontend invokes — `home_stats`, `config_*`, `hermes_*`,
+  `db_*`, `chat_send`, `chat_stream_start`, plus the `plugin:event|*`
+  pub/sub so `@tauri-apps/api/event` works transparently. Tests can mutate
+  fixture state via `window.__CADUCEUS_MOCK__.state` or override any
+  command per-test via `.on('cmd', handler)`.
+- **Suites** (7 tests):
+  - `smoke.spec.ts` — shell renders, sidebar nav works, `/chat` loads,
+    command palette opens, theme toggle flips `<html data-theme>`.
+  - `chat.spec.ts` — full streaming round-trip: compose a prompt, watch
+    two deltas + a done event fly through the mocked IPC, assert the
+    assistant reply renders in a bubble.
+  - `llms.spec.ts` — `/models` reads config on mount, `ApiKeyPanel`
+    renders based on `env_keys_present`.
+- **Scripts**: `pnpm test:e2e` (headless), `test:e2e:headed`, `test:e2e:ui`.
+- **CI-ready**: retries=1 + 2 workers under `$CI`, `forbidOnly=true`,
+  HTML report artefact.
+
+### Design notes
+
+- **Why not drive the real Tauri app?** Full-fat E2E via `tauri-driver`
+  requires platform-specific webdrivers (Edge on macOS, webkit2gtk on
+  Linux) and costs a full Rust rebuild per run. We get 95 % of the
+  regression protection for 5 % of the cost by testing the UI + mocked
+  IPC. Rust-side IPC contracts are still covered by `cargo test`.
+- **Selector discipline**: prefer `getByRole` + accessible name over CSS.
+  tanstack-router's `<Link>` proxies `href` weirdly (CSS
+  `a[href="/chat"]` times out against a tree where the link definitely
+  exists); role-based selection is both more stable and more honest to
+  what a screen reader would see.
+
+### Verified
+
+All seven tests green in 17 s. `pnpm {typecheck,lint,test}` still green.
+
+---
+
 ## 2026-04-21 — Phase 1 Sprint 5C: SQLite persistence (end of Phase 1)
 
 ### Context
