@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "Caduceus",
+    "tagline": "AI Agent 控制台"
+  },
+  "nav": {
+    "home": "首页",
+    "chat": "对话",
+    "compare": "多模对比",
+    "skills": "技能",
+    "trajectory": "轨迹",
+    "analytics": "用量",
+    "logs": "日志",
+    "terminal": "终端",
+    "scheduler": "定时任务",
+    "channels": "平台通道",
+    "models": "模型",
+    "settings": "设置"
+  },
+  "topbar": {
+    "profile": "Profile",
+    "gateway_connected": "Gateway 在线",
+    "gateway_disconnected": "Gateway 离线",
+    "gateway_unknown": "Gateway 未知",
+    "open_palette": "打开命令面板",
+    "toggle_theme": "切换主题"
+  },
+  "palette": {
+    "placeholder": "输入命令或搜索…",
+    "empty": "无匹配结果。",
+    "group": {
+      "goto": "跳转",
+      "actions": "操作",
+      "preferences": "偏好"
+    },
+    "theme": {
+      "toggle": "切换 浅色 / 深色"
+    }
+  },
+  "home": {
+    "title": "欢迎来到 Caduceus",
+    "subtitle": "一个面向 AI Agent 的控制台 —— 美观、迅捷、不绑定单一 agent。",
+    "cta_connect": "连接到 Hermes",
+    "cta_docs": "阅读文档"
+  },
+  "empty": {
+    "chat": {
+      "title": "还没有会话",
+      "desc": "发起一条会话后将显示在这里。Ctrl+Enter 发送，Esc 取消流。"
+    },
+    "compare": {
+      "title": "多模型并排对比",
+      "desc": "一条提示同时发给多个模型。Phase 4 上线。"
+    },
+    "skills": {
+      "title": "技能将展示在此",
+      "desc": "浏览、编辑、版本化技能。Phase 4 上线。"
+    },
+    "trajectory": {
+      "title": "会话轨迹",
+      "desc": "把对话、工具调用、成本可视化为时间线。Phase 4 上线。"
+    },
+    "analytics": {
+      "title": "用量分析",
+      "desc": "Token 用量、成本、日趋势、模型分布。Phase 2 上线。"
+    },
+    "logs": {
+      "title": "Agent 日志",
+      "desc": "尾随 agent / gateway / error 日志，按级别与关键字筛选。Phase 2 上线。"
+    },
+    "terminal": {
+      "title": "Web 终端",
+      "desc": "多标签 PTY 通向 Agent 环境。Phase 4 上线。"
+    },
+    "scheduler": {
+      "title": "定时任务",
+      "desc": "以自然语言管理 cron。Phase 2 上线。"
+    },
+    "channels": {
+      "title": "平台通道",
+      "desc": "配置 Telegram / Discord / Slack 等 8 个通道。Phase 3 上线。"
+    },
+    "models": {
+      "title": "模型供应商",
+      "desc": "从凭证池发现与管理模型。Phase 2 上线。"
+    },
+    "settings": {
+      "title": "设置",
+      "desc": "显示、agent、记忆、隐私、服务器设置。Phase 2 上线。"
+    }
+  },
+  "common": {
+    "coming_soon": "即将推出",
+    "phase": "Phase {{n}}"
+  }
+}

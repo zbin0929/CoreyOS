@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "Caduceus",
+    "tagline": "Control plane for AI agents"
+  },
+  "nav": {
+    "home": "Home",
+    "chat": "Chat",
+    "compare": "Compare",
+    "skills": "Skills",
+    "trajectory": "Trajectory",
+    "analytics": "Analytics",
+    "logs": "Logs",
+    "terminal": "Terminal",
+    "scheduler": "Scheduler",
+    "channels": "Channels",
+    "models": "Models",
+    "settings": "Settings"
+  },
+  "topbar": {
+    "profile": "Profile",
+    "gateway_connected": "Gateway online",
+    "gateway_disconnected": "Gateway offline",
+    "gateway_unknown": "Gateway unknown",
+    "open_palette": "Open command palette",
+    "toggle_theme": "Toggle theme"
+  },
+  "palette": {
+    "placeholder": "Type a command or search…",
+    "empty": "No results found.",
+    "group": {
+      "goto": "Go to",
+      "actions": "Actions",
+      "preferences": "Preferences"
+    },
+    "theme": {
+      "toggle": "Toggle light / dark theme"
+    }
+  },
+  "home": {
+    "title": "Welcome to Caduceus",
+    "subtitle": "A control plane for AI agents — beautiful, fast, and not locked to one.",
+    "cta_connect": "Connect to Hermes",
+    "cta_docs": "Read the docs"
+  },
+  "empty": {
+    "chat": {
+      "title": "No conversations yet",
+      "desc": "Start a chat session to see it here. Ctrl+Enter sends, Esc cancels a stream."
+    },
+    "compare": {
+      "title": "Compare models side by side",
+      "desc": "Send one prompt to multiple models at once. Coming in Phase 4."
+    },
+    "skills": {
+      "title": "Skills will live here",
+      "desc": "Browse, edit, and version skills. Coming in Phase 4."
+    },
+    "trajectory": {
+      "title": "Session trajectory",
+      "desc": "Visualize turns, tool calls, and costs as a timeline. Coming in Phase 4."
+    },
+    "analytics": {
+      "title": "Usage analytics",
+      "desc": "Token usage, costs, daily trend, model mix. Coming in Phase 2."
+    },
+    "logs": {
+      "title": "Agent logs",
+      "desc": "Tail agent / gateway / error logs with filters. Coming in Phase 2."
+    },
+    "terminal": {
+      "title": "Web terminal",
+      "desc": "Multi-tab PTY into the agent environment. Coming in Phase 4."
+    },
+    "scheduler": {
+      "title": "Scheduled jobs",
+      "desc": "Manage cron jobs with natural-language task descriptions. Coming in Phase 2."
+    },
+    "channels": {
+      "title": "Platform channels",
+      "desc": "Configure Telegram, Discord, Slack and 5 more. Coming in Phase 3."
+    },
+    "models": {
+      "title": "Model providers",
+      "desc": "Discover and manage models from your credential pool. Coming in Phase 2."
+    },
+    "settings": {
+      "title": "Settings",
+      "desc": "Display, agent, memory, privacy, and server settings. Coming in Phase 2."
+    }
+  },
+  "common": {
+    "coming_soon": "Coming soon",
+    "phase": "Phase {{n}}"
+  }
+}

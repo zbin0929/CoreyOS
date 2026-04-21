@@ -1,0 +1,42 @@
+[
+  {
+    "id": "anthropic/claude-3.5-sonnet",
+    "provider": "anthropic",
+    "display_name": "Claude 3.5 Sonnet",
+    "context_window": 200000,
+    "is_default": true,
+    "capabilities": { "vision": true, "tool_use": true, "reasoning": false }
+  },
+  {
+    "id": "openai/gpt-4o",
+    "provider": "openai",
+    "display_name": "GPT-4o",
+    "context_window": 128000,
+    "is_default": false,
+    "capabilities": { "vision": true, "tool_use": true, "reasoning": false }
+  },
+  {
+    "id": "openai/o1",
+    "provider": "openai",
+    "display_name": "o1",
+    "context_window": 128000,
+    "is_default": false,
+    "capabilities": { "vision": false, "tool_use": false, "reasoning": true }
+  },
+  {
+    "id": "google/gemini-1.5-pro",
+    "provider": "google",
+    "display_name": "Gemini 1.5 Pro",
+    "context_window": 1000000,
+    "is_default": false,
+    "capabilities": { "vision": true, "tool_use": true, "reasoning": false }
+  },
+  {
+    "id": "meta/llama-3.1-70b",
+    "provider": "openrouter",
+    "display_name": "Llama 3.1 70B",
+    "context_window": 131072,
+    "is_default": false,
+    "capabilities": { "vision": false, "tool_use": true, "reasoning": false }
+  }
+]
