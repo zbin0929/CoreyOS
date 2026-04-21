@@ -21,15 +21,20 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
-    // System Chrome. Skips the ~170 MB Chromium download; falls back to
-    // whatever the host has installed as Google Chrome.
-    channel: 'chrome',
+    // Locally, use system Chrome to skip the ~170 MB Chromium download.
+    // On CI, use Playwright's bundled Chromium (installed via
+    // `playwright install chromium` in the workflow) — the Chrome channel
+    // isn't reliably present on GitHub's ubuntu-latest images.
+    ...(process.env.CI ? {} : { channel: 'chrome' }),
   },
 
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(process.env.CI ? {} : { channel: 'chrome' }),
+      },
     },
   ],
 

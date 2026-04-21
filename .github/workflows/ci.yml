@@ -12,13 +12,12 @@ concurrency:
 
 jobs:
   # ────────────────────────── Frontend (fast) ──────────────────────────
+  # Single OS — TS/vitest output is platform-agnostic; we'd just be burning
+  # CI minutes. Cross-OS surface is covered by the `rust` job below (where
+  # it actually matters: Tauri + native deps).
   frontend:
-    name: Frontend (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Frontend
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +46,49 @@ jobs:
 
       - name: Build (web bundle)
         run: pnpm build
+
+  # ────────────────────────── E2E (Playwright) ──────────────────────────
+  # Runs the full browser suite against the Vite dev server with IPC mocked
+  # (see e2e/fixtures/tauri-mock.ts). No Rust build needed — this is the
+  # regression net for UI + store + router interactions.
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      # Install Playwright's bundled Chromium + system libs. On CI,
+      # playwright.config.ts drops the `channel: 'chrome'` override so we
+      # use this Chromium directly (no Chrome on ubuntu-latest by default).
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
 
   # ─────────────────────────── Rust backend ────────────────────────────
   rust:
