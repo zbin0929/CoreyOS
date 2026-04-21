@@ -14,7 +14,14 @@ use tokio::sync::mpsc;
 use crate::error::{AdapterError, AdapterResult};
 
 const USER_AGENT: &str = concat!("caduceus/", env!("CARGO_PKG_VERSION"));
+/// Default total-request timeout. Fine for health + list_models + chat_once
+/// (non-streaming). Streaming calls override this per-request (see
+/// `STREAM_TIMEOUT_S`) because reasoning models routinely exceed 2 min.
 const DEFAULT_TIMEOUT_S: u64 = 120;
+/// Per-request timeout for streaming chat. Allows deepseek-reasoner,
+/// gpt-5 etc. to spend minutes "thinking" before emitting the first token
+/// without reqwest killing the TCP connection.
+const STREAM_TIMEOUT_S: u64 = 30 * 60;
 
 // ───────────────────────── Client ─────────────────────────
 
@@ -196,6 +203,10 @@ impl HermesGateway {
         let mut req = self
             .http
             .post(format!("{}/v1/chat/completions", self.base_url))
+            // Override the client-wide 120 s timeout — reasoning models can
+            // idle for minutes before emitting a token, and we don't want
+            // reqwest to reset the TCP connection mid-stream.
+            .timeout(Duration::from_secs(STREAM_TIMEOUT_S))
             .json(&body);
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
@@ -231,11 +242,27 @@ impl HermesGateway {
         let mut resolved_model: String = model.to_string();
         let mut prompt_tokens: Option<u32> = None;
         let mut completion_tokens: Option<u32> = None;
+        // Tracks whether at least one content delta has reached the UI.
+        // Used to decide whether a mid-stream transport error is a real
+        // failure or just the server closing an otherwise-successful stream
+        // (e.g. reasoning models that idle before emitting, or any upstream
+        // that forgets to send a proper `[DONE]` sentinel).
+        let mut received_any_delta = false;
 
         while let Some(event) = byte_stream.next().await {
-            let event = event.map_err(|e| AdapterError::Protocol {
-                detail: format!("SSE parse error: {e}"),
-            })?;
+            let event = match event {
+                Ok(e) => e,
+                Err(e) => {
+                    if received_any_delta {
+                        tracing::warn!(error = %e, "SSE stream dropped mid-flight; closing gracefully");
+                        finish_reason.get_or_insert_with(|| "interrupted".into());
+                        break;
+                    }
+                    return Err(AdapterError::Protocol {
+                        detail: format!("SSE parse error: {e}"),
+                    });
+                }
+            };
             let data = event.data;
             if data == "[DONE]" {
                 break;
@@ -265,6 +292,9 @@ impl HermesGateway {
                             completion_tokens,
                         });
                     }
+                    // A tool event is proof the upstream is alive enough to
+                    // count the session as partial-success if it drops now.
+                    received_any_delta = true;
                 }
                 // Default event: OpenAI-compatible chat.completion.chunk.
                 "" | "message" => {
@@ -287,19 +317,21 @@ impl HermesGateway {
                             finish_reason = Some(reason);
                         }
                         if let Some(delta_content) = choice.delta.content {
-                            if !delta_content.is_empty()
-                                && tx
+                            if !delta_content.is_empty() {
+                                if tx
                                     .send(ChatStreamEvent::Delta(delta_content))
                                     .await
                                     .is_err()
-                            {
-                                return Ok(ChatStreamDone {
-                                    finish_reason: Some("cancelled".into()),
-                                    model: resolved_model,
-                                    latency_ms: started.elapsed().as_millis() as u32,
-                                    prompt_tokens,
-                                    completion_tokens,
-                                });
+                                {
+                                    return Ok(ChatStreamDone {
+                                        finish_reason: Some("cancelled".into()),
+                                        model: resolved_model,
+                                        latency_ms: started.elapsed().as_millis() as u32,
+                                        prompt_tokens,
+                                        completion_tokens,
+                                    });
+                                }
+                                received_any_delta = true;
                             }
                         }
                     }
