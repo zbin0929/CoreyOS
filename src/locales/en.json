@@ -43,6 +43,37 @@
     "cta_connect": "Connect to Hermes",
     "cta_docs": "Read the docs"
   },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Usage rolled up from your local session history.",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "error_title": "Couldn't load analytics",
+    "empty": "No activity yet — start a conversation on the Chat page and come back here.",
+    "generated_at": "Snapshot at {{when}}",
+    "kpi": {
+      "sessions": "Sessions",
+      "messages": "Messages",
+      "tool_calls": "Tool calls",
+      "active_days": "Active days"
+    },
+    "chart": {
+      "activity": {
+        "title": "Activity (last 30 days)",
+        "subtitle": "Messages written per day."
+      },
+      "models": {
+        "title": "Top models",
+        "subtitle": "By sessions.",
+        "empty": "No model info recorded yet."
+      },
+      "tools": {
+        "title": "Top tools",
+        "subtitle": "By invocations.",
+        "empty": "No tool calls yet."
+      }
+    }
+  },
   "empty": {
     "chat": {
       "title": "No conversations yet",

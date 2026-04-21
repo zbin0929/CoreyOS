@@ -248,6 +248,41 @@ export function dbToolCallAppend(call: DbToolCallRow): Promise<void> {
   return invoke<void>('db_tool_call_append', { call });
 }
 
+// ───────────────────────── Analytics ─────────────────────────
+
+export interface NamedCount {
+  name: string;
+  count: number;
+}
+
+export interface DayCount {
+  /** ISO date (UTC) `YYYY-MM-DD`. The UI localizes at render time. */
+  date: string;
+  count: number;
+}
+
+export interface AnalyticsTotals {
+  sessions: number;
+  messages: number;
+  tool_calls: number;
+  active_days: number;
+}
+
+export interface AnalyticsSummaryDto {
+  totals: AnalyticsTotals;
+  /** Dates with ≥1 messages in the trailing 30 days. Sparse; UI pads zeros. */
+  messages_per_day: DayCount[];
+  model_usage: NamedCount[];
+  tool_usage: NamedCount[];
+  /** ms since epoch — the clock snapshot that produced this summary. */
+  generated_at: number;
+}
+
+/** One-shot rollup for the Analytics page. Cheap (<5 ms on ~10k rows). */
+export function analyticsSummary(): Promise<AnalyticsSummaryDto> {
+  return invoke<AnalyticsSummaryDto>('analytics_summary');
+}
+
 // ───────────────────────── Hermes's own config.yaml ─────────────────────────
 
 export interface HermesModelSection {

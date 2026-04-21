@@ -37,6 +37,37 @@
       "toggle": "切换 浅色 / 深色"
     }
   },
+  "analytics": {
+    "title": "数据分析",
+    "subtitle": "基于本地会话历史的使用统计。",
+    "refresh": "刷新",
+    "retry": "重试",
+    "error_title": "无法加载分析数据",
+    "empty": "暂无数据 —— 去 Chat 页聊几句再回来看看。",
+    "generated_at": "快照时间：{{when}}",
+    "kpi": {
+      "sessions": "会话数",
+      "messages": "消息数",
+      "tool_calls": "工具调用",
+      "active_days": "活跃天数"
+    },
+    "chart": {
+      "activity": {
+        "title": "近 30 天活跃度",
+        "subtitle": "每日消息数。"
+      },
+      "models": {
+        "title": "Top 模型",
+        "subtitle": "按会话数排序。",
+        "empty": "暂无模型信息。"
+      },
+      "tools": {
+        "title": "Top 工具",
+        "subtitle": "按调用次数排序。",
+        "empty": "暂无工具调用。"
+      }
+    }
+  },
   "home": {
     "title": "欢迎来到 Caduceus",
     "subtitle": "一个面向 AI Agent 的控制台 —— 美观、迅捷、不绑定单一 agent。",

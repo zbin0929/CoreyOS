@@ -8,7 +8,6 @@ import {
   Columns3,
   Wand2,
   GitBranch,
-  BarChart3,
   ScrollText,
   Terminal,
   Clock,
@@ -19,6 +18,7 @@ import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
 import { ModelsRoute } from '@/features/models';
 import { SettingsRoute } from '@/features/settings';
+import { AnalyticsRoute } from '@/features/analytics';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -86,15 +86,7 @@ const trajectoryRoute = createRoute({
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/analytics',
-  component: () => (
-    <Placeholder
-      titleKey="nav.analytics"
-      emptyTitleKey="empty.analytics.title"
-      emptyDescKey="empty.analytics.desc"
-      icon={BarChart3}
-      phase={2}
-    />
-  ),
+  component: AnalyticsRoute,
 });
 
 const logsRoute = createRoute({

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use crate::db::{Db, MessageRow, SessionRow, SessionWithMessages, ToolCallRow};
+use crate::db::{AnalyticsSummary, Db, MessageRow, SessionRow, SessionWithMessages, ToolCallRow};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
 
@@ -80,5 +80,21 @@ pub async fn db_tool_call_append(state: State<'_, AppState>, call: ToolCallRow) 
         })?
         .map_err(|e| IpcError::Internal {
             message: format!("db append_tool_call: {e}"),
+        })
+}
+
+#[tauri::command]
+pub async fn analytics_summary(state: State<'_, AppState>) -> IpcResult<AnalyticsSummary> {
+    let db = db_of(&state)?;
+    // Snapshot the wall clock on the Tokio thread so the blocking closure
+    // stays deterministic / testable.
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    tokio::task::spawn_blocking(move || db.analytics_summary(now_ms))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("analytics task join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("analytics query: {e}"),
         })
 }

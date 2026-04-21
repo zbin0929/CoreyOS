@@ -59,7 +59,33 @@ export const tauriMockInitScript = /* js */ `
     sessions: [],
     /** Canned reply emitted chunk-by-chunk when chat_stream_start fires. */
     chatReply: 'Hello from the mock gateway.',
+    /** Seed payload returned by analytics_summary. Tests can override. */
+    analytics: {
+      totals: { sessions: 42, messages: 137, tool_calls: 58, active_days: 12 },
+      messages_per_day: [
+        { date: isoDaysAgo(5), count: 9 },
+        { date: isoDaysAgo(3), count: 14 },
+        { date: isoDaysAgo(1), count: 6 },
+      ],
+      model_usage: [
+        { name: 'deepseek-chat', count: 28 },
+        { name: 'claude-3-5-sonnet', count: 10 },
+        { name: 'gpt-4o', count: 4 },
+      ],
+      tool_usage: [
+        { name: 'terminal', count: 20 },
+        { name: 'file_read', count: 18 },
+        { name: 'web_search', count: 9 },
+      ],
+      generated_at: Date.now(),
+    },
   };
+
+  function isoDaysAgo(n) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
 
   // ── user-supplied per-command overrides ──
   const overrides = new Map();
@@ -137,6 +163,9 @@ export const tauriMockInitScript = /* js */ `
       case 'db_message_upsert':
       case 'db_tool_call_append':
         return;
+
+      case 'analytics_summary':
+        return state.analytics;
 
       case 'chat_send':
         return { content: state.chatReply };

@@ -308,6 +308,125 @@ pub struct SessionWithMessages {
     pub messages: Vec<MessageWithTools>,
 }
 
+// ───────────────────────── Analytics ─────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NamedCount {
+    pub name: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DayCount {
+    /// ISO date `YYYY-MM-DD` (UTC). The frontend localizes on render.
+    pub date: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AnalyticsTotals {
+    pub sessions: i64,
+    pub messages: i64,
+    pub tool_calls: i64,
+    /// Distinct UTC dates on which any message was written.
+    pub active_days: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AnalyticsSummary {
+    pub totals: AnalyticsTotals,
+    /// Messages/day for the trailing 30 days (inclusive). Dates with zero
+    /// messages are omitted — the frontend pads the series for rendering.
+    pub messages_per_day: Vec<DayCount>,
+    /// Top 5 models by session count. `unknown` bucket covers NULL model.
+    pub model_usage: Vec<NamedCount>,
+    /// Top 10 tools by invocation count.
+    pub tool_usage: Vec<NamedCount>,
+    pub generated_at: i64,
+}
+
+impl Db {
+    /// Produce everything the Analytics page needs in a single `lock()`.
+    /// All timestamps in the DB are Unix ms; `now_ms` is used both for the
+    /// 30-day window and for `generated_at` so tests can pin the clock.
+    pub fn analytics_summary(&self, now_ms: i64) -> rusqlite::Result<AnalyticsSummary> {
+        let conn = self.conn.lock();
+
+        let sessions: i64 = conn.query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))?;
+        let messages: i64 = conn.query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))?;
+        let tool_calls: i64 =
+            conn.query_row("SELECT COUNT(*) FROM tool_calls", [], |r| r.get(0))?;
+        let active_days: i64 = conn.query_row(
+            "SELECT COUNT(DISTINCT date(created_at/1000, 'unixepoch')) FROM messages",
+            [],
+            |r| r.get(0),
+        )?;
+
+        // 30-day window. created_at is ms since epoch.
+        let since = now_ms - 30 * 86_400_000;
+        let mut stmt = conn.prepare(
+            "SELECT date(created_at/1000, 'unixepoch') AS d, COUNT(*)
+             FROM messages
+             WHERE created_at >= ?1
+             GROUP BY d
+             ORDER BY d",
+        )?;
+        let messages_per_day: Vec<DayCount> = stmt
+            .query_map(params![since], |row| {
+                Ok(DayCount {
+                    date: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        let mut mstmt = conn.prepare(
+            "SELECT COALESCE(NULLIF(model, ''), 'unknown') AS m, COUNT(*)
+             FROM sessions
+             GROUP BY m
+             ORDER BY COUNT(*) DESC
+             LIMIT 5",
+        )?;
+        let model_usage: Vec<NamedCount> = mstmt
+            .query_map([], |row| {
+                Ok(NamedCount {
+                    name: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        let mut tstmt = conn.prepare(
+            "SELECT tool, COUNT(*)
+             FROM tool_calls
+             GROUP BY tool
+             ORDER BY COUNT(*) DESC
+             LIMIT 10",
+        )?;
+        let tool_usage: Vec<NamedCount> = tstmt
+            .query_map([], |row| {
+                Ok(NamedCount {
+                    name: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        Ok(AnalyticsSummary {
+            totals: AnalyticsTotals {
+                sessions,
+                messages,
+                tool_calls,
+                active_days,
+            },
+            messages_per_day,
+            model_usage,
+            tool_usage,
+            generated_at: now_ms,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,6 +512,107 @@ mod tests {
 
         let tree = db.load_all().unwrap();
         assert_eq!(tree.len(), 0);
+    }
+
+    #[test]
+    fn analytics_summary_aggregates_counts_and_windows() {
+        let db = Db::open_in_memory().unwrap();
+
+        // Two sessions: one with explicit model, one NULL → falls into `unknown`.
+        db.upsert_session(&SessionRow {
+            id: "s1".into(),
+            title: "t".into(),
+            model: Some("deepseek-chat".into()),
+            created_at: 1_000,
+            updated_at: 1_000,
+        })
+        .unwrap();
+        db.upsert_session(&SessionRow {
+            id: "s2".into(),
+            title: "t".into(),
+            model: None,
+            created_at: 2_000,
+            updated_at: 2_000,
+        })
+        .unwrap();
+
+        // Two messages in window (5 days ago), one way outside window (45 days).
+        let day_ms = 86_400_000i64;
+        let now = 50 * day_ms;
+        db.upsert_message(&MessageRow {
+            id: "m1".into(),
+            session_id: "s1".into(),
+            role: "user".into(),
+            content: "x".into(),
+            error: None,
+            position: 0,
+            created_at: now - 5 * day_ms,
+        })
+        .unwrap();
+        db.upsert_message(&MessageRow {
+            id: "m2".into(),
+            session_id: "s1".into(),
+            role: "assistant".into(),
+            content: "y".into(),
+            error: None,
+            position: 1,
+            created_at: now - 5 * day_ms + 1_000, // same UTC day as m1
+        })
+        .unwrap();
+        db.upsert_message(&MessageRow {
+            id: "m3".into(),
+            session_id: "s2".into(),
+            role: "user".into(),
+            content: "z".into(),
+            error: None,
+            position: 0,
+            created_at: now - 45 * day_ms, // outside 30-day window
+        })
+        .unwrap();
+
+        // Two tool calls on m1 — same tool counts twice.
+        for i in 0..2 {
+            db.append_tool_call(&ToolCallRow {
+                id: format!("t{i}"),
+                message_id: "m1".into(),
+                tool: "terminal".into(),
+                emoji: None,
+                label: None,
+                at: now - 5 * day_ms,
+            })
+            .unwrap();
+        }
+        db.append_tool_call(&ToolCallRow {
+            id: "tw".into(),
+            message_id: "m2".into(),
+            tool: "web_search".into(),
+            emoji: None,
+            label: None,
+            at: now - 5 * day_ms,
+        })
+        .unwrap();
+
+        let s = db.analytics_summary(now).unwrap();
+        assert_eq!(s.totals.sessions, 2);
+        assert_eq!(s.totals.messages, 3);
+        assert_eq!(s.totals.tool_calls, 3);
+        assert_eq!(s.totals.active_days, 2); // two distinct dates
+
+        // Only the in-window day shows up; m3 is excluded by the 30-day filter.
+        assert_eq!(s.messages_per_day.len(), 1);
+        assert_eq!(s.messages_per_day[0].count, 2);
+
+        // Model usage — `deepseek-chat` and `unknown`, order by count desc is
+        // ambiguous for equal counts, so just check the set.
+        let names: Vec<_> = s.model_usage.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"deepseek-chat"));
+        assert!(names.contains(&"unknown"));
+
+        // Tools — terminal (2) must come before web_search (1).
+        assert_eq!(s.tool_usage[0].name, "terminal");
+        assert_eq!(s.tool_usage[0].count, 2);
+        assert_eq!(s.tool_usage[1].name, "web_search");
+        assert_eq!(s.tool_usage[1].count, 1);
     }
 
     #[test]

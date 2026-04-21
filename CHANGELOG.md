@@ -6,6 +6,66 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 2 Sprint 1: Analytics page
+
+### Context
+
+End of Phase 1 had us persisting sessions + messages + tool_calls to SQLite
+(Sprint 5C) with no way to look at the aggregate. Analytics was picked as
+the first Phase 2 sprint because (a) the raw data is already there, (b) it
+proves the value of SQL-queryable storage over the old localStorage blob,
+and (c) it's a visible win the user sees the moment the app opens.
+
+### Shipped
+
+- **Rust `analytics_summary`** in `db.rs` — one method, one lock, four
+  queries (totals, 30-day per-day histogram, top-5 models, top-10 tools)
+  plus a `generated_at` timestamp. `now_ms` is an argument (not pulled
+  from the clock internally) so unit tests can pin time.
+- **IPC `analytics_summary`** (`ipc/db.rs`) wraps the blocking call in
+  `spawn_blocking` to stay polite to the Tokio runtime.
+- **Frontend `features/analytics/index.tsx`** — single route, single IPC.
+  Components:
+  - **KPI strip** — 4 tiles (sessions, messages, tool_calls, active_days)
+    with testid hooks for E2E.
+  - **ActivityChart** — 30-day line chart, pure SVG (no Recharts). Pads
+    sparse `{date,count}[]` to a dense 30-entry series so the x-axis
+    always spans a month. Dots get `<title>` hover tooltips for a11y.
+  - **HBarList** — horizontal percentage bars, used for models and tools.
+  - **SkeletonGrid** / **ErrorBox** for the loading + failure shells.
+- **i18n** — full `analytics.*` tree in en + zh.
+- **Mocks + tests**:
+  - Rust: `analytics_summary_aggregates_counts_and_windows` seeds 2
+    sessions, 3 messages (one outside the 30-day window), and 3 tool
+    calls, then asserts totals, window filtering, and sort order.
+  - Playwright: 2 new tests — default mock renders KPIs + charts;
+    zero-state renders the "No activity yet" empty hint.
+
+### Design notes
+
+- **Why hand-rolled SVG?** Recharts / ECharts are 100+ KB gzipped and
+  their default visual language fights our Linear-esque tokens. For the
+  shapes we actually need (line + h-bars + numeric tiles), ~200 lines of
+  SVG land cleaner, respect CSS variables for theming, and add zero
+  bundle weight.
+- **Why one IPC, not four?** Analytics is read-only, cheap (<5 ms on
+  ~10k rows), and every query shares the DB lock. One round trip beats
+  four for both latency and code density.
+- **UTC everywhere**: the backend's `date(created_at/1000,'unixepoch')`
+  returns UTC dates, and the frontend's `padLast30Days` uses
+  `getUTCDate` / `toISOString().slice(0, 10)` to match exactly. No
+  timezone skew at midnight.
+
+### Verified
+
+- Rust: 16 tests (new test passes), clippy -D warnings clean.
+- Vitest: 11 green.
+- Playwright: 9 green (2 new).
+- Manual: `/analytics` renders correctly against a real DB with ~5 seeded
+  sessions; refresh button re-fetches.
+
+---
+
 ## 2026-04-21 — Sprint 6: Playwright E2E scaffolding
 
 ### Context
