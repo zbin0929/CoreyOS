@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-21 — Phase 1 Sprint 1: real Hermes chat (streaming)
+
+### Shipped
+
+- **Hermes gateway integration live**: Caduceus now talks to a real local Hermes gateway (`http://127.0.0.1:8642`) backed by DeepSeek. Gateway install + DeepSeek config documented; `API_SERVER_ENABLED=true` enables the OpenAI-compatible HTTP platform.
+- **Rust `HermesGateway` client** (`src-tauri/src/adapters/hermes/gateway.rs`): reqwest-based, supports `GET /health`, `POST /v1/chat/completions` (non-streaming via `chat_once`, streaming via `chat_stream` using `eventsource-stream`).
+- **`HermesAdapter` live mode**: new `HermesAdapter::new_live(base_url, api_key, default_model)` constructor wired through `build_hermes_adapter()` in `lib.rs`. Reads `HERMES_GATEWAY_URL` / `HERMES_GATEWAY_KEY` / `HERMES_DEFAULT_MODEL` env overrides; falls back to stub on construction failure. Stub mode preserved for tests and offline dev.
+- **`AgentAdapter` trait extended**: added default-unsupported `chat_once(turn)` and `chat_stream(turn, tx)` methods. `ChatTurn` + `ChatMessageDto` DTOs live in `adapters/mod.rs`.
+- **IPC commands**: `chat_send` (non-streaming) + `chat_stream_start` (streaming). Streaming emits three per-handle events: `chat:delta:{handle}`, `chat:done:{handle}`, `chat:error:{handle}`. Handle is caller-supplied from the frontend to eliminate the "first delta before listener attached" race.
+- **Frontend IPC wrappers** (`src/lib/ipc.ts`): `chatSend()`, `chatStream(args, { onDelta, onDone, onError })` returning a `ChatStreamHandle` with `cancel()`. `ipcErrorMessage()` converts the Rust `IpcError` envelope into human-readable strings.
+- **Chat UI** (`src/features/chat/index.tsx`): real chat page with composer (Enter / Shift+Enter), gold user bubbles with fixed dark ink, assistant bubbles rendering GFM markdown (tables, lists, inline/block code, blockquotes, links) via `react-markdown` + `remark-gfm`. Empty-state hero with suggested prompts. Auto-scroll, pending `thinking…` placeholder until first delta.
+- **End-to-end verified**: ⌘1 → Chat → type → streaming DeepSeek reply with markdown rendering + multi-turn context preserved client-side.
+
+### Not in scope (deferred to Sprint 2)
+
+- **Server-side sessions**: frontend is the source of truth for history. Persistence + resume lands in Sprint 2.
+- **Cancel mid-stream**: `chatStream()` returns a `cancel()` handle but the UI doesn't yet surface a stop button.
+- **Tool calls / attachments / voice / skills**: Sprint 2+ milestones.
+
+### Notes
+
+- Gateway install hiccups during session: GitHub clone from CN required `ghfast.top` mirror; pip via `https://pypi.tuna.tsinghua.edu.cn/simple`; browser tools (playwright + camoufox) skipped — optional for chat.
+- First Tailwind token sweep caught `bg-surface` / `text-muted` / `bg-accent` which don't exist in our design tokens — replaced with real tokens (`bg-bg-elev-1`, `text-fg-muted`, `bg-gold-500`).
+
+---
+
 ## 2026-04-21 — Phase 0.5 quality gates
 
 ### Shipped

@@ -24,12 +24,35 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use crate::adapters::{hermes::HermesAdapter, AdapterRegistry};
 use crate::state::AppState;
 
+/// Gateway defaults. Phase 2 will surface these in Settings; for Sprint 1
+/// we read env overrides and fall back to the documented defaults.
+/// - `HERMES_GATEWAY_URL`  — base URL (default `http://127.0.0.1:8642`)
+/// - `HERMES_GATEWAY_KEY`  — bearer token (matches `API_SERVER_KEY`)
+/// - `HERMES_DEFAULT_MODEL`— model id (falls back to adapter default)
+fn build_hermes_adapter() -> Arc<HermesAdapter> {
+    let base_url =
+        std::env::var("HERMES_GATEWAY_URL").unwrap_or_else(|_| "http://127.0.0.1:8642".to_string());
+    let api_key = std::env::var("HERMES_GATEWAY_KEY").ok().filter(|k| !k.is_empty());
+    let default_model = std::env::var("HERMES_DEFAULT_MODEL").ok().filter(|k| !k.is_empty());
+
+    match HermesAdapter::new_live(base_url.clone(), api_key, default_model) {
+        Ok(adapter) => {
+            info!(base_url, "Hermes adapter: live mode");
+            Arc::new(adapter)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "falling back to Hermes stub adapter");
+            Arc::new(HermesAdapter::new_stub())
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_tracing();
 
     let mut registry = AdapterRegistry::new();
-    registry.register(Arc::new(HermesAdapter::new_stub()));
+    registry.register(build_hermes_adapter());
     registry
         .set_default("hermes")
         .expect("hermes is registered");
@@ -44,7 +67,8 @@ pub fn run() {
             ipc::session::session_list,
             ipc::session::session_get,
             ipc::model::model_list,
-            ipc::chat::chat_send_stub,
+            ipc::chat::chat_send,
+            ipc::chat::chat_stream_start,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

@@ -80,6 +80,23 @@ pub struct ModelCapabilities {
     pub reasoning: bool,
 }
 
+/// A single OpenAI-style chat message: role = "system" | "user" | "assistant".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessageDto {
+    pub role: String,
+    pub content: String,
+}
+
+/// Phase 1 Sprint 1 chat request: stateless single-turn completion.
+/// The caller supplies the full message history on each invocation.
+/// Sessions and streaming live in Sprint 2.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatTurn {
+    pub messages: Vec<ChatMessageDto>,
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Health {
     pub ok: bool,
@@ -130,6 +147,27 @@ pub trait AgentAdapter: Send + Sync + 'static {
     async fn get_session(&self, id: &SessionId) -> AdapterResult<Session>;
 
     async fn list_models(&self) -> AdapterResult<Vec<ModelInfo>>;
+
+    /// Phase 1 Sprint 1: non-streaming single-turn completion. Default
+    /// implementation returns `Unsupported` so stub-only adapters can skip it.
+    async fn chat_once(&self, _turn: ChatTurn) -> AdapterResult<String> {
+        Err(AdapterError::Unsupported {
+            capability: "chat_once",
+        })
+    }
+
+    /// Streaming single-turn completion. Forwards delta content chunks through
+    /// `tx` as they arrive, resolves with a summary (usage, model, finish
+    /// reason) when the upstream stream closes.
+    async fn chat_stream(
+        &self,
+        _turn: ChatTurn,
+        _tx: tokio::sync::mpsc::Sender<String>,
+    ) -> AdapterResult<crate::adapters::hermes::gateway::ChatStreamDone> {
+        Err(AdapterError::Unsupported {
+            capability: "chat_stream",
+        })
+    }
 }
 
 // ───────────────────────── Registry ─────────────────────────

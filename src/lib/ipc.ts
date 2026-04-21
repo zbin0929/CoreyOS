@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 export interface HomeStats {
   path: string;
@@ -9,4 +10,150 @@ export interface HomeStats {
 /** Phase 0 demo — proves the IPC pipe + Rust fs round-trip. */
 export function homeStats(): Promise<HomeStats> {
   return invoke<HomeStats>('home_stats');
+}
+
+// ───────────────────────── Chat ─────────────────────────
+
+export type ChatRole = 'system' | 'user' | 'assistant';
+
+export interface ChatMessageDto {
+  role: ChatRole;
+  content: string;
+}
+
+export interface ChatSendArgs {
+  messages: ChatMessageDto[];
+  model?: string;
+}
+
+export interface ChatSendReply {
+  content: string;
+}
+
+/**
+ * Non-streaming chat. Caller owns the history and sends the whole array on
+ * each turn.
+ */
+export function chatSend(args: ChatSendArgs): Promise<ChatSendReply> {
+  return invoke<ChatSendReply>('chat_send', { args });
+}
+
+// ───────────────────────── Streaming chat ─────────────────────────
+
+export interface ChatStreamDone {
+  finish_reason: string | null;
+  model: string;
+  latency_ms: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+}
+
+export interface ChatStreamHandle {
+  /** Cancel all listeners. The server-side task continues to completion; we
+   *  simply stop receiving its events (cheap cancel). */
+  cancel: () => Promise<void>;
+}
+
+export interface ChatStreamCallbacks {
+  onDelta: (chunk: string) => void;
+  onDone: (summary: ChatStreamDone) => void;
+  onError: (err: unknown) => void;
+}
+
+/**
+ * Streaming chat. Generates a handle on the frontend, attaches listeners
+ * first, THEN kicks off the backend task — this avoids the race where early
+ * deltas might fire before subscription is live.
+ */
+export async function chatStream(
+  args: ChatSendArgs,
+  cbs: ChatStreamCallbacks,
+): Promise<ChatStreamHandle> {
+  const handle = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const unlistens: UnlistenFn[] = [];
+  unlistens.push(
+    await listen<string>(`chat:delta:${handle}`, (e) => cbs.onDelta(e.payload)),
+  );
+  unlistens.push(
+    await listen<ChatStreamDone>(`chat:done:${handle}`, async (e) => {
+      cbs.onDone(e.payload);
+      await disposeAll(unlistens);
+    }),
+  );
+  unlistens.push(
+    await listen(`chat:error:${handle}`, async (e) => {
+      cbs.onError(e.payload);
+      await disposeAll(unlistens);
+    }),
+  );
+
+  try {
+    await invoke<string>('chat_stream_start', {
+      args: { ...args, handle },
+    });
+  } catch (e) {
+    await disposeAll(unlistens);
+    throw e;
+  }
+
+  return {
+    cancel: () => disposeAll(unlistens),
+  };
+}
+
+async function disposeAll(unlistens: UnlistenFn[]): Promise<void> {
+  await Promise.allSettled(unlistens.map((u) => Promise.resolve(u())));
+  unlistens.length = 0;
+}
+
+// ───────────────────────── Error envelope ─────────────────────────
+
+export type IpcErrorKind =
+  | 'not_configured'
+  | 'unreachable'
+  | 'unauthorized'
+  | 'rate_limited'
+  | 'upstream'
+  | 'protocol'
+  | 'unsupported'
+  | 'internal'
+  | 'sandbox_denied'
+  | 'sandbox_consent_required';
+
+export interface IpcError {
+  kind: IpcErrorKind;
+  [k: string]: unknown;
+}
+
+/** Coerce whatever invoke() rejected with into a human message. */
+export function ipcErrorMessage(e: unknown): string {
+  if (e && typeof e === 'object' && 'kind' in e) {
+    const err = e as IpcError;
+    switch (err.kind) {
+      case 'unreachable':
+        return `Gateway unreachable at ${err.endpoint}: ${err.message}`;
+      case 'unauthorized':
+        return `Unauthorized: ${err.detail}`;
+      case 'rate_limited':
+        return `Rate limited${err.retry_after_s ? `, retry in ${err.retry_after_s}s` : ''}`;
+      case 'upstream':
+        return `Upstream error ${err.status}: ${String(err.body).slice(0, 200)}`;
+      case 'protocol':
+        return `Protocol error: ${err.detail}`;
+      case 'unsupported':
+        return `Unsupported capability: ${err.capability}`;
+      case 'not_configured':
+        return `Not configured: ${err.hint}`;
+      case 'internal':
+        return `Internal error: ${err.message}`;
+      case 'sandbox_denied':
+        return `Sandbox denied ${err.path} (${err.reason})`;
+      case 'sandbox_consent_required':
+        return `Sandbox requires consent for ${err.path}`;
+      default:
+        return JSON.stringify(err);
+    }
+  }
+  return typeof e === 'string' ? e : (e instanceof Error ? e.message : String(e));
 }
