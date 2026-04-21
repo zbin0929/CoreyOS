@@ -1,4 +1,5 @@
-import { MessageSquarePlus, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { Check, MessageSquarePlus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useChatStore } from '@/stores/chat';
 
@@ -58,16 +59,7 @@ export function SessionsPanel() {
                     >
                       {s.title}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete "${s.title}"?`)) deleteSession(id);
-                      }}
-                      className="invisible flex h-6 w-6 flex-none items-center justify-center rounded text-fg-subtle hover:bg-danger/10 hover:text-danger group-hover:visible"
-                      aria-label="Delete session"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <DeleteButton onConfirm={() => deleteSession(id)} />
                   </div>
                 </li>
               );
@@ -76,5 +68,49 @@ export function SessionsPanel() {
         )}
       </div>
     </aside>
+  );
+}
+
+/**
+ * Two-click delete: first click arms (icon becomes a red check for 2s),
+ * second click deletes. Native `confirm()` is unreliable in the Tauri
+ * webview (needs per-capability permission), so we do it in-app.
+ */
+function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    };
+  }, []);
+
+  function handleClick(e: ReactMouseEvent) {
+    e.stopPropagation();
+    if (armed) {
+      if (timer.current) window.clearTimeout(timer.current);
+      setArmed(false);
+      onConfirm();
+      return;
+    }
+    setArmed(true);
+    timer.current = window.setTimeout(() => setArmed(false), 2000);
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className={cn(
+        'flex h-6 w-6 flex-none items-center justify-center rounded transition',
+        armed
+          ? 'bg-danger/15 text-danger'
+          : 'invisible text-fg-subtle hover:bg-danger/10 hover:text-danger group-hover:visible',
+      )}
+      aria-label={armed ? 'Confirm delete' : 'Delete session'}
+      title={armed ? 'Click again to confirm' : 'Delete'}
+    >
+      {armed ? <Check className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+    </button>
   );
 }

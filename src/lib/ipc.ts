@@ -107,6 +107,41 @@ async function disposeAll(unlistens: UnlistenFn[]): Promise<void> {
   unlistens.length = 0;
 }
 
+/**
+ * Ask the LLM for a short session title (≤6 words / ≤12 chars for CJK).
+ * Returns null if the gateway errors or the response is unusable — the caller
+ * should keep the heuristic title in that case.
+ */
+export async function generateTitle(
+  firstUserMessage: string,
+  firstAssistantReply: string,
+): Promise<string | null> {
+  const prompt: ChatMessageDto[] = [
+    {
+      role: 'system',
+      content:
+        'You generate concise chat titles. Reply with ONLY the title — no quotes, no punctuation at the end, no "Title:" prefix. Match the user language. Keep it under 6 words (or 12 Chinese characters).',
+    },
+    {
+      role: 'user',
+      content: `USER:\n${firstUserMessage.slice(0, 500)}\n\nASSISTANT:\n${firstAssistantReply.slice(0, 500)}\n\nTitle:`,
+    },
+  ];
+  try {
+    const { content } = await chatSend({ messages: prompt });
+    const cleaned = content
+      .trim()
+      .replace(/^["'「『《]+|["'」』》]+$/g, '')
+      .replace(/[.。!！?？…]+$/, '')
+      .replace(/\s+/g, ' ');
+    if (!cleaned) return null;
+    // Hard-cap length — some models ignore word limits.
+    return cleaned.length > 40 ? cleaned.slice(0, 40) : cleaned;
+  } catch {
+    return null;
+  }
+}
+
 // ───────────────────────── Error envelope ─────────────────────────
 
 export type IpcErrorKind =

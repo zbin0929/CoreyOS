@@ -51,11 +51,19 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Fallback heuristic title from the first user message — used until the LLM
+ * title generator returns (async, see ipc.ts `generateTitle`).
+ * Keeps it short and stops at the first sentence/clause boundary.
+ */
 function deriveTitle(messages: UiMessage[]): string {
   const firstUser = messages.find((m) => m.role === 'user' && m.content.trim());
   if (!firstUser) return 'New chat';
-  const text = firstUser.content.trim().replace(/\s+/g, ' ');
-  return text.length <= 40 ? text : text.slice(0, 40) + '…';
+  const normalized = firstUser.content.trim().replace(/\s+/g, ' ');
+  // Split on common sentence enders (EN + CN).
+  const match = normalized.match(/^[^.!?。！？\n]{1,30}/);
+  const head = match ? match[0] : normalized.slice(0, 30);
+  return head.length < normalized.length ? head + '…' : head;
 }
 
 export const useChatStore = create<ChatState>()(

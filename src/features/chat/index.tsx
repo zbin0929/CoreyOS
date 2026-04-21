@@ -10,7 +10,13 @@ import { Send, Sparkles, Square } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
-import { chatStream, ipcErrorMessage, type ChatMessageDto, type ChatStreamHandle } from '@/lib/ipc';
+import {
+  chatStream,
+  generateTitle,
+  ipcErrorMessage,
+  type ChatMessageDto,
+  type ChatStreamHandle,
+} from '@/lib/ipc';
 import { newMessageId, useChatStore, type UiMessage } from '@/stores/chat';
 import { MessageBubble } from './MessageBubble';
 import { SessionsPanel } from './SessionsPanel';
@@ -23,6 +29,7 @@ export function ChatRoute() {
   );
   const appendMessage = useChatStore((s) => s.appendMessage);
   const patchMessage = useChatStore((s) => s.patchMessage);
+  const renameSession = useChatStore((s) => s.renameSession);
 
   // Ensure there's always a current session on mount.
   useLayoutEffect(() => {
@@ -38,6 +45,7 @@ export function ChatRoute() {
           messages={sessionMessages}
           appendMessage={appendMessage}
           patchMessage={patchMessage}
+          renameSession={renameSession}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
@@ -57,9 +65,16 @@ interface ChatPaneProps {
     msgId: string,
     patch: Partial<Omit<UiMessage, 'id'>>,
   ) => void;
+  renameSession: (id: string, title: string) => void;
 }
 
-function ChatPane({ sessionId, messages, appendMessage, patchMessage }: ChatPaneProps) {
+function ChatPane({
+  sessionId,
+  messages,
+  appendMessage,
+  patchMessage,
+  renameSession,
+}: ChatPaneProps) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -134,6 +149,20 @@ function ChatPane({ sessionId, messages, appendMessage, patchMessage }: ChatPane
             setSending(false);
             streamRef.current = null;
             pendingRef.current = null;
+            // After the FIRST full turn, ask the LLM for a better title.
+            // We detect "first turn" by checking that the only user message
+            // in this session is the one we just sent.
+            const sess = useChatStore.getState().sessions[sessionId];
+            if (!sess) return;
+            const userCount = sess.messages.filter((m) => m.role === 'user').length;
+            const firstAssistant = sess.messages.find(
+              (m) => m.id === pendingId,
+            )?.content;
+            if (userCount === 1 && firstAssistant && firstAssistant.length > 0) {
+              void generateTitle(trimmed, firstAssistant).then((title) => {
+                if (title) renameSession(sessionId, title);
+              });
+            }
           },
           onError: (err) => {
             patchMessage(sessionId, pendingId, {
