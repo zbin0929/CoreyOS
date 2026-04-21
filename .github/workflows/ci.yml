@@ -21,10 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` here — the single source of truth is
+      # `packageManager: "pnpm@9.12.0"` in package.json. Specifying both
+      # triggers ERR_PNPM_BAD_PM_VERSION.
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -60,8 +61,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
