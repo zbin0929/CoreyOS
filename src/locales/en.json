@@ -156,6 +156,26 @@
       "hermes.env.key": "API key"
     }
   },
+  "compare": {
+    "title": "Compare models",
+    "subtitle": "Run one prompt against up to 4 models in parallel. Each lane streams independently.",
+    "prompt_placeholder": "Type a prompt, then Ctrl/⌘+Enter or Run. Multi-line is fine.",
+    "run": "Run",
+    "stop_all": "Stop all",
+    "add_model": "Add model",
+    "remove_model": "Remove",
+    "max_reached": "Max {{n}} lanes",
+    "cancel_lane": "Cancel lane",
+    "cancelled": "Cancelled",
+    "waiting": "Waiting for first token…",
+    "winners": "Winners",
+    "fastest": "Fastest",
+    "most_tokens": "Most tokens",
+    "export_md": "Export MD",
+    "export_json": "Export JSON",
+    "empty_title": "Pick at least one model and type a prompt",
+    "empty_desc": "Each selected model runs the same prompt in parallel. Lanes appear here with streaming output, per-lane latency, and winner highlights."
+  },
   "channels": {
     "title": "Platform channels",
     "subtitle": "Credentials + behavior for every messenger Hermes can talk through.",

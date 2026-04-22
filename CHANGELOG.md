@@ -6,6 +6,71 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 4 Sprint 1 (T4.1): Multi-model compare
+
+### Context
+
+First differentiator feature. Users can paste a prompt, pick up to 4
+models, and watch them stream side-by-side. Drives the Phase 4 demo
+story and makes the "am I picking the right model?" question
+answerable in 10 seconds. No backend changes — existing
+`chatStream` already supports handle-scoped concurrent streams, so
+the entire feature is frontend orchestration + one mock tweak.
+
+### Shipped
+
+- **`src/features/compare/index.tsx`** (~460 LoC, single file).
+  - `PromptBar`: full-width textarea, Ctrl/⌘+Enter to Run, Run/Stop
+    toggle.
+  - `ModelPicker`: chip row + dropdown of `model_list` results,
+    hard-capped at 4 lanes. Remove via X on chip; Add button
+    disables at cap.
+  - `LanePanel` per model: header (display name + provider), body
+    (`Markdown` reused from chat), footer (wall-clock latency,
+    tokens, finish_reason or Cancelled/Error state). Per-lane X
+    cancels just that lane without touching the others.
+  - `DiffFooter`: appears once ≥2 lanes are done. Highlights
+    fastest wall-clock and highest-token model. No similarity
+    metric yet — deliberate.
+  - Export helpers: Markdown + JSON via a tiny `downloadBlob` —
+    no new deps.
+- **Route wiring**: `/compare` in `src/app/routes.tsx` now points
+  at `CompareRoute` instead of the Phase-4 placeholder.
+- **Concurrency model**: one `chatStream()` call per lane; handles
+  collected in a `Map<laneId, ChatStreamHandle>`. Per-lane cancel
+  and global Stop-all both go through the same map. Route unmount
+  drains every handle so nav-away mid-run doesn't leak listeners.
+- **Ephemeral state**: lanes live in React state keyed by
+  `r${runId}-${modelId}-${i}`. No DB writes — Compare is a
+  scratchpad, not a session.
+- **i18n**: `compare.*` keys in en + zh.
+- **Mock tweak**: `chat_stream_start` in `e2e/fixtures/tauri-mock.ts`
+  now echoes `[model=<id>]` when a `model` arg is supplied and
+  reports that model in the `done` summary. Old chat-feature tests
+  take the fallback branch and are unaffected.
+
+### Test totals
+
+- Rust `cargo test`: **79 passed** (unchanged — T4.1 is frontend-only).
+- Playwright `compare.spec.ts`: **3/3 passed** (new).
+- Full Playwright suite: **33/33 passed** (+3 over T3.5's 30).
+- `pnpm typecheck` + `pnpm lint`: clean.
+
+### Deferred (within T4.1 · for later if demand appears)
+
+- `ipc/compare.rs` backend wrapper (for lifecycle / journaling —
+  not needed while frontend orchestrates).
+- Jaccard / embedding similarity in `DiffFooter`.
+- Lane output virtualization (cap of 4 × ~2k tokens is comfortable).
+- "Save run" persistence — export covers the keep-it workflow.
+
+### Next
+
+- **T4.3** Trajectory timeline, **T4.5** Web Terminal, or **T4.4**
+  Budgets & alerts — each independent, 1.5–2 days.
+
+---
+
 ## 2026-04-22 — Phase 3 Sprint 5 (T3.5): Mobile drawer for channel edit flow · **Phase 3 complete**
 
 ### Context

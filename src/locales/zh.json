@@ -156,6 +156,26 @@
       "hermes.env.key": "API Key"
     }
   },
+  "compare": {
+    "title": "模型对比",
+    "subtitle": "同一 prompt 并行跑最多 4 个模型，每条泳道独立流式返回。",
+    "prompt_placeholder": "在此输入 prompt，Ctrl/⌘+Enter 或点击「运行」。支持多行。",
+    "run": "运行",
+    "stop_all": "全部停止",
+    "add_model": "添加模型",
+    "remove_model": "移除",
+    "max_reached": "最多 {{n}} 条",
+    "cancel_lane": "取消该泳道",
+    "cancelled": "已取消",
+    "waiting": "等待首个 token…",
+    "winners": "本轮赢家",
+    "fastest": "最快",
+    "most_tokens": "Token 最多",
+    "export_md": "导出 MD",
+    "export_json": "导出 JSON",
+    "empty_title": "选至少一个模型并输入 prompt",
+    "empty_desc": "每个选中的模型都会并行跑同一 prompt。泳道将在下方出现，显示流式输出、单泳道时延与胜者标注。"
+  },
   "channels": {
     "title": "平台通道",
     "subtitle": "所有 Hermes 可接入的即时通讯平台的凭证与行为设置。",

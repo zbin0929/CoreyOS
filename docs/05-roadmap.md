@@ -9,7 +9,7 @@
 | 1     | Chat core             | Real SSE chat, sessions, tool calls, attachments       | 3–4 days  | **Sprints 1+2 shipped** (2026-04-21) — streaming chat, markdown + syntax highlighting, client-side sessions, stop button. Tools/attachments/SQLite backend in Sprint 2B |
 | 2     | Config & Ops          | Models, Analytics, Logs, Settings, Profiles            | ~1 week   | **Shipped** (2026-04-22) — T2.1–T2.8 all green; tar.gz import/export + per-profile gateway control deferred to Phase 3 (see `docs/phases/phase-2-config.md`) |
 | 3     | Platform channels     | 8 channels + gateway restart + WeChat QR               | ~1 week   | **Shipped** (2026-04-22) — T3.1–T3.5 all green. Real Tencent iLink client + explicit-clear-secret button + `/health/channels` probe deferred; see `docs/phases/phase-3-channels.md`. |
-| 4     | Differentiators       | Multi-model compare, skill editor, trajectory, budgets, terminal | 1–2 weeks | Planned |
+| 4     | Differentiators       | Multi-model compare, skill editor, trajectory, budgets, terminal | 1–2 weeks | **In progress** — T4.1 multi-model compare (up to 4 parallel lanes, per-lane cancel, diff footer, MD/JSON export) shipped (2026-04-22); T4.2 skill editor, T4.3 trajectory, T4.4 budgets, T4.5 terminal, T4.6 runbooks pending. See `docs/phases/phase-4-differentiators.md`. |
 | 5     | Multi-agent console   | 2+ non-Hermes adapters running side-by-side            | ~1 week   | Planned |
 
 Total ~6 weeks solo, sequential. Phases 2/3 can parallelize if 2 devs.

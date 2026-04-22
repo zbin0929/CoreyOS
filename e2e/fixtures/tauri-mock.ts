@@ -557,7 +557,13 @@ export const tauriMockInitScript = /* js */ `
       case 'chat_stream_start': {
         // Shape matches the real Rust IPC: args.args = { messages, model, handle }.
         const h = args.args.handle;
-        const reply = state.chatReply;
+        // T4.1: include the model id in the reply so Compare lanes are
+        // visibly distinguishable in tests. Falls back to the generic
+        // reply for older consumers (chat feature).
+        const modelId = args.args.model;
+        const reply = modelId
+          ? state.chatReply + ' [model=' + modelId + ']'
+          : state.chatReply;
         // Emit two deltas then done — on a microtask so \`listen\` returns first.
         queueMicrotask(() => {
           emit('chat:delta:' + h, reply.slice(0, 5));
@@ -566,7 +572,7 @@ export const tauriMockInitScript = /* js */ `
             () =>
               emit('chat:done:' + h, {
                 finish_reason: 'stop',
-                model: 'mock',
+                model: modelId || 'mock',
                 latency_ms: 42,
                 prompt_tokens: 10,
                 completion_tokens: 5,

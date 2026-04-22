@@ -5,7 +5,6 @@ import {
   Outlet,
 } from '@tanstack/react-router';
 import {
-  Columns3,
   Wand2,
   GitBranch,
   Terminal,
@@ -14,6 +13,7 @@ import {
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
+import { CompareRoute } from '@/features/compare';
 import { ModelsRoute } from '@/features/models';
 import { SettingsRoute } from '@/features/settings';
 import { AnalyticsRoute } from '@/features/analytics';
@@ -45,15 +45,7 @@ const chatRoute = createRoute({
 const compareRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/compare',
-  component: () => (
-    <Placeholder
-      titleKey="nav.compare"
-      emptyTitleKey="empty.compare.title"
-      emptyDescKey="empty.compare.desc"
-      icon={Columns3}
-      phase={4}
-    />
-  ),
+  component: CompareRoute,
 });
 
 const skillsRoute = createRoute({

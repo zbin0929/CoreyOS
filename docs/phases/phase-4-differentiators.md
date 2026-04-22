@@ -18,7 +18,66 @@
 
 ## Tasks by feature
 
-### T4.1 — Multi-model compare (2–3 days)
+### T4.1 — Multi-model compare · **Shipped** (2026-04-22)
+
+**What landed**
+
+- `src/features/compare/index.tsx` (single-file feature, ~460 LoC):
+  PromptBar, ModelPicker (chip row with dropdown, cap 4), LanePanel,
+  DiffFooter, plus Markdown + JSON export helpers. No new IPC — the
+  existing `chatStream(args, cbs)` handle already scopes listeners
+  by run-id, so N parallel invocations coexist cleanly.
+- Route `/compare` flipped from `Placeholder` to `CompareRoute`.
+- Ephemeral state: lanes live in React state keyed by
+  `r${runId}-${modelId}-${i}`. Nothing persists to SQLite; Compare
+  is explicitly a scratchpad, not a session.
+- Per-lane cancel: a `Map<laneId, ChatStreamHandle>` at the route
+  level; clicking a lane's X (or the global "Stop all") drops the
+  matching listener via `handle.cancel()`. The Rust pump continues
+  to completion but the UI stops paying attention — matches the
+  Chat stop semantics.
+- DiffFooter renders once ≥2 lanes reach `done`. Shows fastest
+  wall-clock and highest token-count model; no Jaccard/similarity
+  yet — added cost of more deps vs. real user payoff was unclear.
+- Export: Markdown report (human) + JSON report (machine). Both go
+  through a tiny `downloadBlob` helper — no new deps.
+
+**Mock-side changes**
+
+- `chat_stream_start` in `e2e/fixtures/tauri-mock.ts` now echoes
+  `[model=<id>]` when the caller passes a `model` arg and reports
+  that model in the `done` summary. Old chat-feature tests pass
+  through the fallback branch unchanged.
+
+**Tests**
+
+- Playwright `compare.spec.ts`: 3 specs.
+  - 4 parallel lanes: add 3 extra models, Run, assert each lane
+    ends with its own `[model=<id>]` reply and shows latency /
+    tokens pills; diff footer + fastest winner visible.
+  - Cancel one lane mid-stream (via an override that slows the
+    mock's `done` to 400ms): cancelled lane shows "Cancelled", the
+    other two still finish and appear in the diff footer.
+  - Model picker mechanics: remove chip works; 5th Add attempt is
+    blocked (button disabled at cap).
+- Full Playwright suite: **33/33 passed**. Rust: unchanged (79).
+- `pnpm typecheck` + `pnpm lint`: clean.
+
+**Deliberately out of scope this sprint**
+
+- No `ipc/compare.rs` wrapper. The compare-session concept the
+  plan hinted at would only matter if we wanted backend-side
+  lifecycle (cleanup, journaling); neither is worth the extra IPC
+  surface while everything is frontend-orchestrated.
+- No Jaccard / embedding similarity between outputs. Can add as a
+  post-processing step inside `DiffFooter` later without touching
+  lanes.
+- No virtualization of lane output. Cap of 4 lanes × ~2k token
+  replies is comfortable in a div.
+- No prompt-history / "save this run" affordance. Export covers
+  the "keep it" workflow without introducing new storage.
+
+### T4.1 — Multi-model compare (original plan · kept for reference)
 
 **UX**
 
