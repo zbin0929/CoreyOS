@@ -156,6 +156,31 @@ export const tauriMockInitScript = /* js */ `
       case 'model_list':
         return state.models;
 
+      case 'model_provider_probe': {
+        // Echo a deterministic three-model report so the Discover UX is
+        // testable without network. Endpoint mirrors the normalized form.
+        // NOTE: this file is stringified + injected, so NO template literals
+        // here — they would break the outer backtick string.
+        const raw = String(args.baseUrl || '').replace(/\\/+$/, '');
+        const endpoint = raw.endsWith('/v1/models')
+          ? raw
+          : raw.endsWith('/v1')
+            ? raw + '/models'
+            : raw + '/v1/models';
+        return {
+          endpoint: endpoint,
+          latency_ms: 42,
+          models: [
+            { id: 'mock-large', owned_by: 'mock' },
+            { id: 'mock-medium', owned_by: 'mock' },
+            { id: 'mock-small', owned_by: 'mock' },
+          ],
+        };
+      }
+
+      case 'changelog_list':
+        return state.changelog ?? [];
+
       case 'db_load_all':
         return state.sessions;
       case 'db_session_upsert':

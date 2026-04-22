@@ -11,6 +11,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Search,
   Terminal as TerminalIcon,
   Zap,
 } from 'lucide-react';
@@ -24,6 +25,8 @@ import {
   hermesEnvSetKey,
   hermesGatewayRestart,
   ipcErrorMessage,
+  modelProviderProbe,
+  type DiscoveredModel,
   type HermesConfigView,
   type HermesModelSection,
 } from '@/lib/ipc';
@@ -108,6 +111,17 @@ export function ModelsRoute() {
   /** `true` while the user has saved but the gateway still runs the old config. */
   const [needsRestart, setNeedsRestart] = useState(false);
 
+  /** Result of the most recent "Discover" probe — replaces the hand-curated
+   *  sample models in the Combobox when present. `null` = never probed this
+   *  session. Cleared on provider change. */
+  const [discovered, setDiscovered] = useState<DiscoveredModel[] | null>(null);
+  const [probeState, setProbeState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'probing' }
+    | { kind: 'ok'; count: number; latencyMs: number; endpoint: string }
+    | { kind: 'err'; message: string }
+  >({ kind: 'idle' });
+
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     setSave({ kind: 'idle' });
@@ -136,12 +150,40 @@ export function ModelsRoute() {
 
   function onProviderChange(next: string) {
     setProvider(next);
+    // Any prior discovery was for a different provider — drop it so the
+    // dropdown falls back to hand-curated suggestions until the user probes.
+    setDiscovered(null);
+    setProbeState({ kind: 'idle' });
     const meta = PROVIDER_CATALOG.find((p) => p.slug === next);
     // Only auto-set base_url if the user hasn't customized (or is switching between known providers).
     if (meta?.baseUrl && (baseUrl === '' || PROVIDER_CATALOG.some((p) => p.baseUrl === baseUrl))) {
       setBaseUrl(meta.baseUrl);
     } else if (!meta?.baseUrl) {
       // Unknown provider — leave base_url alone.
+    }
+  }
+
+  async function onDiscover() {
+    const url = baseUrl.trim();
+    if (!url) {
+      setProbeState({ kind: 'err', message: 'Set a base URL first.' });
+      return;
+    }
+    setProbeState({ kind: 'probing' });
+    try {
+      const report = await modelProviderProbe({
+        baseUrl: url,
+        envKey: providerMeta?.envKey ?? null,
+      });
+      setDiscovered(report.models);
+      setProbeState({
+        kind: 'ok',
+        count: report.models.length,
+        latencyMs: report.latency_ms,
+        endpoint: report.endpoint,
+      });
+    } catch (err) {
+      setProbeState({ kind: 'err', message: ipcErrorMessage(err) });
     }
   }
 
@@ -279,27 +321,60 @@ export function ModelsRoute() {
                     />
                   )}
 
-                  <Field label="Model id" hint="The exact id the provider accepts.">
-                    <Combobox
-                      value={model}
-                      onChange={setModel}
-                      placeholder={providerMeta?.sampleModels[0] ?? 'e.g. deepseek-reasoner'}
-                      options={(providerMeta?.sampleModels ?? []).map((m) => ({
-                        value: m,
-                      }))}
-                    />
-                  </Field>
-
                   <Field
                     label="Base URL"
                     hint="Optional. OpenAI-compatible endpoint override."
                   >
-                    <input
-                      type="url"
-                      value={baseUrl}
-                      onChange={(e) => setBaseUrl(e.target.value)}
-                      placeholder={providerMeta?.baseUrl ?? ''}
-                      className={inputCls}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        value={baseUrl}
+                        onChange={(e) => setBaseUrl(e.target.value)}
+                        placeholder={providerMeta?.baseUrl ?? ''}
+                        className={cn(inputCls, 'flex-1')}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={onDiscover}
+                        disabled={probeState.kind === 'probing' || !baseUrl.trim()}
+                        title="GET /v1/models against this endpoint"
+                      >
+                        {probeState.kind === 'probing' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Search className="h-3.5 w-3.5" />
+                        )}
+                        Discover
+                      </Button>
+                    </div>
+                    <ProbeStatus state={probeState} />
+                  </Field>
+
+                  <Field
+                    label="Model id"
+                    hint={
+                      discovered
+                        ? `${discovered.length} model${discovered.length === 1 ? '' : 's'} from ${probeState.kind === 'ok' ? probeState.endpoint : 'upstream'}.`
+                        : 'The exact id the provider accepts.'
+                    }
+                  >
+                    <Combobox
+                      value={model}
+                      onChange={setModel}
+                      placeholder={
+                        discovered?.[0]?.id ??
+                        providerMeta?.sampleModels[0] ??
+                        'e.g. deepseek-reasoner'
+                      }
+                      options={(discovered
+                        ? discovered.map((m) => ({
+                            value: m.id,
+                            hint: m.owned_by ?? undefined,
+                          }))
+                        : (providerMeta?.sampleModels ?? []).map((m) => ({ value: m }))
+                      )}
                     />
                   </Field>
                 </Section>
@@ -639,6 +714,42 @@ function ApiKeyPanel({
         </div>
       )}
     </div>
+  );
+}
+
+/** Inline status line under the Discover button. */
+function ProbeStatus({
+  state,
+}: {
+  state:
+    | { kind: 'idle' }
+    | { kind: 'probing' }
+    | { kind: 'ok'; count: number; latencyMs: number; endpoint: string }
+    | { kind: 'err'; message: string };
+}) {
+  if (state.kind === 'idle') return null;
+  if (state.kind === 'probing') {
+    return (
+      <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-fg-muted">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Probing…
+      </span>
+    );
+  }
+  if (state.kind === 'ok') {
+    return (
+      <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-emerald-500">
+        <CheckCircle2 className="h-3 w-3" />
+        {state.count} model{state.count === 1 ? '' : 's'} from{' '}
+        <code className="font-mono text-[11px]">{state.endpoint}</code> ({state.latencyMs} ms)
+      </span>
+    );
+  }
+  return (
+    <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-danger">
+      <AlertCircle className="h-3 w-3" />
+      {state.message}
+    </span>
   );
 }
 

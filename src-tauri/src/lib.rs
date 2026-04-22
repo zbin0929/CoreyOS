@@ -10,9 +10,11 @@
 #![allow(dead_code)]
 
 mod adapters;
+mod changelog;
 mod config;
 mod db;
 mod error;
+mod fs_atomic;
 mod hermes_config;
 mod ipc;
 mod sandbox;
@@ -59,6 +61,7 @@ pub fn run() {
             ipc::session::session_list,
             ipc::session::session_get,
             ipc::model::model_list,
+            ipc::model::model_provider_probe,
             ipc::chat::chat_send,
             ipc::chat::chat_stream_start,
             ipc::config::config_get,
@@ -68,6 +71,7 @@ pub fn run() {
             ipc::hermes_config::hermes_config_write_model,
             ipc::hermes_config::hermes_env_set_key,
             ipc::hermes_config::hermes_gateway_restart,
+            ipc::changelog::changelog_list,
             ipc::db::db_load_all,
             ipc::db::db_session_upsert,
             ipc::db::db_session_delete,
@@ -118,7 +122,11 @@ pub fn run() {
                 }
             };
 
-            app.manage(AppState::new(registry, cfg, config_dir, db));
+            // Mutation journal lives next to the SQLite DB. One file per
+            // install; appended forever (Phase 2.8 will add a viewer + revert).
+            let changelog_path = app_data_dir.join("changelog.jsonl");
+
+            app.manage(AppState::new(registry, cfg, config_dir, db, changelog_path));
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();

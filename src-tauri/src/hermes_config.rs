@@ -12,10 +12,13 @@
 
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_yaml::{Mapping, Value};
+
+use crate::changelog;
+use crate::fs_atomic;
 
 const HERMES_DIR: &str = ".hermes";
 const CONFIG_FILE: &str = "config.yaml";
@@ -119,9 +122,26 @@ fn extract_model(root: &Value) -> HermesModelSection {
 /// preserved verbatim. Missing or empty string fields are REMOVED from the
 /// YAML (so `base_url: ""` doesn't stay polluting the file after the user
 /// clears it).
-pub fn write_model(new_model: &HermesModelSection) -> io::Result<()> {
+///
+/// `journal_path`, when provided, receives one `hermes.config.model` entry
+/// with the before/after model sections. Pass `None` in contexts where a
+/// journal isn't available (tests, early boot).
+pub fn write_model(
+    new_model: &HermesModelSection,
+    journal_path: Option<&Path>,
+) -> io::Result<()> {
     let config_path = config_path()?;
     let raw = fs::read_to_string(&config_path).unwrap_or_default();
+
+    // Capture before-state for the journal entry (cheap; small mapping).
+    let before_model = if raw.trim().is_empty() {
+        HermesModelSection::default()
+    } else {
+        serde_yaml::from_str::<Value>(&raw)
+            .map(|v| extract_model(&v))
+            .unwrap_or_default()
+    };
+
     let mut root: Value = if raw.trim().is_empty() {
         Value::Mapping(Mapping::new())
     } else {
@@ -148,13 +168,51 @@ pub fn write_model(new_model: &HermesModelSection) -> io::Result<()> {
 
     root_map.insert(model_key, Value::Mapping(model_map));
 
-    // Atomic write: tmp file + rename. Preserves file perms on *nix.
     let serialized =
         serde_yaml::to_string(&root).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let tmp = config_path.with_extension("yaml.caduceus.tmp");
-    fs::write(&tmp, serialized)?;
-    fs::rename(&tmp, &config_path)?;
+    fs_atomic::atomic_write(&config_path, serialized.as_bytes(), None)?;
+
+    if let Some(jp) = journal_path {
+        let summary = summarize_model_diff(&before_model, new_model);
+        let _ = changelog::append(
+            jp,
+            "hermes.config.model",
+            Some(serde_json::to_value(&before_model).unwrap_or(serde_json::Value::Null)),
+            Some(serde_json::to_value(new_model).unwrap_or(serde_json::Value::Null)),
+            summary,
+        );
+    }
     Ok(())
+}
+
+fn summarize_model_diff(before: &HermesModelSection, after: &HermesModelSection) -> String {
+    let mut parts = Vec::new();
+    if before.default != after.default {
+        parts.push(format!(
+            "default: {} → {}",
+            before.default.as_deref().unwrap_or("∅"),
+            after.default.as_deref().unwrap_or("∅")
+        ));
+    }
+    if before.provider != after.provider {
+        parts.push(format!(
+            "provider: {} → {}",
+            before.provider.as_deref().unwrap_or("∅"),
+            after.provider.as_deref().unwrap_or("∅")
+        ));
+    }
+    if before.base_url != after.base_url {
+        parts.push(format!(
+            "base_url: {} → {}",
+            before.base_url.as_deref().unwrap_or("∅"),
+            after.base_url.as_deref().unwrap_or("∅")
+        ));
+    }
+    if parts.is_empty() {
+        "no-op".to_string()
+    } else {
+        parts.join(", ")
+    }
 }
 
 fn set_or_remove(map: &mut Mapping, key: &str, value: Option<&str>) {
@@ -167,6 +225,41 @@ fn set_or_remove(map: &mut Mapping, key: &str, value: Option<&str>) {
             map.remove(k);
         }
     }
+}
+
+/// Read the raw value of a single `*_API_KEY` from `~/.hermes/.env`.
+///
+/// Returns `Ok(None)` if the file is missing, the key is absent, or the
+/// value is empty. Values never leave the process unless the caller (a
+/// Rust-side consumer) explicitly forwards them — the IPC boundary only
+/// ever surfaces derived booleans (`env_keys_present`).
+pub fn read_env_value(key: &str) -> io::Result<Option<String>> {
+    if !is_allowed_env_key(key) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("refusing to read non-API-key env var: {key}"),
+        ));
+    }
+    let path = env_path()?;
+    let raw = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    for line in raw.lines() {
+        if !line_matches_key(line, key) {
+            continue;
+        }
+        let Some((_, value)) = line.split_once('=') else {
+            continue;
+        };
+        let val = value.trim().trim_matches('"').trim_matches('\'');
+        if val.is_empty() {
+            return Ok(None);
+        }
+        return Ok(Some(val.to_string()));
+    }
+    Ok(None)
 }
 
 /// Parse `.env` and return the KEYS of any `*_API_KEY=nonempty` lines.
@@ -202,7 +295,11 @@ fn read_env_key_names() -> io::Result<Vec<String>> {
 ///
 /// Only `*_API_KEY` names are permitted to avoid accidental corruption of
 /// non-secret config via this endpoint.
-pub fn write_env_key(key: &str, value: Option<&str>) -> io::Result<()> {
+pub fn write_env_key(
+    key: &str,
+    value: Option<&str>,
+    journal_path: Option<&Path>,
+) -> io::Result<()> {
     if !is_allowed_env_key(key) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -212,8 +309,9 @@ pub fn write_env_key(key: &str, value: Option<&str>) -> io::Result<()> {
 
     let path = env_path()?;
     let raw = fs::read_to_string(&path).unwrap_or_default();
-    let mut out = String::with_capacity(raw.len() + 64);
+    let was_present = raw.lines().any(|l| line_matches_key(l, key));
 
+    let mut out = String::with_capacity(raw.len() + 64);
     let mut found = false;
     let should_delete = value.map(str::is_empty).unwrap_or(true);
     let target_value = value.unwrap_or("");
@@ -234,13 +332,11 @@ pub fn write_env_key(key: &str, value: Option<&str>) -> io::Result<()> {
         }
     }
 
-    // Trim trailing newlines to avoid accumulating blanks over many edits.
     while out.ends_with("\n\n") {
         out.pop();
     }
 
     if !found && !should_delete {
-        // Append, with a separating newline if the file didn't end with one.
         if !out.is_empty() && !out.ends_with('\n') {
             out.push('\n');
         }
@@ -250,16 +346,28 @@ pub fn write_env_key(key: &str, value: Option<&str>) -> io::Result<()> {
         out.push('\n');
     }
 
-    // Atomic write via tmp + rename. Also tighten perms to 0600 on Unix
-    // since this file now carries secrets.
-    let tmp = path.with_extension("env.caduceus.tmp");
-    fs::write(&tmp, &out)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+    // 0o600 so api keys are owner-only. `atomic_write` applies perms to the
+    // tmp file BEFORE rename, closing the window where the final file briefly
+    // had default perms.
+    fs_atomic::atomic_write(&path, out.as_bytes(), Some(0o600))?;
+
+    if let Some(jp) = journal_path {
+        let summary = if should_delete {
+            format!("env: -{key}")
+        } else if was_present {
+            format!("env: {key} (updated)")
+        } else {
+            format!("env: +{key}")
+        };
+        // before/after record PRESENCE only — never secret values.
+        let _ = changelog::append(
+            jp,
+            "hermes.env.key",
+            Some(serde_json::json!({ "key": key, "present": was_present })),
+            Some(serde_json::json!({ "key": key, "present": !should_delete })),
+            summary,
+        );
     }
-    fs::rename(&tmp, &path)?;
     Ok(())
 }
 

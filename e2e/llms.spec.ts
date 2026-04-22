@@ -22,4 +22,16 @@ test.describe('llms', () => {
     // Default mock state: DEEPSEEK_API_KEY is present.
     await expect(page.getByText('DEEPSEEK_API_KEY', { exact: false })).toBeVisible();
   });
+
+  test('Discover populates model suggestions from probe', async ({ page }) => {
+    await page.goto('/models');
+    await page.getByRole('button', { name: /Discover/i }).click();
+    // Two elements match: the emerald success line under the button, and the
+    // Combobox hint. Either being visible proves the probe round-tripped;
+    // `.first()` keeps the assertion strict-mode compliant.
+    await expect(page.getByText(/3 models from/i).first()).toBeVisible();
+    // Normalized endpoint shown in the status line (mock echoes the
+    // base_url with /v1/models appended).
+    await expect(page.getByText('/v1/models').first()).toBeVisible();
+  });
 });

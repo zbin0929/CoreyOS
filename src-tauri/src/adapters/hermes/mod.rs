@@ -9,6 +9,7 @@
 //! `docs/phases/phase-1-chat.md`).
 
 pub mod gateway;
+pub mod probe;
 
 use async_trait::async_trait;
 

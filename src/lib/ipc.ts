@@ -341,6 +341,64 @@ export function hermesGatewayRestart(): Promise<string> {
   return invoke<string>('hermes_gateway_restart');
 }
 
+// ───────────────────────── Provider probe ─────────────────────────
+
+export interface DiscoveredModel {
+  id: string;
+  owned_by?: string | null;
+  /** Unix seconds when the provider first published the model, if any. */
+  created?: number | null;
+}
+
+export interface ProbeReport {
+  /** The URL we actually queried (post-normalization of the user's base_url). */
+  endpoint: string;
+  latency_ms: number;
+  models: DiscoveredModel[];
+}
+
+/**
+ * `GET {base_url}/v1/models` against an OpenAI-compatible provider.
+ * Bypasses the local Hermes gateway — talks straight to the upstream.
+ *
+ * Auth source is exactly one of:
+ * - `envKey`: name of a `*_API_KEY` entry in `~/.hermes/.env`. Server reads
+ *   the value; raw secret never crosses IPC. **Preferred.**
+ * - `apiKey`: literal key. Crosses IPC but is never persisted.
+ * - neither: anonymous probe (self-hosted endpoints).
+ */
+export function modelProviderProbe(args: {
+  baseUrl: string;
+  envKey?: string | null;
+  apiKey?: string | null;
+}): Promise<ProbeReport> {
+  return invoke<ProbeReport>('model_provider_probe', {
+    baseUrl: args.baseUrl,
+    envKey: args.envKey ?? null,
+    apiKey: args.apiKey ?? null,
+  });
+}
+
+// ───────────────────────── Changelog journal ─────────────────────────
+
+export interface ChangelogEntry {
+  /** `<rfc3339>-<session-seq>`. Stable primary key. */
+  id: string;
+  /** RFC-3339 timestamp (UTC). */
+  ts: string;
+  /** Dotted op namespace, e.g. `hermes.config.model`. */
+  op: string;
+  before?: unknown;
+  after?: unknown;
+  /** Human-readable summary for display. */
+  summary: string;
+}
+
+/** Newest-first list, capped server-side at 500. Defaults to 100. */
+export function changelogList(limit?: number): Promise<ChangelogEntry[]> {
+  return invoke<ChangelogEntry[]>('changelog_list', { limit });
+}
+
 // ───────────────────────── Settings / config ─────────────────────────
 
 export interface GatewayConfigDto {

@@ -4,8 +4,11 @@
 //! touch the *Hermes* process's config. Changes require a gateway restart to
 //! take effect — the frontend surfaces that.
 
+use tauri::State;
+
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config::{self, HermesConfigView, HermesModelSection};
+use crate::state::AppState;
 
 #[tauri::command]
 pub async fn hermes_config_read() -> IpcResult<HermesConfigView> {
@@ -15,8 +18,12 @@ pub async fn hermes_config_read() -> IpcResult<HermesConfigView> {
 }
 
 #[tauri::command]
-pub async fn hermes_config_write_model(model: HermesModelSection) -> IpcResult<HermesConfigView> {
-    hermes_config::write_model(&model).map_err(|e| IpcError::Internal {
+pub async fn hermes_config_write_model(
+    model: HermesModelSection,
+    state: State<'_, AppState>,
+) -> IpcResult<HermesConfigView> {
+    let journal = state.changelog_path.clone();
+    hermes_config::write_model(&model, Some(&journal)).map_err(|e| IpcError::Internal {
         message: format!("write hermes config: {e}"),
     })?;
     // Return the refreshed view so the UI can reconcile immediately.
@@ -29,9 +36,16 @@ pub async fn hermes_config_write_model(model: HermesModelSection) -> IpcResult<H
 /// in `~/.hermes/.env`. Returns the refreshed view so the UI can re-check
 /// `env_keys_present` without a separate read.
 #[tauri::command]
-pub async fn hermes_env_set_key(key: String, value: Option<String>) -> IpcResult<HermesConfigView> {
-    hermes_config::write_env_key(&key, value.as_deref()).map_err(|e| IpcError::Internal {
-        message: format!("write hermes env: {e}"),
+pub async fn hermes_env_set_key(
+    key: String,
+    value: Option<String>,
+    state: State<'_, AppState>,
+) -> IpcResult<HermesConfigView> {
+    let journal = state.changelog_path.clone();
+    hermes_config::write_env_key(&key, value.as_deref(), Some(&journal)).map_err(|e| {
+        IpcError::Internal {
+            message: format!("write hermes env: {e}"),
+        }
     })?;
     hermes_config::read_view().map_err(|e| IpcError::Internal {
         message: format!("re-read hermes config: {e}"),

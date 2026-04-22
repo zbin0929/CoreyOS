@@ -23,6 +23,11 @@ pub struct AppState {
     /// persist). `Option` rather than aborting lets the app launch even on a
     /// read-only home dir.
     pub db: Option<Arc<Db>>,
+    /// Append-only mutation journal (`<app_data_dir>/changelog.jsonl`). Every
+    /// config-writing IPC appends one entry; Phase 2.8 adds a UI to list and
+    /// revert. Held as a `PathBuf` so each IPC can open/close on demand —
+    /// writes are rare and small.
+    pub changelog_path: PathBuf,
 }
 
 impl AppState {
@@ -31,6 +36,7 @@ impl AppState {
         config: GatewayConfig,
         config_dir: PathBuf,
         db: Option<Arc<Db>>,
+        changelog_path: PathBuf,
     ) -> Self {
         Self {
             adapters: Arc::new(registry),
@@ -38,6 +44,7 @@ impl AppState {
             config: Arc::new(RwLock::new(config)),
             config_dir,
             db,
+            changelog_path,
         }
     }
 }
