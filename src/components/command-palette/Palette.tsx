@@ -9,7 +9,8 @@ import { useComposerStore } from '@/stores/composer';
 import { NAV } from '@/app/nav-config';
 import { Kbd } from '@/components/ui/kbd';
 import { runbookList, type RunbookRow } from '@/lib/ipc';
-import { detectParams, renderRunbook } from '@/features/runbooks';
+import { detectParams, renderRunbook, runbookScopeApplies } from '@/features/runbooks';
+import { useAppStatusStore } from '@/stores/appStatus';
 
 export function CommandPalette() {
   const open = usePaletteStore((s) => s.open);
@@ -21,6 +22,7 @@ export function CommandPalette() {
   // (cheap but not free). Clears on close so a delete/edit elsewhere is
   // picked up next time.
   const [runbooks, setRunbooks] = useState<RunbookRow[]>([]);
+  const activeProfile = useAppStatusStore((s) => s.activeProfile);
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -31,6 +33,12 @@ export function CommandPalette() {
       cancelled = true;
     };
   }, [open]);
+  // T4.6b — hide runbooks scoped to a different profile. Unlike the
+  // Runbooks page there's no "show all" toggle in the palette; we want
+  // it tightly scoped to the current profile's workflow.
+  const visibleRunbooks = runbooks.filter((rb) =>
+    runbookScopeApplies(rb, activeProfile),
+  );
 
   // Global ⌘K / Ctrl+K
   useEffect(() => {
@@ -89,12 +97,12 @@ export function CommandPalette() {
               ))}
             </Command.Group>
 
-            {runbooks.length > 0 && (
+            {visibleRunbooks.length > 0 && (
               <Command.Group
                 heading={t('palette.group.runbooks')}
                 className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-fg-subtle"
               >
-                {runbooks.map((rb) => (
+                {visibleRunbooks.map((rb) => (
                   <PaletteItem
                     key={rb.id}
                     value={`run ${rb.name} ${rb.description ?? ''}`}

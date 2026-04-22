@@ -65,7 +65,19 @@
       "description_placeholder": "显示在命令面板副标题",
       "template": "模板",
       "template_hint": "— 用双花括号 包裹占位符",
-      "detected": "已检测参数: {{list}}"
+      "detected": "已检测参数: {{list}}",
+      "scope": "作用域"
+    },
+    "scope": {
+      "any": "所有配置集（通用）",
+      "this_profile": "仅当前配置集：{{profile}}",
+      "active_hint": "正在显示配置集 {{profile}} 下的运行手册",
+      "no_active_profile": "未发现活动 Hermes 配置集 — 仅显示通用运行手册",
+      "hidden_count": "已隐藏 {{n}} 条",
+      "show_all": "显示全部作用域",
+      "show_active": "仅显示当前配置集",
+      "empty_visible_title": "当前配置集下暂无运行手册",
+      "empty_visible_desc": "点击上方「显示全部作用域」，或创建一条通用运行手册。"
     }
   },
   "skills": {

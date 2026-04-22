@@ -9,6 +9,79 @@ import { test, expect } from './fixtures/test';
  * fill flow).
  */
 test.describe('runbooks', () => {
+  // T4.6b — scope filtering end-to-end. Seeds one universal + one
+  // profile-pinned runbook and asserts the list filters correctly.
+  test('T4.6b: scope filter hides runbooks pinned to other profiles', async ({
+    page,
+  }) => {
+    // Seed runbooks via addInitScript BEFORE first goto — this runs
+    // after the tauri mock init script on every navigation, so the
+    // mock.state.runbooks array is pre-populated when the page's first
+    // runbookList() call fires. Active profile in the mock defaults
+    // to 'dev'.
+    await page.addInitScript(() => {
+      // The mock init script defines __CADUCEUS_MOCK__ synchronously at
+      // the top of the page, so reading it here (also synchronous) is
+      // safe.
+      const mock = (window as unknown as { __CADUCEUS_MOCK__: any })
+        .__CADUCEUS_MOCK__;
+      if (!mock) return;
+      mock.state.runbooks = [
+        {
+          id: 'rb-any',
+          name: 'any-scope',
+          description: 'universal',
+          template: 'hello',
+          scope_profile: null,
+          created_at: 1,
+          updated_at: 1,
+        },
+        {
+          id: 'rb-dev',
+          name: 'dev-only',
+          description: 'only on dev',
+          template: 'hello dev',
+          scope_profile: 'dev',
+          created_at: 1,
+          updated_at: 1,
+        },
+        {
+          id: 'rb-prod',
+          name: 'prod-only',
+          description: 'only on prod',
+          template: 'hello prod',
+          scope_profile: 'prod',
+          created_at: 1,
+          updated_at: 1,
+        },
+      ];
+    });
+    await page.goto('/runbooks');
+
+    const list = page.getByTestId('runbooks-list');
+    await expect(list).toContainText('any-scope');
+    await expect(list).toContainText('dev-only');
+    await expect(list).not.toContainText('prod-only');
+
+    // Scope filter banner names the active profile and the hidden
+    // count (just the prod-only row).
+    const filter = page.getByTestId('runbooks-scope-filter');
+    await expect(filter).toBeVisible();
+    await expect(filter).toContainText(/dev/);
+    await expect(filter).toContainText(/1 hidden|已隐藏 1/);
+
+    // Toggle → all 3 visible.
+    await page.getByTestId('runbooks-scope-toggle').click();
+    await expect(list).toContainText('prod-only');
+    await expect(list).toContainText('dev-only');
+    await expect(list).toContainText('any-scope');
+
+    // Toggle back hides the prod-only row again.
+    await page.getByTestId('runbooks-scope-toggle').click();
+    await expect(list).not.toContainText('prod-only');
+  });
+
+
   test('create → edit → delete round-trip via the Runbooks page', async ({
     page,
   }) => {

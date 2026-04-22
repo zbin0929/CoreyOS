@@ -23,6 +23,7 @@ import {
   runbookUpsert,
   type RunbookRow,
 } from '@/lib/ipc';
+import { useAppStatusStore } from '@/stores/appStatus';
 import { useComposerStore } from '@/stores/composer';
 
 /**
@@ -47,6 +48,11 @@ export function RunbooksRoute() {
   const [rows, setRows] = useState<RunbookRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: 'list' });
+  // T4.6b — show runbooks scoped to *any* profile OR to the active one.
+  // Users can flip to "show all" to edit runbooks across scopes without
+  // switching Hermes profile first.
+  const [showAllScopes, setShowAllScopes] = useState(false);
+  const activeProfile = useAppStatusStore((s) => s.activeProfile);
 
   const load = useCallback(async () => {
     setError(null);
@@ -59,6 +65,18 @@ export function RunbooksRoute() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Partition rows into "visible in the current profile" vs "hidden by
+  // scope". Tracking `hiddenCount` so the filter toggle has a meaningful
+  // badge even when the list itself is empty.
+  const visibleRows = useMemo(() => {
+    if (rows === null) return null;
+    if (showAllScopes) return rows;
+    return rows.filter((rb) => runbookScopeApplies(rb, activeProfile));
+  }, [rows, showAllScopes, activeProfile]);
+  const hiddenCount = rows && !showAllScopes
+    ? rows.length - (visibleRows?.length ?? 0)
+    : 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -132,8 +150,48 @@ export function RunbooksRoute() {
                 description={t('runbooks.empty_desc')}
               />
             ) : (
-              <ul className="flex flex-col gap-2" data-testid="runbooks-list">
-                {rows.map((rb) => (
+              <>
+                {/* T4.6b — scope filter toggle. Only rendered when
+                    some rows are scoped (either some or all are
+                    profile-scoped); a flat library with zero scope
+                    usage doesn't need the UI noise. */}
+                {rows.some((rb) => rb.scope_profile !== null) && (
+                  <div
+                    className="mb-3 flex items-center justify-between gap-2 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-xs text-fg-muted"
+                    data-testid="runbooks-scope-filter"
+                  >
+                    <span>
+                      {activeProfile
+                        ? t('runbooks.scope.active_hint', { profile: activeProfile })
+                        : t('runbooks.scope.no_active_profile')}
+                      {hiddenCount > 0 && (
+                        <span className="ml-2 rounded-full bg-bg-elev-2 px-1.5 py-0.5 text-[10px]">
+                          {t('runbooks.scope.hidden_count', { n: hiddenCount })}
+                        </span>
+                      )}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowAllScopes((v) => !v)}
+                      data-testid="runbooks-scope-toggle"
+                    >
+                      {showAllScopes
+                        ? t('runbooks.scope.show_active')
+                        : t('runbooks.scope.show_all')}
+                    </Button>
+                  </div>
+                )}
+
+                {visibleRows && visibleRows.length === 0 ? (
+                  <EmptyState
+                    icon={BookMarked}
+                    title={t('runbooks.scope.empty_visible_title')}
+                    description={t('runbooks.scope.empty_visible_desc')}
+                  />
+                ) : (
+                  <ul className="flex flex-col gap-2" data-testid="runbooks-list">
+                    {(visibleRows ?? []).map((rb) => (
                   <li
                     key={rb.id}
                     className="flex flex-col gap-2 rounded-md border border-border bg-bg-elev-1 p-3"
@@ -213,7 +271,9 @@ export function RunbooksRoute() {
                     </div>
                   </li>
                 ))}
-              </ul>
+                  </ul>
+                )}
+              </>
             ))}
         </div>
       </div>
@@ -241,6 +301,14 @@ function RunbookEditor({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const params = useMemo(() => detectParams(template), [template]);
+  // T4.6b — scope picker. `null` means "any profile", non-null pins the
+  // runbook to a specific Hermes profile. Defaults for NEW runbooks:
+  // any-profile (keeps historical behaviour). For EDIT: whatever's
+  // persisted.
+  const [scopeProfile, setScopeProfile] = useState<string | null>(
+    initial?.scope_profile ?? null,
+  );
+  const activeProfile = useAppStatusStore((s) => s.activeProfile);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -254,6 +322,7 @@ function RunbookEditor({
           name: name.trim(),
           description: description.trim() || null,
           template,
+          scope_profile: scopeProfile,
           updated_at: now,
         }
       : {
@@ -261,7 +330,7 @@ function RunbookEditor({
           name: name.trim(),
           description: description.trim() || null,
           template,
-          scope_profile: null,
+          scope_profile: scopeProfile,
           created_at: now,
           updated_at: now,
         };
@@ -319,6 +388,44 @@ function RunbookEditor({
           </span>
         )}
       </label>
+
+      {/* T4.6b — scope picker. Two-option radio keeps the UI compact;
+          non-active profile scopes stay editable via direct DB edit.
+          When there's no active profile Hermes isn't installed, so the
+          picker hides entirely (any-profile is the only sensible
+          default). */}
+      {activeProfile && (
+        <fieldset
+          className="flex flex-col gap-1.5 rounded border border-border bg-bg-elev-2/40 px-2 py-1.5 text-xs"
+          data-testid="runbook-scope-picker"
+        >
+          <legend className="px-1 text-fg-subtle">
+            {t('runbooks.field.scope')}
+          </legend>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="runbook-scope"
+              checked={scopeProfile === null}
+              onChange={() => setScopeProfile(null)}
+              data-testid="runbook-scope-any"
+            />
+            <span>{t('runbooks.scope.any')}</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="runbook-scope"
+              checked={scopeProfile === activeProfile}
+              onChange={() => setScopeProfile(activeProfile)}
+              data-testid="runbook-scope-current"
+            />
+            <span>
+              {t('runbooks.scope.this_profile', { profile: activeProfile })}
+            </span>
+          </label>
+        </fieldset>
+      )}
 
       {err && (
         <div className="flex items-center gap-2 rounded border border-danger/40 bg-danger/5 px-2 py-1 text-xs text-danger">
@@ -446,4 +553,27 @@ export function renderRunbook(template: string, values: Record<string, string>):
 
 function newRunbookId(): string {
   return `rb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * T4.6b — scope filter predicate shared by the Runbooks list and the
+ * command palette. Universal runbooks (`scope_profile === null`) are
+ * always visible; profile-scoped ones only match when the active
+ * profile equals the scope value.
+ *
+ * Edge cases:
+ *   - `activeProfile === null` (Hermes not installed / pointer file
+ *     missing): we show ONLY universal runbooks. Scoped ones would
+ *     otherwise be orphaned until the user installs Hermes, which
+ *     would silently break existing workflows.
+ *   - Case-sensitive match on purpose — profile dir names are
+ *     filesystem-identifiers and Hermes treats them as such.
+ */
+export function runbookScopeApplies(
+  rb: Pick<RunbookRow, 'scope_profile'>,
+  activeProfile: string | null,
+): boolean {
+  if (rb.scope_profile === null) return true;
+  if (activeProfile === null) return false;
+  return rb.scope_profile === activeProfile;
 }

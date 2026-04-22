@@ -65,7 +65,19 @@
       "description_placeholder": "Shown in the palette subtitle",
       "template": "Template",
       "template_hint": "— wrap placeholders in double curly braces",
-      "detected": "Detected parameters: {{list}}"
+      "detected": "Detected parameters: {{list}}",
+      "scope": "Visible in"
+    },
+    "scope": {
+      "any": "Any profile (universal)",
+      "this_profile": "Only this profile: {{profile}}",
+      "active_hint": "Showing runbooks for active profile: {{profile}}",
+      "no_active_profile": "No active Hermes profile — showing universal runbooks only",
+      "hidden_count": "{{n}} hidden",
+      "show_all": "Show all scopes",
+      "show_active": "Hide other scopes",
+      "empty_visible_title": "No runbooks in this profile",
+      "empty_visible_desc": "Toggle \"Show all scopes\" above, or create a universal runbook."
     }
   },
   "skills": {

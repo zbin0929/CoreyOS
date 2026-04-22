@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import { configGet, configTest, hermesConfigRead, type GatewayConfigDto } from '@/lib/ipc';
+import {
+  configGet,
+  configTest,
+  hermesConfigRead,
+  hermesProfileList,
+  type GatewayConfigDto,
+} from '@/lib/ipc';
 
 /**
  * App-wide status the shell reads from: the current default model (shown in
@@ -23,12 +29,22 @@ interface AppStatusState {
   gateway: GatewayHealth;
   /** Round-trip latency from the last successful probe (ms). */
   gatewayLatencyMs: number | null;
+  /** T4.6b — active Hermes profile name, read from
+   *  `~/.hermes/active_profile`. `null` when the pointer file is
+   *  missing or Hermes isn't installed. Runbooks use this to filter
+   *  their list by `scope_profile`. */
+  activeProfile: string | null;
 
   /** Explicit setter — called by Settings/LLMs pages after the user saves. */
   setCurrentModel: (m: string | null) => void;
 
   /** Re-resolve the current model from Hermes + gateway config. */
   refreshModel: () => Promise<void>;
+
+  /** T4.6b — re-resolve the active profile from Hermes. Swallows
+   *  errors so a missing Hermes install just leaves `activeProfile`
+   *  as `null`. */
+  refreshActiveProfile: () => Promise<void>;
 
   /**
    * Hit `/health` via the Rust adapter. Flips `gateway` + `gatewayLatencyMs`.
@@ -47,6 +63,7 @@ export const useAppStatusStore = create<AppStatusState>()((set, get) => ({
   currentModel: null,
   gateway: 'unknown',
   gatewayLatencyMs: null,
+  activeProfile: null,
 
   setCurrentModel: (m) => set({ currentModel: m && m.trim() ? m : null }),
 
@@ -72,6 +89,17 @@ export const useAppStatusStore = create<AppStatusState>()((set, get) => ({
     }
   },
 
+  refreshActiveProfile: async () => {
+    try {
+      const view = await hermesProfileList();
+      set({ activeProfile: view.active });
+    } catch {
+      // Hermes may not be installed or the profiles dir is missing.
+      // Leave whatever was last set; a transient error shouldn't flip
+      // filters and change what runbooks the user sees.
+    }
+  },
+
   refreshGateway: async () => {
     try {
       // Reuse `config_test` with the already-saved config to probe /health.
@@ -87,6 +115,7 @@ export const useAppStatusStore = create<AppStatusState>()((set, get) => ({
     // One-shot immediate refresh so the UI doesn't sit on "unknown" for long.
     void get().refreshModel();
     void get().refreshGateway();
+    void get().refreshActiveProfile();
     if (gatewayInterval !== null) return;
     gatewayInterval = setInterval(() => {
       void get().refreshGateway();
