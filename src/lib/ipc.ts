@@ -216,8 +216,24 @@ export interface DbToolCallRow {
   at: number;
 }
 
+/** T1.5 — attachment row mirror. `path` is the absolute location on disk
+ *  under `~/.hermes/attachments/`. The frontend never reads the blob
+ *  itself; it treats the path as opaque. */
+export interface DbAttachmentRow {
+  id: string;
+  message_id: string;
+  name: string;
+  mime: string;
+  size: number;
+  path: string;
+  created_at: number;
+}
+
 export interface DbMessageWithTools extends DbMessageRow {
   tool_calls: DbToolCallRow[];
+  /** `undefined` for legacy rows (v<4) and for messages with no attachments
+   *  — Rust skips the field when empty. */
+  attachments?: DbAttachmentRow[];
 }
 
 export interface DbSessionWithMessages extends DbSessionRow {
@@ -265,6 +281,60 @@ export function dbMessageSetUsage(args: {
  *  ignored so duplicate emissions don't blow up. */
 export function dbToolCallAppend(call: DbToolCallRow): Promise<void> {
   return invoke<void>('db_tool_call_append', { call });
+}
+
+// ───────────────────────── Attachments (T1.5) ─────────────────────────
+
+/** Metadata returned by the Rust `attachment_stage_*` commands after a
+ *  blob or picked file has been written under `~/.hermes/attachments/`.
+ *  Mirrors `crate::attachments::StagedAttachment`. */
+export interface StagedAttachment {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  path: string;
+  created_at: number;
+}
+
+/** Stage a base64-encoded blob (clipboard paste, drag-and-drop File read
+ *  via FileReader). The display `name` + `mime` travel with it so the UI
+ *  can label the chip and, later, tell the provider what it's dealing
+ *  with for multimodal requests. */
+export function attachmentStageBlob(args: {
+  name: string;
+  mime: string;
+  base64Body: string;
+}): Promise<StagedAttachment> {
+  return invoke<StagedAttachment>('attachment_stage_blob', args);
+}
+
+/** Stage an absolute on-disk path the user picked from a native file
+ *  dialog. `mimeHint` is optional; if omitted the backend falls back to
+ *  a tiny extension table. */
+export function attachmentStagePath(args: {
+  path: string;
+  mimeHint?: string;
+}): Promise<StagedAttachment> {
+  return invoke<StagedAttachment>('attachment_stage_path', args);
+}
+
+/** Remove a staged file from disk. Idempotent. The DB row (if any) is
+ *  deleted separately via `dbAttachmentDelete`. */
+export function attachmentDelete(path: string): Promise<void> {
+  return invoke<void>('attachment_delete', { path });
+}
+
+/** Insert an attachment row into the DB once the message it belongs to
+ *  has been persisted. Duplicate ids surface as an error (uuid collision
+ *  would be astronomical — treat as a client bug). */
+export function dbAttachmentInsert(attachment: DbAttachmentRow): Promise<void> {
+  return invoke<void>('db_attachment_insert', { attachment });
+}
+
+/** Delete the DB row for an attachment. */
+export function dbAttachmentDelete(id: string): Promise<void> {
+  return invoke<void>('db_attachment_delete', { id });
 }
 
 // ───────────────────────── Analytics ─────────────────────────

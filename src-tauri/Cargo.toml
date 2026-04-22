@@ -54,6 +54,12 @@ dunce = "1"
 # frontend via Tauri events.
 portable-pty = "0.9"
 
+# Phase 1 · T1.5 — Attachments. Frontend stages blob uploads by sending
+# base64; we decode once server-side. `base64` is the canonical crate
+# and is tiny. (pty.rs has a homemade encoder for a different shape —
+# bytes out, not bytes in — and we leave it alone.)
+base64 = "0.22"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

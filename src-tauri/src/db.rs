@@ -138,6 +138,31 @@ impl Db {
         Ok(())
     }
 
+    // ─── attachments ─────────────────────────────────────────────────
+
+    /// Insert a new attachment row. Caller supplies the id (same uuid the
+    /// `attachments` module stamped onto the staged file) so duplicate
+    /// inserts are a client bug, not a silent upsert.
+    pub fn insert_attachment(&self, a: &AttachmentRow) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO attachments (id, message_id, name, mime, size, path, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![a.id, a.message_id, a.name, a.mime, a.size, a.path, a.created_at],
+        )?;
+        Ok(())
+    }
+
+    /// Delete a single attachment row. The on-disk file is removed by the
+    /// IPC handler (`ipc::attachments::attachment_delete`) separately — the
+    /// DB row and the file have distinct failure modes and the frontend
+    /// sees both over two calls.
+    pub fn delete_attachment(&self, id: &str) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute("DELETE FROM attachments WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
     // ─── bulk load for hydration ─────────────────────────────────────
 
     /// Load the full tree in one trip. Sessions come back ordered by
@@ -201,21 +226,47 @@ impl Db {
             })?
             .collect::<Result<_, _>>()?;
 
+        // 4) All attachments, sorted by (message_id, created_at). Cheap
+        //    even at O(10k) rows — clients never hydrate that deep.
+        let mut astmt = conn.prepare(
+            "SELECT id, message_id, name, mime, size, path, created_at
+             FROM attachments ORDER BY message_id, created_at",
+        )?;
+        let attachments: Vec<AttachmentRow> = astmt
+            .query_map([], |row| {
+                Ok(AttachmentRow {
+                    id: row.get(0)?,
+                    message_id: row.get(1)?,
+                    name: row.get(2)?,
+                    mime: row.get(3)?,
+                    size: row.get(4)?,
+                    path: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
         // Fold into the nested shape. O(N) with a couple of HashMaps.
         use std::collections::HashMap;
         let mut tc_by_msg: HashMap<String, Vec<ToolCallRow>> = HashMap::new();
         for t in tool_calls {
             tc_by_msg.entry(t.message_id.clone()).or_default().push(t);
         }
+        let mut att_by_msg: HashMap<String, Vec<AttachmentRow>> = HashMap::new();
+        for a in attachments {
+            att_by_msg.entry(a.message_id.clone()).or_default().push(a);
+        }
         let mut msgs_by_session: HashMap<String, Vec<MessageWithTools>> = HashMap::new();
         for m in messages {
             let tcs = tc_by_msg.remove(&m.id).unwrap_or_default();
+            let atts = att_by_msg.remove(&m.id).unwrap_or_default();
             msgs_by_session
                 .entry(m.session_id.clone())
                 .or_default()
                 .push(MessageWithTools {
                     msg: m,
                     tool_calls: tcs,
+                    attachments: atts,
                 });
         }
 
@@ -343,6 +394,29 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v4: Phase 1 T1.5 — chat attachments. Each row points at a file staged
+    // under `~/.hermes/attachments/<uuid>.<ext>`; on-disk cleanup is the
+    // caller's job (we cascade the row via `ON DELETE CASCADE` but don't
+    // sweep orphaned files — a manual `hermes clean` subcommand can do that
+    // later if it becomes a real problem).
+    if version < 4 {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS attachments (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                mime TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                path TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id, created_at);
+            PRAGMA user_version = 4;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -387,11 +461,29 @@ pub struct ToolCallRow {
     pub at: i64,
 }
 
+/// Phase 1 · T1.5 — attachment row. Paired with a message; the staged
+/// blob lives on disk at `path`. See `src/attachments.rs`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentRow {
+    pub id: String,
+    pub message_id: String,
+    pub name: String,
+    pub mime: String,
+    pub size: i64,
+    pub path: String,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MessageWithTools {
     #[serde(flatten)]
     pub msg: MessageRow,
     pub tool_calls: Vec<ToolCallRow>,
+    /// Attachments on the user message (and occasionally on assistant
+    /// messages if a provider returns files — none do today, but the
+    /// schema doesn't forbid it).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<AttachmentRow>,
 }
 
 #[derive(Debug, Clone, Serialize)]

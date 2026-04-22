@@ -1,3 +1,4 @@
+pub mod attachments;
 pub mod budgets;
 pub mod changelog;
 pub mod channel_status;

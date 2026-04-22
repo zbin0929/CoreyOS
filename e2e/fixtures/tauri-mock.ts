@@ -557,6 +557,45 @@ export const tauriMockInitScript = /* js */ `
       case 'db_tool_call_append':
         return;
 
+      // T1.5 — attachments. Backend-side: we simulate the on-disk
+      // staging by synthesising a path and returning metadata. The
+      // bytes themselves are discarded — e2e tests only care about
+      // the metadata round-trip through the UI + zustand + DB mock.
+      case 'attachment_stage_blob': {
+        const id = 'att-' + Math.random().toString(36).slice(2, 10);
+        const ext = (args.name || '').split('.').pop() || 'bin';
+        return {
+          id,
+          name: args.name,
+          mime: args.mime,
+          size: Math.max(1, Math.floor(((args.base64Body?.length || 0) * 3) / 4)),
+          path: '/mock/home/.hermes/attachments/' + id + '.' + ext,
+          created_at: Date.now(),
+        };
+      }
+      case 'attachment_stage_path': {
+        const id = 'att-' + Math.random().toString(36).slice(2, 10);
+        // basename: normalise Windows backslashes to forward-slashes then
+        // split. Avoids a regex char class, which the browser engine
+        // once mis-parsed when this whole file is injected as a single
+        // template-literal blob.
+        const rawPath = args.path || '';
+        const name = rawPath.split('\\\\').join('/').split('/').pop() || 'unknown';
+        const ext = name.split('.').pop() || 'bin';
+        return {
+          id,
+          name,
+          mime: args.mimeHint || 'application/octet-stream',
+          size: 1024,
+          path: '/mock/home/.hermes/attachments/' + id + '.' + ext,
+          created_at: Date.now(),
+        };
+      }
+      case 'attachment_delete':
+      case 'db_attachment_insert':
+      case 'db_attachment_delete':
+        return;
+
       case 'analytics_summary':
         return state.analytics;
 

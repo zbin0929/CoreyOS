@@ -3,22 +3,33 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ClipboardEvent,
+  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { Send, Sparkles, Square } from 'lucide-react';
+import { Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import {
+  attachmentDelete,
+  attachmentStageBlob,
   chatStream,
   dbMessageSetUsage,
   generateTitle,
   ipcErrorMessage,
   type ChatMessageDto,
   type ChatStreamHandle,
+  type StagedAttachment,
 } from '@/lib/ipc';
-import { newMessageId, useChatStore, type UiMessage, type UiToolCall } from '@/stores/chat';
+import {
+  newMessageId,
+  useChatStore,
+  type UiAttachment,
+  type UiMessage,
+  type UiToolCall,
+} from '@/stores/chat';
 import { useComposerStore } from '@/stores/composer';
 import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { MessageBubble } from './MessageBubble';
@@ -110,6 +121,20 @@ function ChatPane({
   // Also track the pending id to null-out the spinner on stop.
   const pendingRef = useRef<string | null>(null);
 
+  // T1.5 — pending attachments staged but not yet sent. Local state (not in
+  // a store) because it's purely UI-local and shouldn't survive navigation.
+  // On send, these become `UiAttachment[]` on the user message; on remove,
+  // we fire `attachmentDelete` to sweep the on-disk copy.
+  const [pendingAttachments, setPendingAttachments] = useState<StagedAttachment[]>([]);
+  // Drag-over visual; toggled by the form-level handlers. Counter-based so
+  // a child's enter/leave doesn't flicker the overlay during a drag.
+  const [dragDepth, setDragDepth] = useState(0);
+  // Hidden file input driving the Paperclip button. We keep it un-
+  // rendered-as-chip by using the native HTML element — no extra library.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Transient error shown above the chip row when a stage fails.
+  const [attachError, setAttachError] = useState<string | null>(null);
+
   // Reset composer when switching sessions. Also re-seeds from
   // pendingDraft so launching a runbook into a brand-new session reaches
   // the freshly-mounted pane. We do NOT clear pendingDraft here — the
@@ -136,14 +161,125 @@ function ChatPane({
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
+  /**
+   * Read a File through FileReader and base64-encode it so the Rust
+   * `attachment_stage_blob` command can decode once server-side. We
+   * strip the `data:<mime>;base64,` prefix because the Rust helper
+   * expects bare base64.
+   */
+  async function stageFile(file: File): Promise<void> {
+    setAttachError(null);
+    try {
+      const base64Body = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onerror = () => reject(r.error ?? new Error('read failed'));
+        r.onload = () => {
+          const raw = typeof r.result === 'string' ? r.result : '';
+          const comma = raw.indexOf(',');
+          resolve(comma >= 0 ? raw.slice(comma + 1) : raw);
+        };
+        r.readAsDataURL(file);
+      });
+      const staged = await attachmentStageBlob({
+        name: file.name || 'pasted',
+        mime: file.type || 'application/octet-stream',
+        base64Body,
+      });
+      setPendingAttachments((prev) => [...prev, staged]);
+    } catch (e) {
+      setAttachError(ipcErrorMessage(e));
+    }
+  }
+
+  async function removePendingAttachment(id: string) {
+    const victim = pendingAttachments.find((a) => a.id === id);
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+    if (victim) {
+      // Fire-and-forget — the DB has no row yet (not sent), so only the
+      // on-disk file needs sweeping. A missing file is not an error.
+      void attachmentDelete(victim.path).catch(() => {
+        /* intentionally ignored */
+      });
+    }
+  }
+
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          void stageFile(file);
+        }
+      }
+    }
+  }
+
+  function onDragEnter(e: DragEvent<HTMLFormElement>) {
+    // Only react to drags that actually carry files — ignore text drags
+    // from within the app (e.g. highlighting a message bubble).
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    setDragDepth((d) => d + 1);
+  }
+  function onDragLeave(e: DragEvent<HTMLFormElement>) {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    setDragDepth((d) => Math.max(0, d - 1));
+  }
+  function onDragOver(e: DragEvent<HTMLFormElement>) {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    // preventDefault allows `drop` to fire.
+    e.preventDefault();
+  }
+  async function onDrop(e: DragEvent<HTMLFormElement>) {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    setDragDepth(0);
+    const files = Array.from(e.dataTransfer.files);
+    for (const f of files) await stageFile(f);
+  }
+
+  async function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    for (const f of files) await stageFile(f);
+    // Reset the input so picking the SAME file twice still fires `change`.
+    e.target.value = '';
+  }
+
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    const hasAttachments = pendingAttachments.length > 0;
+    // Let the user send a message whose payload is purely attachments —
+    // the provider still gets a "[attached: …]" marker in the content.
+    if ((!trimmed && !hasAttachments) || sending) return;
+
+    // Bake pending attachments into the user message. Snapshot before
+    // we clear so a fast follow-up paste doesn't attach to the wrong turn.
+    const attachmentsSnapshot: UiAttachment[] = pendingAttachments.map((a) => ({
+      id: a.id,
+      name: a.name,
+      mime: a.mime,
+      size: a.size,
+      path: a.path,
+      createdAt: a.created_at,
+    }));
+    // Compose the content shown both in the bubble AND sent to the LLM:
+    // the user's text plus a trailing marker listing filenames. Providers
+    // that don't support multimodal still get a readable hint; a future
+    // follow-up will upgrade `ChatMessageDto.content` to a multimodal
+    // array for vision-capable models.
+    const contentForMessage = hasAttachments
+      ? `${trimmed}${trimmed ? '\n\n' : ''}[attached: ${attachmentsSnapshot.map((a) => a.name).join(', ')}]`
+      : trimmed;
 
     const userMsg: UiMessage = {
       id: newMessageId(),
       role: 'user',
-      content: trimmed,
+      content: contentForMessage,
+      attachments: hasAttachments ? attachmentsSnapshot : undefined,
       createdAt: Date.now(),
     };
     const pendingId = newMessageId();
@@ -159,6 +295,11 @@ function ChatPane({
     appendMessage(sessionId, pendingMsg);
 
     setDraft('');
+    // Pending attachments have been baked into the message above; clear
+    // them so a follow-up turn starts fresh. Do NOT sweep the files from
+    // disk — the message now owns them and their lifecycle ties to the
+    // DB row's cascade on session delete.
+    setPendingAttachments([]);
     setSending(true);
     pendingRef.current = pendingId;
     // T4.6: the user has taken ownership of the prompt — drop any
@@ -169,7 +310,7 @@ function ChatPane({
       ...messages
         .filter((m) => !m.error && !m.pending)
         .map<ChatMessageDto>((m) => ({ role: m.role, content: m.content })),
-      { role: 'user', content: trimmed },
+      { role: 'user', content: contentForMessage },
     ];
 
     try {
@@ -309,50 +450,151 @@ function ChatPane({
         <div className="mx-auto flex max-w-3xl items-center px-6 pt-3">
           <ActiveLLMBadge />
         </div>
-        <form onSubmit={onSubmit} className="mx-auto flex max-w-3xl items-end gap-2 px-6 pb-4 pt-2">
-          <textarea
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              clearPendingDraftIfSet();
-            }}
-            onKeyDown={onTextareaKeyDown}
-            rows={1}
-            placeholder="Message Hermes…  (Enter to send, Shift+Enter for newline)"
-            disabled={sending}
-            className={cn(
-              'min-h-[44px] max-h-[200px] flex-1 resize-none rounded-xl border border-border',
-              'bg-bg-elev-1 px-4 py-3 text-sm text-fg placeholder:text-fg-subtle',
-              'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
-              'disabled:opacity-60',
-            )}
-          />
-          {sending ? (
-            <Button
-              type="submit"
-              variant="secondary"
-              className="h-11 px-4"
-              aria-label="Stop generating"
-              title="Stop"
-            >
-              <Square className="h-4 w-4" fill="currentColor" />
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={!draft.trim()}
-              className="h-11 px-4"
-              aria-label="Send message"
-              title="Send"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+        <form
+          onSubmit={onSubmit}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          className={cn(
+            'relative mx-auto flex max-w-3xl flex-col gap-2 px-6 pb-4 pt-2',
+            dragDepth > 0 && 'ring-2 ring-gold-500/50 ring-offset-0',
           )}
+          data-testid="chat-composer"
+        >
+          {/* Drag-drop overlay — appears when files are being dragged over
+              the composer area so the user knows dropping will attach. */}
+          {dragDepth > 0 && (
+            <div
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-gold-500/10 backdrop-blur-[1px]"
+              data-testid="chat-drop-overlay"
+            >
+              <span className="rounded-md border border-gold-500/40 bg-bg-elev-1 px-3 py-1.5 text-xs text-gold-500">
+                Drop to attach
+              </span>
+            </div>
+          )}
+
+          {attachError && (
+            <div
+              className="rounded-md border border-danger/40 bg-danger/5 px-3 py-1.5 text-xs text-danger"
+              data-testid="chat-attach-error"
+            >
+              {attachError}
+            </div>
+          )}
+
+          {pendingAttachments.length > 0 && (
+            <ul
+              className="flex flex-wrap items-center gap-1.5"
+              data-testid="chat-attachment-chips"
+            >
+              {pendingAttachments.map((a) => (
+                <li
+                  key={a.id}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elev-1 px-2 py-0.5 text-xs text-fg"
+                  data-testid={`chat-attachment-chip-${a.id}`}
+                  title={`${a.mime} · ${formatBytes(a.size)}`}
+                >
+                  <Paperclip className="h-3 w-3 text-fg-subtle" />
+                  <span className="max-w-[180px] truncate">{a.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => void removePendingAttachment(a.id)}
+                    aria-label={`Remove ${a.name}`}
+                    className="rounded p-0.5 text-fg-subtle transition-colors hover:bg-bg-elev-2 hover:text-fg"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex items-end gap-2">
+            {/* Hidden input — Paperclip button clicks it to open the
+                native file chooser. No plugin dependency, works in both
+                browser (dev/e2e) and Tauri. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={onFilePicked}
+              className="hidden"
+              data-testid="chat-file-input"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-11 px-3"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              aria-label="Attach file"
+              title="Attach file"
+              data-testid="chat-attach-button"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+
+            <textarea
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                clearPendingDraftIfSet();
+              }}
+              onKeyDown={onTextareaKeyDown}
+              onPaste={onPaste}
+              rows={1}
+              placeholder="Message Hermes…  (Enter to send, Shift+Enter for newline)"
+              disabled={sending}
+              className={cn(
+                'min-h-[44px] max-h-[200px] flex-1 resize-none rounded-xl border border-border',
+                'bg-bg-elev-1 px-4 py-3 text-sm text-fg placeholder:text-fg-subtle',
+                'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
+                'disabled:opacity-60',
+              )}
+              data-testid="chat-textarea"
+            />
+            {sending ? (
+              <Button
+                type="submit"
+                variant="secondary"
+                className="h-11 px-4"
+                aria-label="Stop generating"
+                title="Stop"
+              >
+                <Square className="h-4 w-4" fill="currentColor" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!draft.trim() && pendingAttachments.length === 0}
+                className="h-11 px-4"
+                aria-label="Send message"
+                title="Send"
+                data-testid="chat-send"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </form>
       </div>
     </div>
   );
+}
+
+/**
+ * Compact byte formatter used in attachment chip tooltips. `1` kb = 1024 b.
+ * Lives here rather than in `@/lib/` because it's the only caller; lift it
+ * out if a second feature needs it.
+ */
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const kib = n / 1024;
+  if (kib < 1024) return `${kib.toFixed(1)} KB`;
+  return `${(kib / 1024).toFixed(1)} MB`;
 }
 
 function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {

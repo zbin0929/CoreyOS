@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use crate::db::{AnalyticsSummary, Db, MessageRow, SessionRow, SessionWithMessages, ToolCallRow};
+use crate::db::{
+    AnalyticsSummary, AttachmentRow, Db, MessageRow, SessionRow, SessionWithMessages, ToolCallRow,
+};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
 
@@ -103,6 +105,44 @@ pub async fn db_tool_call_append(state: State<'_, AppState>, call: ToolCallRow) 
         })?
         .map_err(|e| IpcError::Internal {
             message: format!("db append_tool_call: {e}"),
+        })
+}
+
+/// T1.5 — insert an attachment row. The frontend has already staged the
+/// file on disk via `attachment_stage_blob` / `attachment_stage_path`; this
+/// call records the association with a message. Duplicate ids are a bug
+/// (uuid collision is astronomically unlikely), so we surface the SQL
+/// error instead of silently upserting.
+#[tauri::command]
+pub async fn db_attachment_insert(
+    state: State<'_, AppState>,
+    attachment: AttachmentRow,
+) -> IpcResult<()> {
+    let db = db_of(&state)?;
+    tokio::task::spawn_blocking(move || db.insert_attachment(&attachment))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("db task join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("db insert_attachment: {e}"),
+        })
+}
+
+/// Delete the DB row for an attachment. The on-disk file is removed
+/// separately by `attachment_delete` (the two calls can fail
+/// independently, and we prefer the frontend to sequence them rather than
+/// coupling the failure modes here).
+#[tauri::command]
+pub async fn db_attachment_delete(state: State<'_, AppState>, id: String) -> IpcResult<()> {
+    let db = db_of(&state)?;
+    tokio::task::spawn_blocking(move || db.delete_attachment(&id))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("db task join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("db delete_attachment: {e}"),
         })
 }
 

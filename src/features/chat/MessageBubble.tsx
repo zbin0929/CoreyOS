@@ -1,10 +1,19 @@
 import { useState } from 'react';
-import { AlertCircle, Check, Copy, Loader2, Sparkles, User, Wrench } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Loader2,
+  Paperclip,
+  Sparkles,
+  User,
+  Wrench,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { cn } from '@/lib/cn';
-import type { UiMessage, UiToolCall } from '@/stores/chat';
+import type { UiAttachment, UiMessage, UiToolCall } from '@/stores/chat';
 
 export function MessageBubble({ msg }: { msg: UiMessage }) {
   const isUser = msg.role === 'user';
@@ -38,6 +47,9 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
         >
           {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
             <ToolCallsStrip calls={msg.toolCalls} />
+          )}
+          {isUser && msg.attachments && msg.attachments.length > 0 && (
+            <AttachmentsStrip attachments={msg.attachments} />
           )}
           {msg.pending && !msg.content ? (
             <span className="inline-flex items-center gap-2 text-fg-muted">
@@ -143,6 +155,32 @@ function ToolCallsStrip({ calls }: { calls: UiToolCall[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * T1.5 — user-bubble attachment chips. Inside the gold bubble we swap to
+ * a semi-transparent chip so legibility holds against the gold backdrop;
+ * otherwise the same visual shape as the composer's pending-chip row.
+ */
+function AttachmentsStrip({ attachments }: { attachments: UiAttachment[] }) {
+  return (
+    <ul
+      className="mb-2 flex flex-wrap gap-1.5"
+      data-testid="bubble-attachments"
+    >
+      {attachments.map((a) => (
+        <li
+          key={a.id}
+          className="inline-flex items-center gap-1 rounded-full bg-black/15 px-2 py-0.5 text-[11px]"
+          title={a.mime}
+          data-testid={`bubble-attachment-${a.id}`}
+        >
+          <Paperclip className="h-3 w-3 opacity-70" />
+          <span className="max-w-[220px] truncate">{a.name}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

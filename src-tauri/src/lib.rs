@@ -10,6 +10,7 @@
 #![allow(dead_code)]
 
 mod adapters;
+mod attachments;
 mod changelog;
 mod channel_status;
 mod channels;
@@ -114,6 +115,11 @@ pub fn run() {
             ipc::skills::skill_get,
             ipc::skills::skill_save,
             ipc::skills::skill_delete,
+            ipc::attachments::attachment_stage_blob,
+            ipc::attachments::attachment_stage_path,
+            ipc::attachments::attachment_delete,
+            ipc::db::db_attachment_insert,
+            ipc::db::db_attachment_delete,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

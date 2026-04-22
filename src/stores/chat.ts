@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import {
+  dbAttachmentInsert,
   dbLoadAll,
   dbMessageUpsert,
   dbSessionDelete,
@@ -19,6 +20,10 @@ export interface UiMessage {
   error?: string;
   /** Tool-progress markers emitted by the agent during this turn. */
   toolCalls?: UiToolCall[];
+  /** T1.5 — attachments carried by this message. Only populated on user
+   *  messages today (the composer stages files and hands them over on
+   *  send). Hydrated from `DbAttachmentRow`. */
+  attachments?: UiAttachment[];
   createdAt: number;
 }
 
@@ -29,6 +34,18 @@ export interface UiToolCall {
   emoji?: string | null;
   label?: string | null;
   at: number;
+}
+
+/** UI-side attachment metadata. Mirrors `DbAttachmentRow` but uses
+ *  camelCase like the rest of the zustand schema. `path` is an opaque
+ *  on-disk location — the frontend never reads it. */
+export interface UiAttachment {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  path: string;
+  createdAt: number;
 }
 
 export interface ChatSession {
@@ -112,6 +129,17 @@ function sessionFromDb(s: DbSessionWithMessages): ChatSession {
               emoji: t.emoji,
               label: t.label,
               at: t.at,
+            }))
+          : undefined,
+      attachments:
+        m.attachments && m.attachments.length > 0
+          ? m.attachments.map<UiAttachment>((a) => ({
+              id: a.id,
+              name: a.name,
+              mime: a.mime,
+              size: a.size,
+              path: a.path,
+              createdAt: a.created_at,
             }))
           : undefined,
     })),
@@ -342,6 +370,27 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }),
         'appendMessage.message',
       );
+      // T1.5 — persist each attachment row now that its parent message
+      // exists. Done inline (not via a separate store action) so a crash
+      // mid-batch can't leave the DB with a message minus its chips;
+      // fire-and-forget lets individual inserts fail without blocking
+      // the chat stream that's already underway.
+      if (msg.attachments && msg.attachments.length > 0) {
+        for (const a of msg.attachments) {
+          fireWrite(
+            dbAttachmentInsert({
+              id: a.id,
+              message_id: msg.id,
+              name: a.name,
+              mime: a.mime,
+              size: a.size,
+              path: a.path,
+              created_at: a.createdAt,
+            }),
+            'appendMessage.attachment',
+          );
+        }
+      }
     }
   },
 
