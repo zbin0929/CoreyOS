@@ -15,13 +15,23 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-border bg-bg-elev-1">
-      {/* Brand — drag region, with left inset to clear macOS traffic lights */}
+      {/* Brand — drag region, with left inset to clear macOS traffic lights.
+          `pl-20` reserves ~80px for the system-rendered traffic lights
+          (Tauri v2 `titleBarStyle: Overlay`); when the window is in
+          fullscreen mode macOS hides the lights, so we collapse back to
+          `pl-4` to avoid a dead-looking gap. `shrink-0` guards against
+          the icon compressing when something pushes from inside. */}
       <div
         data-tauri-drag-region
-        className="flex h-12 items-center gap-2 border-b border-border pl-20 pr-4 select-none"
+        className={cn(
+          'flex h-12 shrink-0 items-center gap-2 border-b border-border pr-4 select-none',
+          'pl-20 [@media(display-mode:fullscreen)]:pl-4',
+        )}
       >
-        <CoreyMark className="h-5 w-5" />
-        <span className="text-md font-semibold text-fg tracking-tight">{t('app.name')}</span>
+        <CoreyMark className="h-5 w-5 shrink-0" />
+        <span className="truncate text-md font-semibold text-fg tracking-tight">
+          {t('app.name')}
+        </span>
       </div>
 
       {/* Primary nav */}

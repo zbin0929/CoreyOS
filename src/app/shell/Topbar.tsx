@@ -29,13 +29,16 @@ export function Topbar() {
       data-tauri-drag-region
       className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-bg-elev-1 px-4 select-none"
     >
-      {/* Model picker — jumps to /models for a full edit. */}
+      {/* Model picker — jumps to /models for a full edit.
+          `shrink-0` on every pill/button below so a narrow window
+          doesn't crush them into each other; the `flex-1` spacer
+          soaks up the excess. */}
       <button
         type="button"
         onClick={() => navigate({ to: '/models' })}
         title={t('topbar.change_model')}
         className={cn(
-          'flex h-7 items-center gap-2 rounded px-2 text-sm text-fg-muted',
+          'flex h-7 shrink-0 items-center gap-2 rounded px-2 text-sm text-fg-muted',
           'hover:bg-bg-elev-2 hover:text-fg transition-colors duration-fast',
         )}
       >
@@ -51,7 +54,7 @@ export function Topbar() {
         onClick={() => void refreshGateway()}
         title={gatewayTooltip(gateway, gatewayLatencyMs, t)}
         className={cn(
-          'flex h-7 items-center gap-1.5 rounded px-2 text-xs',
+          'flex h-7 shrink-0 items-center gap-1.5 rounded px-2 text-xs',
           'border bg-bg-elev-2/50 transition-colors duration-fast',
           gateway === 'online' && 'border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10',
           gateway === 'offline' && 'border-danger/40 text-danger hover:bg-danger/10',
@@ -69,7 +72,7 @@ export function Topbar() {
         type="button"
         onClick={togglePalette}
         className={cn(
-          'flex h-7 items-center gap-2 rounded-md border border-border bg-bg-elev-2 px-2.5',
+          'flex h-7 shrink-0 items-center gap-2 rounded-md border border-border bg-bg-elev-2 px-2.5',
           'text-xs text-fg-muted hover:border-border-strong hover:text-fg',
           'transition-colors duration-fast',
         )}
@@ -84,7 +87,7 @@ export function Topbar() {
       <button
         type="button"
         onClick={toggleTheme}
-        className="flex h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-bg-elev-2 hover:text-fg"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-bg-elev-2 hover:text-fg"
         aria-label={t('topbar.toggle_theme')}
         title={t('topbar.toggle_theme')}
       >
