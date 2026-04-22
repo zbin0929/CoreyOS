@@ -68,6 +68,24 @@
       "detected": "已检测参数: {{list}}"
     }
   },
+  "trajectory": {
+    "title": "轨迹",
+    "subtitle": "以时间线方式可视化已发生的会话 —— 消息 + 工具调用。",
+    "pick_session": "选择会话",
+    "empty_title": "还没有会话",
+    "empty_desc": "在 Chat 页发几句话再回来 —— 每个会话都会在这里渲染成工具调用时间线。",
+    "session_empty_title": "空会话",
+    "session_empty_desc": "此会话还没有消息。",
+    "totals": {
+      "messages": "{{n}} 消息",
+      "tool_calls": "{{n}} 工具"
+    },
+    "inspector": {
+      "content": "内容",
+      "tokens": "Token",
+      "tools": "工具调用"
+    }
+  },
   "budgets": {
     "title": "预算",
     "subtitle": "按范围/周期/超额动作限制花费。基于本地使用历史 + 内置价格表做预估。",

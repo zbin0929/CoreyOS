@@ -6,7 +6,6 @@ import {
 } from '@tanstack/react-router';
 import {
   Wand2,
-  GitBranch,
   Terminal,
   Clock,
 } from 'lucide-react';
@@ -22,6 +21,7 @@ import { ProfilesRoute } from '@/features/profiles';
 import { ChannelsRoute } from '@/features/channels';
 import { RunbooksRoute } from '@/features/runbooks';
 import { BudgetsRoute } from '@/features/budgets';
+import { TrajectoryRoute } from '@/features/trajectory';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -67,15 +67,7 @@ const skillsRoute = createRoute({
 const trajectoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/trajectory',
-  component: () => (
-    <Placeholder
-      titleKey="nav.trajectory"
-      emptyTitleKey="empty.trajectory.title"
-      emptyDescKey="empty.trajectory.desc"
-      icon={GitBranch}
-      phase={4}
-    />
-  ),
+  component: TrajectoryRoute,
 });
 
 const analyticsRoute = createRoute({

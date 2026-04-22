@@ -68,6 +68,24 @@
       "detected": "Detected parameters: {{list}}"
     }
   },
+  "trajectory": {
+    "title": "Trajectory",
+    "subtitle": "Visualise a past session as a timeline of messages and tool calls.",
+    "pick_session": "Pick a session",
+    "empty_title": "No sessions yet",
+    "empty_desc": "Send a chat turn and come back — each session renders here with a tool-call timeline.",
+    "session_empty_title": "Empty session",
+    "session_empty_desc": "This session has no messages yet.",
+    "totals": {
+      "messages": "{{n}} msg",
+      "tool_calls": "{{n}} tool"
+    },
+    "inspector": {
+      "content": "Content",
+      "tokens": "Tokens",
+      "tools": "Tool calls"
+    }
+  },
   "budgets": {
     "title": "Budgets",
     "subtitle": "Cap spend per scope, period, and breach action. Projection uses local usage history and a built-in price table.",
