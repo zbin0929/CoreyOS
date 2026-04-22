@@ -140,12 +140,11 @@ pub fn save(rel_path: &str, body: &str, create_new: bool) -> anyhow::Result<Skil
     if let Some(parent) = abs.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs_atomic::atomic_write(
-        &abs,
-        body.as_bytes(),
-        #[cfg(unix)]
-        None,
-    )?;
+    // `atomic_write` takes a perms param on every target (unix has the
+    // meaningful version; non-unix carries a `_`-prefixed placeholder of
+    // the same shape). Pass `None` unconditionally — no cfg-gate here,
+    // otherwise Windows sees 2 args where 3 are expected.
+    fs_atomic::atomic_write(&abs, body.as_bytes(), None)?;
     let updated_at_ms = abs
         .metadata()?
         .modified()
