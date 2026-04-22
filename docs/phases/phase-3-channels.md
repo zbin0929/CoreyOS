@@ -107,3 +107,53 @@ src/locales/{en,zh}.json   (+ channel strings)
 
 - No channel-specific analytics beyond what Phase 2 already shows.
 - No message-level channel routing rules (e.g. "send errors to Slack"). That could be a Phase 4+ feature.
+
+---
+
+## Progress
+
+### T3.1 — Channel schema catalog · **Shipped** (2026-04-22)
+
+- `src-tauri/src/channels.rs` — 8 `ChannelSpec` entries (Telegram /
+  Discord / Slack / WhatsApp / Matrix / Feishu / WeChat / WeCom) built
+  once via `once_cell::Lazy`. Each spec declares: stable id, display
+  name, yaml root (dotted prefix under `channels.*`), env-key names +
+  required flag + i18n hint key, yaml fields with `FieldKind`
+  (bool / string / string_list) + label key + defaults, a
+  `hot_reloadable` flag (default `false`), and a `has_qr_login` flag
+  (only WeChat).
+- `hermes_config::is_allowed_env_key` extended to accept any name in
+  the channel catalog alongside the existing `*_API_KEY` rule — so
+  `hermes_env_set_key` can store channel tokens without a separate
+  write path per channel.
+- **New IPC** `hermes_channel_list` → `Vec<ChannelState>` joining each
+  spec with current disk state: an `env_present` map
+  (`name → bool`, values never leave Rust) and a `yaml_values` map
+  read by walking the config.yaml doc at `yaml_root + "." + path`.
+  Runs under `spawn_blocking`.
+- **Channels page** now renders the catalog as a read-only grid at
+  `/channels` (was a Placeholder): one card per channel with a status
+  pill (Configured / Partial / Unconfigured / QR login), env-key
+  presence icons, and a collapsible "behavior fields" preview.
+- **i18n** `channels.*` namespace in en + zh: title/subtitle, status
+  labels, per-channel credential hints, field labels.
+- **Tests**: +10 Rust unit tests (catalog invariants — 8 entries,
+  unique ids, SCREAMING_SNAKE env names, yaml-root convention; plus
+  `walk_dotted` and `yaml_to_json` for the IPC read path). 2 new
+  Playwright cases covering all four status buckets.
+
+### Deferred within Phase 3
+
+Will land with subsequent Txx:
+
+- **T3.2** — inline forms (form flip on click, atomic `.env` + YAML
+  writes, diff modal, Save with "Restart gateway?" prompt for
+  `hot_reloadable = false`).
+- **T3.3** — WeChat QR flow (Tencent iLink).
+- **T3.4** — live status probing + log-grep fallback.
+- **T3.5** — mobile layout (Drawer instead of card-flip below 720px).
+- WhatsApp env name is a placeholder (`WHATSAPP_TOKEN`); verify against
+  a live Hermes before T3.2 wires the form.
+- Phase-2 deferrals that cluster here: profile tar.gz import/export,
+  per-profile gateway start/stop, active-profile switching, streaming
+  log tail.

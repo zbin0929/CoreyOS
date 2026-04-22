@@ -191,6 +191,66 @@ export const tauriMockInitScript = /* js */ `
       case 'app_paths':
         return state.appPaths;
 
+      case 'hermes_channel_list': {
+        // A minimal representative catalog. Covers all 4 status buckets
+        // (configured / partial / unconfigured / qr) so the test doesn't
+        // have to mutate state to exercise each pill.
+        return [
+          {
+            id: 'telegram',
+            display_name: 'Telegram',
+            yaml_root: 'channels.telegram',
+            env_keys: [
+              { name: 'TELEGRAM_BOT_TOKEN', required: true },
+            ],
+            yaml_fields: [
+              { path: 'mention_required', kind: 'bool', label_key: 'channels.field.mention_required', default_bool: true },
+              { path: 'reactions', kind: 'bool', label_key: 'channels.field.reactions', default_bool: true },
+            ],
+            hot_reloadable: false,
+            has_qr_login: false,
+            env_present: { TELEGRAM_BOT_TOKEN: true },
+            yaml_values: { mention_required: true, reactions: false },
+          },
+          {
+            id: 'discord',
+            display_name: 'Discord',
+            yaml_root: 'channels.discord',
+            env_keys: [{ name: 'DISCORD_BOT_TOKEN', required: true }],
+            yaml_fields: [],
+            hot_reloadable: false,
+            has_qr_login: false,
+            env_present: { DISCORD_BOT_TOKEN: false },
+            yaml_values: {},
+          },
+          {
+            id: 'matrix',
+            display_name: 'Matrix',
+            yaml_root: 'channels.matrix',
+            env_keys: [
+              { name: 'MATRIX_ACCESS_TOKEN', required: true },
+              { name: 'MATRIX_HOMESERVER', required: true },
+            ],
+            yaml_fields: [],
+            hot_reloadable: false,
+            has_qr_login: false,
+            env_present: { MATRIX_ACCESS_TOKEN: true, MATRIX_HOMESERVER: false },
+            yaml_values: {},
+          },
+          {
+            id: 'wechat',
+            display_name: 'WeChat',
+            yaml_root: '',
+            env_keys: [{ name: 'WECHAT_SESSION', required: false }],
+            yaml_fields: [],
+            hot_reloadable: false,
+            has_qr_login: true,
+            env_present: { WECHAT_SESSION: false },
+            yaml_values: {},
+          },
+        ];
+      }
+
       case 'hermes_profile_list': {
         return {
           root: state.profilesRoot,

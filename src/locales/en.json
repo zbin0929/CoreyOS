@@ -156,6 +156,64 @@
       "hermes.env.key": "API key"
     }
   },
+  "channels": {
+    "title": "Platform channels",
+    "subtitle": "Credentials + behavior for every messenger Hermes can talk through.",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "error_title": "Couldn't list channels",
+    "optional": "optional",
+    "qr_hint": "Log in via QR code (scan with the app).",
+    "behavior_fields_zero": "No behavior fields",
+    "behavior_fields_one": "1 behavior field",
+    "behavior_fields_other": "{{count}} behavior fields",
+    "behavior_fields": "{{count}} behavior fields",
+    "status": {
+      "configured": "Configured",
+      "partial": "Partial",
+      "unconfigured": "Not configured",
+      "qr": "QR login"
+    },
+    "field": {
+      "mention_required": "Only respond when @-mentioned",
+      "auto_thread": "Reply in a new thread",
+      "reactions": "React with emoji on receipt",
+      "enable": "Enable this channel"
+    },
+    "telegram": {
+      "hint_token": "Create via @BotFather on Telegram → /newbot.",
+      "free_chats": "Chat IDs allowed without @-mention"
+    },
+    "discord": {
+      "hint_token": "Discord Developer Portal → Bot → Copy Token.",
+      "allow_channels": "Channel IDs to listen in",
+      "ignore_channels": "Channel IDs to ignore"
+    },
+    "slack": {
+      "hint_token": "Slack App settings → OAuth & Permissions → Bot User OAuth Token.",
+      "handle_bot_messages": "Respond to other bots"
+    },
+    "whatsapp": {
+      "hint_token": "WhatsApp Business API access token (verify env name against your Hermes version).",
+      "mention_patterns": "Regex patterns that count as a mention"
+    },
+    "matrix": {
+      "hint_token": "Matrix client-server access token.",
+      "hint_homeserver": "Homeserver URL, e.g. https://matrix.org",
+      "dm_mention_thread": "Thread DMs when the bot is @-mentioned"
+    },
+    "feishu": {
+      "hint_app_id": "Feishu Open Platform → app credentials.",
+      "hint_app_secret": "Paired with App ID; keep secret."
+    },
+    "wechat": {
+      "hint_qr": "Scan with your WeChat app to log in (Tencent iLink)."
+    },
+    "wecom": {
+      "hint_bot_id": "WeCom admin console → bot ID.",
+      "hint_bot_secret": "WeCom bot secret."
+    }
+  },
   "profiles": {
     "title": "Profiles",
     "subtitle": "Each profile is a self-contained Hermes config under ~/.hermes/profiles/.",

@@ -11,6 +11,7 @@
 
 mod adapters;
 mod changelog;
+mod channels;
 mod config;
 mod db;
 mod error;
@@ -83,6 +84,7 @@ pub fn run() {
             ipc::db::db_tool_call_append,
             ipc::db::analytics_summary,
             ipc::paths::app_paths,
+            ipc::channels::hermes_channel_list,
             ipc::hermes_logs::hermes_log_tail,
             ipc::hermes_profiles::hermes_profile_list,
             ipc::hermes_profiles::hermes_profile_create,

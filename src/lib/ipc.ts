@@ -311,6 +311,51 @@ export function analyticsSummary(): Promise<AnalyticsSummaryDto> {
   return invoke<AnalyticsSummaryDto>('analytics_summary');
 }
 
+// ───────────────────────── Hermes channels ─────────────────────────
+
+/** Field shape drives how a form cell is rendered. Mirrors the Rust
+ *  `FieldKind` enum; any other value from the backend will fall through
+ *  to a plain text input in the UI. */
+export type ChannelFieldKind = 'bool' | 'string' | 'string_list';
+
+export interface ChannelYamlFieldSpec {
+  /** Relative dotted path under the channel's yaml_root. */
+  path: string;
+  kind: ChannelFieldKind;
+  label_key: string;
+  default_bool?: boolean;
+  default_string?: string;
+}
+
+export interface ChannelEnvKeySpec {
+  name: string;
+  required: boolean;
+  /** i18n key for a hint rendered under the input. Empty string when
+   *  serialized → normalized to `undefined` on the wire. */
+  hint_key?: string;
+}
+
+export interface ChannelState {
+  id: string;
+  display_name: string;
+  yaml_root: string;
+  env_keys: ChannelEnvKeySpec[];
+  yaml_fields: ChannelYamlFieldSpec[];
+  hot_reloadable: boolean;
+  has_qr_login: boolean;
+  /** Map from env key name → whether currently set in `.env`. */
+  env_present: Record<string, boolean>;
+  /** Current YAML values keyed by `yaml_fields[*].path`. `null` when
+   *  the field isn't set. */
+  yaml_values: Record<string, unknown>;
+}
+
+/** Read-only join of the static channel catalog with current disk
+ *  state. See `src-tauri/src/channels.rs` for the catalog. */
+export function hermesChannelList(): Promise<ChannelState[]> {
+  return invoke<ChannelState[]>('hermes_channel_list');
+}
+
 // ───────────────────────── Hermes profiles ─────────────────────────
 
 export interface HermesProfileInfo {

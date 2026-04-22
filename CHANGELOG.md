@@ -6,6 +6,78 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 3 Sprint 1 (T3.1): Channels page catalog
+
+### Context
+
+Phase 3 foundation. Before building 8 per-channel forms, ship the
+schema that drives them — one static `ChannelSpec` per channel with
+env-key names, YAML field paths, field kinds, and flags. This also
+gives us a real `/channels` page to replace the Placeholder, and it
+exercises the IPC end-to-end so any catalog bugs surface before the
+form work lands.
+
+### Shipped
+
+- **Rust `channels.rs`** — `Lazy<Vec<ChannelSpec>>` catalog covering
+  Telegram, Discord, Slack, WhatsApp, Matrix, Feishu, WeChat, WeCom.
+  Each spec has: stable lower-case slug id, display name, `yaml_root`
+  (dotted path under `channels.*`), `env_keys` (name + required +
+  i18n hint key), `yaml_fields` (`FieldKind::Bool | String |
+  StringList` + label key + default), `hot_reloadable` (default
+  `false`, conservative), `has_qr_login` (only WeChat).
+- **Env allowlist extension.** `hermes_config::is_allowed_env_key`
+  now accepts any name in `channels::allowed_channel_env_keys()`
+  alongside the original `*_API_KEY` rule, so channel tokens go
+  through the same `hermes_env_set_key` path as provider API keys.
+  The allowlist stays tight — the UI still can't write arbitrary
+  env vars.
+- **New IPC** `hermes_channel_list` in `ipc/channels.rs` →
+  `Vec<ChannelState>` joining catalog + on-disk state:
+  `env_present: HashMap<name, bool>` (values never leave Rust) and
+  `yaml_values: HashMap<path, JsonValue>` read by walking
+  `serde_yaml::Value`. `spawn_blocking` wrapped.
+- **`/channels` page** replaces the Placeholder:
+  responsive grid of cards, one per channel, with a status pill
+  (Configured / Partial / Unconfigured / QR login), env-key presence
+  icons (name-only, never value), and a collapsible "behavior
+  fields" preview that renders current YAML values compactly.
+- **i18n** — new `channels.*` namespace in en + zh, ~25 keys each
+  covering title, subtitle, status labels, field labels
+  (`mention_required`, `auto_thread`, `reactions`, `enable`), and
+  per-channel credential hints.
+
+### Fixed
+
+- (none — clean sprint)
+
+### Deferred
+
+- **T3.2** inline forms (flip-on-click, atomic `.env` + YAML writes,
+  diff modal, "Restart gateway?" prompt on save).
+- **T3.3** WeChat QR flow (Tencent iLink).
+- **T3.4** live status probing + log-grep fallback.
+- **T3.5** mobile layout (Drawer instead of card flip under 720px).
+- WhatsApp env name is a `WHATSAPP_TOKEN` placeholder — must be
+  verified against a live Hermes before T3.2 wires the form.
+
+### Test totals
+
+- Rust unit: **61** (was 51; +8 catalog invariants, +2 yaml walk)
+- Vitest: 11
+- Playwright: **25** (was 23; +2 channels cases covering all four
+  status buckets + the "env names but never values" safety assertion)
+- CI: clean on all 3 platforms
+
+### Next
+
+T3.2 — inline channel forms. The schema is already in place; the
+front-end work is mostly wiring generic `FieldKind` renderers +
+extending `hermes_config::write_env_key` to emit
+`hermes.channel.*` journal entries.
+
+---
+
 ## 2026-04-22 — Phase 2 complete (T2.1–T2.8)
 
 ### Context

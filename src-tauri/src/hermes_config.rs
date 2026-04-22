@@ -369,11 +369,24 @@ pub fn write_env_key(
 }
 
 fn is_allowed_env_key(key: &str) -> bool {
-    !key.is_empty()
-        && key.ends_with("_API_KEY")
-        && key
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+    if key.is_empty() {
+        return false;
+    }
+    let shape_ok = key
+        .chars()
+        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    if !shape_ok {
+        return false;
+    }
+    // Original rule: any `*_API_KEY` name (model providers — Phase 2).
+    if key.ends_with("_API_KEY") {
+        return true;
+    }
+    // Phase 3: any env name declared by a channel spec. Keeps the
+    // allowlist tight — we never let the UI write arbitrary env vars.
+    crate::channels::allowed_channel_env_keys()
+        .iter()
+        .any(|s| s == key)
 }
 
 /// Returns `true` when `line` (after trimming leading whitespace, ignoring

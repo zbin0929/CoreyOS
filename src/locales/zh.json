@@ -156,6 +156,64 @@
       "hermes.env.key": "API Key"
     }
   },
+  "channels": {
+    "title": "平台通道",
+    "subtitle": "所有 Hermes 可接入的即时通讯平台的凭证与行为设置。",
+    "refresh": "刷新",
+    "retry": "重试",
+    "error_title": "无法列出通道",
+    "optional": "可选",
+    "qr_hint": "扫码登录（用对应 App 扫一下即可）。",
+    "behavior_fields_zero": "无行为字段",
+    "behavior_fields_one": "1 个行为字段",
+    "behavior_fields_other": "{{count}} 个行为字段",
+    "behavior_fields": "{{count}} 个行为字段",
+    "status": {
+      "configured": "已配置",
+      "partial": "缺字段",
+      "unconfigured": "未配置",
+      "qr": "扫码登录"
+    },
+    "field": {
+      "mention_required": "仅在被 @ 时回复",
+      "auto_thread": "自动开新线程回复",
+      "reactions": "收到消息时用 emoji 回应",
+      "enable": "启用此通道"
+    },
+    "telegram": {
+      "hint_token": "在 Telegram 中找 @BotFather → /newbot 创建。",
+      "free_chats": "不需要 @ 也能回复的聊天 ID"
+    },
+    "discord": {
+      "hint_token": "Discord Developer Portal → Bot → Copy Token。",
+      "allow_channels": "只在这些频道 ID 中监听",
+      "ignore_channels": "忽略这些频道 ID"
+    },
+    "slack": {
+      "hint_token": "Slack App 设置 → OAuth & Permissions → Bot Token。",
+      "handle_bot_messages": "也回应其他机器人"
+    },
+    "whatsapp": {
+      "hint_token": "WhatsApp Business API 访问令牌（env 名需按你的 Hermes 版本核对）。",
+      "mention_patterns": "匹配为 @ 的正则表达式"
+    },
+    "matrix": {
+      "hint_token": "Matrix 客户端-服务器 access token。",
+      "hint_homeserver": "Homeserver URL，例如 https://matrix.org",
+      "dm_mention_thread": "被 @ 时在 DM 里开新线程"
+    },
+    "feishu": {
+      "hint_app_id": "飞书开放平台 → 应用凭证。",
+      "hint_app_secret": "与 App ID 配对，请保密。"
+    },
+    "wechat": {
+      "hint_qr": "打开微信 App 扫码登录（Tencent iLink）。"
+    },
+    "wecom": {
+      "hint_bot_id": "企业微信管理后台 → 机器人 ID。",
+      "hint_bot_secret": "企业微信机器人密钥。"
+    }
+  },
   "profiles": {
     "title": "配置集",
     "subtitle": "每个配置集是一个独立的 Hermes 配置目录（~/.hermes/profiles/）。",

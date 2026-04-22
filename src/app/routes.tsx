@@ -10,7 +10,6 @@ import {
   GitBranch,
   Terminal,
   Clock,
-  Radio,
 } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
@@ -20,6 +19,7 @@ import { SettingsRoute } from '@/features/settings';
 import { AnalyticsRoute } from '@/features/analytics';
 import { LogsRoute } from '@/features/logs';
 import { ProfilesRoute } from '@/features/profiles';
+import { ChannelsRoute } from '@/features/channels';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -127,15 +127,7 @@ const schedulerRoute = createRoute({
 const channelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/channels',
-  component: () => (
-    <Placeholder
-      titleKey="nav.channels"
-      emptyTitleKey="empty.channels.title"
-      emptyDescKey="empty.channels.desc"
-      icon={Radio}
-      phase={3}
-    />
-  ),
+  component: ChannelsRoute,
 });
 
 const modelsRoute = createRoute({

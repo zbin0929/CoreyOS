@@ -1,0 +1,243 @@
+//! IPC surface for the Phase 3 Channels page. T3.1 ships just the
+//! read-only `hermes_channel_list` — it returns the static catalog
+//! joined with current disk state:
+//!
+//!   - Which of each channel's env keys are currently set in
+//!     `~/.hermes/.env` (as booleans; values never cross the IPC
+//!     boundary).
+//!   - Current values for each yaml field, read from
+//!     `~/.hermes/config.yaml` by walking `yaml_root` + `path` through
+//!     the `serde_yaml::Value` tree.
+//!
+//! Writes (form submit → atomic .env + yaml update) land in T3.2.
+
+use std::path::Path;
+
+use serde::Serialize;
+use serde_yaml::Value as YamlValue;
+use tauri::State;
+
+use crate::channels::{self as cat, CHANNEL_SPECS};
+use crate::error::{IpcError, IpcResult};
+use crate::state::AppState;
+
+/// One row returned by `hermes_channel_list`. Frontend renders one card
+/// per entry; there's no separate "list specs" vs "list state" call
+/// because the static catalog is small and this keeps the UI simple.
+#[derive(Debug, Serialize)]
+pub struct ChannelState {
+    /// The static spec, cloned out of the Lazy — serde flattens the
+    /// shape so the frontend sees one flat object per channel.
+    #[serde(flatten)]
+    pub spec: cat::ChannelSpec,
+    /// `env_keys[i].name` → whether that key is currently set with a
+    /// non-empty value. Parallel to `spec.env_keys` but keyed by name
+    /// for robustness against UI reordering.
+    pub env_present: std::collections::HashMap<String, bool>,
+    /// Current value for each yaml field, resolved through
+    /// `yaml_root + "." + path`. Missing / unset fields report `null`.
+    /// Stringly-typed via JSON so the frontend can render a generic
+    /// "value preview" without knowing field kinds ahead of time.
+    pub yaml_values: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[tauri::command]
+pub async fn hermes_channel_list(state: State<'_, AppState>) -> IpcResult<Vec<ChannelState>> {
+    let _ = state; // reserved — we might thread AppState.data_dir in later
+    tokio::task::spawn_blocking(build_channel_states)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("channel_list task join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("channel_list: {e}"),
+        })
+}
+
+/// Walk the catalog, cross-reference on-disk state. Returns one
+/// `ChannelState` per spec, in catalog order (stable across reloads).
+fn build_channel_states() -> std::io::Result<Vec<ChannelState>> {
+    // Read the full `.env` keyset once — cheaper than re-reading per
+    // channel. We only need a set of known-set names; values are never
+    // surfaced.
+    let env_keyset = read_nonempty_env_keys().unwrap_or_default();
+
+    // Read the yaml doc once so nested lookups are cheap.
+    let yaml_doc = read_config_yaml_value().unwrap_or(YamlValue::Null);
+
+    let mut out = Vec::with_capacity(CHANNEL_SPECS.len());
+    for spec in CHANNEL_SPECS.iter() {
+        let mut env_present = std::collections::HashMap::new();
+        for env in &spec.env_keys {
+            env_present.insert(env.name.clone(), env_keyset.contains(&env.name));
+        }
+
+        let mut yaml_values = std::collections::HashMap::new();
+        for field in &spec.yaml_fields {
+            let full_path = if spec.yaml_root.is_empty() {
+                field.path.clone()
+            } else {
+                format!("{}.{}", spec.yaml_root, field.path)
+            };
+            let v = walk_dotted(&yaml_doc, &full_path)
+                .map(yaml_to_json)
+                .unwrap_or(serde_json::Value::Null);
+            yaml_values.insert(field.path.clone(), v);
+        }
+
+        out.push(ChannelState {
+            spec: spec.clone(),
+            env_present,
+            yaml_values,
+        });
+    }
+    Ok(out)
+}
+
+/// Parse `~/.hermes/.env` and collect the set of KEY names whose values
+/// are non-empty. Symmetric with `read_env_key_names` in
+/// `hermes_config.rs` but without the `*_API_KEY` filter — channels use
+/// token-style names (`TELEGRAM_BOT_TOKEN`, `MATRIX_ACCESS_TOKEN`, …).
+fn read_nonempty_env_keys() -> std::io::Result<std::collections::HashSet<String>> {
+    let path = env_path()?;
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        // Missing .env is a valid "none configured yet" state; surface
+        // as an empty set rather than bubbling the error up to the UI.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
+        Err(e) => return Err(e),
+    };
+    let mut out = std::collections::HashSet::new();
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        let mut value = value.trim();
+        // Strip surrounding quotes, matching hermes_config's convention.
+        if (value.starts_with('"') && value.ends_with('"')) && value.len() >= 2 {
+            value = &value[1..value.len() - 1];
+        }
+        if !value.is_empty() {
+            out.insert(key.to_string());
+        }
+    }
+    Ok(out)
+}
+
+fn env_path() -> std::io::Result<std::path::PathBuf> {
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "$HOME not set"))?;
+    Ok(Path::new(&home).join(".hermes/.env"))
+}
+
+fn read_config_yaml_value() -> std::io::Result<YamlValue> {
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "$HOME not set"))?;
+    let path = Path::new(&home).join(".hermes/config.yaml");
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(YamlValue::Null),
+        Err(e) => return Err(e),
+    };
+    serde_yaml::from_str::<YamlValue>(&raw)
+        .map_err(|e| std::io::Error::other(format!("parse config.yaml: {e}")))
+}
+
+/// Walk a dotted path through a `serde_yaml::Value`. Returns `Some`
+/// only when every segment is a key in a mapping and the final
+/// segment resolves. Non-mapping intermediate values abort the walk —
+/// we never auto-coerce through a list or scalar.
+fn walk_dotted<'a>(doc: &'a YamlValue, path: &str) -> Option<&'a YamlValue> {
+    let mut cur = doc;
+    for segment in path.split('.') {
+        let map = cur.as_mapping()?;
+        cur = map.get(YamlValue::String(segment.to_string()))?;
+    }
+    Some(cur)
+}
+
+/// Translate a YAML value to a JSON value for the IPC boundary. Most
+/// kinds map cleanly; Tags, Aliases, etc. fall through as strings.
+fn yaml_to_json(v: &YamlValue) -> serde_json::Value {
+    match v {
+        YamlValue::Null => serde_json::Value::Null,
+        YamlValue::Bool(b) => serde_json::Value::Bool(*b),
+        YamlValue::Number(n) => {
+            if let Some(u) = n.as_u64() {
+                serde_json::Value::from(u)
+            } else if let Some(i) = n.as_i64() {
+                serde_json::Value::from(i)
+            } else if let Some(f) = n.as_f64() {
+                serde_json::json!(f)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        YamlValue::String(s) => serde_json::Value::String(s.clone()),
+        YamlValue::Sequence(seq) => {
+            serde_json::Value::Array(seq.iter().map(yaml_to_json).collect())
+        }
+        YamlValue::Mapping(m) => {
+            let mut o = serde_json::Map::new();
+            for (k, v) in m {
+                // Only serialize string-keyed entries — non-string keys
+                // aren't representable in JSON anyway.
+                if let YamlValue::String(sk) = k {
+                    o.insert(sk.clone(), yaml_to_json(v));
+                }
+            }
+            serde_json::Value::Object(o)
+        }
+        YamlValue::Tagged(t) => yaml_to_json(&t.value),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn walk_dotted_resolves_nested_keys_and_returns_none_on_miss() {
+        let doc: YamlValue = serde_yaml::from_str(
+            r#"
+channels:
+  telegram:
+    mention_required: true
+    reactions: false
+"#,
+        )
+        .unwrap();
+
+        let got = walk_dotted(&doc, "channels.telegram.mention_required").unwrap();
+        assert_eq!(got, &YamlValue::Bool(true));
+
+        assert!(walk_dotted(&doc, "channels.telegram.missing").is_none());
+        assert!(walk_dotted(&doc, "channels.discord").is_none());
+    }
+
+    #[test]
+    fn yaml_to_json_covers_scalars_sequences_and_mappings() {
+        let doc: YamlValue = serde_yaml::from_str(
+            r#"
+b: true
+n: 42
+s: hi
+seq: [1, 2, "three"]
+map:
+  inner: true
+"#,
+        )
+        .unwrap();
+        let j = yaml_to_json(&doc);
+        assert_eq!(j["b"], serde_json::json!(true));
+        assert_eq!(j["n"], serde_json::json!(42));
+        assert_eq!(j["s"], serde_json::json!("hi"));
+        assert_eq!(j["seq"], serde_json::json!([1, 2, "three"]));
+        assert_eq!(j["map"]["inner"], serde_json::json!(true));
+    }
+}
