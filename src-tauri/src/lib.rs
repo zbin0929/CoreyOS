@@ -16,6 +16,7 @@ mod db;
 mod error;
 mod fs_atomic;
 mod hermes_config;
+mod hermes_logs;
 mod ipc;
 mod sandbox;
 mod state;
@@ -81,6 +82,7 @@ pub fn run() {
             ipc::db::db_tool_call_append,
             ipc::db::analytics_summary,
             ipc::paths::app_paths,
+            ipc::hermes_logs::hermes_log_tail,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

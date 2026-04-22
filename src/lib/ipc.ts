@@ -311,6 +311,34 @@ export function analyticsSummary(): Promise<AnalyticsSummaryDto> {
   return invoke<AnalyticsSummaryDto>('analytics_summary');
 }
 
+// ───────────────────────── Hermes logs ─────────────────────────
+
+export type HermesLogKind = 'agent' | 'gateway' | 'error';
+
+export interface HermesLogTail {
+  /** Absolute path on disk the backend tried to read. */
+  path: string;
+  /** `true` if the file didn't exist — `lines` will be empty. */
+  missing: boolean;
+  /** Last N lines in chronological order (oldest first). */
+  lines: string[];
+  /** Total line count in the file before truncation. Lets the UI show
+   *  "Showing last 500 of 12,340 lines". */
+  total_lines: number;
+}
+
+/** Tail one of Hermes's rolling log files. `maxLines` is clamped server-
+ *  side to [1, 5000] and defaults to 500. */
+export function hermesLogTail(args: {
+  kind: HermesLogKind;
+  maxLines?: number;
+}): Promise<HermesLogTail> {
+  return invoke<HermesLogTail>('hermes_log_tail', {
+    kind: args.kind,
+    maxLines: args.maxLines ?? null,
+  });
+}
+
 // ───────────────────────── App paths ─────────────────────────
 
 export interface AppPaths {

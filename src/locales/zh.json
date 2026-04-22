@@ -155,6 +155,21 @@
       "hermes.env.key": "API Key"
     }
   },
+  "hermes_logs": {
+    "page_subtitle": "Agent · 网关 · 错误 · 配置历史",
+    "tab": {
+      "agent": "Agent",
+      "gateway": "网关",
+      "error": "错误",
+      "changelog": "变更日志"
+    },
+    "tail_meta": "显示 {{shown}} / {{total}} 行",
+    "filter_placeholder": "筛选（子串）…",
+    "no_matches": "没有匹配 \"{{query}}\" 的行。",
+    "error_title": "读取日志失败",
+    "missing_title": "暂无日志文件",
+    "missing_desc": "Hermes 还没有写入这个日志。预期路径：{{path}}"
+  },
   "empty": {
     "chat": {
       "title": "还没有会话",

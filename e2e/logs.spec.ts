@@ -9,6 +9,9 @@ import { test, expect } from './fixtures/test';
 test.describe('logs (changelog)', () => {
   test('empty state when no journal entries', async ({ page }) => {
     await page.goto('/logs');
+    // T2.6 made /logs a tabbed surface with Agent as the default. Click
+    // the Changelog tab before asserting the existing empty-state copy.
+    await page.getByTestId('logs-tab-changelog').click();
     // Seeded fixture has `changelog: []`.
     await expect(page.getByText(/No changes yet|暂无改动/)).toBeVisible();
   });
@@ -32,6 +35,8 @@ test.describe('logs (changelog)', () => {
     // in-memory journal survives — a full reload would re-run addInitScript
     // and wipe state.changelog.
     await page.getByRole('link', { name: /Logs|日志/ }).click();
+    // Active tab defaults to Agent; switch to Changelog to see the entry.
+    await page.getByTestId('logs-tab-changelog').click();
     await expect(page.getByText(/deepseek-reasoner/).first()).toBeVisible();
 
     // Click the single Revert button on the row. The row flips to "Reverted"

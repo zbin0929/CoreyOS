@@ -155,6 +155,21 @@
       "hermes.env.key": "API key"
     }
   },
+  "hermes_logs": {
+    "page_subtitle": "Agent · gateway · errors · config history",
+    "tab": {
+      "agent": "Agent",
+      "gateway": "Gateway",
+      "error": "Errors",
+      "changelog": "Changelog"
+    },
+    "tail_meta": "Showing {{shown}} of {{total}} lines",
+    "filter_placeholder": "Filter (substring)…",
+    "no_matches": "No lines matched \"{{query}}\".",
+    "error_title": "Couldn't read the log file",
+    "missing_title": "No log file yet",
+    "missing_desc": "Hermes hasn't written to this log. Expected at: {{path}}"
+  },
   "empty": {
     "chat": {
       "title": "No conversations yet",

@@ -28,6 +28,33 @@ export const tauriMockInitScript = /* js */ `
   // ── user-editable fixture state ──
   const state = {
     homeStats: { path: '/tmp/caduceus', entry_count: 3, sandbox_mode: 'dev-allow' },
+    // Fixture lines for hermes_log_tail, keyed by kind. Tests can override
+    // lines or missing at runtime via window.__CADUCEUS_MOCK__.state.
+    hermesLogs: {
+      agent: {
+        missing: false,
+        path: '/Users/test/.hermes/logs/agent.log',
+        lines: [
+          '2026-04-22 15:12:03 INFO  agent boot',
+          '2026-04-22 15:12:04 INFO  loaded 3 skills',
+          '2026-04-22 15:12:12 WARN  rate limiter near cap',
+          '2026-04-22 15:12:20 ERROR upstream 503 on /v1/chat',
+        ],
+      },
+      gateway: {
+        missing: false,
+        path: '/Users/test/.hermes/logs/gateway.log',
+        lines: [
+          '2026-04-22 15:12:02 INFO  listening on 127.0.0.1:8642',
+          '2026-04-22 15:12:10 INFO  POST /v1/chat/completions 200 1.8s',
+        ],
+      },
+      error: {
+        missing: true,
+        path: '/Users/test/.hermes/logs/error.log',
+        lines: [],
+      },
+    },
     /** Canned result for app_paths. Tests can override by mutating this. */
     appPaths: {
       config_dir: '/Users/test/Library/Application Support/com.caduceus.app',
@@ -154,6 +181,19 @@ export const tauriMockInitScript = /* js */ `
 
       case 'app_paths':
         return state.appPaths;
+
+      case 'hermes_log_tail': {
+        const bucket = state.hermesLogs[args.kind];
+        if (!bucket) {
+          return { path: '', missing: true, lines: [], total_lines: 0 };
+        }
+        return {
+          path: bucket.path,
+          missing: bucket.missing,
+          lines: bucket.lines,
+          total_lines: bucket.lines.length,
+        };
+      }
 
       case 'config_get':
         return state.config;
