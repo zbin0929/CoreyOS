@@ -18,6 +18,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import { useUIStore, type Theme } from '@/stores/ui';
 import { supportedLngs, type Lang } from '@/lib/i18n';
@@ -335,17 +336,18 @@ function AppearanceSection() {
       </Field>
 
       <Field label={t('settings.appearance.language')}>
-        <select
-          value={currentLang}
-          data-testid="settings-lang"
-          onChange={(e) => {
-            void i18n.changeLanguage(e.target.value);
-          }}
-          className={cn(inputCls, 'max-w-[200px] appearance-none pr-8')}
-        >
-          <option value="en">English</option>
-          <option value="zh">中文</option>
-        </select>
+        <div className="max-w-[200px]">
+          <Select<Lang>
+            value={currentLang}
+            onChange={(v) => void i18n.changeLanguage(v)}
+            data-testid="settings-lang"
+            ariaLabel={t('settings.appearance.language')}
+            options={[
+              { value: 'en', label: 'English' },
+              { value: 'zh', label: '中文' },
+            ]}
+          />
+        </div>
       </Field>
     </Section>
   );

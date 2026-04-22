@@ -33,12 +33,15 @@ test.describe('settings', () => {
     // The "Appearance" heading uses a stable i18n key.
     await expect(page.getByRole('heading', { name: /Appearance/i })).toBeVisible();
 
-    await page.getByTestId('settings-lang').selectOption('zh');
-    // Chinese rendering — the same heading is now the translated string.
+    // Custom Select — open then pick the row. Chinese rendering swaps
+    // the same heading to the translated string.
+    await page.getByTestId('settings-lang').click();
+    await page.getByRole('option', { name: '中文' }).click();
     await expect(page.getByRole('heading', { name: '外观' })).toBeVisible();
 
     // Reset so other tests don't inherit the Chinese localStorage value.
-    await page.getByTestId('settings-lang').selectOption('en');
+    await page.getByTestId('settings-lang').click();
+    await page.getByRole('option', { name: 'English' }).click();
   });
 
   test('gateway form loads config and Test connection reports latency', async ({ page }) => {

@@ -64,5 +64,30 @@ export function Providers({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', handler);
   }, [toggleTheme]);
 
+  // Suppress webview zoom. Desktop apps aren't web pages — Cmd/Ctrl +/- /0
+  // and Ctrl+scroll zoom distort our layout (chat bubbles compress, sidebar
+  // traffic-light inset gets wrong, etc.). Tauri's webview honours these
+  // by default; we neutralise them so "zoom" visually means "resize the
+  // window" only. `passive: false` on the wheel listener is required —
+  // preventDefault() is a no-op on passive listeners.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      // `=` covers the un-shifted form of `+`; `0` resets zoom.
+      if (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0') {
+        e.preventDefault();
+      }
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

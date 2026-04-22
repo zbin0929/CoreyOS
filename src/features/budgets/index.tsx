@@ -13,6 +13,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
   analyticsSummary,
@@ -329,18 +330,19 @@ function BudgetEditor({
       <div className="flex items-center gap-2">
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
           <span className="text-fg-subtle">{t('budgets.field.scope_kind')}</span>
-          <select
+          <Select<BudgetScopeKind>
             value={scopeKind}
-            onChange={(e) => setScopeKind(e.target.value as BudgetScopeKind)}
-            className="rounded border border-border bg-bg-elev-2 px-2 py-1.5 text-sm text-fg focus:border-gold-500/40 focus:outline-none"
+            onChange={setScopeKind}
             data-testid="budget-scope-kind"
-          >
-            <option value="global">{t('budgets.scope.global')}</option>
-            <option value="model">{t('budgets.scope.model')}</option>
-            <option value="profile">{t('budgets.scope.profile')}</option>
-            <option value="adapter">{t('budgets.scope.adapter')}</option>
-            <option value="channel">{t('budgets.scope.channel')}</option>
-          </select>
+            ariaLabel={t('budgets.field.scope_kind')}
+            options={[
+              { value: 'global', label: t('budgets.scope.global') },
+              { value: 'model', label: t('budgets.scope.model') },
+              { value: 'profile', label: t('budgets.scope.profile') },
+              { value: 'adapter', label: t('budgets.scope.adapter') },
+              { value: 'channel', label: t('budgets.scope.channel') },
+            ]}
+          />
         </label>
         {needsScopeValue && (
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
@@ -371,29 +373,31 @@ function BudgetEditor({
         </label>
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
           <span className="text-fg-subtle">{t('budgets.field.period')}</span>
-          <select
+          <Select<BudgetPeriod>
             value={period}
-            onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
-            className="rounded border border-border bg-bg-elev-2 px-2 py-1.5 text-sm text-fg focus:border-gold-500/40 focus:outline-none"
+            onChange={setPeriod}
             data-testid="budget-period"
-          >
-            <option value="day">{t('budgets.period.day')}</option>
-            <option value="week">{t('budgets.period.week')}</option>
-            <option value="month">{t('budgets.period.month')}</option>
-          </select>
+            ariaLabel={t('budgets.field.period')}
+            options={[
+              { value: 'day', label: t('budgets.period.day') },
+              { value: 'week', label: t('budgets.period.week') },
+              { value: 'month', label: t('budgets.period.month') },
+            ]}
+          />
         </label>
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
           <span className="text-fg-subtle">{t('budgets.field.action')}</span>
-          <select
+          <Select<BudgetAction>
             value={action}
-            onChange={(e) => setAction(e.target.value as BudgetAction)}
-            className="rounded border border-border bg-bg-elev-2 px-2 py-1.5 text-sm text-fg focus:border-gold-500/40 focus:outline-none"
+            onChange={setAction}
             data-testid="budget-action"
-          >
-            <option value="notify">{t('budgets.action.notify')}</option>
-            <option value="block">{t('budgets.action.block')}</option>
-            <option value="notify_block">{t('budgets.action.notify_block')}</option>
-          </select>
+            ariaLabel={t('budgets.field.action')}
+            options={[
+              { value: 'notify', label: t('budgets.action.notify') },
+              { value: 'block', label: t('budgets.action.block') },
+              { value: 'notify_block', label: t('budgets.action.notify_block') },
+            ]}
+          />
         </label>
       </div>
 

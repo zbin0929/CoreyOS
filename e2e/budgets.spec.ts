@@ -16,8 +16,12 @@ test.describe('budgets', () => {
     await page.getByTestId('budgets-new').click();
     await expect(page.getByTestId('budget-editor')).toBeVisible();
     await page.getByTestId('budget-amount').fill('10.00');
-    await page.getByTestId('budget-period').selectOption('week');
-    await page.getByTestId('budget-action').selectOption('notify_block');
+    // Custom Select (not a native <select>) — click the trigger, then
+    // click the option row by its visible label.
+    await page.getByTestId('budget-period').click();
+    await page.getByRole('option', { name: 'Weekly' }).click();
+    await page.getByTestId('budget-action').click();
+    await page.getByRole('option', { name: 'Notify + block' }).click();
     await page.getByTestId('budget-save').click();
 
     const row = page.locator('[data-testid^="budget-row-"]').first();
@@ -28,7 +32,8 @@ test.describe('budgets', () => {
     // Edit → swap to model scope.
     await row.locator('[data-testid^="budget-edit-"]').click();
     await expect(page.getByTestId('budget-editor')).toBeVisible();
-    await page.getByTestId('budget-scope-kind').selectOption('model');
+    await page.getByTestId('budget-scope-kind').click();
+    await page.getByRole('option', { name: 'Model' }).click();
     await page.getByTestId('budget-scope-value').fill('gpt-4o');
     await page.getByTestId('budget-save').click();
     await expect(

@@ -18,12 +18,17 @@ export function Topbar() {
   const gatewayLatencyMs = useAppStatusStore((s) => s.gatewayLatencyMs);
   const refreshGateway = useAppStatusStore((s) => s.refreshGateway);
 
-  // Keep the drag region DIV outside the interactive buttons — macOS eats
-  // clicks inside `data-tauri-drag-region` otherwise.
+  // Tauri v2: the whole `<header>` is a drag region. Children keep working
+  // because Tauri checks `event.target` — clicks on an interactive
+  // descendant (which lacks the attribute) still fire normally. The
+  // previous ghost `<div absolute inset-0 -z-10>` approach was broken on
+  // two counts: the parent wasn't `relative` (so `inset-0` anchored to
+  // the viewport) and `-z-10` hid it behind the right-hand buttons.
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-bg-elev-1 px-4 select-none">
-      <div data-tauri-drag-region className="absolute inset-0 -z-10" />
-
+    <header
+      data-tauri-drag-region
+      className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-bg-elev-1 px-4 select-none"
+    >
       {/* Model picker — jumps to /models for a full edit. */}
       <button
         type="button"
