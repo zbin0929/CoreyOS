@@ -23,6 +23,7 @@ mod hermes_profiles;
 mod ipc;
 mod pty;
 mod sandbox;
+mod skills;
 mod state;
 mod wechat;
 
@@ -109,6 +110,10 @@ pub fn run() {
             ipc::pty::pty_write,
             ipc::pty::pty_resize,
             ipc::pty::pty_kill,
+            ipc::skills::skill_list,
+            ipc::skills::skill_get,
+            ipc::skills::skill_save,
+            ipc::skills::skill_delete,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

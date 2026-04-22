@@ -68,6 +68,23 @@
       "detected": "Detected parameters: {{list}}"
     }
   },
+  "skills": {
+    "title": "Skills",
+    "subtitle": "Browse, edit, and save Hermes skill files under ~/.hermes/skills/.",
+    "new": "New skill",
+    "save": "Save",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "create": "Create",
+    "unsaved": "unsaved",
+    "pick_title": "Pick a skill on the left",
+    "pick_desc": "Or click New skill to start one. Files are plain Markdown; Hermes reads them on the next run.",
+    "empty_tree": "No skills yet. Create one with the New button in the header.",
+    "field": {
+      "path": "Path",
+      "path_hint": "Relative to ~/.hermes/skills/. Nested paths like work/standup.md are fine."
+    }
+  },
   "terminal": {
     "title": "Terminal",
     "subtitle": "A native PTY-backed shell in your browser. One tab, full UTF-8, resize-aware.",

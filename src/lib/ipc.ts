@@ -369,6 +369,46 @@ export function budgetDelete(id: string): Promise<void> {
   return invoke<void>('budget_delete', { id });
 }
 
+// ───────────────────────── Skills (T4.2) ─────────────────────────
+
+export interface SkillSummary {
+  /** Relative posix path under `~/.hermes/skills/`, ending in `.md`.
+   *  Treat as the stable id. */
+  path: string;
+  /** Derived name (file stem). */
+  name: string;
+  /** Parent directory relative to `skills/`. `null` for top-level files. */
+  group: string | null;
+  size: number;
+  updated_at_ms: number;
+}
+
+export interface SkillContent {
+  path: string;
+  body: string;
+  updated_at_ms: number;
+}
+
+export function skillList(): Promise<SkillSummary[]> {
+  return invoke<SkillSummary[]>('skill_list');
+}
+
+export function skillGet(path: string): Promise<SkillContent> {
+  return invoke<SkillContent>('skill_get', { path });
+}
+
+export function skillSave(
+  path: string,
+  body: string,
+  createNew: boolean,
+): Promise<SkillContent> {
+  return invoke<SkillContent>('skill_save', { path, body, createNew });
+}
+
+export function skillDelete(path: string): Promise<void> {
+  return invoke<void>('skill_delete', { path });
+}
+
 // ───────────────────────── PTY (T4.5) ─────────────────────────
 
 /**

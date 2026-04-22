@@ -93,6 +93,8 @@ export const tauriMockInitScript = /* js */ `
     wechatSessions: /** @type {any} */ ({}),
     // T4.6 Runbooks — mutable in-memory list.
     runbooks: /** @type {any[]} */ ([]),
+    // T4.2 Skills — in-memory file tree. Keyed by relative posix path.
+    skills: /** @type {Record<string, { body: string; updated_at_ms: number }>} */ ({}),
     // T4.5 PTY ids currently alive in the mock. Tests can count or
     // assert; the real backend's pty state isn't reachable from JS.
     ptyIds: /** @type {string[]} */ ([]),
@@ -604,6 +606,45 @@ export const tauriMockInitScript = /* js */ `
       }
       case 'runbook_delete':
         state.runbooks = state.runbooks.filter((r) => r.id !== args.id);
+        return;
+
+      // T4.2 Skills — in-memory file system keyed by relative path.
+      case 'skill_list': {
+        const rows = Object.entries(state.skills).map(([path, entry]) => {
+          const segs = path.split('/');
+          const name = segs[segs.length - 1].replace(/\.md$/i, '');
+          const group = segs.length > 1 ? segs.slice(0, -1).join('/') : null;
+          return {
+            path,
+            name,
+            group,
+            size: entry.body.length,
+            updated_at_ms: entry.updated_at_ms,
+          };
+        });
+        rows.sort((a, b) => b.updated_at_ms - a.updated_at_ms);
+        return rows;
+      }
+      case 'skill_get': {
+        const entry = state.skills[args.path];
+        if (!entry) {
+          throw { kind: 'internal', message: 'skill not found: ' + args.path };
+        }
+        return { path: args.path, body: entry.body, updated_at_ms: entry.updated_at_ms };
+      }
+      case 'skill_save': {
+        if (args.createNew && state.skills[args.path]) {
+          throw {
+            kind: 'internal',
+            message: 'skill already exists: ' + args.path,
+          };
+        }
+        const now = Date.now();
+        state.skills[args.path] = { body: args.body, updated_at_ms: now };
+        return { path: args.path, body: args.body, updated_at_ms: now };
+      }
+      case 'skill_delete':
+        delete state.skills[args.path];
         return;
 
       // T4.5 PTY — echoes a canned banner + parrot-on-write. The

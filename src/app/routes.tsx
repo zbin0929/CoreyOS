@@ -4,7 +4,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
-import { Wand2, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
@@ -19,6 +19,7 @@ import { RunbooksRoute } from '@/features/runbooks';
 import { BudgetsRoute } from '@/features/budgets';
 import { TrajectoryRoute } from '@/features/trajectory';
 import { TerminalRoute } from '@/features/terminal';
+import { SkillsRoute } from '@/features/skills';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -50,15 +51,7 @@ const compareRoute = createRoute({
 const skillsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/skills',
-  component: () => (
-    <Placeholder
-      titleKey="nav.skills"
-      emptyTitleKey="empty.skills.title"
-      emptyDescKey="empty.skills.desc"
-      icon={Wand2}
-      phase={4}
-    />
-  ),
+  component: SkillsRoute,
 });
 
 const trajectoryRoute = createRoute({

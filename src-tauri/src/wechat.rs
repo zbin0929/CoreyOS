@@ -414,7 +414,15 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // Whole test body runs under the
+    // HOME lock — that's the entire point. Parallel tests can't touch HOME
+    // until we're done.
     async fn scanned_write_uses_stub_token_matching_qr_id() {
+        // Serialise HOME mutations across the whole crate — otherwise
+        // `skills::tests::*` (which also set_var("HOME", …)) can race.
+        let _home_guard = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Point HOME at a tempdir so write_env_key has somewhere to land.
         let tmp = std::env::temp_dir().join(format!(
             "caduceus-wechat-stub-{}-{}",

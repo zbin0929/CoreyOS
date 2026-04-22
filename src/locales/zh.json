@@ -68,6 +68,23 @@
       "detected": "已检测参数: {{list}}"
     }
   },
+  "skills": {
+    "title": "技能",
+    "subtitle": "浏览、编辑、保存 ~/.hermes/skills/ 下的 Hermes 技能文件。",
+    "new": "新建技能",
+    "save": "保存",
+    "delete": "删除",
+    "cancel": "取消",
+    "create": "创建",
+    "unsaved": "未保存",
+    "pick_title": "在左侧选一项技能",
+    "pick_desc": "或点右上角「新建技能」新建。技能是普通 Markdown，Hermes 下次运行时读取。",
+    "empty_tree": "还没有技能。点右上角「新建」来创建。",
+    "field": {
+      "path": "路径",
+      "path_hint": "相对 ~/.hermes/skills/ 的路径。支持嵌套，如 work/standup.md。"
+    }
+  },
   "terminal": {
     "title": "终端",
     "subtitle": "基于原生 PTY 的浏览器终端。单 tab、UTF-8、自动 resize。",

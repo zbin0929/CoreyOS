@@ -15,4 +15,5 @@ pub mod paths;
 pub mod pty;
 pub mod runbooks;
 pub mod session;
+pub mod skills;
 pub mod wechat;
