@@ -203,6 +203,51 @@ test.describe('channels', () => {
     ).toBeVisible();
   });
 
+  // ───────────────────────── T3.5 — mobile drawer ─────────────────────────
+
+  test('mobile viewport: editing a channel opens a bottom drawer (not inline expansion)', async ({
+    page,
+  }) => {
+    // Shrink the default test page instead of spawning a fresh
+    // context — that way the shared fixture (which installs the
+    // Tauri IPC mock via addInitScript) still applies. The
+    // useIsMobile hook flips at <720px; 375 is iPhone-SE width
+    // and unambiguously in-range.
+    await page.setViewportSize({ width: 375, height: 740 });
+
+    await page.goto('/channels');
+    await expect(page.getByTestId('channel-card-telegram')).toBeVisible();
+
+    // Inline form not present on mobile until Edit is clicked; the
+    // drawer shouldn't exist yet either.
+    await expect(page.getByTestId('channel-form-telegram')).toHaveCount(0);
+    await expect(page.getByTestId('channel-drawer-telegram')).toHaveCount(0);
+
+    await page.getByTestId('channel-edit-telegram').click();
+
+    // Drawer mounts in a portal under <body>, not inside the card.
+    await expect(page.getByTestId('channel-drawer-telegram')).toBeVisible();
+    await expect(page.getByTestId('channel-form-telegram')).toBeVisible();
+    // Form lives inside the drawer, not the card article.
+    const formInCard = page
+      .getByTestId('channel-card-telegram')
+      .locator('[data-testid="channel-form-telegram"]');
+    await expect(formInCard).toHaveCount(0);
+
+    // Close via the drawer's X button → form unmounts + mode resets.
+    await page.getByTestId('channel-drawer-telegram-close').click();
+    await expect(page.getByTestId('channel-drawer-telegram')).toHaveCount(0);
+    await expect(page.getByTestId('channel-form-telegram')).toHaveCount(0);
+
+    // Reopen, then close via backdrop click — same outcome.
+    await page.getByTestId('channel-edit-telegram').click();
+    await expect(page.getByTestId('channel-drawer-telegram')).toBeVisible();
+    await page.getByTestId('channel-drawer-telegram-backdrop').click({
+      position: { x: 10, y: 10 }, // top-left of the backdrop, safely away from the sheet
+    });
+    await expect(page.getByTestId('channel-drawer-telegram')).toHaveCount(0);
+  });
+
   // ───────────────────────── T3.3 — WeChat QR flow ─────────────────────────
 
   test('WeChat QR: start → scan progression → env_present flips to set', async ({ page }) => {

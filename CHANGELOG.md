@@ -6,6 +6,81 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 3 Sprint 5 (T3.5): Mobile drawer for channel edit flow · **Phase 3 complete**
+
+### Context
+
+The card grid already stacks to one column below Tailwind's `sm`
+breakpoint (640px), so the visible layout work for T3.5 is the
+edit flow itself. Expanding a card inline on a 375-wide viewport
+pushes the user past the viewport fold; we flip that to a bottom
+drawer above the card grid, keeping the ergonomics (Cancel,
+restart prompt, etc.) identical to desktop.
+
+This closes Phase 3. T3.1–T3.5 are all green.
+
+### Shipped
+
+- **`useIsMobile(maxPx = 720)`** — 12-line `matchMedia` hook at
+  `src/lib/useIsMobile.ts`. SSR-safe, re-subscribes on
+  breakpoint change. One call site today (ChannelCard) — kept
+  small instead of reaching for a media-query library.
+- **`Drawer`** — `src/components/ui/drawer.tsx`, ~70 LoC. Fixed
+  bottom sheet, 88vh max-height, slide-in via a `drawerUp`
+  keyframe added to `tailwind.config.ts`. Click-outside on the
+  backdrop closes; ESC closes; `document.body` gets
+  `overflow: hidden` while open. Portal'd into `document.body`
+  via `createPortal` so the parent card's overflow never clips
+  it. Deliberately skipped swipe-to-dismiss, focus trap, and
+  animated unmount — each adds state the one call site doesn't
+  yet justify.
+- **`ChannelCard` mobile integration**: extracted edit / confirm /
+  saving / restart-prompt / error JSX into a local
+  `renderInteractivePanels()` closure. Desktop renders inline
+  below the read-only summary (unchanged behavior); mobile
+  mounts the same node inside `<Drawer>`. `isInteractive` gates
+  the drawer mount so the portal never exists in `view` mode.
+  Drawer's X button + backdrop both route through
+  `setMode({ kind: 'view' })` — matching the inline version's
+  Cancel / dismiss paths exactly.
+- **Tailwind**: one new keyframe `drawerUp` (translateY 100% →
+  0%). No new colors, fonts, or spacing tokens.
+
+### Test totals
+
+- Rust `cargo test`: **79 passed** (unchanged — T3.5 is
+  frontend-only).
+- Playwright `channels.spec.ts`: **7/7 passed** (+1): 375×740
+  viewport, click Edit, asserts drawer mounts outside the
+  `<article>` (portal), form lives inside the drawer not the
+  card, X button closes, backdrop click closes.
+- Full Playwright suite: **30/30 passed**.
+- `pnpm typecheck` + `pnpm lint`: clean.
+
+### Phase 3 rollup
+
+- T3.1 ✓ catalog + grid · T3.2 ✓ inline forms + atomic writes +
+  diff + restart prompt · T3.3 ✓ WeChat QR scaffolding · T3.4 ✓
+  live status probing · T3.5 ✓ mobile drawer.
+- Rust: 70 → 79 tests (+9 over Phase 3).
+- Playwright: 23 → 30 tests (+7 over Phase 3).
+
+### Deferred (carry forward)
+
+- Real Tencent iLink HTTP client (T3.3 follow-up).
+- Explicit "Clear existing secret" button.
+- Real `/health/channels` endpoint probe (if upstream adds it).
+- WhatsApp env name verification.
+- Phase-2 profile tar.gz import/export, per-profile gateway
+  start/stop, active-profile switching, streaming log tail.
+
+### Next
+
+- **Phase 4** — Differentiators (multi-model compare, skill
+  editor, trajectory, budgets, terminal).
+
+---
+
 ## 2026-04-22 — Phase 3 Sprint 4 (T3.4): Live channel-status probing
 
 ### Context

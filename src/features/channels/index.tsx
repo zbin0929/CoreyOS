@@ -15,7 +15,9 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Drawer } from '@/components/ui/drawer';
 import { cn } from '@/lib/cn';
+import { useIsMobile } from '@/lib/useIsMobile';
 import {
   hermesChannelList,
   hermesChannelSave,
@@ -256,6 +258,18 @@ function ChannelCard({
   const requiredEnv = channel.env_keys.filter((k) => k.required);
   const setCount = requiredEnv.filter((k) => channel.env_present[k.name]).length;
   const busy = mode.kind === 'saving';
+  // T3.5: below 720px the edit/confirm/restart UI moves into a bottom
+  // drawer instead of expanding inline. Above that threshold we
+  // render exactly the same sections in-card as before — no behavior
+  // change on desktop, which keeps the existing e2e suite stable
+  // (tests run on the default 1280x720 viewport).
+  const isMobile = useIsMobile(720);
+  const isInteractive =
+    mode.kind === 'edit' ||
+    mode.kind === 'confirm' ||
+    mode.kind === 'saving' ||
+    mode.kind === 'restart-prompt' ||
+    mode.kind === 'error';
 
   async function doSave(submission: ChannelFormSubmission) {
     setMode({ kind: 'saving', submission });
@@ -414,7 +428,36 @@ function ChannelCard({
         </>
       )}
 
-      {/* Edit mode — inline form. */}
+      {/* Edit / confirm / restart / error panels. On desktop they
+          render inline below the summary; on mobile (<720px) the
+          whole group moves into a bottom-drawer that slides over
+          the page. Condition below short-circuits when the card is
+          in a non-interactive mode so the drawer doesn't mount. */}
+      {!isMobile && renderInteractivePanels()}
+      {isMobile && isInteractive && (
+        <Drawer
+          open
+          onClose={() => {
+            // From any interactive state, hitting X on the drawer
+            // header should drop us back to view mode — matching
+            // the behavior Cancel buttons inside the panels give.
+            setMode({ kind: 'view' });
+          }}
+          title={channel.display_name}
+          testId={`channel-drawer-${channel.id}`}
+        >
+          <div className="flex flex-col gap-3">{renderInteractivePanels()}</div>
+        </Drawer>
+      )}
+    </article>
+  );
+
+  /** Inline / drawer-content panels. Extracted so the desktop
+   *  (inline below summary) and mobile (inside Drawer) paths share
+   *  one source of truth. */
+  function renderInteractivePanels() {
+    return (
+      <>
       {mode.kind === 'edit' && (
         <ChannelForm
           channel={channel}
@@ -511,8 +554,9 @@ function ChannelCard({
           </Button>
         </div>
       )}
-    </article>
-  );
+      </>
+    );
+  }
 }
 
 // ───────────────────────── Confirm diff ─────────────────────────

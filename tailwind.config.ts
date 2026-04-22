@@ -77,6 +77,15 @@ export default {
         DEFAULT: '180ms',
         slow: '320ms',
       },
+      keyframes: {
+        // T3.5 mobile drawer slide-in (see components/ui/drawer.tsx).
+        // Kept at the tailwind level rather than a stylesheet so the
+        // `animate-[drawerUp_...]` arbitrary value in JSX resolves.
+        drawerUp: {
+          '0%': { transform: 'translateY(100%)' },
+          '100%': { transform: 'translateY(0%)' },
+        },
+      },
     },
   },
   plugins: [animate],

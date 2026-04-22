@@ -304,13 +304,49 @@ touching the IPC or UI.
     (unconfigured → no pill) — plus a Probe-button force-refresh
     flipping matrix to online.
 
-### Deferred within Phase 3
+### T3.5 — Mobile layout · **Shipped** (2026-04-22)
+
+The card grid already stacks to one column below `sm` (640px), so
+the visible layout work here is the edit flow: on narrow viewports
+we don't want a form to expand a card past the viewport height.
+
+- **`useIsMobile(maxPx = 720)`** (`src/lib/useIsMobile.ts`) — a
+  twelve-line `matchMedia` hook. SSR-safe initial state, re-binds
+  on unmount. One call site today; we kept it tiny instead of
+  pulling in a media-query library.
+- **`Drawer`** (`src/components/ui/drawer.tsx`) — ~70 LoC
+  bottom-sheet. Fixed-bottom panel, 88vh max-height, CSS
+  transform slide-in via a `drawerUp` keyframe added to
+  `tailwind.config.ts`. Click-outside on the backdrop closes;
+  ESC closes; `document.body` gets `overflow: hidden` while open
+  to prevent iOS / Android's double-scroll feel. Portal'd into
+  `document.body` so the card's overflow doesn't clip it.
+  Deliberately skipped: swipe-to-dismiss, focus trap, animated
+  unmount — each adds state complexity the one call site doesn't
+  need yet.
+- **`ChannelCard` integration** — extracted the edit / confirm /
+  saving / restart-prompt / error JSX into a local
+  `renderInteractivePanels()` closure. Desktop renders it inline
+  below the read-only summary (unchanged behavior); mobile
+  mounts the same node inside `<Drawer>`. `isInteractive` gates
+  the drawer mount so the portal doesn't even exist in `view`
+  mode. The Drawer's close button + backdrop both route through
+  `setMode({ kind: 'view' })` — matching every Cancel / dismiss
+  path the inline version already has.
+- **Tests**:
+  - Playwright: +1 at 375×740 viewport — clicks Edit, asserts
+    the drawer mounts outside the `<article>` (portal), the form
+    lives inside the drawer not the card, the X button closes it,
+    and a backdrop click closes it too.
+  - All 6 pre-existing channel tests keep running at the default
+    1280×720 desktop viewport — the drawer path never fires, so
+    no existing expectations shift.
+
+### Deferred within Phase 3 / follow-ups
 
 - **Real Tencent iLink client** — `ILinkQrProvider` living next to
   `StubQrProvider`, wired in via the same registry. Out-of-scope
   while we lack live credentials + a documented endpoint to hit.
-- **T3.5** — mobile layout (Drawer instead of card-flip below
-  720px).
 - **Delete-an-existing-secret** affordance. Still via the
   changelog revert or hand-editing `.env`; explicit "Clear"
   button lands once we stop carrying "token presence" as the
