@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import {
   chatStream,
+  dbMessageSetUsage,
   generateTitle,
   ipcErrorMessage,
   type ChatMessageDto,
@@ -180,11 +181,25 @@ function ChatPane({
               patchMessage(sessionId, pendingId, { pending: false });
             }
           },
-          onDone: () => {
+          onDone: (summary) => {
             patchMessage(sessionId, pendingId, { pending: false });
             setSending(false);
             streamRef.current = null;
             pendingRef.current = null;
+            // T2.4: persist token usage so Analytics can roll it up. Fire-
+            // and-forget — a DB hiccup shouldn't visibly break the chat.
+            if (
+              summary.prompt_tokens !== null ||
+              summary.completion_tokens !== null
+            ) {
+              void dbMessageSetUsage({
+                messageId: pendingId,
+                promptTokens: summary.prompt_tokens,
+                completionTokens: summary.completion_tokens,
+              }).catch(() => {
+                /* intentionally swallowed — see comment above */
+              });
+            }
             // After the FIRST full turn, ask the LLM for a better title.
             // We detect "first turn" by checking that the only user message
             // in this session is the one we just sent.

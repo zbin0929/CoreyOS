@@ -201,6 +201,10 @@ export interface DbMessageRow {
   error: string | null;
   position: number;
   created_at: number;
+  /** Stamped after the stream completes via `dbMessageSetUsage`. `null` /
+   *  absent on user messages and on pre-T2.4 legacy rows. */
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
 }
 
 export interface DbToolCallRow {
@@ -242,6 +246,21 @@ export function dbMessageUpsert(message: DbMessageRow): Promise<void> {
   return invoke<void>('db_message_upsert', { message });
 }
 
+/** Stamp provider-reported token usage onto a message after streaming
+ *  completes. The backend preserves existing values when passed `null`, so
+ *  subsequent content-only upserts don't wipe tokens. */
+export function dbMessageSetUsage(args: {
+  messageId: string;
+  promptTokens: number | null;
+  completionTokens: number | null;
+}): Promise<void> {
+  return invoke<void>('db_message_set_usage', {
+    messageId: args.messageId,
+    promptTokens: args.promptTokens,
+    completionTokens: args.completionTokens,
+  });
+}
+
 /** Append a tool-call annotation. Primary-key conflicts are silently
  *  ignored so duplicate emissions don't blow up. */
 export function dbToolCallAppend(call: DbToolCallRow): Promise<void> {
@@ -266,12 +285,21 @@ export interface AnalyticsTotals {
   messages: number;
   tool_calls: number;
   active_days: number;
+  /** Lifetime token sums across all assistant messages that have usage
+   *  recorded. Pre-T2.4 rows contribute 0. */
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
 }
 
 export interface AnalyticsSummaryDto {
   totals: AnalyticsTotals;
   /** Dates with ≥1 messages in the trailing 30 days. Sparse; UI pads zeros. */
   messages_per_day: DayCount[];
+  /** `(prompt + completion)`-tokens per UTC day for the trailing 30 days.
+   *  Days with no usage are omitted; the UI aligns this series with
+   *  `messages_per_day` when rendering the combined chart. */
+  tokens_per_day: DayCount[];
   model_usage: NamedCount[];
   tool_usage: NamedCount[];
   /** ms since epoch — the clock snapshot that produced this summary. */

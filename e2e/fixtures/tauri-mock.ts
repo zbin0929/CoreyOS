@@ -61,11 +61,24 @@ export const tauriMockInitScript = /* js */ `
     chatReply: 'Hello from the mock gateway.',
     /** Seed payload returned by analytics_summary. Tests can override. */
     analytics: {
-      totals: { sessions: 42, messages: 137, tool_calls: 58, active_days: 12 },
+      totals: {
+        sessions: 42,
+        messages: 137,
+        tool_calls: 58,
+        active_days: 12,
+        prompt_tokens: 82_345,
+        completion_tokens: 61_210,
+        total_tokens: 143_555,
+      },
       messages_per_day: [
         { date: isoDaysAgo(5), count: 9 },
         { date: isoDaysAgo(3), count: 14 },
         { date: isoDaysAgo(1), count: 6 },
+      ],
+      tokens_per_day: [
+        { date: isoDaysAgo(5), count: 12_400 },
+        { date: isoDaysAgo(3), count: 51_120 },
+        { date: isoDaysAgo(1), count: 8_880 },
       ],
       model_usage: [
         { name: 'deepseek-chat', count: 28 },
@@ -240,6 +253,7 @@ export const tauriMockInitScript = /* js */ `
       case 'db_session_upsert':
       case 'db_session_delete':
       case 'db_message_upsert':
+      case 'db_message_set_usage':
       case 'db_tool_call_append':
         return;
 

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Activity,
   BarChart3,
+  Coins,
   MessageSquare,
   Wrench,
   RefreshCcw,
@@ -71,11 +72,13 @@ export function AnalyticsRoute() {
 // ───────────────────────── Dashboard ─────────────────────────
 
 function Dashboard({ data }: { data: AnalyticsSummaryDto }) {
-  const { totals, messages_per_day, model_usage, tool_usage } = data;
+  const { totals, messages_per_day, tokens_per_day, model_usage, tool_usage } = data;
   const { t } = useTranslation();
 
   const daily = useMemo(() => padLast30Days(messages_per_day), [messages_per_day]);
+  const dailyTokens = useMemo(() => padLast30Days(tokens_per_day), [tokens_per_day]);
   const hasAnyActivity = totals.messages > 0;
+  const hasAnyTokens = totals.total_tokens > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -92,7 +95,27 @@ function Dashboard({ data }: { data: AnalyticsSummaryDto }) {
         subtitle={t('analytics.chart.activity.subtitle')}
         icon={Activity}
       >
-        <ActivityChart data={daily} />
+        <ActivityChart
+          data={daily}
+          ariaLabel={t('analytics.chart.activity.title')}
+          unit="message"
+        />
+      </Card>
+
+      <Card
+        title={t('analytics.chart.tokens.title')}
+        subtitle={t('analytics.chart.tokens.subtitle')}
+        icon={Coins}
+      >
+        {hasAnyTokens ? (
+          <ActivityChart
+            data={dailyTokens}
+            ariaLabel={t('analytics.chart.tokens.title')}
+            unit="token"
+          />
+        ) : (
+          <EmptyRow hint={t('analytics.chart.tokens.empty')} />
+        )}
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -139,9 +162,10 @@ function KpiStrip({ totals }: { totals: AnalyticsSummaryDto['totals'] }) {
     { key: 'messages', label: t('analytics.kpi.messages'), value: totals.messages, icon: MessageSquare },
     { key: 'tool_calls', label: t('analytics.kpi.tool_calls'), value: totals.tool_calls, icon: Wrench },
     { key: 'active_days', label: t('analytics.kpi.active_days'), value: totals.active_days, icon: Calendar },
+    { key: 'total_tokens', label: t('analytics.kpi.total_tokens'), value: totals.total_tokens, icon: Coins },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
       {cards.map(({ key, label, value, icon: Icon }) => (
         <div
           key={key}
@@ -193,7 +217,17 @@ const ACTIVITY_W = 720;
 const ACTIVITY_H = 140;
 const ACTIVITY_PAD = { t: 12, r: 8, b: 22, l: 28 };
 
-function ActivityChart({ data }: { data: Array<{ date: string; count: number }> }) {
+function ActivityChart({
+  data,
+  ariaLabel = 'Activity',
+  unit = 'message',
+}: {
+  data: Array<{ date: string; count: number }>;
+  ariaLabel?: string;
+  /** Singular unit noun for tooltips ("message" / "token"). Plural is
+   *  auto-derived as `${unit}s`. */
+  unit?: string;
+}) {
   const max = Math.max(1, ...data.map((d) => d.count));
   const innerW = ACTIVITY_W - ACTIVITY_PAD.l - ACTIVITY_PAD.r;
   const innerH = ACTIVITY_H - ACTIVITY_PAD.t - ACTIVITY_PAD.b;
@@ -218,7 +252,7 @@ function ActivityChart({ data }: { data: Array<{ date: string; count: number }> 
     <svg
       viewBox={`0 0 ${ACTIVITY_W} ${ACTIVITY_H}`}
       role="img"
-      aria-label="Messages per day, last 30 days"
+      aria-label={ariaLabel}
       className="w-full"
     >
       {/* horizontal grid lines */}
@@ -263,7 +297,7 @@ function ActivityChart({ data }: { data: Array<{ date: string; count: number }> 
           className="fill-[var(--color-gold-500)]"
         >
           <title>
-            {p.d.date} — {p.d.count} message{p.d.count === 1 ? '' : 's'}
+            {p.d.date} — {formatNumber(p.d.count)} {unit}{p.d.count === 1 ? '' : 's'}
           </title>
         </circle>
       ))}
@@ -329,8 +363,8 @@ function EmptyRow({ hint }: { hint: string }) {
 function SkeletonGrid() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="h-[72px] animate-pulse rounded-md border border-border bg-bg-elev-1" />
         ))}
       </div>

@@ -52,12 +52,18 @@
       "sessions": "会话数",
       "messages": "消息数",
       "tool_calls": "工具调用",
-      "active_days": "活跃天数"
+      "active_days": "活跃天数",
+      "total_tokens": "Tokens"
     },
     "chart": {
       "activity": {
-        "title": "近 30 天活跃度",
-        "subtitle": "每日消息数。"
+        "title": "活动 (最近 30 天)",
+        "subtitle": "每天的消息条数。"
+      },
+      "tokens": {
+        "title": "Tokens (最近 30 天)",
+        "subtitle": "每天的 prompt + completion token 总和。",
+        "empty": "暂无 token 用量——发一条消息就有了。"
       },
       "models": {
         "title": "Top 模型",

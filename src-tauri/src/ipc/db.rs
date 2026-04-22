@@ -70,6 +70,29 @@ pub async fn db_message_upsert(state: State<'_, AppState>, message: MessageRow) 
         })
 }
 
+/// Stamp token usage onto an already-upserted message. Called from the
+/// streaming `onDone` callback so the totals in Analytics reflect real
+/// provider-reported usage, not an estimate.
+#[tauri::command]
+pub async fn db_message_set_usage(
+    state: State<'_, AppState>,
+    message_id: String,
+    prompt_tokens: Option<i64>,
+    completion_tokens: Option<i64>,
+) -> IpcResult<()> {
+    let db = db_of(&state)?;
+    tokio::task::spawn_blocking(move || {
+        db.set_message_usage(&message_id, prompt_tokens, completion_tokens)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("db task join: {e}"),
+    })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("db set_message_usage: {e}"),
+    })
+}
+
 #[tauri::command]
 pub async fn db_tool_call_append(state: State<'_, AppState>, call: ToolCallRow) -> IpcResult<()> {
     let db = db_of(&state)?;

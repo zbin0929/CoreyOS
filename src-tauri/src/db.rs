@@ -73,13 +73,21 @@ impl Db {
     pub fn upsert_message(&self, m: &MessageRow) -> rusqlite::Result<()> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO messages (id, session_id, role, content, error, position, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO messages
+               (id, session_id, role, content, error, position, created_at,
+                prompt_tokens, completion_tokens)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(id) DO UPDATE SET
                  role = excluded.role,
                  content = excluded.content,
                  error = excluded.error,
-                 position = excluded.position",
+                 position = excluded.position,
+                 -- Preserve existing token counts if the upserter didn't
+                 -- supply them (common path: streaming writes content with
+                 -- tokens=None; set_message_usage stamps them later, and
+                 -- subsequent content upserts should not wipe that).
+                 prompt_tokens = COALESCE(excluded.prompt_tokens, prompt_tokens),
+                 completion_tokens = COALESCE(excluded.completion_tokens, completion_tokens)",
             params![
                 m.id,
                 m.session_id,
@@ -88,7 +96,32 @@ impl Db {
                 m.error,
                 m.position,
                 m.created_at,
+                m.prompt_tokens,
+                m.completion_tokens,
             ],
+        )?;
+        Ok(())
+    }
+
+    /// Stamp token usage onto an existing message row. Idempotent — the
+    /// streaming `onDone` callback may fire once per turn but Hermes sometimes
+    /// redelivers `[DONE]`, and we also want the update to survive the app
+    /// being restarted mid-turn (we re-ingest on hydration). Uses a direct
+    /// UPDATE so the call avoids touching content/position fields that the
+    /// upsert path owns.
+    pub fn set_message_usage(
+        &self,
+        message_id: &str,
+        prompt_tokens: Option<i64>,
+        completion_tokens: Option<i64>,
+    ) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE messages
+                SET prompt_tokens = ?1,
+                    completion_tokens = ?2
+              WHERE id = ?3",
+            params![prompt_tokens, completion_tokens, message_id],
         )?;
         Ok(())
     }
@@ -131,7 +164,8 @@ impl Db {
 
         // 2) All messages, sorted by (session_id, position).
         let mut mstmt = conn.prepare(
-            "SELECT id, session_id, role, content, error, position, created_at
+            "SELECT id, session_id, role, content, error, position, created_at,
+                    prompt_tokens, completion_tokens
              FROM messages ORDER BY session_id, position",
         )?;
         let messages: Vec<MessageRow> = mstmt
@@ -144,6 +178,8 @@ impl Db {
                     error: row.get(4)?,
                     position: row.get(5)?,
                     created_at: row.get(6)?,
+                    prompt_tokens: row.get(7)?,
+                    completion_tokens: row.get(8)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -257,6 +293,19 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v2: token usage on messages. Nullable so existing rows are untouched
+    // (legacy data pre-dates usage ingestion, the Analytics rollup COALESCEs
+    // to 0). Ingested by db_message_set_usage when streaming completes.
+    if version < 2 {
+        conn.execute_batch(
+            r#"
+            ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER;
+            ALTER TABLE messages ADD COLUMN completion_tokens INTEGER;
+            PRAGMA user_version = 2;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -282,6 +331,13 @@ pub struct MessageRow {
     pub error: Option<String>,
     pub position: i64,
     pub created_at: i64,
+    /// Populated only on assistant messages after the stream completes —
+    /// see `set_message_usage`. `None` on user messages and on turns that
+    /// finished before usage ingestion landed (Phase 2 T2.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -330,6 +386,11 @@ pub struct AnalyticsTotals {
     pub tool_calls: i64,
     /// Distinct UTC dates on which any message was written.
     pub active_days: i64,
+    /// Sum of prompt + completion across all assistant messages that have
+    /// usage recorded. Pre-T2.4 rows contribute 0.
+    pub prompt_tokens: i64,
+    pub completion_tokens: i64,
+    pub total_tokens: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -338,6 +399,9 @@ pub struct AnalyticsSummary {
     /// Messages/day for the trailing 30 days (inclusive). Dates with zero
     /// messages are omitted — the frontend pads the series for rendering.
     pub messages_per_day: Vec<DayCount>,
+    /// `(prompt + completion)`-tokens per UTC day for the trailing 30 days.
+    /// Same sparse shape as `messages_per_day`.
+    pub tokens_per_day: Vec<DayCount>,
     /// Top 5 models by session count. `unknown` bucket covers NULL model.
     pub model_usage: Vec<NamedCount>,
     /// Top 10 tools by invocation count.
@@ -362,6 +426,17 @@ impl Db {
             |r| r.get(0),
         )?;
 
+        // Lifetime token totals. COALESCE + SUM lets pre-T2.4 rows (NULL
+        // tokens) contribute 0 without blowing up the SUM on an all-NULL set.
+        let (prompt_tokens, completion_tokens): (i64, i64) = conn.query_row(
+            "SELECT COALESCE(SUM(prompt_tokens), 0),
+                    COALESCE(SUM(completion_tokens), 0)
+             FROM messages",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        let total_tokens = prompt_tokens + completion_tokens;
+
         // 30-day window. created_at is ms since epoch.
         let since = now_ms - 30 * 86_400_000;
         let mut stmt = conn.prepare(
@@ -372,6 +447,29 @@ impl Db {
              ORDER BY d",
         )?;
         let messages_per_day: Vec<DayCount> = stmt
+            .query_map(params![since], |row| {
+                Ok(DayCount {
+                    date: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        // Tokens per day for the same 30-day window. WHERE clause keeps days
+        // with all-NULL tokens from polluting the series with zero rows —
+        // SUM over no rows = NULL and we'd get a "zero-count" bucket anyway.
+        // Filtering on IS NOT NULL is the cleaner shape for the chart.
+        let mut tstmt_day = conn.prepare(
+            "SELECT date(created_at/1000, 'unixepoch') AS d,
+                    COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) AS tok
+             FROM messages
+             WHERE created_at >= ?1
+               AND (prompt_tokens IS NOT NULL OR completion_tokens IS NOT NULL)
+             GROUP BY d
+             HAVING tok > 0
+             ORDER BY d",
+        )?;
+        let tokens_per_day: Vec<DayCount> = tstmt_day
             .query_map(params![since], |row| {
                 Ok(DayCount {
                     date: row.get(0)?,
@@ -418,8 +516,12 @@ impl Db {
                 messages,
                 tool_calls,
                 active_days,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
             },
             messages_per_day,
+            tokens_per_day,
             model_usage,
             tool_usage,
             generated_at: now_ms,
@@ -453,6 +555,8 @@ mod tests {
             error: None,
             position: 0,
             created_at: 110,
+            prompt_tokens: None,
+            completion_tokens: None,
         })
         .unwrap();
         db.append_tool_call(&ToolCallRow {
@@ -497,6 +601,8 @@ mod tests {
             error: None,
             position: 0,
             created_at: 110,
+            prompt_tokens: None,
+            completion_tokens: None,
         })
         .unwrap();
         db.append_tool_call(&ToolCallRow {
@@ -547,6 +653,8 @@ mod tests {
             error: None,
             position: 0,
             created_at: now - 5 * day_ms,
+            prompt_tokens: Some(11),
+            completion_tokens: None,
         })
         .unwrap();
         db.upsert_message(&MessageRow {
@@ -557,6 +665,8 @@ mod tests {
             error: None,
             position: 1,
             created_at: now - 5 * day_ms + 1_000, // same UTC day as m1
+            prompt_tokens: Some(20),
+            completion_tokens: Some(33),
         })
         .unwrap();
         db.upsert_message(&MessageRow {
@@ -567,6 +677,8 @@ mod tests {
             error: None,
             position: 0,
             created_at: now - 45 * day_ms, // outside 30-day window
+            prompt_tokens: Some(999),
+            completion_tokens: Some(999),
         })
         .unwrap();
 
@@ -598,9 +710,23 @@ mod tests {
         assert_eq!(s.totals.tool_calls, 3);
         assert_eq!(s.totals.active_days, 2); // two distinct dates
 
+        // Lifetime token totals: sum across ALL rows (even out-of-window m3
+        // contributes to lifetime totals — it's just excluded from the 30d
+        // chart below). 11 + 20 + 999 = 1030 prompt, 0 + 33 + 999 = 1032 completion.
+        assert_eq!(s.totals.prompt_tokens, 11 + 20 + 999);
+        assert_eq!(s.totals.completion_tokens, 33 + 999);
+        assert_eq!(
+            s.totals.total_tokens,
+            s.totals.prompt_tokens + s.totals.completion_tokens
+        );
+
         // Only the in-window day shows up; m3 is excluded by the 30-day filter.
         assert_eq!(s.messages_per_day.len(), 1);
         assert_eq!(s.messages_per_day[0].count, 2);
+
+        // 30d tokens_per_day: only m1 + m2 qualify, same day, sum is 11+20+33.
+        assert_eq!(s.tokens_per_day.len(), 1);
+        assert_eq!(s.tokens_per_day[0].count, 11 + 20 + 33);
 
         // Model usage — `deepseek-chat` and `unknown`, order by count desc is
         // ambiguous for equal counts, so just check the set.
@@ -627,6 +753,8 @@ mod tests {
             error: None,
             position: 0,
             created_at: 110,
+            prompt_tokens: None,
+            completion_tokens: None,
         };
         db.upsert_message(&base).unwrap();
         db.upsert_message(&MessageRow {
@@ -637,5 +765,41 @@ mod tests {
 
         let tree = db.load_all().unwrap();
         assert_eq!(tree[0].messages[0].msg.content, "hello world");
+    }
+
+    #[test]
+    fn set_message_usage_stamps_tokens_without_touching_content() {
+        let db = Db::open_in_memory().unwrap();
+        db.upsert_session(&sample_session("s1", 100)).unwrap();
+        db.upsert_message(&MessageRow {
+            id: "m1".into(),
+            session_id: "s1".into(),
+            role: "assistant".into(),
+            content: "payload".into(),
+            error: None,
+            position: 0,
+            created_at: 110,
+            prompt_tokens: None,
+            completion_tokens: None,
+        })
+        .unwrap();
+
+        // Stamp tokens after the fact (simulating the streaming onDone callback).
+        db.set_message_usage("m1", Some(42), Some(7)).unwrap();
+
+        // Re-stamping is allowed (Hermes sometimes redelivers usage).
+        db.set_message_usage("m1", Some(42), Some(7)).unwrap();
+
+        let tree = db.load_all().unwrap();
+        let m = &tree[0].messages[0].msg;
+        assert_eq!(m.content, "payload"); // unchanged
+        assert_eq!(m.prompt_tokens, Some(42));
+        assert_eq!(m.completion_tokens, Some(7));
+
+        // Lifetime totals reflect the stamp.
+        let s = db.analytics_summary(200).unwrap();
+        assert_eq!(s.totals.prompt_tokens, 42);
+        assert_eq!(s.totals.completion_tokens, 7);
+        assert_eq!(s.totals.total_tokens, 49);
     }
 }

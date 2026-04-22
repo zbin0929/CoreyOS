@@ -58,12 +58,18 @@
       "sessions": "Sessions",
       "messages": "Messages",
       "tool_calls": "Tool calls",
-      "active_days": "Active days"
+      "active_days": "Active days",
+      "total_tokens": "Tokens"
     },
     "chart": {
       "activity": {
         "title": "Activity (last 30 days)",
         "subtitle": "Messages written per day."
+      },
+      "tokens": {
+        "title": "Tokens (last 30 days)",
+        "subtitle": "Prompt + completion tokens per day.",
+        "empty": "No token usage recorded yet — send a chat turn to start tracking."
       },
       "models": {
         "title": "Top models",
