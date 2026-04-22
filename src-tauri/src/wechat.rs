@@ -413,10 +413,10 @@ mod tests {
         assert!(a1.starts_with("<svg xmlns"));
     }
 
+    // Whole test body runs under the HOME lock — that's the entire point.
+    // Parallel tests can't touch HOME until we're done.
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)] // Whole test body runs under the
-    // HOME lock — that's the entire point. Parallel tests can't touch HOME
-    // until we're done.
+    #[allow(clippy::await_holding_lock)]
     async fn scanned_write_uses_stub_token_matching_qr_id() {
         // Serialise HOME mutations across the whole crate — otherwise
         // `skills::tests::*` (which also set_var("HOME", …)) can race.
