@@ -277,10 +277,9 @@ pub fn rename_profile_at(
 pub fn delete_profile_at(home: &Path, name: &str, changelog_path: Option<&Path>) -> io::Result<()> {
     validate_name(name).map_err(io::Error::other)?;
     if read_active(home).as_deref() == Some(name) {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("refusing to delete active profile '{name}'"),
-        ));
+        return Err(io::Error::other(format!(
+            "refusing to delete active profile '{name}'"
+        )));
     }
     let dir = profiles_root(home).join(name);
     if !dir.is_dir() {
