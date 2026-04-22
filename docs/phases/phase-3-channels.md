@@ -246,21 +246,78 @@ won't change when the real provider lands.
     flips. ~10s wall clock because the stub cadence is intentionally
     real-time.
 
-### Deferred within Phase 3
+### T3.4 — Live status probing · **Shipped** (2026-04-22)
 
-Will land with subsequent Txx:
+Hermes exposes no `/health/channels` endpoint, so we derive liveness
+from the rolling log files. Read-on-demand, cached for 30s, with a
+bypass knob for the user's Refresh button. When upstream grows a
+real health endpoint, it drops in as a second backend here without
+touching the IPC or UI.
+
+- **Backend `channel_status.rs`**:
+  - `LiveState` three-way enum (`Online` / `Offline` / `Unknown`).
+    `Unknown` is load-bearing: unconfigured channels or fresh
+    installs should never be misreported as down.
+  - `classify(id, lines)` scans log lines newest-first for the
+    first match combining the channel slug with a known marker:
+    positive (`connected`, `ready`, `started`, `online`,
+    `subscribed`) or negative (`error`, `failed`, `disconnect`).
+    Most-recent-wins so a reconnect after an outage reads right.
+  - `probe_all(home_override)` tails `gateway.log` + `agent.log`
+    (1000 lines each via `hermes_logs::tail_log_at`) and
+    classifies every channel in the catalog. Always returns one
+    row per channel in catalog order so the frontend can zip
+    against its list without worrying about missing ids.
+  - `ChannelStatusCache` — 30s TTL around the full snapshot (not
+    per-channel — probing is one fs-read regardless of how many
+    channels you ask about, so there's no split-cache benefit).
+    `snapshot(force)` bypasses the TTL for the user's refresh.
+- **IPC** `hermes_channel_status_list(force)` — thin wrapper
+  hopping `spawn_blocking` so the Tokio loop stays snappy while the
+  probe's fs-reads run.
+- **`ChannelStatusCache` on `AppState`** behind an `Arc`, built
+  lazily at startup (no work until the first IPC call).
+- **Frontend**:
+  - `ChannelsRoute` fetches statuses alongside the catalog on mount
+    and keeps them keyed by id at route level (one IPC call
+    populates all 8 cards). Two buttons in the header: Probe
+    (force-refreshes just status) and Refresh (full reload of
+    catalog + status).
+  - `LiveStatusPill` sits next to the existing config `StatusPill`.
+    Emerald / danger / muted styling for online / offline / unknown.
+    The triggering log line is exposed as a `title` tooltip
+    (truncated to 160 chars) so power users can see WHICH event
+    drove the verdict.
+  - Guarded: hidden for `unconfigured` and `qr` statuses — no
+    sensible liveness to report for channels with no credentials
+    yet or WeChat's QR-only flow.
+- **i18n** `channels.probe` + `channels.live.{online,offline,unknown}`
+  in en + zh.
+- **Tests**:
+  - Rust unit: +9 covering `classify` (online/offline/unknown
+    resolution, channel-name substring safety wechat vs wecom,
+    case-insensitivity, lines without the slug), `probe_all`
+    (every catalog row present, Unknown when logs missing), and
+    cache semantics (reuse within TTL, force advances probed_at).
+  - Playwright: +1 exercising all three render paths — telegram
+    (configured → online), matrix (partial → offline), discord
+    (unconfigured → no pill) — plus a Probe-button force-refresh
+    flipping matrix to online.
+
+### Deferred within Phase 3
 
 - **Real Tencent iLink client** — `ILinkQrProvider` living next to
   `StubQrProvider`, wired in via the same registry. Out-of-scope
   while we lack live credentials + a documented endpoint to hit.
-  Expected work: ~300 LoC of `reqwest` glue + cookie handling +
-  retry logic. No UI or IPC changes.
-- **T3.4** — live status probing + log-grep fallback.
 - **T3.5** — mobile layout (Drawer instead of card-flip below
   720px).
 - **Delete-an-existing-secret** affordance. Still via the
   changelog revert or hand-editing `.env`; explicit "Clear"
-  button lands with T3.4.
+  button lands once we stop carrying "token presence" as the
+  single source of truth.
+- **Real health endpoint probe**. If Hermes grows `/health/channels`
+  we'd add it as a second backend inside `channel_status.rs` and
+  short-circuit the log parse when it answered.
 - WhatsApp env name is still a placeholder (`WHATSAPP_TOKEN`).
 - Phase-2 deferrals that cluster here: profile tar.gz import /
   export, per-profile gateway start/stop, active-profile

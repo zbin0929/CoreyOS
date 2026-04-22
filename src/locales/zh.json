@@ -202,6 +202,12 @@
       "env_set": "已设置",
       "env_unset": "未设置"
     },
+    "probe": "探测",
+    "live": {
+      "online": "在线",
+      "offline": "离线",
+      "unknown": "未知"
+    },
     "qr_hint": "扫码登录（用对应 App 扫一下即可）。",
     "behavior_fields_zero": "无行为字段",
     "behavior_fields_one": "1 个行为字段",

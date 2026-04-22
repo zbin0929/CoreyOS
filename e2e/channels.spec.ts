@@ -124,6 +124,85 @@ test.describe('channels', () => {
     await expect(page.getByText('super-secret-bot-token')).toHaveCount(0);
   });
 
+  // ───────────────────────── T3.4 — live status probe ─────────────────────────
+
+  test('live status pill: configured channels render online/offline per probe, unconfigured hidden', async ({
+    page,
+  }) => {
+    // Fixture setup: telegram is configured, matrix is partial,
+    // discord is unconfigured. We'll use all three to exercise the
+    // render/hide branches of the live pill.
+    await page.goto('/channels');
+    await expect(page.getByTestId('channel-card-telegram')).toBeVisible();
+
+    // Seed mixed verdicts. Discord stays absent from the map so its
+    // probe defaults to "unknown" AND its status is "unconfigured"
+    // — both reasons to hide the pill; we assert neither renders.
+    await page.evaluate(() => {
+      const mock = (
+        window as unknown as {
+          __CADUCEUS_MOCK__: {
+            state: {
+              channelStatuses: Record<
+                string,
+                { state: 'online' | 'offline' | 'unknown'; last_marker: string | null }
+              >;
+            };
+          };
+        }
+      ).__CADUCEUS_MOCK__;
+      mock.state.channelStatuses.telegram = {
+        state: 'online',
+        last_marker: '2026-04-22 telegram connected to bot API',
+      };
+      mock.state.channelStatuses.matrix = {
+        state: 'offline',
+        last_marker: '2026-04-22 matrix failed: auth rejected',
+      };
+    });
+
+    await page.getByTestId('channels-probe-button').click();
+
+    // Telegram (configured) → online pill.
+    await expect(
+      page.getByTestId('channel-card-telegram').getByTestId('channel-live-online-telegram'),
+    ).toBeVisible();
+    // Matrix (partial, still "configured-ish" = not unconfigured) → offline pill.
+    await expect(
+      page.getByTestId('channel-card-matrix').getByTestId('channel-live-offline-matrix'),
+    ).toBeVisible();
+    // Discord (unconfigured) → no live pill at all.
+    await expect(
+      page.getByTestId('channel-card-discord').locator('[data-testid^="channel-live-"]'),
+    ).toHaveCount(0);
+
+    // Flip matrix → online, then click Probe. Force-refresh path
+    // should re-fetch status and the pill flips without a full
+    // reload.
+    await page.evaluate(() => {
+      const mock = (
+        window as unknown as {
+          __CADUCEUS_MOCK__: {
+            state: {
+              channelStatuses: Record<
+                string,
+                { state: 'online' | 'offline' | 'unknown'; last_marker: string | null }
+              >;
+            };
+          };
+        }
+      ).__CADUCEUS_MOCK__;
+      mock.state.channelStatuses.matrix = {
+        state: 'online',
+        last_marker: '2026-04-22 matrix reconnected and subscribed',
+      };
+    });
+    await page.getByTestId('channels-probe-button').click();
+    await expect(
+      page.getByTestId('channel-card-matrix').getByTestId('channel-live-online-matrix'),
+    ).toBeVisible();
+  });
+
   // ───────────────────────── T3.3 — WeChat QR flow ─────────────────────────
 
   test('WeChat QR: start → scan progression → env_present flips to set', async ({ page }) => {

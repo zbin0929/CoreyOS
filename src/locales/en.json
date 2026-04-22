@@ -202,6 +202,12 @@
       "env_set": "set",
       "env_unset": "unset"
     },
+    "probe": "Probe",
+    "live": {
+      "online": "online",
+      "offline": "offline",
+      "unknown": "unknown"
+    },
     "qr_hint": "Log in via QR code (scan with the app).",
     "behavior_fields_zero": "No behavior fields",
     "behavior_fields_one": "1 behavior field",

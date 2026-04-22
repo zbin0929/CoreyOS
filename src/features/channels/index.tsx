@@ -19,8 +19,10 @@ import { cn } from '@/lib/cn';
 import {
   hermesChannelList,
   hermesChannelSave,
+  hermesChannelStatusList,
   hermesGatewayRestart,
   ipcErrorMessage,
+  type ChannelLiveStatus,
   type ChannelState,
 } from '@/lib/ipc';
 // hermesChannelList is re-used by the WeChat scan handler to re-read
@@ -79,6 +81,12 @@ function computeStatus(c: ChannelState):
 export function ChannelsRoute() {
   const { t } = useTranslation();
   const [state, setState] = useState<State>({ kind: 'loading' });
+  // T3.4: keyed by channel id for O(1) lookup from each card. Kept
+  // at the route level so a single IPC call populates all 8 cards;
+  // the force-refresh button on the page header bypasses the 30s
+  // backend cache.
+  const [liveStatuses, setLiveStatuses] = useState<Record<string, ChannelLiveStatus>>({});
+  const [probing, setProbing] = useState(false);
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -90,9 +98,26 @@ export function ChannelsRoute() {
     }
   }, []);
 
+  const probe = useCallback(async (force: boolean) => {
+    setProbing(true);
+    try {
+      const rows = await hermesChannelStatusList(force);
+      const map: Record<string, ChannelLiveStatus> = {};
+      for (const r of rows) map[r.id] = r;
+      setLiveStatuses(map);
+    } catch {
+      // Silent — the live pill just stays on its previous value
+      // (or is absent on first load). No need to blow up the whole
+      // page for a log-parse failure.
+    } finally {
+      setProbing(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void probe(false);
+  }, [load, probe]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -100,20 +125,42 @@ export function ChannelsRoute() {
         title={t('channels.title')}
         subtitle={t('channels.subtitle')}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={load}
-            disabled={state.kind === 'loading'}
-          >
-            <RefreshCw
-              className={cn(
-                'h-3.5 w-3.5',
-                state.kind === 'loading' && 'animate-spin',
-              )}
-            />
-            {t('channels.refresh')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* T3.4 live-probe button. Distinct from the catalog
+                reload above it because the probe reads logs, not
+                config — a change on the filesystem is the only
+                thing that moves liveness. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void probe(true)}
+              disabled={probing}
+              data-testid="channels-probe-button"
+            >
+              <RefreshCw
+                className={cn('h-3.5 w-3.5', probing && 'animate-spin')}
+              />
+              {t('channels.probe')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void load();
+                void probe(true);
+              }}
+              disabled={state.kind === 'loading'}
+              data-testid="channels-refresh-button"
+            >
+              <RotateCw
+                className={cn(
+                  'h-3.5 w-3.5',
+                  state.kind === 'loading' && 'animate-spin',
+                )}
+              />
+              {t('channels.refresh')}
+            </Button>
+          </div>
         }
       />
 
@@ -153,6 +200,7 @@ export function ChannelsRoute() {
                 <ChannelCard
                   key={c.id}
                   channel={c}
+                  liveStatus={liveStatuses[c.id]}
                   onSaved={(fresh) => {
                     setState((prev) =>
                       prev.kind === 'loaded'
@@ -192,9 +240,14 @@ type CardMode =
 
 function ChannelCard({
   channel,
+  liveStatus,
   onSaved,
 }: {
   channel: ChannelState;
+  /** T3.4 — may be absent on first render if the probe hasn't
+   *  landed yet. When present we render an extra pill next to the
+   *  configured/partial/unconfigured one. */
+  liveStatus?: ChannelLiveStatus;
   onSaved: (fresh: ChannelState) => void;
 }) {
   const { t } = useTranslation();
@@ -266,6 +319,15 @@ function ChannelCard({
             setCount={setCount}
             totalCount={requiredEnv.length}
           />
+          {/* T3.4 — live-state pill. We intentionally hide it for
+              channels whose configured-status is unconfigured
+              (there's nothing to be online about yet) and for the
+              QR-login channel whose liveness we can't yet probe. */}
+          {liveStatus &&
+            status !== 'unconfigured' &&
+            status !== 'qr' && (
+              <LiveStatusPill status={liveStatus} />
+            )}
           {mode.kind === 'view' && (
             <Button
               size="sm"
@@ -574,6 +636,43 @@ function StatusPill({
     >
       {t(key)}
       {status === 'partial' && ` · ${setCount}/${totalCount}`}
+    </span>
+  );
+}
+
+/** T3.4 live-state pill. Sits next to `StatusPill` and renders
+ *  online / offline / unknown derived from the backend's log probe.
+ *  Title tooltip shows the triggering log line (truncated) so power
+ *  users can see WHICH event drove the verdict without opening the
+ *  Logs tab. */
+function LiveStatusPill({ status }: { status: ChannelLiveStatus }) {
+  const { t } = useTranslation();
+  const map = {
+    online: {
+      cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/40',
+      key: 'channels.live.online',
+    },
+    offline: {
+      cls: 'bg-danger/10 text-danger border-danger/40',
+      key: 'channels.live.offline',
+    },
+    unknown: {
+      cls: 'bg-bg-elev-2 text-fg-subtle border-border',
+      key: 'channels.live.unknown',
+    },
+  } as const;
+  const { cls, key } = map[status.state];
+  const marker = status.last_marker ?? '';
+  return (
+    <span
+      data-testid={`channel-live-${status.state}-${status.id}`}
+      className={cn(
+        'flex-none rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
+        cls,
+      )}
+      title={marker.length > 0 ? marker.slice(0, 160) : undefined}
+    >
+      {t(key)}
     </span>
   );
 }

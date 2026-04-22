@@ -91,6 +91,12 @@ export const tauriMockInitScript = /* js */ `
     // scanned we flip WECHAT_SESSION on the WeChat card so the UI
     // sees the same end state the real backend would produce.
     wechatSessions: /** @type {any} */ ({}),
+    // T3.4: per-channel live-status overrides keyed by channel id.
+    // Tests push values here via page.evaluate() before navigating
+    // so the first hermes_channel_status_list call returns the
+    // verdict under test; default "unknown" is what a fresh install
+    // with no logs would report.
+    channelStatuses: /** @type {any} */ ({}),
     // T2.7 profile fixture. The mock treats the list as mutable state so
     // create/rename/delete/clone round-trip through the same array the UI
     // reads back in its subsequent hermes_profile_list call.
@@ -258,6 +264,23 @@ export const tauriMockInitScript = /* js */ `
         // Return a deep clone so the UI can't accidentally mutate
         // the fixture by reference.
         return JSON.parse(JSON.stringify(state.channels));
+      }
+
+      case 'hermes_channel_status_list': {
+        // T3.4: return a deterministic probe snapshot. Tests that
+        // want different verdicts can override state.channelStatuses
+        // before the first page visit. force=true is a no-op for the
+        // mock (no real cache to bypass).
+        const now = Date.now();
+        return state.channels.map((c) => {
+          const override = state.channelStatuses?.[c.id];
+          return {
+            id: c.id,
+            state: override?.state ?? 'unknown',
+            last_marker: override?.last_marker ?? null,
+            probed_at_ms: now,
+          };
+        });
       }
 
       case 'wechat_qr_start': {

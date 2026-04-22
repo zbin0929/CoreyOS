@@ -11,6 +11,7 @@
 
 mod adapters;
 mod changelog;
+mod channel_status;
 mod channels;
 mod config;
 mod db;
@@ -87,6 +88,7 @@ pub fn run() {
             ipc::paths::app_paths,
             ipc::channels::hermes_channel_list,
             ipc::channels::hermes_channel_save,
+            ipc::channel_status::hermes_channel_status_list,
             ipc::wechat::wechat_qr_start,
             ipc::wechat::wechat_qr_poll,
             ipc::wechat::wechat_qr_cancel,
@@ -152,6 +154,11 @@ pub fn run() {
                 wechat::StubQrProvider::new(Some(changelog_path.clone())),
             )));
 
+            // Phase 3 · T3.4: 30s-TTL cache for channel liveness
+            // derived from Hermes's rolling logs. Populated lazily
+            // on first IPC call — startup does no work here.
+            let channel_status = Arc::new(channel_status::ChannelStatusCache::new());
+
             app.manage(AppState::new(
                 registry,
                 cfg,
@@ -161,6 +168,7 @@ pub fn run() {
                 app_data_dir,
                 db_path,
                 wechat,
+                channel_status,
             ));
 
             if let Some(window) = app.get_webview_window("main") {

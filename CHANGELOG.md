@@ -6,6 +6,80 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 3 Sprint 4 (T3.4): Live channel-status probing
+
+### Context
+
+Hermes exposes no per-channel health endpoint, so we derive liveness
+from the rolling log files at `~/.hermes/logs/{gateway,agent}.log`.
+Read-on-demand, 30s cached, with a force-refresh knob for the
+Channels page's Probe button. When upstream adds a real health
+endpoint, it drops in as a second backend inside
+`channel_status.rs` without touching the IPC or UI.
+
+### Shipped
+
+- **`channel_status.rs`**:
+  - `LiveState` three-way enum (`Online`/`Offline`/`Unknown`).
+    `Unknown` is load-bearing — unconfigured channels or fresh
+    installs must never be misreported as down.
+  - `classify(id, lines)` — newest-first log scan matching the
+    channel slug with a positive marker
+    (`connected/ready/started/online/subscribed`) or negative
+    (`error/failed/disconnect`). Most-recent wins so a reconnect
+    after an outage reads right.
+  - `probe_all(home_override)` — tails 1000 lines each of
+    gateway.log + agent.log via `hermes_logs::tail_log_at`,
+    classifies all 8 channels, returns one row per catalog entry
+    in catalog order.
+  - `ChannelStatusCache` with `snapshot(force)` — 30s TTL on the
+    whole snapshot; force bypasses.
+- **IPC** `hermes_channel_status_list(force)` — thin wrapper that
+  runs the probe in `spawn_blocking` so the Tokio loop stays
+  snappy.
+- **`AppState.channel_status: Arc<ChannelStatusCache>`** — lazy,
+  no startup cost.
+- **Frontend**:
+  - `ChannelsRoute` fetches statuses + catalog on mount; keeps
+    statuses keyed by id at route level. Two header buttons: Probe
+    (force-refreshes status only) and Refresh (catalog + status).
+    Both carry distinct testids for e2e.
+  - `LiveStatusPill` next to the config `StatusPill` — emerald /
+    danger / muted for online / offline / unknown. Triggering log
+    line exposed as a `title` tooltip (truncated to 160 chars).
+    Guarded: hidden for `unconfigured` and `qr` (WeChat) statuses.
+- **i18n** `channels.probe` + `channels.live.{online,offline,unknown}`
+  in en + zh.
+
+### Test totals
+
+- Rust `cargo test`: **79 passed** (+9): `classify` across
+  online/offline/unknown plus wechat-vs-wecom substring safety,
+  case-insensitivity, lines-without-slug; `probe_all` returns one
+  row per catalog entry; cache reuse within TTL + force advances
+  `probed_at_ms`.
+- Playwright `channels.spec.ts`: **6/6 passed** (+1): telegram
+  configured → online, matrix partial → offline, discord
+  unconfigured → no pill; Probe button force-refresh flips matrix
+  to online without a full reload.
+- `cargo fmt` + `cargo clippy --all-targets -- -D warnings`:
+  clean.
+- `pnpm typecheck` + `pnpm lint`: clean.
+
+### Deferred
+
+- **T3.5** mobile layout.
+- Real Tencent iLink client (T3.3 follow-up).
+- Explicit "Clear" button for existing secrets.
+- Real `/health/channels` endpoint probe (if upstream adds one).
+- WhatsApp env name verification.
+
+### Next
+
+- **T3.5** mobile layout.
+
+---
+
 ## 2026-04-22 — Phase 3 Sprint 3 (T3.3): WeChat QR-login scaffolding
 
 ### Context

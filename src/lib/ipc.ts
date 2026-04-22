@@ -423,6 +423,32 @@ export function isWechatQrTerminal(s: WechatQrStatus): boolean {
   );
 }
 
+// ───────────────────────── Channel live status (T3.4) ─────────────────────────
+
+/** Three-way liveness verdict for a single channel. `unknown` when the
+ *  logs have no recent line matching the channel's slug — distinct
+ *  from `offline` so unconfigured channels don't falsely read as down. */
+export type ChannelLiveState = 'online' | 'offline' | 'unknown';
+
+export interface ChannelLiveStatus {
+  id: string;
+  state: ChannelLiveState;
+  /** Raw log line that drove the verdict, or null for `unknown`.
+   *  The UI surfaces the first ~120 chars as a tooltip. */
+  last_marker: string | null;
+  /** Unix millis at which the snapshot was computed. Shared across
+   *  every row in a single response — they're classified from the
+   *  same log tail. */
+  probed_at_ms: number;
+}
+
+/** 30s-cached probe; `force=true` bypasses the cache. Reads
+ *  `~/.hermes/logs/{gateway,agent}.log` and regex-classifies the
+ *  most-recent marker per channel. */
+export function hermesChannelStatusList(force = false): Promise<ChannelLiveStatus[]> {
+  return invoke<ChannelLiveStatus[]>('hermes_channel_status_list', { force });
+}
+
 export function wechatQrStart(): Promise<WechatQrStart> {
   return invoke<WechatQrStart>('wechat_qr_start');
 }

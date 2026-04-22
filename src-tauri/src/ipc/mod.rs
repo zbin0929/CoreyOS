@@ -1,4 +1,5 @@
 pub mod changelog;
+pub mod channel_status;
 pub mod channels;
 pub mod chat;
 pub mod config;

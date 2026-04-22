@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use crate::adapters::AdapterRegistry;
+use crate::channel_status::ChannelStatusCache;
 use crate::config::GatewayConfig;
 use crate::db::Db;
 use crate::sandbox::PathAuthority;
@@ -42,6 +43,11 @@ pub struct AppState {
     /// impact. Sessions live in the provider (not here) — this
     /// struct is effectively a lazy accessor.
     pub wechat: Arc<WechatRegistry>,
+    /// Phase 3 · T3.4: cached per-channel liveness, derived from
+    /// `~/.hermes/logs/*.log`. 30s TTL; the Channels page surfaces
+    /// it as an extra pill. Arc so spawn_blocking can take a clone
+    /// without holding a `State<'_>` reference across the await.
+    pub channel_status: Arc<ChannelStatusCache>,
 }
 
 impl AppState {
@@ -55,6 +61,7 @@ impl AppState {
         data_dir: PathBuf,
         db_path: PathBuf,
         wechat: Arc<WechatRegistry>,
+        channel_status: Arc<ChannelStatusCache>,
     ) -> Self {
         Self {
             adapters: Arc::new(registry),
@@ -66,6 +73,7 @@ impl AppState {
             data_dir,
             db_path,
             wechat,
+            channel_status,
         }
     }
 }
