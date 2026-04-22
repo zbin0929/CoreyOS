@@ -340,6 +340,36 @@ export function attachmentDelete(path: string): Promise<void> {
   return invoke<void>('attachment_delete', { path });
 }
 
+/** T1.5d — read a staged image and return a `data:<mime>;base64,<…>`
+ *  URL suitable for `<img src="…">`. Caller passes the same `path` that's
+ *  persisted on the attachment row; the backend sandbox-checks it and
+ *  caps the size. Rejects non-image MIMEs. */
+export function attachmentPreview(
+  path: string,
+  mime?: string | null,
+): Promise<string> {
+  return invoke<string>('attachment_preview', {
+    path,
+    mime: mime ?? null,
+  });
+}
+
+/** Summary of a T1.5e GC pass. `failed` lists per-file error strings so
+ *  the caller can surface them to devtools without swallowing silently. */
+export interface AttachmentGcReport {
+  removed_count: number;
+  removed_bytes: number;
+  failed: string[];
+}
+
+/** T1.5e — sweep orphan attachment files. The frontend gathers every
+ *  path it sees across all hydrated messages and passes them as
+ *  `livePaths`; everything else under `~/.hermes/attachments/` gets
+ *  reaped. Safe to call on every app start. */
+export function attachmentGc(livePaths: string[]): Promise<AttachmentGcReport> {
+  return invoke<AttachmentGcReport>('attachment_gc', { livePaths });
+}
+
 /** Insert an attachment row into the DB once the message it belongs to
  *  has been persisted. Duplicate ids surface as an error (uuid collision
  *  would be astronomical — treat as a client bug). */

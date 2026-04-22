@@ -118,6 +118,8 @@ pub fn run() {
             ipc::attachments::attachment_stage_blob,
             ipc::attachments::attachment_stage_path,
             ipc::attachments::attachment_delete,
+            ipc::attachments::attachment_preview,
+            ipc::attachments::attachment_gc,
             ipc::db::db_attachment_insert,
             ipc::db::db_attachment_delete,
             ipc::demo::home_stats,

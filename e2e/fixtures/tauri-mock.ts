@@ -596,6 +596,28 @@ export const tauriMockInitScript = /* js */ `
       case 'db_attachment_delete':
         return;
 
+      // T1.5d — preview: in browser-e2e there's no actual on-disk file,
+      // so we return a tiny embedded 1x1 PNG data URL whose round-trip
+      // proves the IPC plumbing. Tests can assert on the data-attr or
+      // the img-src prefix without depending on a real image. (String
+      // concat, not template literals — the whole mock lives inside an
+      // outer backtick-delimited string and nested backticks would
+      // close the outer template early.)
+      case 'attachment_preview': {
+        const mime =
+          (args.mime && String(args.mime).indexOf('image/') === 0 && String(args.mime)) ||
+          'image/png';
+        const ONE_PX_PNG_B64 =
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        return 'data:' + mime + ';base64,' + ONE_PX_PNG_B64;
+      }
+
+      // T1.5e — GC: the mock has no disk state, so there's nothing to
+      // sweep. Return an empty report so the caller's telemetry logs
+      // cleanly in browser-mode runs.
+      case 'attachment_gc':
+        return { removed_count: 0, removed_bytes: 0, failed: [] };
+
       case 'analytics_summary':
         return state.analytics;
 

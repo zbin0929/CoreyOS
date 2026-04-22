@@ -32,10 +32,15 @@ test.describe('chat attachments', () => {
     await composer.fill('look at this');
     await page.getByTestId('chat-send').click();
 
-    // Bubble renders the attachment chip.
+    // Bubble renders the attachment. T1.5d — images now display as a
+    // thumbnail `<img>` tile (filename lives on the alt/title attrs),
+    // non-images still render as a filename chip. Assert the image-tile
+    // variant appeared for this PNG attachment.
     const bubbleAttachments = page.getByTestId('bubble-attachments').first();
     await expect(bubbleAttachments).toBeVisible();
-    await expect(bubbleAttachments).toContainText('screenshot.png');
+    const thumb = bubbleAttachments.locator('img[alt="screenshot.png"]');
+    await expect(thumb).toBeVisible();
+    await expect(thumb).toHaveAttribute('src', /^data:image\/png;base64,/);
 
     // T1.5b — the bubble no longer prepends `[attached: …]` to the text.
     // The user's typed content is stored verbatim; the LLM receives the

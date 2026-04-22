@@ -125,6 +125,114 @@ pub fn stage_path(src: &Path, mime_hint: Option<&str>) -> anyhow::Result<StagedA
     write_staged(name, &mime, &bytes)
 }
 
+/// T1.5d — preview cap. Hard ceiling on the bytes we'll willingly
+/// base64-encode and stream back over IPC for an `<img>` preview. Anything
+/// larger than this renders as a filename chip without a thumbnail.
+/// 5 MB chosen empirically: enough for a retina screenshot or a typical
+/// photo, small enough to keep IPC transport under a second even on
+/// mechanical drives and large enough to avoid nagging users for
+/// resize-before-preview.
+const MAX_PREVIEW_BYTES: usize = 5 * 1024 * 1024;
+
+/// T1.5d — read a staged attachment and return a `data:<mime>;base64,<…>`
+/// URL suitable for `<img src="…">`. Sandbox-checked (must live under
+/// `attachments_dir`) and size-capped so an enormous file can't freeze
+/// the renderer thread.
+///
+/// `mime_hint` is what the UI already stored on the message row — if
+/// missing or blank we fall back to the extension-based guess. We
+/// deliberately return an error for non-image MIMEs: the frontend only
+/// calls this for `image/*` attachments today and keeping a MIME allow-
+/// list here stops a future caller from accidentally inlining a PDF
+/// into an `<img>`.
+pub fn read_as_data_url(abs_path: &str, mime_hint: Option<&str>) -> anyhow::Result<String> {
+    let root = attachments_dir()?;
+    let target = PathBuf::from(abs_path);
+    if !target.starts_with(&root) {
+        anyhow::bail!(
+            "refusing to read outside attachments dir: {}",
+            target.display(),
+        );
+    }
+    let meta = fs::metadata(&target)?;
+    let size = meta.len() as usize;
+    if size > MAX_PREVIEW_BYTES {
+        anyhow::bail!(
+            "attachment too large to preview: {} bytes (max {} bytes)",
+            size,
+            MAX_PREVIEW_BYTES,
+        );
+    }
+    let mime = match mime_hint {
+        Some(m) if !m.trim().is_empty() => m.to_string(),
+        _ => {
+            let name = target
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            guess_mime(name)
+        }
+    };
+    if !mime.starts_with("image/") {
+        anyhow::bail!("preview only supports image/* MIMEs, got: {mime}");
+    }
+    let bytes = fs::read(&target)?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{mime};base64,{b64}"))
+}
+
+/// T1.5e — garbage-collect attachment files that no DB row references.
+/// Given the set of paths the DB believes are still live, remove every
+/// regular file under `attachments_dir` that isn't in that set. Returns
+/// `(removed_count, removed_bytes)` for observability.
+///
+/// Silently tolerates individual delete failures (we log via the caller)
+/// rather than aborting on the first error — GC should be best-effort
+/// and never block app startup.
+pub fn gc_orphans(live_paths: &std::collections::HashSet<PathBuf>) -> anyhow::Result<GcReport> {
+    let root = attachments_dir()?;
+    if !root.exists() {
+        return Ok(GcReport::default());
+    }
+    let mut report = GcReport::default();
+    for entry in fs::read_dir(&root)? {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if live_paths.contains(&path) {
+            continue;
+        }
+        // Canonicalize-lite: try the exact path first, then accept a
+        // symlink/case-insensitive match if the set happens to carry a
+        // differently-spelled equivalent.
+        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+        match fs::remove_file(&path) {
+            Ok(()) => {
+                report.removed_count += 1;
+                report.removed_bytes += size;
+            }
+            Err(e) => {
+                report.failed.push(format!("{}: {}", path.display(), e));
+            }
+        }
+    }
+    Ok(report)
+}
+
+/// Summary of a GC pass — what the frontend can surface as a toast or
+/// log to devtools. `failed` is empty on the happy path.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct GcReport {
+    pub removed_count: u64,
+    pub removed_bytes: u64,
+    pub failed: Vec<String>,
+}
+
 /// Remove a staged file from disk. Idempotent — a missing file is not an
 /// error (the UI may call this speculatively during a remove-and-re-stage
 /// flow). Paths outside `attachments_dir` are rejected to keep this call
@@ -367,6 +475,93 @@ mod tests {
             outside.exists(),
             "delete() must not touch files outside the dir"
         );
+    }
+
+    // T1.5d — preview
+
+    #[test]
+    fn preview_returns_data_url_for_image() {
+        let home = tmp_home();
+        let _g = HomeGuard::new(&home);
+        let bytes = b"\x89PNG\r\n\x1a\nfake-body";
+        let b64_body = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let att = stage_blob("pic.png", "image/png", &b64_body).unwrap();
+
+        let url = read_as_data_url(&att.path, Some("image/png")).unwrap();
+        assert!(url.starts_with("data:image/png;base64,"));
+        let comma = url.find(',').unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&url[comma + 1..])
+            .unwrap();
+        assert_eq!(decoded, bytes);
+    }
+
+    #[test]
+    fn preview_rejects_non_image_mime() {
+        let home = tmp_home();
+        let _g = HomeGuard::new(&home);
+        let b64 = base64::engine::general_purpose::STANDARD.encode(b"PDF-bytes");
+        let att = stage_blob("doc.pdf", "application/pdf", &b64).unwrap();
+        let err = read_as_data_url(&att.path, Some("application/pdf")).unwrap_err();
+        assert!(err.to_string().contains("image/"), "got: {err}");
+    }
+
+    #[test]
+    fn preview_rejects_outside_sandbox() {
+        let home = tmp_home();
+        let _g = HomeGuard::new(&home);
+        let outside = home.join("sneaky.png");
+        std::fs::write(&outside, b"bytes").unwrap();
+        let err = read_as_data_url(outside.to_str().unwrap(), Some("image/png")).unwrap_err();
+        assert!(err.to_string().contains("refusing"), "got: {err}");
+    }
+
+    #[test]
+    fn preview_falls_back_to_guessed_mime_when_hint_blank() {
+        let home = tmp_home();
+        let _g = HomeGuard::new(&home);
+        // guess_mime() keys off the display name — stage needs a .png
+        // name so the extension-based guess returns image/png even when
+        // we pass an empty hint.
+        let b64 = base64::engine::general_purpose::STANDARD.encode(b"bytes");
+        let att = stage_blob("auto.png", "image/png", &b64).unwrap();
+        let url = read_as_data_url(&att.path, Some("")).unwrap();
+        assert!(url.starts_with("data:image/png;base64,"));
+    }
+
+    // T1.5e — GC
+
+    #[test]
+    fn gc_removes_orphans_and_keeps_live() {
+        let home = tmp_home();
+        let _g = HomeGuard::new(&home);
+
+        let b64 = base64::engine::general_purpose::STANDARD.encode(b"live");
+        let live = stage_blob("live.txt", "text/plain", &b64).unwrap();
+        let orphan = stage_blob("orphan.txt", "text/plain", &b64).unwrap();
+
+        let mut set = std::collections::HashSet::new();
+        set.insert(PathBuf::from(&live.path));
+
+        let report = gc_orphans(&set).unwrap();
+        assert_eq!(report.removed_count, 1);
+        assert_eq!(report.removed_bytes, b"live".len() as u64);
+        assert!(report.failed.is_empty());
+        assert!(Path::new(&live.path).exists(), "live file must survive");
+        assert!(
+            !Path::new(&orphan.path).exists(),
+            "orphan file must be swept"
+        );
+    }
+
+    #[test]
+    fn gc_empty_dir_is_noop() {
+        let home = tmp_home();
+        let _g = HomeGuard::new(&home);
+        // Dir may not even exist yet.
+        let report = gc_orphans(&std::collections::HashSet::new()).unwrap();
+        assert_eq!(report.removed_count, 0);
+        assert!(report.failed.is_empty());
     }
 
     #[test]

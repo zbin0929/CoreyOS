@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import {
+  attachmentGc,
   dbAttachmentInsert,
   dbLoadAll,
   dbMessageUpsert,
@@ -194,6 +195,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         currentId: orderedIds[0] ?? null,
         hydrated: true,
       });
+
+      // T1.5e — opportunistic orphan GC. Collect every attachment path
+      // the DB believes is live and ask the backend to sweep the rest.
+      // Fire-and-forget; a failure here is non-fatal and shouldn't
+      // delay the UI — we just log to the console and move on. Done
+      // AFTER set() so even a slow GC never blocks the first paint.
+      const livePaths: string[] = [];
+      for (const row of rows) {
+        for (const m of row.messages) {
+          if (m.attachments) {
+            for (const a of m.attachments) livePaths.push(a.path);
+          }
+        }
+      }
+      fireWrite(
+        attachmentGc(livePaths).then((report) => {
+          if (report.removed_count > 0 || report.failed.length > 0) {
+            console.info('[attachments.gc]', report);
+          }
+        }),
+        'attachmentGc',
+      );
     } catch (e) {
       console.error('db hydrate failed:', e);
       // Still mark as hydrated so the UI unblocks — users start fresh.

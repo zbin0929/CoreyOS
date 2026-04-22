@@ -13,9 +13,10 @@
 //! All three are `spawn_blocking`-wrapped — the core module does sync
 //! file I/O and base64 decoding that could stall the Tokio runtime.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::attachments::{self, StagedAttachment};
+use crate::attachments::{self, GcReport, StagedAttachment};
 use crate::error::{IpcError, IpcResult};
 
 fn map_anyhow(e: anyhow::Error) -> IpcError {
@@ -60,4 +61,30 @@ pub async fn attachment_delete(path: String) -> IpcResult<()> {
         .await
         .map_err(map_join)?
         .map_err(map_anyhow)
+}
+
+/// T1.5d — read a staged image and return a `data:<mime>;base64,<…>`
+/// URL for an `<img>` preview in chat bubbles. Caller passes the same
+/// `path` that's persisted on the attachment row so sandbox checks can
+/// confirm it belongs under `~/.hermes/attachments/`.
+#[tauri::command]
+pub async fn attachment_preview(path: String, mime: Option<String>) -> IpcResult<String> {
+    tokio::task::spawn_blocking(move || attachments::read_as_data_url(&path, mime.as_deref()))
+        .await
+        .map_err(map_join)?
+        .map_err(map_anyhow)
+}
+
+/// T1.5e — sweep orphaned attachment files. Called at app startup from
+/// the chat-store hydrate path with the set of paths the DB still
+/// references; everything else under `attachments_dir` gets reaped.
+#[tauri::command]
+pub async fn attachment_gc(live_paths: Vec<String>) -> IpcResult<GcReport> {
+    tokio::task::spawn_blocking(move || {
+        let set: HashSet<PathBuf> = live_paths.into_iter().map(PathBuf::from).collect();
+        attachments::gc_orphans(&set)
+    })
+    .await
+    .map_err(map_join)?
+    .map_err(map_anyhow)
 }

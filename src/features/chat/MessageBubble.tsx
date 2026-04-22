@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Check,
@@ -13,6 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { cn } from '@/lib/cn';
+import { attachmentPreview } from '@/lib/ipc';
 import type { UiAttachment, UiMessage, UiToolCall } from '@/stores/chat';
 
 export function MessageBubble({ msg }: { msg: UiMessage }) {
@@ -166,21 +167,93 @@ function ToolCallsStrip({ calls }: { calls: UiToolCall[] }) {
 function AttachmentsStrip({ attachments }: { attachments: UiAttachment[] }) {
   return (
     <ul
-      className="mb-2 flex flex-wrap gap-1.5"
+      className="mb-2 flex flex-wrap items-start gap-1.5"
       data-testid="bubble-attachments"
     >
-      {attachments.map((a) => (
-        <li
-          key={a.id}
-          className="inline-flex items-center gap-1 rounded-full bg-black/15 px-2 py-0.5 text-[11px]"
-          title={a.mime}
-          data-testid={`bubble-attachment-${a.id}`}
-        >
-          <Paperclip className="h-3 w-3 opacity-70" />
-          <span className="max-w-[220px] truncate">{a.name}</span>
-        </li>
-      ))}
+      {attachments.map((a) =>
+        a.mime.startsWith('image/') ? (
+          <AttachmentImageTile key={a.id} attachment={a} />
+        ) : (
+          <li
+            key={a.id}
+            className="inline-flex items-center gap-1 rounded-full bg-black/15 px-2 py-0.5 text-[11px]"
+            title={a.mime}
+            data-testid={`bubble-attachment-${a.id}`}
+          >
+            <Paperclip className="h-3 w-3 opacity-70" />
+            <span className="max-w-[220px] truncate">{a.name}</span>
+          </li>
+        ),
+      )}
     </ul>
+  );
+}
+
+/**
+ * T1.5d — per-image thumbnail tile. Fires a lazy `attachment_preview`
+ * IPC on mount; until it resolves (or when it fails, e.g. file has
+ * been GC'd), we show a filename-only chip so the bubble layout never
+ * jumps. The preview IPC is capped at 5 MB on the backend — oversize
+ * images also fall back to the chip.
+ *
+ * We deliberately don't cache the data URL across renders — React
+ * remounts are rare (bubble list isn't virtualised today) and the IPC
+ * is cheap. Adding a module-level cache is a later optimization if
+ * real usage turns up chatty re-renders.
+ */
+function AttachmentImageTile({ attachment }: { attachment: UiAttachment }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    attachmentPreview(attachment.path, attachment.mime)
+      .then((data) => {
+        if (!cancelled) setUrl(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attachment.path, attachment.mime]);
+
+  // On preview failure, fall back to the filename chip so the user
+  // still sees that an image was attached.
+  if (failed || (!url && attachment.size > 5 * 1024 * 1024)) {
+    return (
+      <li
+        className="inline-flex items-center gap-1 rounded-full bg-black/15 px-2 py-0.5 text-[11px]"
+        title={`${attachment.mime} · preview unavailable`}
+        data-testid={`bubble-attachment-${attachment.id}`}
+      >
+        <Paperclip className="h-3 w-3 opacity-70" />
+        <span className="max-w-[220px] truncate">{attachment.name}</span>
+      </li>
+    );
+  }
+
+  return (
+    <li
+      className="overflow-hidden rounded-md bg-black/15"
+      title={`${attachment.name} · ${attachment.mime}`}
+      data-testid={`bubble-attachment-${attachment.id}`}
+    >
+      {url ? (
+        <img
+          src={url}
+          alt={attachment.name}
+          className="block h-24 w-24 object-cover"
+          data-testid={`bubble-attachment-image-${attachment.id}`}
+        />
+      ) : (
+        // Placeholder keeps the layout stable while the preview loads.
+        <div className="flex h-24 w-24 items-center justify-center text-[11px] opacity-70">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      )}
+    </li>
   );
 }
 
