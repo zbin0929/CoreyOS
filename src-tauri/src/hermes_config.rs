@@ -368,6 +368,204 @@ pub fn write_env_key(
     Ok(())
 }
 
+/// Write a set of YAML fields into `~/.hermes/config.yaml` under a
+/// dotted root (e.g. `channels.telegram`). Missing intermediate
+/// mappings are created; every other field in the document is
+/// preserved verbatim.
+///
+/// `updates` is keyed by dotted path RELATIVE to `root`; values are
+/// JSON (from the IPC layer) and are round-tripped through
+/// `serde_yaml::Value` so YAML-native types (sequences, nested
+/// mappings) survive unchanged.
+///
+/// A JSON `null` deletes the field (and removes now-empty ancestor
+/// mappings up to but not including `root` itself).
+///
+/// Phase 3 · T3.2 — the write counterpart to the read-only walker in
+/// `ipc::channels::walk_dotted`.
+pub fn write_channel_yaml_fields(
+    root: &str,
+    updates: &std::collections::HashMap<String, serde_json::Value>,
+    journal_path: Option<&Path>,
+) -> io::Result<()> {
+    if updates.is_empty() {
+        return Ok(());
+    }
+
+    let config_path = config_path()?;
+    let raw = fs::read_to_string(&config_path).unwrap_or_default();
+
+    let mut doc: Value = if raw.trim().is_empty() {
+        Value::Mapping(Mapping::new())
+    } else {
+        serde_yaml::from_str(&raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+    };
+    if !matches!(doc, Value::Mapping(_)) {
+        doc = Value::Mapping(Mapping::new());
+    }
+
+    // Capture before-state for the journal: one mapping keyed by
+    // relative path, values serialized to JSON for diff display.
+    let mut before = serde_json::Map::new();
+    let mut after = serde_json::Map::new();
+    for (rel_path, new_val) in updates {
+        let full = if root.is_empty() {
+            rel_path.clone()
+        } else {
+            format!("{}.{}", root, rel_path)
+        };
+        let prev = walk_get(&doc, &full).cloned();
+        before.insert(
+            rel_path.clone(),
+            prev.map(yaml_to_json_value)
+                .unwrap_or(serde_json::Value::Null),
+        );
+        after.insert(rel_path.clone(), new_val.clone());
+
+        let yaml_val = json_to_yaml_value(new_val);
+        if matches!(yaml_val, Value::Null) {
+            walk_remove(&mut doc, &full);
+        } else {
+            walk_set(&mut doc, &full, yaml_val);
+        }
+    }
+
+    let serialized =
+        serde_yaml::to_string(&doc).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs_atomic::atomic_write(&config_path, serialized.as_bytes(), None)?;
+
+    if let Some(jp) = journal_path {
+        let summary = format!("channel yaml: {} ({} field(s))", root, updates.len());
+        let _ = changelog::append(
+            jp,
+            "hermes.channel.yaml",
+            Some(serde_json::json!({ "root": root, "fields": before })),
+            Some(serde_json::json!({ "root": root, "fields": after })),
+            summary,
+        );
+    }
+    Ok(())
+}
+
+fn walk_get<'a>(doc: &'a Value, path: &str) -> Option<&'a Value> {
+    let mut cur = doc;
+    for seg in path.split('.') {
+        cur = cur.as_mapping()?.get(Value::String(seg.into()))?;
+    }
+    Some(cur)
+}
+
+fn walk_set(doc: &mut Value, path: &str, value: Value) {
+    let segs: Vec<&str> = path.split('.').collect();
+    if segs.is_empty() {
+        return;
+    }
+    // Ensure every intermediate level is a mapping.
+    let mut cur: &mut Value = doc;
+    for seg in &segs[..segs.len() - 1] {
+        if !matches!(cur, Value::Mapping(_)) {
+            *cur = Value::Mapping(Mapping::new());
+        }
+        let map = cur.as_mapping_mut().expect("is mapping");
+        let key = Value::String((*seg).into());
+        if !matches!(map.get(&key), Some(Value::Mapping(_))) {
+            map.insert(key.clone(), Value::Mapping(Mapping::new()));
+        }
+        cur = map.get_mut(&key).expect("just inserted");
+    }
+    if !matches!(cur, Value::Mapping(_)) {
+        *cur = Value::Mapping(Mapping::new());
+    }
+    let map = cur.as_mapping_mut().expect("is mapping");
+    map.insert(Value::String((*segs.last().unwrap()).to_string()), value);
+}
+
+fn walk_remove(doc: &mut Value, path: &str) {
+    let segs: Vec<&str> = path.split('.').collect();
+    if segs.is_empty() {
+        return;
+    }
+    let mut cur = doc;
+    for seg in &segs[..segs.len() - 1] {
+        let Some(map) = cur.as_mapping_mut() else {
+            return;
+        };
+        let key = Value::String((*seg).into());
+        let Some(next) = map.get_mut(&key) else {
+            return;
+        };
+        cur = next;
+    }
+    if let Some(map) = cur.as_mapping_mut() {
+        map.remove(Value::String(segs.last().unwrap().to_string()));
+    }
+}
+
+/// YAML → JSON (mirror of `ipc::channels::yaml_to_json` but local —
+/// avoid a crate-internal import cycle).
+fn yaml_to_json_value(v: Value) -> serde_json::Value {
+    match v {
+        Value::Null => serde_json::Value::Null,
+        Value::Bool(b) => serde_json::Value::Bool(b),
+        Value::Number(n) => {
+            if let Some(u) = n.as_u64() {
+                serde_json::Value::from(u)
+            } else if let Some(i) = n.as_i64() {
+                serde_json::Value::from(i)
+            } else if let Some(f) = n.as_f64() {
+                serde_json::json!(f)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        Value::String(s) => serde_json::Value::String(s),
+        Value::Sequence(seq) => {
+            serde_json::Value::Array(seq.into_iter().map(yaml_to_json_value).collect())
+        }
+        Value::Mapping(m) => {
+            let mut o = serde_json::Map::new();
+            for (k, v) in m {
+                if let Value::String(sk) = k {
+                    o.insert(sk, yaml_to_json_value(v));
+                }
+            }
+            serde_json::Value::Object(o)
+        }
+        Value::Tagged(t) => yaml_to_json_value(t.value),
+    }
+}
+
+/// JSON → YAML. Numbers round-trip via serde_yaml's own conversion
+/// so int/float distinction is preserved.
+fn json_to_yaml_value(v: &serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Null,
+        serde_json::Value::Bool(b) => Value::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Number(i.into())
+            } else if let Some(u) = n.as_u64() {
+                Value::Number(u.into())
+            } else if let Some(f) = n.as_f64() {
+                Value::Number(f.into())
+            } else {
+                Value::Null
+            }
+        }
+        serde_json::Value::String(s) => Value::String(s.clone()),
+        serde_json::Value::Array(arr) => {
+            Value::Sequence(arr.iter().map(json_to_yaml_value).collect())
+        }
+        serde_json::Value::Object(o) => {
+            let mut m = Mapping::new();
+            for (k, v) in o {
+                m.insert(Value::String(k.clone()), json_to_yaml_value(v));
+            }
+            Value::Mapping(m)
+        }
+    }
+}
+
 fn is_allowed_env_key(key: &str) -> bool {
     if key.is_empty() {
         return false;
@@ -535,6 +733,164 @@ NOT_A_KEY=hello
         assert!(!is_allowed_env_key("openai_api_key")); // lowercase rejected
         assert!(!is_allowed_env_key(""));
         assert!(!is_allowed_env_key("EVIL $() _API_KEY"));
+    }
+
+    #[test]
+    fn walk_set_creates_missing_intermediate_mappings() {
+        let mut doc = Value::Mapping(Mapping::new());
+        walk_set(
+            &mut doc,
+            "channels.telegram.mention_required",
+            Value::Bool(true),
+        );
+        walk_set(&mut doc, "channels.telegram.reactions", Value::Bool(false));
+
+        let telegram = doc
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("channels".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("telegram".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap();
+        assert_eq!(
+            telegram.get(Value::String("mention_required".into())),
+            Some(&Value::Bool(true)),
+        );
+        assert_eq!(
+            telegram.get(Value::String("reactions".into())),
+            Some(&Value::Bool(false)),
+        );
+    }
+
+    #[test]
+    fn walk_remove_clears_leaf_without_touching_siblings() {
+        let mut doc: Value = serde_yaml::from_str(
+            "channels:\n  telegram:\n    mention_required: true\n    reactions: false\n",
+        )
+        .unwrap();
+        walk_remove(&mut doc, "channels.telegram.reactions");
+        let telegram = doc
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("channels".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("telegram".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap();
+        assert!(telegram.get(Value::String("reactions".into())).is_none());
+        assert_eq!(
+            telegram.get(Value::String("mention_required".into())),
+            Some(&Value::Bool(true)),
+        );
+    }
+
+    #[test]
+    fn json_to_yaml_preserves_scalars_lists_and_nested_objects() {
+        let j = serde_json::json!({
+            "a": true,
+            "b": 42,
+            "c": "hi",
+            "d": [1, "two", false],
+            "e": { "nested": "ok" }
+        });
+        let y = json_to_yaml_value(&j);
+        let m = y.as_mapping().unwrap();
+        assert_eq!(m.get(Value::String("a".into())), Some(&Value::Bool(true)));
+        assert_eq!(
+            m.get(Value::String("c".into())).and_then(Value::as_str),
+            Some("hi"),
+        );
+        let d = m
+            .get(Value::String("d".into()))
+            .unwrap()
+            .as_sequence()
+            .unwrap();
+        assert_eq!(d.len(), 3);
+    }
+
+    #[test]
+    fn write_channel_yaml_fields_round_trips_through_disk() {
+        let tmp = std::env::temp_dir().join(format!(
+            "caduceus-hermes-yaml-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(tmp.join(".hermes")).unwrap();
+        // Seed a yaml file with an unrelated field so we can assert it survives.
+        std::fs::write(
+            tmp.join(".hermes/config.yaml"),
+            "model:\n  default: gpt-4o\n",
+        )
+        .unwrap();
+
+        let original_home = std::env::var_os("HOME");
+        std::env::set_var("HOME", &tmp);
+
+        let mut updates = std::collections::HashMap::new();
+        updates.insert("mention_required".to_string(), serde_json::json!(true));
+        updates.insert("free_chats".to_string(), serde_json::json!(["one", "two"]));
+        write_channel_yaml_fields("channels.telegram", &updates, None).unwrap();
+
+        let raw = std::fs::read_to_string(tmp.join(".hermes/config.yaml")).unwrap();
+        let parsed: Value = serde_yaml::from_str(&raw).unwrap();
+        let tg = parsed
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("channels".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("telegram".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap();
+        assert_eq!(
+            tg.get(Value::String("mention_required".into())),
+            Some(&Value::Bool(true)),
+        );
+        let fc = tg.get(Value::String("free_chats".into())).unwrap();
+        assert_eq!(fc.as_sequence().unwrap().len(), 2);
+        // unrelated field survives
+        assert!(parsed
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("model".into()))
+            .is_some());
+
+        // Delete semantic: JSON null removes the field.
+        let mut del = std::collections::HashMap::new();
+        del.insert("mention_required".to_string(), serde_json::Value::Null);
+        write_channel_yaml_fields("channels.telegram", &del, None).unwrap();
+        let raw2 = std::fs::read_to_string(tmp.join(".hermes/config.yaml")).unwrap();
+        let parsed2: Value = serde_yaml::from_str(&raw2).unwrap();
+        let tg2 = parsed2
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("channels".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap()
+            .get(Value::String("telegram".into()))
+            .unwrap()
+            .as_mapping()
+            .unwrap();
+        assert!(tg2.get(Value::String("mention_required".into())).is_none());
+
+        if let Some(v) = original_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
     }
 
     #[test]

@@ -7,32 +7,47 @@ import {
   Hash,
   Loader2,
   MessageSquareMore,
+  Pencil,
   QrCode,
   RefreshCw,
+  RotateCw,
+  X,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import {
   hermesChannelList,
+  hermesChannelSave,
+  hermesGatewayRestart,
   ipcErrorMessage,
   type ChannelState,
 } from '@/lib/ipc';
+import {
+  ChannelForm,
+  type ChannelDiffLine,
+  type ChannelFormSubmission,
+} from './ChannelForm';
 
 /**
- * Channels route — Phase 3 · T3.1 (catalog-only pass).
+ * Channels route — Phase 3 · T3.1 (catalog) + T3.2 (inline forms).
  *
- * This iteration renders the read-only channel catalog returned by
- * `hermes_channel_list`: one card per channel with a status pill
- * ("Configured" / "Partial" / "Not configured" / "QR login"), a
- * condensed summary of which env keys are set, and a peek at the
- * current YAML field values. There's no inline form yet — that's T3.2.
+ * Each card starts in a compact read-only view with a status pill
+ * ("Configured" / "Partial" / "Not configured" / "QR login"), the
+ * declared env-key presence, and the current yaml-field values.
+ * Clicking **Edit** expands the card into an inline `ChannelForm`
+ * driven entirely by the channel's `ChannelSpec`. On submit the form
+ * returns the computed diff; we show a confirmation view under the
+ * form (no separate modal — stays consistent with the Profiles
+ * screen) and only call `hermes_channel_save` after the user
+ * confirms. For `hot_reloadable = false` channels we surface a
+ * "Restart gateway?" prompt after a successful save.
  *
- * Why ship the read-only grid first:
- *   - It exercises the Rust catalog + IPC end-to-end so any schema
- *     bugs surface before we invest in 8 custom forms.
- *   - It gives us somewhere to dock the per-channel status pills that
- *     T3.4's live-probing hooks into later.
+ * Why we still ship this as one big file:
+ *   - The surface is small (~500 LoC) and cohesive.
+ *   - Card ↔ form ↔ restart-prompt share a per-card state machine;
+ *     splitting them across files would just move prop-drilling
+ *     plumbing around.
  */
 type State =
   | { kind: 'loading' }
@@ -132,7 +147,22 @@ export function ChannelsRoute() {
           {state.kind === 'loaded' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {state.channels.map((c) => (
-                <ChannelCard key={c.id} channel={c} />
+                <ChannelCard
+                  key={c.id}
+                  channel={c}
+                  onSaved={(fresh) => {
+                    setState((prev) =>
+                      prev.kind === 'loaded'
+                        ? {
+                            ...prev,
+                            channels: prev.channels.map((x) =>
+                              x.id === fresh.id ? fresh : x,
+                            ),
+                          }
+                        : prev,
+                    );
+                  }}
+                />
               ))}
             </div>
           )}
@@ -144,11 +174,65 @@ export function ChannelsRoute() {
 
 // ───────────────────────── Card ─────────────────────────
 
-function ChannelCard({ channel }: { channel: ChannelState }) {
+/** Per-card state machine. `view` is read-only. `edit` shows the
+ *  form. `confirm` renders the computed diff + Save/Cancel. `saving`
+ *  is the brief flash between IPC-in-flight and the restart prompt
+ *  (or a fresh `view`). `restart-prompt` offers to run
+ *  `hermes_gateway_restart` for non-hot-reloadable channels. */
+type CardMode =
+  | { kind: 'view' }
+  | { kind: 'edit' }
+  | { kind: 'confirm'; submission: ChannelFormSubmission }
+  | { kind: 'saving'; submission: ChannelFormSubmission }
+  | { kind: 'restart-prompt' }
+  | { kind: 'error'; message: string };
+
+function ChannelCard({
+  channel,
+  onSaved,
+}: {
+  channel: ChannelState;
+  onSaved: (fresh: ChannelState) => void;
+}) {
   const { t } = useTranslation();
+  const [mode, setMode] = useState<CardMode>({ kind: 'view' });
   const status = computeStatus(channel);
   const requiredEnv = channel.env_keys.filter((k) => k.required);
   const setCount = requiredEnv.filter((k) => channel.env_present[k.name]).length;
+  const busy = mode.kind === 'saving';
+
+  async function doSave(submission: ChannelFormSubmission) {
+    setMode({ kind: 'saving', submission });
+    try {
+      const fresh = await hermesChannelSave({
+        id: channel.id,
+        env_updates: submission.envUpdates,
+        yaml_updates: submission.yamlUpdates,
+      });
+      onSaved(fresh);
+      // Hot-reloadable channels: no restart prompt — flip back to
+      // the read-only view immediately. Otherwise surface the
+      // "Restart gateway?" offer so the user's change actually
+      // takes effect.
+      if (fresh.hot_reloadable) {
+        setMode({ kind: 'view' });
+      } else {
+        setMode({ kind: 'restart-prompt' });
+      }
+    } catch (e) {
+      setMode({ kind: 'error', message: ipcErrorMessage(e) });
+    }
+  }
+
+  async function doRestart() {
+    setMode({ kind: 'saving', submission: { envUpdates: {}, yamlUpdates: {}, diffs: [] } });
+    try {
+      await hermesGatewayRestart();
+      setMode({ kind: 'view' });
+    } catch (e) {
+      setMode({ kind: 'error', message: ipcErrorMessage(e) });
+    }
+  }
 
   return (
     <article
@@ -173,80 +257,270 @@ function ChannelCard({ channel }: { channel: ChannelState }) {
             #{channel.id}
           </code>
         </div>
-        <StatusPill
-          status={status}
-          setCount={setCount}
-          totalCount={requiredEnv.length}
-        />
+        <div className="flex items-center gap-2">
+          <StatusPill
+            status={status}
+            setCount={setCount}
+            totalCount={requiredEnv.length}
+          />
+          {mode.kind === 'view' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setMode({ kind: 'edit' })}
+              data-testid={`channel-edit-${channel.id}`}
+              title={t('channels.edit')}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Env keys — one row each with a check/cross. We never render the
-          value, only the name + presence, so the card is safe to share
-          in a screenshot. */}
-      {channel.env_keys.length > 0 && (
-        <ul className="flex flex-col gap-1">
-          {channel.env_keys.map((k) => (
-            <li
-              key={k.name}
-              className="flex items-center gap-2 text-[11px] text-fg-muted"
-            >
-              {channel.env_present[k.name] ? (
-                <Check className="h-3 w-3 flex-none text-emerald-500" />
-              ) : (
-                <CircleOff
-                  className={cn(
-                    'h-3 w-3 flex-none',
-                    k.required ? 'text-fg-subtle' : 'text-fg-subtle/60',
+      {/* View mode — read-only summary. */}
+      {(mode.kind === 'view' || mode.kind === 'restart-prompt' || mode.kind === 'error') && (
+        <>
+          {/* Env keys — one row each with a check/cross. We never render
+              the value, only the name + presence, so the card is safe
+              to share in a screenshot. */}
+          {channel.env_keys.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {channel.env_keys.map((k) => (
+                <li
+                  key={k.name}
+                  className="flex items-center gap-2 text-[11px] text-fg-muted"
+                >
+                  {channel.env_present[k.name] ? (
+                    <Check className="h-3 w-3 flex-none text-emerald-500" />
+                  ) : (
+                    <CircleOff
+                      className={cn(
+                        'h-3 w-3 flex-none',
+                        k.required ? 'text-fg-subtle' : 'text-fg-subtle/60',
+                      )}
+                    />
                   )}
-                />
-              )}
-              <code className="truncate font-mono">{k.name}</code>
-              {!k.required && (
-                <span className="rounded border border-border px-1 text-[9px] uppercase tracking-wider text-fg-subtle">
-                  {t('channels.optional')}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
+                  <code className="truncate font-mono">{k.name}</code>
+                  {!k.required && (
+                    <span className="rounded border border-border px-1 text-[9px] uppercase tracking-wider text-fg-subtle">
+                      {t('channels.optional')}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {channel.has_qr_login && (
+            <div className="flex items-center gap-1.5 rounded border border-gold-500/40 bg-gold-500/5 px-2 py-1 text-[11px] text-gold-500">
+              <QrCode className="h-3 w-3" />
+              {t('channels.qr_hint')}
+            </div>
+          )}
+
+          {channel.yaml_fields.length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer text-[11px] text-fg-subtle group-open:text-fg-muted">
+                {t('channels.behavior_fields', {
+                  count: channel.yaml_fields.length,
+                })}
+              </summary>
+              <ul className="mt-2 flex flex-col gap-1 text-[11px]">
+                {channel.yaml_fields.map((f) => (
+                  <li
+                    key={f.path}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <code
+                      className="truncate font-mono text-fg-subtle"
+                      title={f.path}
+                    >
+                      <Hash className="mr-0.5 inline h-2.5 w-2.5" />
+                      {f.path}
+                    </code>
+                    <span className="truncate font-mono text-fg-muted">
+                      {formatYamlValue(channel.yaml_values[f.path])}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
 
-      {channel.has_qr_login && (
-        <div className="flex items-center gap-1.5 rounded border border-gold-500/40 bg-gold-500/5 px-2 py-1 text-[11px] text-gold-500">
-          <QrCode className="h-3 w-3" />
-          {t('channels.qr_hint')}
+      {/* Edit mode — inline form. */}
+      {mode.kind === 'edit' && (
+        <ChannelForm
+          channel={channel}
+          busy={false}
+          onCancel={() => setMode({ kind: 'view' })}
+          onSubmit={(submission) => {
+            // Empty patches → no-op. Keep the user in edit mode so
+            // they notice nothing changed rather than silently
+            // bouncing them back to view with no feedback.
+            if (
+              Object.keys(submission.envUpdates).length === 0 &&
+              Object.keys(submission.yamlUpdates).length === 0
+            ) {
+              setMode({ kind: 'error', message: t('channels.no_changes') });
+              return;
+            }
+            setMode({ kind: 'confirm', submission });
+          }}
+        />
+      )}
+
+      {/* Confirm mode — diff + Save/Cancel. Used as a lightweight
+          "DiffModal" without layering a real overlay — consistent
+          with the Profiles card flow. */}
+      {(mode.kind === 'confirm' || mode.kind === 'saving') && (
+        <ConfirmDiff
+          diffs={mode.submission.diffs}
+          busy={busy}
+          hotReloadable={channel.hot_reloadable}
+          onCancel={() => setMode({ kind: 'edit' })}
+          onConfirm={() => doSave(mode.submission)}
+        />
+      )}
+
+      {/* Non-hot-reloadable channels: after a successful save, prompt
+          for a gateway restart. User can decline — the change is
+          already on disk, just not picked up yet. */}
+      {mode.kind === 'restart-prompt' && (
+        <div
+          className="flex flex-col gap-2 rounded border border-amber-500/40 bg-amber-500/5 p-2 text-[11px] text-fg"
+          data-testid={`channel-restart-prompt-${channel.id}`}
+        >
+          <div className="flex items-start gap-1.5">
+            <RotateCw className="mt-0.5 h-3 w-3 flex-none text-amber-500" />
+            <span>{t('channels.restart_prompt')}</span>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setMode({ kind: 'view' })}
+            >
+              <X className="h-3 w-3" />
+              {t('channels.restart_later')}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={doRestart}
+              data-testid={`channel-restart-confirm-${channel.id}`}
+            >
+              <RotateCw className="h-3 w-3" />
+              {t('channels.restart_now')}
+            </Button>
+          </div>
         </div>
       )}
 
-      {channel.yaml_fields.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-[11px] text-fg-subtle group-open:text-fg-muted">
-            {t('channels.behavior_fields', {
-              count: channel.yaml_fields.length,
-            })}
-          </summary>
-          <ul className="mt-2 flex flex-col gap-1 text-[11px]">
-            {channel.yaml_fields.map((f) => (
-              <li
-                key={f.path}
-                className="flex items-center justify-between gap-2"
-              >
-                <code
-                  className="truncate font-mono text-fg-subtle"
-                  title={f.path}
-                >
-                  <Hash className="mr-0.5 inline h-2.5 w-2.5" />
-                  {f.path}
-                </code>
-                <span className="truncate font-mono text-fg-muted">
-                  {formatYamlValue(channel.yaml_values[f.path])}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
+      {mode.kind === 'error' && (
+        <div className="flex items-start gap-1 rounded border border-danger/40 bg-danger/5 p-2 text-[11px] text-danger">
+          <AlertCircle className="mt-0.5 h-3 w-3 flex-none" />
+          <span className="flex-1 break-all">{mode.message}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setMode({ kind: 'view' })}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
       )}
     </article>
+  );
+}
+
+// ───────────────────────── Confirm diff ─────────────────────────
+
+/** Compact inline "diff modal". Shows one row per pending change with
+ *  before → after. Secrets render as presence only (the form produced
+ *  that already). Restart warning is inline so the user sees the
+ *  consequence before they click Save. */
+function ConfirmDiff({
+  diffs,
+  busy,
+  hotReloadable,
+  onCancel,
+  onConfirm,
+}: {
+  diffs: ChannelDiffLine[];
+  busy: boolean;
+  hotReloadable: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="flex flex-col gap-2 rounded border border-accent/40 bg-accent/5 p-2 text-[11px]"
+      data-testid="channel-confirm-diff"
+    >
+      <div className="font-medium text-fg">{t('channels.confirm_title')}</div>
+      <ul className="flex flex-col gap-1">
+        {diffs.map((d) => (
+          <li
+            key={`${d.kind}:${d.label}`}
+            className="grid grid-cols-[auto_1fr] gap-x-2 font-mono"
+          >
+            <span
+              className={cn(
+                'rounded px-1 text-[9px] uppercase',
+                d.kind === 'env'
+                  ? 'bg-amber-500/15 text-amber-500'
+                  : 'bg-accent/15 text-accent',
+              )}
+            >
+              {d.kind}
+            </span>
+            <span className="truncate text-fg-muted" title={d.label}>
+              {d.label}
+            </span>
+            <span />
+            <span className="text-fg-subtle">
+              {d.before}
+              <span className="mx-1 text-fg-subtle/60">→</span>
+              <span className="text-fg">{d.after}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {!hotReloadable && (
+        <div className="rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-amber-500">
+          <AlertCircle className="mr-1 inline h-3 w-3" />
+          {t('channels.not_hot_reloadable')}
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          <X className="h-3 w-3" />
+          {t('channels.cancel')}
+        </Button>
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={onConfirm}
+          disabled={busy}
+          data-testid="channel-confirm-save"
+        >
+          {busy ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Check className="h-3 w-3" />
+          )}
+          {t('channels.confirm_save')}
+        </Button>
+      </div>
+    </div>
   );
 }
 

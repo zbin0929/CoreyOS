@@ -142,18 +142,71 @@ src/locales/{en,zh}.json   (+ channel strings)
   `walk_dotted` and `yaml_to_json` for the IPC read path). 2 new
   Playwright cases covering all four status buckets.
 
+### T3.2 — Inline channel forms · **Shipped** (2026-04-22)
+
+- **Dynamic form component** (`src/features/channels/ChannelForm.tsx`).
+  One component drives all 8 channels from the `ChannelSpec` the
+  backend already ships with each card. Bool / string / string_list
+  kinds each have a matching input; `EyeOff/Eye` toggle reveals typed
+  tokens so users can verify before save. Secrets **never** pre-fill —
+  an empty input on a channel whose env is already set means "leave
+  unchanged"; typing triggers an upsert.
+- **Atomic write IPC** `hermes_channel_save`. Accepts
+  `{ id, env_updates, yaml_updates }` where omitted fields are
+  untouched. Validates every key against the channel's `ChannelSpec`
+  before doing any I/O. Writes happen in two atomic phases via
+  `fs_atomic::atomic_write`:
+    1. `.env` upserts — one journal entry per env key (so revert
+       targets a single credential).
+    2. `config.yaml` patch — one journal entry
+       (`hermes.channel.yaml`) carrying the before / after maps of
+       just the channel's fields.
+  Returns the refreshed `ChannelState` so the card updates without a
+  second `hermes_channel_list` call.
+- **YAML walker with upsert + delete** (`hermes_config::write_channel_yaml_fields`).
+  Walks dotted paths, creates missing intermediate mappings, and
+  treats a JSON `null` as "delete this field". Every unrelated key
+  in `config.yaml` is preserved verbatim via round-trip through
+  `serde_yaml::Value`.
+- **Diff + confirmation** (`ConfirmDiff` inline panel). After the
+  user hits Save, the form computes `{ env, yaml }` diffs; the
+  confirmation view renders one row per change with `before → after`.
+  Env diffs render presence-only (`set` / `unset`) — the typed value
+  is never shown so the card stays screenshot-safe end to end.
+- **Restart prompt.** When `hot_reloadable = false` (the default for
+  every channel until we have runtime evidence otherwise), a
+  post-save amber prompt offers "Restart now" (→
+  `hermes_gateway_restart`) or "Later". Never restarts implicitly —
+  the user's change is already on disk either way.
+- **Env-value safety.** `is_allowed_env_key` remains the choke point;
+  the new save path calls `write_env_key` per key, so the same 0o600
+  atomic-write + journal entry that the Phase 2 API-key flow uses
+  carries channel tokens too.
+- **i18n** `channels.*` grew ~15 new keys in en + zh: edit / save /
+  cancel / show / hide, env placeholders, list placeholder, the four
+  diff strings, the restart prompt labels, no-changes and
+  not-hot-reloadable warnings.
+- **Tests.** +4 Rust unit tests (walk_set creates intermediates,
+  walk_remove preserves siblings, json→yaml round-trip, disk-level
+  `write_channel_yaml_fields` with unrelated-field preservation and
+  `null = delete` semantics). +2 Playwright cases covering (a) bool
+  toggle → diff → save → restart prompt → payload assertion, and
+  (b) token fill → diff never leaks the value → card flips to
+  Configured without the raw token appearing anywhere in the DOM.
+
 ### Deferred within Phase 3
 
 Will land with subsequent Txx:
 
-- **T3.2** — inline forms (form flip on click, atomic `.env` + YAML
-  writes, diff modal, Save with "Restart gateway?" prompt for
-  `hot_reloadable = false`).
 - **T3.3** — WeChat QR flow (Tencent iLink).
 - **T3.4** — live status probing + log-grep fallback.
 - **T3.5** — mobile layout (Drawer instead of card-flip below 720px).
-- WhatsApp env name is a placeholder (`WHATSAPP_TOKEN`); verify against
-  a live Hermes before T3.2 wires the form.
+- **Delete-an-existing-secret** affordance is NOT in T3.2. Users can
+  still remove a channel token via the changelog revert or by hand
+  editing `~/.hermes/.env`; an explicit "Clear" button lands once
+  T3.4 gives us live-status to show the side effect.
+- WhatsApp env name is still a placeholder (`WHATSAPP_TOKEN`); verify
+  against a live Hermes once we have one wired up.
 - Phase-2 deferrals that cluster here: profile tar.gz import/export,
   per-profile gateway start/stop, active-profile switching, streaming
   log tail.

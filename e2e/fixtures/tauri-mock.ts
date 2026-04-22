@@ -28,6 +28,63 @@ export const tauriMockInitScript = /* js */ `
   // ── user-editable fixture state ──
   const state = {
     homeStats: { path: '/tmp/caduceus', entry_count: 3, sandbox_mode: 'dev-allow' },
+    // T3.2 channel state — kept as mutable state so save round-trips.
+    // Shape mirrors the hermes_channel_list response exactly.
+    channels: /** @type {any[]} */ ([
+      {
+        id: 'telegram',
+        display_name: 'Telegram',
+        yaml_root: 'channels.telegram',
+        env_keys: [{ name: 'TELEGRAM_BOT_TOKEN', required: true }],
+        yaml_fields: [
+          { path: 'mention_required', kind: 'bool', label_key: 'channels.field.mention_required', default_bool: true },
+          { path: 'reactions', kind: 'bool', label_key: 'channels.field.reactions', default_bool: true },
+        ],
+        hot_reloadable: false,
+        has_qr_login: false,
+        env_present: { TELEGRAM_BOT_TOKEN: true },
+        yaml_values: { mention_required: true, reactions: false },
+      },
+      {
+        id: 'discord',
+        display_name: 'Discord',
+        yaml_root: 'channels.discord',
+        env_keys: [{ name: 'DISCORD_BOT_TOKEN', required: true }],
+        yaml_fields: [],
+        hot_reloadable: false,
+        has_qr_login: false,
+        env_present: { DISCORD_BOT_TOKEN: false },
+        yaml_values: {},
+      },
+      {
+        id: 'matrix',
+        display_name: 'Matrix',
+        yaml_root: 'channels.matrix',
+        env_keys: [
+          { name: 'MATRIX_ACCESS_TOKEN', required: true },
+          { name: 'MATRIX_HOMESERVER', required: true },
+        ],
+        yaml_fields: [],
+        hot_reloadable: false,
+        has_qr_login: false,
+        env_present: { MATRIX_ACCESS_TOKEN: true, MATRIX_HOMESERVER: false },
+        yaml_values: {},
+      },
+      {
+        id: 'wechat',
+        display_name: 'WeChat',
+        yaml_root: '',
+        env_keys: [{ name: 'WECHAT_SESSION', required: false }],
+        yaml_fields: [],
+        hot_reloadable: false,
+        has_qr_login: true,
+        env_present: { WECHAT_SESSION: false },
+        yaml_values: {},
+      },
+    ]),
+    // Captured save payloads, so tests can assert the exact
+    // env_updates / yaml_updates the UI sent.
+    channelSaves: /** @type {any[]} */ ([]),
     // T2.7 profile fixture. The mock treats the list as mutable state so
     // create/rename/delete/clone round-trip through the same array the UI
     // reads back in its subsequent hermes_profile_list call.
@@ -192,63 +249,35 @@ export const tauriMockInitScript = /* js */ `
         return state.appPaths;
 
       case 'hermes_channel_list': {
-        // A minimal representative catalog. Covers all 4 status buckets
-        // (configured / partial / unconfigured / qr) so the test doesn't
-        // have to mutate state to exercise each pill.
-        return [
-          {
-            id: 'telegram',
-            display_name: 'Telegram',
-            yaml_root: 'channels.telegram',
-            env_keys: [
-              { name: 'TELEGRAM_BOT_TOKEN', required: true },
-            ],
-            yaml_fields: [
-              { path: 'mention_required', kind: 'bool', label_key: 'channels.field.mention_required', default_bool: true },
-              { path: 'reactions', kind: 'bool', label_key: 'channels.field.reactions', default_bool: true },
-            ],
-            hot_reloadable: false,
-            has_qr_login: false,
-            env_present: { TELEGRAM_BOT_TOKEN: true },
-            yaml_values: { mention_required: true, reactions: false },
-          },
-          {
-            id: 'discord',
-            display_name: 'Discord',
-            yaml_root: 'channels.discord',
-            env_keys: [{ name: 'DISCORD_BOT_TOKEN', required: true }],
-            yaml_fields: [],
-            hot_reloadable: false,
-            has_qr_login: false,
-            env_present: { DISCORD_BOT_TOKEN: false },
-            yaml_values: {},
-          },
-          {
-            id: 'matrix',
-            display_name: 'Matrix',
-            yaml_root: 'channels.matrix',
-            env_keys: [
-              { name: 'MATRIX_ACCESS_TOKEN', required: true },
-              { name: 'MATRIX_HOMESERVER', required: true },
-            ],
-            yaml_fields: [],
-            hot_reloadable: false,
-            has_qr_login: false,
-            env_present: { MATRIX_ACCESS_TOKEN: true, MATRIX_HOMESERVER: false },
-            yaml_values: {},
-          },
-          {
-            id: 'wechat',
-            display_name: 'WeChat',
-            yaml_root: '',
-            env_keys: [{ name: 'WECHAT_SESSION', required: false }],
-            yaml_fields: [],
-            hot_reloadable: false,
-            has_qr_login: true,
-            env_present: { WECHAT_SESSION: false },
-            yaml_values: {},
-          },
-        ];
+        // Return a deep clone so the UI can't accidentally mutate
+        // the fixture by reference.
+        return JSON.parse(JSON.stringify(state.channels));
+      }
+
+      case 'hermes_channel_save': {
+        const payload = args.args;
+        const row = state.channels.find((c) => c.id === payload.id);
+        if (!row) {
+          throw { kind: 'internal', message: 'unknown channel id: ' + payload.id };
+        }
+        // Record the exact patch the UI sent so the test can assert
+        // against env_updates + yaml_updates without reading files.
+        state.channelSaves.push(payload);
+        // Apply env updates to the env_present map (values never
+        // flow through the mock; we only flip booleans).
+        const env = payload.env_updates || {};
+        for (const key of Object.keys(env)) {
+          const v = env[key];
+          row.env_present[key] = typeof v === 'string' && v.length > 0;
+        }
+        // Apply yaml updates.
+        const ymu = payload.yaml_updates || {};
+        for (const path of Object.keys(ymu)) {
+          const val = ymu[path];
+          if (val === null) delete row.yaml_values[path];
+          else row.yaml_values[path] = val;
+        }
+        return JSON.parse(JSON.stringify(row));
       }
 
       case 'hermes_profile_list': {

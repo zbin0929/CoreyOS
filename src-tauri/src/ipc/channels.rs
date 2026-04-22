@@ -9,16 +9,18 @@
 //!     `~/.hermes/config.yaml` by walking `yaml_root` + `path` through
 //!     the `serde_yaml::Value` tree.
 //!
-//! Writes (form submit → atomic .env + yaml update) land in T3.2.
+//! Writes live in `hermes_channel_save` (T3.2): atomic `.env`
+//! upserts + YAML field patches under the channel's `yaml_root`.
 
 use std::path::Path;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_yaml::Value as YamlValue;
 use tauri::State;
 
 use crate::channels::{self as cat, CHANNEL_SPECS};
 use crate::error::{IpcError, IpcResult};
+use crate::hermes_config;
 use crate::state::AppState;
 
 /// One row returned by `hermes_channel_list`. Frontend renders one card
@@ -52,6 +54,110 @@ pub async fn hermes_channel_list(state: State<'_, AppState>) -> IpcResult<Vec<Ch
         .map_err(|e| IpcError::Internal {
             message: format!("channel_list: {e}"),
         })
+}
+
+/// Patch payload for `hermes_channel_save`. Fields omitted from the
+/// maps are left untouched on disk — a partial save is normal (e.g.
+/// the user toggles `mention_required` without retyping the bot
+/// token). The envelope lives in its own struct so specta/ts-codegen
+/// has something stable to point at.
+#[derive(Debug, Deserialize)]
+pub struct ChannelSaveArgs {
+    /// Stable slug — must match a `ChannelSpec` in the catalog.
+    pub id: String,
+    /// Env-key updates by name. `Some("")`/`None` DELETES the key;
+    /// `Some(v)` upserts. Only keys declared in the channel's spec
+    /// are accepted — anything else is a 400-equiv `Internal` error.
+    #[serde(default)]
+    pub env_updates: std::collections::HashMap<String, Option<String>>,
+    /// YAML field updates keyed by relative dotted path (matching
+    /// `YamlFieldSpec.path`). `null` deletes the field.
+    #[serde(default)]
+    pub yaml_updates: std::collections::HashMap<String, serde_json::Value>,
+}
+
+/// Save a channel's credentials + behavior fields.
+///
+/// Writes happen in two phases, each already atomic via
+/// `fs_atomic::atomic_write`:
+///   1) `.env` upserts — one call per env key, each journaled as its
+///      own `hermes.env.key` entry (consistent with the Phase 2 model
+///      page).
+///   2) `config.yaml` patch — a single call merging every yaml field
+///      update under `yaml_root`, journaled as one
+///      `hermes.channel.yaml` entry.
+///
+/// Returns the refreshed `ChannelState` for this channel only, so the
+/// frontend can update its card without re-fetching the whole list.
+/// The `hot_reloadable` flag in the response tells the UI whether to
+/// prompt for a gateway restart — the backend never restarts on its
+/// own (restart is a separate user-confirmed action via
+/// `hermes_gateway_restart`).
+#[tauri::command]
+pub async fn hermes_channel_save(
+    args: ChannelSaveArgs,
+    state: State<'_, AppState>,
+) -> IpcResult<ChannelState> {
+    // Validate against the static spec BEFORE we spawn_blocking — cheap
+    // and lets us return a clean error without doing any I/O.
+    let spec = cat::find_spec(&args.id).ok_or_else(|| IpcError::Internal {
+        message: format!("unknown channel id: {}", args.id),
+    })?;
+    let allowed_env: std::collections::HashSet<&str> =
+        spec.env_keys.iter().map(|e| e.name.as_str()).collect();
+    for key in args.env_updates.keys() {
+        if !allowed_env.contains(key.as_str()) {
+            return Err(IpcError::Internal {
+                message: format!("env key '{key}' not declared by channel '{}'", args.id),
+            });
+        }
+    }
+    let allowed_fields: std::collections::HashSet<&str> =
+        spec.yaml_fields.iter().map(|f| f.path.as_str()).collect();
+    for path in args.yaml_updates.keys() {
+        if !allowed_fields.contains(path.as_str()) {
+            return Err(IpcError::Internal {
+                message: format!("yaml field '{path}' not declared by channel '{}'", args.id,),
+            });
+        }
+    }
+    if spec.yaml_root.is_empty() && !args.yaml_updates.is_empty() {
+        return Err(IpcError::Internal {
+            message: format!("channel '{}' has no yaml footprint", args.id),
+        });
+    }
+
+    let journal = state.changelog_path.clone();
+    let id = args.id.clone();
+    let yaml_root = spec.yaml_root.to_string();
+
+    tokio::task::spawn_blocking(move || -> std::io::Result<ChannelState> {
+        // 1) .env upserts — one journal entry per key so revert
+        //    targets a single credential at a time.
+        for (key, val) in &args.env_updates {
+            hermes_config::write_env_key(key, val.as_deref(), Some(&journal))?;
+        }
+        // 2) YAML patch under the channel's root.
+        if !args.yaml_updates.is_empty() {
+            hermes_config::write_channel_yaml_fields(
+                &yaml_root,
+                &args.yaml_updates,
+                Some(&journal),
+            )?;
+        }
+        // Re-read disk state for the freshened card.
+        let all = build_channel_states()?;
+        all.into_iter()
+            .find(|c| c.spec.id == id)
+            .ok_or_else(|| std::io::Error::other(format!("channel disappeared: {id}")))
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("channel_save task join: {e}"),
+    })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("channel_save: {e}"),
+    })
 }
 
 /// Walk the catalog, cross-reference on-disk state. Returns one

@@ -6,6 +6,92 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 3 Sprint 2 (T3.2): Channels inline forms + atomic writes
+
+### Context
+
+T3.1 gave us a read-only catalog grid. T3.2 makes it interactive:
+the user can now click Edit on any card, change the channel's
+credentials and / or behavior fields, and save — with an atomic
+`.env` + `config.yaml` round-trip, a diff confirmation, and a
+gateway-restart prompt for channels Hermes doesn't hot-reload.
+
+No new channels; just the write path for the 8 we already enumerate.
+
+### Shipped
+
+- **Atomic write IPC** `hermes_channel_save(id, env_updates,
+  yaml_updates)`. Validates every key against the channel's
+  `ChannelSpec` before touching disk, then runs two atomic phases:
+  `.env` upserts (one journal entry per key) and a
+  `hermes.channel.yaml` patch that creates missing intermediate
+  mappings and treats JSON `null` as "delete this field". Unrelated
+  keys elsewhere in `config.yaml` round-trip verbatim via
+  `serde_yaml::Value`. Returns the refreshed `ChannelState` so the
+  card updates without a second `hermes_channel_list` call.
+- **YAML walker helpers** in `hermes_config.rs`:
+  `write_channel_yaml_fields` (public), plus `walk_set` /
+  `walk_remove` / `json_to_yaml_value` / `yaml_to_json_value`
+  (private). `walk_set` creates missing intermediate mappings;
+  `walk_remove` leaves siblings intact.
+- **Dynamic form** `src/features/channels/ChannelForm.tsx`. One
+  component drives all 8 channels via the `ChannelSpec` the backend
+  ships with each card. `bool` → checkbox, `string` → text input,
+  `string_list` → textarea (one per line). Env inputs are
+  password-masked by default with an Eye toggle; they never
+  pre-fill — an empty input on a channel whose token is already set
+  means "leave unchanged". Save emits an explicit `{ envUpdates,
+  yamlUpdates, diffs }` submission envelope; no-op patches are
+  rejected so the user sees why.
+- **Inline `ConfirmDiff`** panel. After Save the form flips to a
+  review view with one row per pending change (`before → after`),
+  an amber "not hot-reloaded" warning when relevant, and Cancel /
+  Apply. Env diffs render presence-only (`set` / `unset`) — the
+  typed value is never shown.
+- **Restart prompt**. For `hot_reloadable = false` channels (all 8
+  today), a post-save amber card offers "Restart now" →
+  `hermes_gateway_restart` or "Later". Never restarts implicitly.
+- **i18n** `channels.*` grew ~15 keys in en + zh: edit / save /
+  cancel / show / hide, env placeholders, list placeholder, the four
+  diff strings, the restart prompt labels, and the no-changes /
+  not-hot-reloadable warnings.
+
+### Fixed
+
+- `io_other_error` clippy lint in `walk_remove` (`.to_string().into()`
+  on a `String` → just `.to_string()`).
+
+### Deferred
+
+- **T3.3** WeChat QR flow (Tencent iLink).
+- **T3.4** live status probing + log-grep fallback.
+- **T3.5** mobile layout.
+- **Explicit "Clear" on an existing secret** — today users remove
+  tokens via the changelog revert or by editing `.env` directly; the
+  button lands alongside T3.4 live-status feedback.
+- WhatsApp env name still a placeholder.
+
+### Test totals
+
+- Rust `cargo test`: **65 passed** (+4 vs T3.1: `walk_set`,
+  `walk_remove`, `json_to_yaml`, disk-level round-trip of
+  `write_channel_yaml_fields`).
+- Vitest: **11 passed** (unchanged).
+- Playwright: **27 passed** (+2: bool toggle → diff → save → restart
+  prompt → payload assertion; token fill → diff never leaks the
+  value → card flips to Configured without the raw token appearing
+  anywhere in the DOM). Full suite skipped this session for time;
+  channel spec ran clean standalone.
+- `cargo fmt` + `cargo clippy -- -D warnings`: clean.
+- `pnpm typecheck` + `pnpm lint`: clean.
+
+### Next
+
+- **T3.3** WeChat QR flow.
+- **T3.4** live status probing.
+
+---
+
 ## 2026-04-22 — Phase 3 Sprint 1 (T3.1): Channels page catalog
 
 ### Context

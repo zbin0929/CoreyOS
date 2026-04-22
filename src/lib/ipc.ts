@@ -356,6 +356,34 @@ export function hermesChannelList(): Promise<ChannelState[]> {
   return invoke<ChannelState[]>('hermes_channel_list');
 }
 
+/** Patch payload for `hermesChannelSave`. Fields left out of both maps
+ *  are untouched on disk. The backend enforces that every key in
+ *  `env_updates` / `yaml_updates` is declared by the channel spec. */
+export interface ChannelSaveArgs {
+  id: string;
+  /** Env-key name → new value. `null` or `""` DELETES the key. */
+  env_updates?: Record<string, string | null>;
+  /** YAML field path (relative to yaml_root) → new value. JSON `null`
+   *  deletes the field; booleans / strings / arrays round-trip as-is. */
+  yaml_updates?: Record<string, unknown>;
+}
+
+/**
+ * Atomic write of a channel's credentials + behavior fields.
+ *
+ * Writes happen in two phases, each atomic:
+ *   1) `.env` upserts — one journal entry per env key.
+ *   2) `config.yaml` patch — single journal entry for the whole patch.
+ *
+ * Returns the refreshed `ChannelState` for the saved channel so the
+ * UI can update its card without refetching the full list. If the
+ * channel is not hot-reloadable (`hot_reloadable = false`) the UI
+ * should prompt the user to call `hermesGatewayRestart`.
+ */
+export function hermesChannelSave(args: ChannelSaveArgs): Promise<ChannelState> {
+  return invoke<ChannelState>('hermes_channel_save', { args });
+}
+
 // ───────────────────────── Hermes profiles ─────────────────────────
 
 export interface HermesProfileInfo {
