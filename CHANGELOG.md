@@ -6,6 +6,66 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 4 complete · T4.2–T4.6 rollup
+
+Wraps up Phase 4. All six differentiator tasks now ship; the last five
+landed today on top of T4.1 from the morning. Per-task commits carry
+full details; this entry is the consolidated view.
+
+### Shipped
+
+- **T4.2 Skill editor** (`067a94f`) — CRUD on `~/.hermes/skills/**/*.md`.
+  Backend `skills.rs` + `ipc/skills.rs` with traversal-safe resolve and
+  atomic writes; frontend tree + textarea editor + dirty-state badge.
+  No CodeMirror yet (textarea is enough for Markdown).
+- **T4.3 Trajectory timeline** (`48885d6`) — read-only session
+  visualiser rendering messages + tool-call ribbons on a CSS timeline
+  with a right-side inspector. Uses existing `dbLoadAll` — no new IPC.
+- **T4.4 Budgets** (`5de15dc`) — CRUD page with live progress bars,
+  colour-coded at 80% / 100%. Projects lifetime spend via a hard-coded
+  per-1M-token price table. Backend CRUD arrived with T4.6's v3
+  migration. Budget-breach chat interceptor deferred to T4.4b.
+- **T4.5 Web terminal** (`fdb5417`) — portable-pty backend + xterm.js
+  frontend. Single-tab MVP; spawn → stream → resize → kill lifecycle
+  with base64-framed data events. Multi-tab / WebGL / scrollback
+  restore deferred.
+- **T4.6 Runbooks** (`a553f13`) — named prompt templates with
+  `{{placeholder}}` parameters. v3 SQLite migration adds both
+  `runbooks` and `budgets` tables. Palette integration: zero-param
+  runbooks drop straight into Chat; param-ful ones open a fill form.
+  Chat composer reads `pendingDraft` from a StrictMode-safe zustand
+  store.
+
+### Phase 4 test rollup
+
+- Rust `cargo test --lib`: **89 passed** (79 pre-Phase-4 → +10 across
+  runbooks / budgets / pty / skills / base64).
+- Playwright: **42 passed** (33 pre-Phase-4 → +9 across
+  compare × 3, runbooks × 3, budgets × 2, trajectory × 1,
+  terminal × 1, skills × 2; one accidental "+3/+2/+1/+1/+2" count —
+  see per-task commits).
+- Rust clippy `--all-targets -- -D warnings`: clean.
+- `pnpm typecheck` + `pnpm lint`: clean (3 fast-refresh warnings on
+  feature files that co-locate helpers; accepted as MVP tradeoff).
+
+### Deferred for later phases / follow-ups
+
+- CodeMirror 6 editor in Skills.
+- Skill test-runner + version history / rollback.
+- Multi-tab terminal + WebGL renderer + paste-large protection.
+- Budget-breach chat interceptor (notify/block at 80/100%).
+- Per-model cost breakdown in Budgets (needs Analytics v2 refactor).
+- Runbook scope filtering by profile; export / import runbook JSON.
+- Jaccard / embedding similarity in Compare's diff footer.
+- Real Tencent iLink client (T3.3 follow-up, still open).
+
+### Next
+
+- Phase 5 — Multi-agent console (≥2 non-Hermes adapters running
+  side-by-side).
+
+---
+
 ## 2026-04-22 — Phase 4 Sprint 1 (T4.1): Multi-model compare
 
 ### Context

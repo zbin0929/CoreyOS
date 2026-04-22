@@ -220,3 +220,52 @@ src/features/
 - No non-Hermes adapters.
 - No cloud sync of runbooks/budgets (local only).
 - No team-scoped budgets (single-user).
+
+---
+
+## Shipped (2026-04-22)
+
+All six T4.x tasks landed in a single day, on top of the existing
+Phases 0–3. Phase 4 is closed.
+
+| Task | Status | Commit | Notes |
+|------|--------|--------|-------|
+| T4.1 Multi-model compare | ✅ | `6f36e97` | Up to 4 parallel `chatStream` lanes, per-lane cancel, diff footer (fastest + most-tokens), MD/JSON export. No backend wrapper — existing handle-scoped events are enough. |
+| T4.2 Skill editor         | ✅ | `067a94f` | Tree + textarea editor + CRUD on `~/.hermes/skills/**/*.md`. Atomic writes + path-traversal rejection. CodeMirror deferred. |
+| T4.3 Trajectory timeline  | ✅ | `48885d6` | CSS-driven vertical timeline + tool-call ribbons + right-side inspector. Reuses `dbLoadAll`. No D3, no replay. |
+| T4.4 Budgets              | ✅ | `5de15dc` | CRUD page + live progress bars with 80% / 100% colour bands. Hard-coded price table. Breach interceptor deferred (T4.4b). |
+| T4.5 Web terminal         | ✅ | `fdb5417` | `portable-pty` backend, `@xterm/xterm` + FitAddon frontend. Single-tab MVP. Base64 data envelope. |
+| T4.6 Runbooks             | ✅ | `a553f13` | `{{placeholder}}` templates with param-fill dialog; palette integration; StrictMode-safe pendingDraft handoff to Chat. Shared v3 SQLite migration with T4.4. |
+
+### Deltas vs the original plan
+
+- **T4.1**: skipped the backend `ipc/compare.rs` wrapper (frontend
+  orchestration is enough); skipped Jaccard similarity and lane
+  virtualization. Exported MD + JSON instead.
+- **T4.2**: shipped with textarea, not CodeMirror. No test-runner,
+  no version history.
+- **T4.3**: CSS timeline, no D3. No replay.
+- **T4.4**: storage + UI only; the chat-send interceptor that
+  actually fires notifications / blocks sends is T4.4b.
+- **T4.5**: one tab, no WebGL, no paste-large protection.
+- **T4.6**: no scope-filtering UI, no export/import. Shipped with
+  palette + route integration as scoped.
+
+### Deferred to later phases / follow-ups
+
+- **T4.2b** — CodeMirror 6, skill test-runner, version history/rollback.
+- **T4.4b** — chat-send interceptor for notify/block; per-period
+  windowing (today / week / month totals); per-model cost breakdown.
+- **T4.5b** — multi-tab terminal; WebGL renderer; paste-large guard;
+  session restore on navigate-away-and-back.
+- **T4.6b** — scope filtering; JSON export/import; inline preview.
+- **T3.3 follow-up** — real Tencent iLink QR client (still open from
+  Phase 3).
+
+### Test totals (end of Phase 4)
+
+- Rust `cargo test --lib`: 89 passed (79 → +10).
+- Playwright: 42 passed (33 → +9).
+- `cargo fmt` + `cargo clippy --all-targets -- -D warnings`: clean.
+- `pnpm typecheck` + `pnpm lint`: clean (3 fast-refresh warnings on
+  feature files that co-locate helpers — accepted).
