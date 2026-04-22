@@ -311,6 +311,21 @@ export function analyticsSummary(): Promise<AnalyticsSummaryDto> {
   return invoke<AnalyticsSummaryDto>('analytics_summary');
 }
 
+// ───────────────────────── App paths ─────────────────────────
+
+export interface AppPaths {
+  config_dir: string;
+  data_dir: string;
+  db_path: string;
+  changelog_path: string;
+}
+
+/** Platform-native paths the app uses on disk. Read-only view for the
+ *  Settings → Storage section. No I/O — AppState caches these at boot. */
+export function appPaths(): Promise<AppPaths> {
+  return invoke<AppPaths>('app_paths');
+}
+
 // ───────────────────────── Hermes's own config.yaml ─────────────────────────
 
 export interface HermesModelSection {

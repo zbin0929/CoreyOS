@@ -83,6 +83,56 @@
     "cta_connect": "连接到 Hermes",
     "cta_docs": "阅读文档"
   },
+  "settings": {
+    "title": "设置",
+    "subtitle": "偏好 · 网关 · 存储",
+    "loading": "正在加载当前配置…",
+    "appearance": {
+      "title": "外观",
+      "desc": "仅保存在本机的视觉偏好。",
+      "theme": "主题",
+      "theme_dark": "深色",
+      "theme_light": "浅色",
+      "theme_system": "跟随系统",
+      "language": "语言"
+    },
+    "gateway": {
+      "title": "网关",
+      "desc": "Corey 发送聊天请求的目标地址。保存后即时生效，无需重启。",
+      "base_url": "Base URL",
+      "base_url_hint": "例如：http://127.0.0.1:8642",
+      "api_key": "API Key",
+      "api_key_hint": "可选。与网关的 API_SERVER_KEY 对应。明文存储在本机。",
+      "api_key_placeholder": "（如果网关无鉴权留空）",
+      "show_key": "显示 API Key",
+      "hide_key": "隐藏 API Key",
+      "test": "测试连接",
+      "test_hint": "只探测 /health，不会保存。",
+      "testing": "探测中…",
+      "test_ok": "正常 · {{ms}} ms",
+      "save": "保存",
+      "saving": "保存中…",
+      "saved": "已保存，适配器已重载。",
+      "reset": "重置",
+      "dirty": "有未保存的更改。",
+      "clean": "无改动。"
+    },
+    "model": {
+      "title": "默认语言模型",
+      "desc": "Hermes Agent 在会话未指定时使用的默认模型。单个会话可在输入栏覆盖。",
+      "label": "模型 ID"
+    },
+    "storage": {
+      "title": "存储",
+      "desc": "本地数据的存放路径。如需备份或清理，请手动操作。",
+      "config_dir": "配置目录",
+      "data_dir": "数据目录",
+      "db_path": "聊天数据库",
+      "changelog_path": "变更日志",
+      "copy": "复制",
+      "copied": "已复制"
+    }
+  },
   "logs": {
     "title": "配置变更日志",
     "subtitle": "每次配置改动都会留痕，可在此撤销。",

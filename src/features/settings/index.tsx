@@ -1,23 +1,33 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   CheckCircle2,
+  Check,
+  Copy,
   Eye,
   EyeOff,
   Loader2,
+  Monitor,
+  Moon,
   RotateCcw,
   Save,
+  Sun,
   Wifi,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { cn } from '@/lib/cn';
+import { useUIStore, type Theme } from '@/stores/ui';
+import { supportedLngs, type Lang } from '@/lib/i18n';
 import {
+  appPaths,
   configGet,
   configSet,
   configTest,
   ipcErrorMessage,
+  type AppPaths,
   type GatewayConfigDto,
 } from '@/lib/ipc';
 
@@ -41,6 +51,8 @@ const MODEL_SUGGESTIONS = [
 ];
 
 export function SettingsRoute() {
+  const { t } = useTranslation();
+
   // Loaded snapshot from the backend; used for the Reset button.
   const [loaded, setLoaded] = useState<GatewayConfigDto | null>(null);
 
@@ -52,7 +64,11 @@ export function SettingsRoute() {
   const [test, setTest] = useState<TestStatus>({ kind: 'idle' });
   const [save, setSave] = useState<SaveStatus>({ kind: 'idle' });
 
-  // Load current config on mount.
+  // Storage section — paths resolved once at app startup, cached on
+  // AppState. Load in parallel with the gateway config.
+  const [paths, setPaths] = useState<AppPaths | null>(null);
+
+  // Load current config + paths on mount.
   useEffect(() => {
     let alive = true;
     configGet()
@@ -66,6 +82,13 @@ export function SettingsRoute() {
       .catch((e) => {
         if (!alive) return;
         setSave({ kind: 'err', message: ipcErrorMessage(e) });
+      });
+    appPaths()
+      .then((p) => {
+        if (alive) setPaths(p);
+      })
+      .catch(() => {
+        /* Storage section just hides on failure — not blocking. */
       });
     return () => {
       alive = false;
@@ -122,25 +145,29 @@ export function SettingsRoute() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader
-        title="Settings"
-        subtitle="Gateway · runtime configuration"
-      />
+      <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-6 py-8">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8">
+          {/* Appearance is independent of gateway config — render first and
+              always, even while the gateway config is still loading. */}
+          <AppearanceSection />
+
           {loaded === null ? (
             <div className="flex items-center gap-2 text-fg-muted">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading current configuration…
+              {t('settings.loading')}
             </div>
           ) : (
             <form onSubmit={onSubmit} className="flex flex-col gap-6">
               <Section
-                title="Gateway"
-                description="Where Corey sends chat requests. Changes take effect immediately — no restart needed."
+                title={t('settings.gateway.title')}
+                description={t('settings.gateway.desc')}
               >
-                <Field label="Base URL" hint="Example: http://127.0.0.1:8642">
+                <Field
+                  label={t('settings.gateway.base_url')}
+                  hint={t('settings.gateway.base_url_hint')}
+                >
                   <input
                     type="url"
                     value={baseUrl}
@@ -155,8 +182,8 @@ export function SettingsRoute() {
                 </Field>
 
                 <Field
-                  label="API key"
-                  hint="Optional. Matches the gateway's API_SERVER_KEY. Stored locally in plaintext."
+                  label={t('settings.gateway.api_key')}
+                  hint={t('settings.gateway.api_key_hint')}
                 >
                   <div className="relative">
                     <input
@@ -166,7 +193,7 @@ export function SettingsRoute() {
                         setApiKey(e.target.value);
                         setTest({ kind: 'idle' });
                       }}
-                      placeholder="(leave empty if the gateway is unauthenticated)"
+                      placeholder={t('settings.gateway.api_key_placeholder')}
                       className={cn(inputCls, 'pr-10')}
                       autoComplete="off"
                     />
@@ -174,7 +201,11 @@ export function SettingsRoute() {
                       type="button"
                       onClick={() => setShowKey((v) => !v)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg"
-                      aria-label={showKey ? 'Hide API key' : 'Show API key'}
+                      aria-label={
+                        showKey
+                          ? t('settings.gateway.hide_key')
+                          : t('settings.gateway.show_key')
+                      }
                       tabIndex={-1}
                     >
                       {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -184,10 +215,10 @@ export function SettingsRoute() {
               </Section>
 
               <Section
-                title="Default language model"
-                description="Which LLM the Hermes agent uses when a chat doesn't specify one. Individual chats can override this from the composer."
+                title={t('settings.model.title')}
+                description={t('settings.model.desc')}
               >
-                <Field label="Model id">
+                <Field label={t('settings.model.label')}>
                   <Combobox
                     value={defaultModel}
                     onChange={setDefaultModel}
@@ -210,7 +241,7 @@ export function SettingsRoute() {
                       disabled={save.kind === 'saving'}
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
-                      Reset
+                      {t('settings.gateway.reset')}
                     </Button>
                   )}
                   <Button
@@ -223,15 +254,168 @@ export function SettingsRoute() {
                     ) : (
                       <Save className="h-4 w-4" />
                     )}
-                    Save
+                    {t('settings.gateway.save')}
                   </Button>
                 </div>
               </div>
             </form>
           )}
+
+          {/* Read-only storage info. Lives below the gateway form — it's the
+              least-frequently-needed section but important for backup /
+              debugging. Hides itself if the IPC fails. */}
+          {paths && <StorageSection paths={paths} />}
         </div>
       </div>
     </div>
+  );
+}
+
+// ───────────────────────── Appearance ─────────────────────────
+
+/**
+ * Theme + language controls. Both persist independently of the Rust
+ * backend: theme in zustand (localStorage `caduceus.ui`), language in
+ * i18next's LanguageDetector cache (`caduceus.lang`). No IPC, no dirty
+ * tracking — changes are applied immediately and visible on the same
+ * render.
+ */
+function AppearanceSection() {
+  const { t, i18n } = useTranslation();
+  const theme = useUIStore((s) => s.theme);
+  const setTheme = useUIStore((s) => s.setTheme);
+
+  // Narrow i18next's `language` (could be `zh-CN`, `en-US`, etc.) to our
+  // supported set. LanguageDetector returns the first match but at runtime
+  // we still want a clean 2-letter value for the <select>.
+  const currentLang: Lang = (supportedLngs as readonly string[]).includes(i18n.language)
+    ? (i18n.language as Lang)
+    : 'en';
+
+  const themes: Array<{ value: Theme; label: string; icon: typeof Sun }> = [
+    { value: 'dark', label: t('settings.appearance.theme_dark'), icon: Moon },
+    { value: 'light', label: t('settings.appearance.theme_light'), icon: Sun },
+    { value: 'system', label: t('settings.appearance.theme_system'), icon: Monitor },
+  ];
+
+  return (
+    <Section
+      title={t('settings.appearance.title')}
+      description={t('settings.appearance.desc')}
+    >
+      <Field label={t('settings.appearance.theme')}>
+        <div
+          role="radiogroup"
+          aria-label={t('settings.appearance.theme')}
+          className="inline-flex rounded-md border border-border bg-bg-elev-1 p-0.5"
+        >
+          {themes.map(({ value, label, icon: Icon }) => {
+            const active = theme === value;
+            return (
+              <button
+                type="button"
+                key={value}
+                role="radio"
+                aria-checked={active}
+                data-testid={`settings-theme-${value}`}
+                onClick={() => setTheme(value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs transition',
+                  active
+                    ? 'bg-gold-500/20 text-fg'
+                    : 'text-fg-subtle hover:bg-bg-elev-2 hover:text-fg',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      <Field label={t('settings.appearance.language')}>
+        <select
+          value={currentLang}
+          data-testid="settings-lang"
+          onChange={(e) => {
+            void i18n.changeLanguage(e.target.value);
+          }}
+          className={cn(inputCls, 'max-w-[200px] appearance-none pr-8')}
+        >
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+      </Field>
+    </Section>
+  );
+}
+
+// ───────────────────────── Storage ─────────────────────────
+
+function StorageSection({ paths }: { paths: AppPaths }) {
+  const { t } = useTranslation();
+  const rows: Array<{ key: keyof AppPaths; label: string }> = [
+    { key: 'config_dir', label: t('settings.storage.config_dir') },
+    { key: 'data_dir', label: t('settings.storage.data_dir') },
+    { key: 'db_path', label: t('settings.storage.db_path') },
+    { key: 'changelog_path', label: t('settings.storage.changelog_path') },
+  ];
+
+  return (
+    <Section
+      title={t('settings.storage.title')}
+      description={t('settings.storage.desc')}
+    >
+      <ul className="flex flex-col gap-2">
+        {rows.map((row) => (
+          <PathRow key={row.key} label={row.label} value={paths[row.key]} />
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+function PathRow({ label, value }: { label: string; value: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  async function onCopy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard access can fail under strict permissions — silently
+         ignore. Users can still select + copy the path manually. */
+    }
+  }
+
+  return (
+    <li className="flex items-center gap-3 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-xs">
+      <span className="min-w-[110px] flex-none text-fg-subtle">{label}</span>
+      <code className="min-w-0 flex-1 truncate font-mono text-fg" title={value}>
+        {value}
+      </code>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="inline-flex flex-none items-center gap-1 rounded p-1 text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg"
+        aria-label={t('settings.storage.copy')}
+      >
+        {copied ? (
+          <>
+            <Check className="h-3.5 w-3.5 text-emerald-500" />
+            <span className="text-emerald-500">{t('settings.storage.copied')}</span>
+          </>
+        ) : (
+          <>
+            <Copy className="h-3.5 w-3.5" />
+            <span>{t('settings.storage.copy')}</span>
+          </>
+        )}
+      </button>
+    </li>
   );
 }
 
@@ -284,6 +468,7 @@ function Field({
 }
 
 function TestRow({ status, onTest }: { status: TestStatus; onTest: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-3 rounded-md border border-border bg-bg-elev-1 px-3 py-2.5">
       <Button
@@ -298,17 +483,19 @@ function TestRow({ status, onTest }: { status: TestStatus; onTest: () => void })
         ) : (
           <Wifi className="h-3.5 w-3.5" />
         )}
-        Test connection
+        {t('settings.gateway.test')}
       </Button>
       <div className="min-w-0 flex-1 text-xs">
         {status.kind === 'idle' && (
-          <span className="text-fg-subtle">Hits <code className="font-mono">/health</code> without saving.</span>
+          <span className="text-fg-subtle">{t('settings.gateway.test_hint')}</span>
         )}
-        {status.kind === 'probing' && <span className="text-fg-muted">Probing…</span>}
+        {status.kind === 'probing' && (
+          <span className="text-fg-muted">{t('settings.gateway.testing')}</span>
+        )}
         {status.kind === 'ok' && (
           <span className="inline-flex items-center gap-1 text-emerald-500">
             <CheckCircle2 className="h-3.5 w-3.5" />
-            Healthy · {status.latencyMs} ms
+            {t('settings.gateway.test_ok', { ms: status.latencyMs })}
           </span>
         )}
         {status.kind === 'err' && (
@@ -323,11 +510,12 @@ function TestRow({ status, onTest }: { status: TestStatus; onTest: () => void })
 }
 
 function SaveStatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }) {
+  const { t } = useTranslation();
   if (status.kind === 'saved') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        Saved. Adapter reloaded.
+        {t('settings.gateway.saved')}
       </span>
     );
   }
@@ -340,7 +528,7 @@ function SaveStatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }
     );
   }
   if (dirty) {
-    return <span className="text-xs text-fg-muted">Unsaved changes.</span>;
+    return <span className="text-xs text-fg-muted">{t('settings.gateway.dirty')}</span>;
   }
-  return <span className="text-xs text-fg-subtle">No changes.</span>;
+  return <span className="text-xs text-fg-subtle">{t('settings.gateway.clean')}</span>;
 }

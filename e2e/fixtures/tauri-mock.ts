@@ -28,6 +28,14 @@ export const tauriMockInitScript = /* js */ `
   // ── user-editable fixture state ──
   const state = {
     homeStats: { path: '/tmp/caduceus', entry_count: 3, sandbox_mode: 'dev-allow' },
+    /** Canned result for app_paths. Tests can override by mutating this. */
+    appPaths: {
+      config_dir: '/Users/test/Library/Application Support/com.caduceus.app',
+      data_dir: '/Users/test/Library/Application Support/com.caduceus.app',
+      db_path: '/Users/test/Library/Application Support/com.caduceus.app/caduceus.db',
+      changelog_path:
+        '/Users/test/Library/Application Support/com.caduceus.app/changelog.jsonl',
+    },
     config: {
       base_url: 'http://127.0.0.1:8642',
       api_key: null,
@@ -143,6 +151,9 @@ export const tauriMockInitScript = /* js */ `
     switch (cmd) {
       case 'home_stats':
         return state.homeStats;
+
+      case 'app_paths':
+        return state.appPaths;
 
       case 'config_get':
         return state.config;

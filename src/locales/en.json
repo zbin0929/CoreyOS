@@ -83,6 +83,56 @@
       }
     }
   },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Preferences · gateway · storage",
+    "loading": "Loading current configuration…",
+    "appearance": {
+      "title": "Appearance",
+      "desc": "Visual preferences stored locally on this machine.",
+      "theme": "Theme",
+      "theme_dark": "Dark",
+      "theme_light": "Light",
+      "theme_system": "System",
+      "language": "Language"
+    },
+    "gateway": {
+      "title": "Gateway",
+      "desc": "Where Corey sends chat requests. Changes take effect immediately — no restart needed.",
+      "base_url": "Base URL",
+      "base_url_hint": "Example: http://127.0.0.1:8642",
+      "api_key": "API key",
+      "api_key_hint": "Optional. Matches the gateway's API_SERVER_KEY. Stored locally in plaintext.",
+      "api_key_placeholder": "(leave empty if the gateway is unauthenticated)",
+      "show_key": "Show API key",
+      "hide_key": "Hide API key",
+      "test": "Test connection",
+      "test_hint": "Hits /health without saving.",
+      "testing": "Probing…",
+      "test_ok": "Healthy · {{ms}} ms",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved. Adapter reloaded.",
+      "reset": "Reset",
+      "dirty": "Unsaved changes.",
+      "clean": "No changes."
+    },
+    "model": {
+      "title": "Default language model",
+      "desc": "Which LLM the Hermes agent uses when a chat doesn't specify one. Individual chats can override this from the composer.",
+      "label": "Model id"
+    },
+    "storage": {
+      "title": "Storage",
+      "desc": "Where your local data lives on disk. Back these up or delete them manually.",
+      "config_dir": "Config directory",
+      "data_dir": "Data directory",
+      "db_path": "Chat database",
+      "changelog_path": "Mutation journal",
+      "copy": "Copy",
+      "copied": "Copied"
+    }
+  },
   "logs": {
     "title": "Config changelog",
     "subtitle": "Every config mutation is journaled. Revert from here.",

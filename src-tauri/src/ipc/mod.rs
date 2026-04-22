@@ -6,4 +6,5 @@ pub mod demo;
 pub mod health;
 pub mod hermes_config;
 pub mod model;
+pub mod paths;
 pub mod session;

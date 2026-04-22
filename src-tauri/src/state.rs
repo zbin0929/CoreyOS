@@ -28,6 +28,13 @@ pub struct AppState {
     /// revert. Held as a `PathBuf` so each IPC can open/close on demand —
     /// writes are rare and small.
     pub changelog_path: PathBuf,
+    /// Platform-native data directory (holds `caduceus.db` +
+    /// `changelog.jsonl`). Surfaced to the UI via `app_paths` so users can
+    /// locate their data on disk for backup or deletion.
+    pub data_dir: PathBuf,
+    /// Resolved path to the SQLite DB (`<data_dir>/caduceus.db`). Stored so
+    /// the `app_paths` IPC doesn't have to re-derive it.
+    pub db_path: PathBuf,
 }
 
 impl AppState {
@@ -37,6 +44,8 @@ impl AppState {
         config_dir: PathBuf,
         db: Option<Arc<Db>>,
         changelog_path: PathBuf,
+        data_dir: PathBuf,
+        db_path: PathBuf,
     ) -> Self {
         Self {
             adapters: Arc::new(registry),
@@ -45,6 +54,8 @@ impl AppState {
             config_dir,
             db,
             changelog_path,
+            data_dir,
+            db_path,
         }
     }
 }

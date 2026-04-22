@@ -80,6 +80,7 @@ pub fn run() {
             ipc::db::db_message_set_usage,
             ipc::db::db_tool_call_append,
             ipc::db::analytics_summary,
+            ipc::paths::app_paths,
             ipc::demo::home_stats,
         ])
         .setup(|app| {
@@ -128,7 +129,15 @@ pub fn run() {
             // install; appended forever (Phase 2.8 will add a viewer + revert).
             let changelog_path = app_data_dir.join("changelog.jsonl");
 
-            app.manage(AppState::new(registry, cfg, config_dir, db, changelog_path));
+            app.manage(AppState::new(
+                registry,
+                cfg,
+                config_dir,
+                db,
+                changelog_path,
+                app_data_dir,
+                db_path,
+            ));
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
