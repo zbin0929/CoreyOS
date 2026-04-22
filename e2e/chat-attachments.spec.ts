@@ -97,6 +97,40 @@ test.describe('chat attachments', () => {
     await expect(page.getByText(/\[attached: a\.txt, b\.txt\]/)).toHaveCount(0);
   });
 
+  test('T1.5c: vision warning appears when a text-only model has a pending image', async ({
+    page,
+  }) => {
+    await page.goto('/chat');
+    await expect(page.getByText('Sessions', { exact: true })).toBeVisible();
+
+    // The mock's currentModel is `deepseek-chat` — the visionSupport
+    // heuristic deny-lists that, so attaching an image should surface
+    // the warning banner without blocking the attach flow itself.
+    await page.getByTestId('chat-file-input').setInputFiles({
+      name: 'photo.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('PNG-fake'),
+    });
+    await expect(page.getByTestId('chat-vision-warning')).toBeVisible();
+    await expect(page.getByTestId('chat-vision-warning')).toContainText(
+      /deepseek-chat/i,
+    );
+    // The Paperclip button's data-attr also carries the tri-state.
+    await expect(page.getByTestId('chat-attach-button')).toHaveAttribute(
+      'data-vision-support',
+      'no',
+    );
+
+    // Removing the image clears the warning (no pending image left).
+    await page
+      .getByTestId('chat-attachment-chips')
+      .getByRole('button', { name: /Remove/i })
+      .first()
+      .click();
+    await expect(page.getByTestId('chat-attachment-chips')).toHaveCount(0);
+    await expect(page.getByTestId('chat-vision-warning')).toHaveCount(0);
+  });
+
   test('T1.5b: outgoing IPC payload carries the attachments array', async ({
     page,
   }) => {

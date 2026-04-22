@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
+import { AlertTriangle, Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -23,6 +23,8 @@ import {
   type ChatStreamHandle,
   type StagedAttachment,
 } from '@/lib/ipc';
+import { visionSupport } from '@/lib/modelCapabilities';
+import { useAppStatusStore } from '@/stores/appStatus';
 import {
   newMessageId,
   useChatStore,
@@ -134,6 +136,19 @@ function ChatPane({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Transient error shown above the chip row when a stage fails.
   const [attachError, setAttachError] = useState<string | null>(null);
+
+  // T1.5c — resolve the effective model: per-session override wins over
+  // the gateway-wide default. Subscribed so the composer reacts live to
+  // a model switch in Settings or via the Models page.
+  const sessionModelOverride = useChatStore((s) => s.sessions[sessionId]?.model ?? null);
+  const defaultModel = useAppStatusStore((s) => s.currentModel);
+  const effectiveModel = sessionModelOverride ?? defaultModel;
+  const visionCap = visionSupport(effectiveModel);
+  // Only warn about non-vision models when the user actually has an
+  // image queued — non-image attachments still go through via the
+  // `[attached: name]` text marker and don't need vision support.
+  const hasPendingImage = pendingAttachments.some((a) => a.mime.startsWith('image/'));
+  const imageBlockedByModel = visionCap === 'no' && hasPendingImage;
 
   // Reset composer when switching sessions. Also re-seeds from
   // pendingDraft so launching a runbook into a brand-new session reaches
@@ -504,6 +519,27 @@ function ChatPane({
             </div>
           )}
 
+          {/* T1.5c — surface when the active model clearly can't read
+              images. We don't hard-block the send (the user may be
+              mid-model-switch and know what they're doing); just warn
+              once so nobody wonders why the model keeps saying "I can't
+              see any image". Non-image attachments never trigger this
+              because their [attached: name] text marker still works. */}
+          {imageBlockedByModel && (
+            <div
+              className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
+              data-testid="chat-vision-warning"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span>
+                The current model{' '}
+                <code className="rounded bg-amber-500/10 px-1">{effectiveModel}</code>{' '}
+                does not accept images. Switch to a vision-capable model or
+                send text-only.
+              </span>
+            </div>
+          )}
+
           {pendingAttachments.length > 0 && (
             <ul
               className="flex flex-wrap items-center gap-1.5"
@@ -550,8 +586,15 @@ function ChatPane({
               onClick={() => fileInputRef.current?.click()}
               disabled={sending}
               aria-label="Attach file"
-              title="Attach file"
+              title={
+                visionCap === 'no'
+                  ? `Attach file (images will be ignored — ${effectiveModel ?? 'current model'} is text-only)`
+                  : visionCap === 'unknown'
+                    ? 'Attach file (image support for this model is unverified)'
+                    : 'Attach file'
+              }
               data-testid="chat-attach-button"
+              data-vision-support={visionCap}
             >
               <Paperclip className="h-4 w-4" />
             </Button>
