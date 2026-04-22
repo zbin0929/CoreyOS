@@ -72,6 +72,7 @@ pub fn run() {
             ipc::hermes_config::hermes_env_set_key,
             ipc::hermes_config::hermes_gateway_restart,
             ipc::changelog::changelog_list,
+            ipc::changelog::changelog_revert,
             ipc::db::db_load_all,
             ipc::db::db_session_upsert,
             ipc::db::db_session_delete,

@@ -399,6 +399,27 @@ export function changelogList(limit?: number): Promise<ChangelogEntry[]> {
   return invoke<ChangelogEntry[]>('changelog_list', { limit });
 }
 
+export interface RevertReport {
+  /** The fresh entry describing the revert itself (also appears in next list). */
+  revert_entry: ChangelogEntry;
+}
+
+/**
+ * Revert one journal entry by id. Dispatches server-side by the entry's `op`.
+ *
+ * Revertible ops (current):
+ * - `hermes.config.model` — restores provider/model/base_url.
+ *
+ * Irreversible ops (server returns `unsupported`):
+ * - `hermes.env.key` — we never persisted the secret, so we can't put it back.
+ *
+ * The revert itself is journaled as a new entry, so the history stays
+ * append-only and reverts can be re-reverted.
+ */
+export function changelogRevert(entryId: string): Promise<RevertReport> {
+  return invoke<RevertReport>('changelog_revert', { entryId });
+}
+
 // ───────────────────────── Settings / config ─────────────────────────
 
 export interface GatewayConfigDto {

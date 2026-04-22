@@ -77,6 +77,28 @@
     "cta_connect": "连接到 Hermes",
     "cta_docs": "阅读文档"
   },
+  "logs": {
+    "title": "配置变更日志",
+    "subtitle": "每次配置改动都会留痕，可在此撤销。",
+    "refresh": "刷新",
+    "retry": "重试",
+    "error_title": "无法读取变更日志",
+    "empty_title": "暂无改动",
+    "empty_desc": "修改 Hermes 模型或 API Key 后，每一次改动都会出现在这里，带撤销按钮。",
+    "revert": "撤销",
+    "reverting": "撤销中…",
+    "reverted": "已撤销",
+    "not_revertible": "不可撤销",
+    "not_revertible_env": "API Key 的值从不落盘，删除无法还原。请手动重新添加。",
+    "diff": {
+      "before": "改前",
+      "after": "改后"
+    },
+    "op": {
+      "hermes.config.model": "Hermes 模型",
+      "hermes.env.key": "API Key"
+    }
+  },
   "empty": {
     "chat": {
       "title": "还没有会话",

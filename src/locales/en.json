@@ -77,6 +77,28 @@
       }
     }
   },
+  "logs": {
+    "title": "Config changelog",
+    "subtitle": "Every config mutation is journaled. Revert from here.",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "error_title": "Couldn't read changelog",
+    "empty_title": "No changes yet",
+    "empty_desc": "When you edit the Hermes model or API keys, each change lands here with a Revert button.",
+    "revert": "Revert",
+    "reverting": "Reverting…",
+    "reverted": "Reverted",
+    "not_revertible": "Not revertible",
+    "not_revertible_env": "API key values are never stored, so a deletion can't be undone. Re-add the key manually.",
+    "diff": {
+      "before": "Before",
+      "after": "After"
+    },
+    "op": {
+      "hermes.config.model": "Hermes model",
+      "hermes.env.key": "API key"
+    }
+  },
   "empty": {
     "chat": {
       "title": "No conversations yet",

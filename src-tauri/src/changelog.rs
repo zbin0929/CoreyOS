@@ -72,6 +72,28 @@ pub fn append(
     Ok(entry)
 }
 
+/// Find a single entry by id. Returns `None` if missing (caller decides
+/// whether that's an error — e.g. a stale UI clicking Revert on a
+/// log-rotated entry).
+pub fn find(path: &Path, id: &str) -> io::Result<Option<Entry>> {
+    let raw = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    for line in raw.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Ok(e) = serde_json::from_str::<Entry>(line) {
+            if e.id == id {
+                return Ok(Some(e));
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// Read the last `limit` entries, newest-first. Torn tail lines are skipped.
 pub fn tail(path: &Path, limit: usize) -> io::Result<Vec<Entry>> {
     let raw = match fs::read_to_string(path) {
@@ -155,6 +177,19 @@ mod tests {
         let entries = tail(&path, 10).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].summary, "fine");
+    }
+
+    #[test]
+    fn find_locates_entry_by_id() {
+        let path = tmp("find");
+        let e1 = append(&path, "a", None, None, "one").unwrap();
+        let e2 = append(&path, "b", None, None, "two").unwrap();
+        assert_eq!(find(&path, &e1.id).unwrap().unwrap().summary, "one");
+        assert_eq!(find(&path, &e2.id).unwrap().unwrap().summary, "two");
+        assert!(find(&path, "does-not-exist").unwrap().is_none());
+        // Missing file is not an error — just None.
+        let ghost = std::env::temp_dir().join("caduceus-changelog-ghost-nope.jsonl");
+        assert!(find(&ghost, &e1.id).unwrap().is_none());
     }
 
     #[test]

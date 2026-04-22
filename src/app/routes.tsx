@@ -8,7 +8,6 @@ import {
   Columns3,
   Wand2,
   GitBranch,
-  ScrollText,
   Terminal,
   Clock,
   Radio,
@@ -19,6 +18,7 @@ import { ChatRoute } from '@/features/chat';
 import { ModelsRoute } from '@/features/models';
 import { SettingsRoute } from '@/features/settings';
 import { AnalyticsRoute } from '@/features/analytics';
+import { LogsRoute } from '@/features/logs';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -92,15 +92,7 @@ const analyticsRoute = createRoute({
 const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/logs',
-  component: () => (
-    <Placeholder
-      titleKey="nav.logs"
-      emptyTitleKey="empty.logs.title"
-      emptyDescKey="empty.logs.desc"
-      icon={ScrollText}
-      phase={2}
-    />
-  ),
+  component: LogsRoute,
 });
 
 const terminalRoute = createRoute({

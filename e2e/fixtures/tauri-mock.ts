@@ -79,6 +79,10 @@ export const tauriMockInitScript = /* js */ `
       ],
       generated_at: Date.now(),
     },
+    /** Mutable journal backing changelog_list / changelog_revert. The mock
+     *  appends entries on hermes_config_write_model so the revert roundtrip
+     *  is testable end-to-end. */
+    changelog: [],
   };
 
   function isoDaysAgo(n) {
@@ -137,9 +141,27 @@ export const tauriMockInitScript = /* js */ `
 
       case 'hermes_config_read':
         return state.hermesConfig;
-      case 'hermes_config_write_model':
-        state.hermesConfig = { ...state.hermesConfig, model: args.model };
+      case 'hermes_config_write_model': {
+        // Journal the change before flipping state so the revert can replay
+        // the original before-model.
+        const beforeModel = state.hermesConfig.model;
+        const afterModel = args.model;
+        const nowIso = new Date().toISOString();
+        state.changelog.unshift({
+          id: nowIso + '-' + state.changelog.length,
+          ts: nowIso,
+          op: 'hermes.config.model',
+          before: beforeModel,
+          after: afterModel,
+          summary:
+            'default: ' +
+            (beforeModel.default || 'empty') +
+            ' -> ' +
+            (afterModel.default || 'empty'),
+        });
+        state.hermesConfig = { ...state.hermesConfig, model: afterModel };
         return state.hermesConfig;
+      }
       case 'hermes_env_set_key': {
         const next = new Set(state.hermesConfig.env_keys_present);
         if (args.value) next.add(args.key);
@@ -179,7 +201,39 @@ export const tauriMockInitScript = /* js */ `
       }
 
       case 'changelog_list':
-        return state.changelog ?? [];
+        return state.changelog.slice(0, args.limit || 100);
+
+      case 'changelog_revert': {
+        const target = state.changelog.find((e) => e.id === args.entryId);
+        if (!target) {
+          throw { kind: 'not_configured', hint: 'entry not found' };
+        }
+        if (target.op === 'hermes.env.key') {
+          throw { kind: 'unsupported', capability: 'env key revert' };
+        }
+        if (target.op !== 'hermes.config.model') {
+          throw { kind: 'unsupported', capability: 'revert for op ' + target.op };
+        }
+        // Restore the before-model; the act of writing appends a fresh entry
+        // via the hermes_config_write_model handler above.
+        const restored = target.before || {};
+        state.hermesConfig = { ...state.hermesConfig, model: restored };
+        const nowIso = new Date().toISOString();
+        const revertEntry = {
+          id: nowIso + '-' + state.changelog.length,
+          ts: nowIso,
+          op: 'hermes.config.model',
+          before: target.after,
+          after: target.before,
+          summary:
+            'default: ' +
+            ((target.after && target.after.default) || 'empty') +
+            ' -> ' +
+            ((target.before && target.before.default) || 'empty'),
+        };
+        state.changelog.unshift(revertEntry);
+        return { revert_entry: revertEntry };
+      }
 
       case 'db_load_all':
         return state.sessions;
