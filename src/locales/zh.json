@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "科里",
+    "name": "Corey",
     "tagline": "AI Agent 控制台"
   },
   "nav": {
@@ -72,7 +72,7 @@
     }
   },
   "home": {
-    "title": "欢迎来到 科里",
+    "title": "欢迎来到 Corey",
     "subtitle": "一个面向 AI Agent 的控制台 —— 美观、迅捷、不绑定单一 agent。",
     "cta_connect": "连接到 Hermes",
     "cta_docs": "阅读文档"
