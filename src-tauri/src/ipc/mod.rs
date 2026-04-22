@@ -12,6 +12,7 @@ pub mod hermes_logs;
 pub mod hermes_profiles;
 pub mod model;
 pub mod paths;
+pub mod pty;
 pub mod runbooks;
 pub mod session;
 pub mod wechat;

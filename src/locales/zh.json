@@ -68,6 +68,13 @@
       "detected": "已检测参数: {{list}}"
     }
   },
+  "terminal": {
+    "title": "终端",
+    "subtitle": "基于原生 PTY 的浏览器终端。单 tab、UTF-8、自动 resize。",
+    "open": "打开终端",
+    "close": "关闭",
+    "starting": "启动中…"
+  },
   "trajectory": {
     "title": "轨迹",
     "subtitle": "以时间线方式可视化已发生的会话 —— 消息 + 工具调用。",

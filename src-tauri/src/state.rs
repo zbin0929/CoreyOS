@@ -1,10 +1,15 @@
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
+use std::collections::HashMap;
+
+use parking_lot::Mutex;
+
 use crate::adapters::AdapterRegistry;
 use crate::channel_status::ChannelStatusCache;
 use crate::config::GatewayConfig;
 use crate::db::Db;
+use crate::pty::Pty;
 use crate::sandbox::PathAuthority;
 use crate::wechat::WechatRegistry;
 
@@ -48,6 +53,10 @@ pub struct AppState {
     /// it as an extra pill. Arc so spawn_blocking can take a clone
     /// without holding a `State<'_>` reference across the await.
     pub channel_status: Arc<ChannelStatusCache>,
+    /// Phase 4 · T4.5 — PTY registry keyed by caller-supplied id.
+    /// Each open terminal tab corresponds to one entry; kill/close
+    /// drops it from the map so the OS resources free immediately.
+    pub ptys: Arc<Mutex<HashMap<String, Arc<Pty>>>>,
 }
 
 impl AppState {
@@ -74,6 +83,7 @@ impl AppState {
             db_path,
             wechat,
             channel_status,
+            ptys: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

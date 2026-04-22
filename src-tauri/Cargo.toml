@@ -49,6 +49,11 @@ parking_lot = "0.12"
 # `std::fs::canonicalize`, so it's zero-cost elsewhere.
 dunce = "1"
 
+# Phase 4 · T4.5 — Web terminal. `portable-pty` provides a cross-platform
+# PTY primitive; we spawn the user's login shell and relay bytes to the
+# frontend via Tauri events.
+portable-pty = "0.9"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

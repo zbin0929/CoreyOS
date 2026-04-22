@@ -4,11 +4,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
-import {
-  Wand2,
-  Terminal,
-  Clock,
-} from 'lucide-react';
+import { Wand2, Clock } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
@@ -22,6 +18,7 @@ import { ChannelsRoute } from '@/features/channels';
 import { RunbooksRoute } from '@/features/runbooks';
 import { BudgetsRoute } from '@/features/budgets';
 import { TrajectoryRoute } from '@/features/trajectory';
+import { TerminalRoute } from '@/features/terminal';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -85,15 +82,7 @@ const logsRoute = createRoute({
 const terminalRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/terminal',
-  component: () => (
-    <Placeholder
-      titleKey="nav.terminal"
-      emptyTitleKey="empty.terminal.title"
-      emptyDescKey="empty.terminal.desc"
-      icon={Terminal}
-      phase={4}
-    />
-  ),
+  component: TerminalRoute,
 });
 
 const schedulerRoute = createRoute({

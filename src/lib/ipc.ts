@@ -369,6 +369,33 @@ export function budgetDelete(id: string): Promise<void> {
   return invoke<void>('budget_delete', { id });
 }
 
+// ───────────────────────── PTY (T4.5) ─────────────────────────
+
+/**
+ * Spawn a pty-wrapped shell. Output bytes arrive on the `pty:data:<id>`
+ * event as a base64-encoded string — the caller handles decoding (and
+ * feeding xterm.js). `id` is a caller-generated uuid so the frontend
+ * can attach listeners BEFORE the shell races to emit its first byte.
+ */
+export function ptySpawn(id: string, rows: number, cols: number): Promise<string> {
+  return invoke<string>('pty_spawn', { id, rows, cols });
+}
+
+/** Send UTF-8 keystrokes to the pty. */
+export function ptyWrite(id: string, data: string): Promise<void> {
+  return invoke<void>('pty_write', { id, data });
+}
+
+/** Resize the pty. Match what xterm.js's fit addon reports. */
+export function ptyResize(id: string, rows: number, cols: number): Promise<void> {
+  return invoke<void>('pty_resize', { id, rows, cols });
+}
+
+/** Kill the pty's child process and drop it from the backend registry. */
+export function ptyKill(id: string): Promise<void> {
+  return invoke<void>('pty_kill', { id });
+}
+
 // ───────────────────────── Hermes channels ─────────────────────────
 
 /** Field shape drives how a form cell is rendered. Mirrors the Rust

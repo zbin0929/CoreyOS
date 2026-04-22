@@ -93,6 +93,9 @@ export const tauriMockInitScript = /* js */ `
     wechatSessions: /** @type {any} */ ({}),
     // T4.6 Runbooks — mutable in-memory list.
     runbooks: /** @type {any[]} */ ([]),
+    // T4.5 PTY ids currently alive in the mock. Tests can count or
+    // assert; the real backend's pty state isn't reachable from JS.
+    ptyIds: /** @type {string[]} */ ([]),
     // T4.4 Budgets — mutable in-memory list.
     budgets: /** @type {any[]} */ ([]),
     // T3.4: per-channel live-status overrides keyed by channel id.
@@ -601,6 +604,36 @@ export const tauriMockInitScript = /* js */ `
       }
       case 'runbook_delete':
         state.runbooks = state.runbooks.filter((r) => r.id !== args.id);
+        return;
+
+      // T4.5 PTY — echoes a canned banner + parrot-on-write. The
+      // backend's real behaviour (interactive shell bytes) isn't
+      // reproducible in a browser mock, but we can exercise the
+      // spawn → stream → kill lifecycle + base64 event envelope.
+      case 'pty_spawn': {
+        const id = args.id;
+        const ev = 'pty:data:' + id;
+        queueMicrotask(() => {
+          emit(ev, btoa('mock-shell $ '));
+        });
+        state.ptyIds = state.ptyIds || [];
+        state.ptyIds.push(id);
+        return id;
+      }
+      case 'pty_write': {
+        // Echo whatever the user typed back on the data channel so a
+        // Playwright test can verify round-trip without a real shell.
+        const id = args.id;
+        const data = args.data;
+        queueMicrotask(() => {
+          emit('pty:data:' + id, btoa(data));
+        });
+        return;
+      }
+      case 'pty_resize':
+        return;
+      case 'pty_kill':
+        state.ptyIds = (state.ptyIds || []).filter((x) => x !== args.id);
         return;
 
       // T4.4 Budgets — same pattern.

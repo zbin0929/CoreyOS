@@ -21,6 +21,7 @@ mod hermes_config;
 mod hermes_logs;
 mod hermes_profiles;
 mod ipc;
+mod pty;
 mod sandbox;
 mod state;
 mod wechat;
@@ -104,6 +105,10 @@ pub fn run() {
             ipc::budgets::budget_list,
             ipc::budgets::budget_upsert,
             ipc::budgets::budget_delete,
+            ipc::pty::pty_spawn,
+            ipc::pty::pty_write,
+            ipc::pty::pty_resize,
+            ipc::pty::pty_kill,
             ipc::demo::home_stats,
         ])
         .setup(|app| {
