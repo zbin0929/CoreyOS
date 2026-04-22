@@ -148,7 +148,15 @@ impl Db {
         conn.execute(
             "INSERT INTO attachments (id, message_id, name, mime, size, path, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![a.id, a.message_id, a.name, a.mime, a.size, a.path, a.created_at],
+            params![
+                a.id,
+                a.message_id,
+                a.name,
+                a.mime,
+                a.size,
+                a.path,
+                a.created_at
+            ],
         )?;
         Ok(())
     }

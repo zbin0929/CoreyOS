@@ -237,7 +237,9 @@ mod tests {
     impl HomeGuard {
         fn new(home: &Path) -> Self {
             let local = LOCAL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            let c = crate::skills::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let c = crate::skills::HOME_LOCK
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let prev_home = std::env::var_os("HOME");
             let prev_userprofile = std::env::var_os("USERPROFILE");
             std::env::set_var("HOME", home);
@@ -320,7 +322,8 @@ mod tests {
         let home = tmp_home();
         let _g = HomeGuard::new(&home);
         // Source outside of attachments dir.
-        let src_dir = std::env::temp_dir().join(format!("caduceus-attach-src-{}", std::process::id()));
+        let src_dir =
+            std::env::temp_dir().join(format!("caduceus-attach-src-{}", std::process::id()));
         std::fs::create_dir_all(&src_dir).unwrap();
         let src = src_dir.join("cat.png");
         std::fs::write(&src, b"\x89PNG\r\n\x1a\nfake").unwrap();
@@ -360,7 +363,10 @@ mod tests {
         std::fs::write(&outside, b"bad").unwrap();
         let err = delete(outside.to_str().unwrap()).unwrap_err();
         assert!(err.to_string().contains("refusing"), "got: {err}");
-        assert!(outside.exists(), "delete() must not touch files outside the dir");
+        assert!(
+            outside.exists(),
+            "delete() must not touch files outside the dir"
+        );
     }
 
     #[test]
