@@ -6,6 +6,63 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Phase 1–4 close-out · six follow-ups shipped
+
+Final sweep before Phase 5: six high-value follow-ups across Phase 1,
+2, and 4 land in a single session. Everything else is triaged into
+`docs/06-backlog.md` with priority + re-open triggers.
+
+### Shipped
+
+- **T1.5c** (`1f34124`) — vision-capability gating on the Paperclip
+  button. Tri-state `visionSupport()` heuristic in
+  `src/lib/modelCapabilities.ts`; non-vision models surface an amber
+  warning banner when an image is pending; send is not hard-blocked.
+- **T1.5d + T1.5e** (`6c34f71`) — attachment thumbnails + orphan-file
+  GC. New `attachment_preview` IPC returns a 5 MB-capped data URL;
+  `AttachmentImageTile` renders 96×96 thumbs with loading/failure
+  fallback. `attachment_gc` sweeps files not referenced by any DB
+  row on every app start.
+- **T4.4b** (`ce6603e`) — budget-breach chat interceptor. Before each
+  send, `evaluateBudgetGate` runs; `notify` budgets surface an inline
+  amber banner, `block` budgets raise a native confirm dialog, cancel
+  aborts with the composer draft preserved. Lifetime spend only (per-
+  period windowing parked pending analytics bucket support).
+- **T4.6b** (`5490f18`) — runbook scope filtering by active Hermes
+  profile. `runbookScopeApplies()` shared between the Runbooks list
+  (with "Show all scopes" toggle) and the palette (tight filter, no
+  toggle). Scope picker added to the editor.
+- **P2 profile revert** (`ad264c9`) — `changelog_revert` dispatcher
+  now handles `hermes.profile.{create,rename,clone,delete}`. Extracted
+  pure `apply_revert()` for testing; delete-revert recreates the
+  profile with a seed `config.yaml` (prior data explicitly not
+  restored, per documented contract).
+
+### Test totals
+
+- **Rust**: 101 → **112** (+11 across 4 modules).
+- **E2E (Playwright)**: 46 → **52** (+6).
+- `cargo fmt --check` + `cargo clippy -- -D warnings` + typecheck +
+  lint: clean.
+
+### Backlog-ified
+
+See `docs/06-backlog.md` for the 18-ish items that stayed parked:
+Tencent iLink (blocked on credentials), CodeMirror 6, multi-tab
+terminal, per-period budget windowing, reconnect auto-poll, 10k-msg
+virtualisation, profile data-restore, per-profile gateway lifecycle,
+tar.gz profile import/export, streaming log tail, and more. Each
+entry carries a priority + re-open trigger so nothing rots.
+
+### Phase 5 opens on
+
+- M1–M3 shipped, Phase 1 / 2 / 3 / 4 all flagged `**Shipped**` in
+  `docs/05-roadmap.md`.
+- No open exit-criteria regressions.
+- Clean working tree; CI green on `main`.
+
+---
+
 ## 2026-04-22 — T1.5b · Multimodal chat wire format
 
 Upgrades the chat IPC wire so vision-capable providers actually receive
