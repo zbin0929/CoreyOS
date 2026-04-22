@@ -365,8 +365,33 @@ fn synth_qr_svg(seed: &str) -> String {
 mod tests {
     use super::*;
 
+    // Serialise with the HOME lock: this test reaches `Scanned`, which
+    // triggers the stub's `.env` upsert. That upsert resolves the env
+    // path through `hermes_dir()` (reads `$HOME` / `%USERPROFILE%`), so
+    // it must not interleave with any other test that mutates HOME.
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn stub_advances_through_pending_scanning_scanned() {
+        let _home_guard = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
+        // Point HOME + USERPROFILE at an isolated tempdir so the `.env`
+        // write doesn't pollute the dev/CI user's real profile.
+        let tmp = std::env::temp_dir().join(format!(
+            "caduceus-wechat-advance-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(tmp.join(".hermes")).unwrap();
+        let original_home = std::env::var_os("HOME");
+        let original_userprofile = std::env::var_os("USERPROFILE");
+        std::env::set_var("HOME", &tmp);
+        std::env::set_var("USERPROFILE", &tmp);
+
         let p = StubQrProvider::new(None);
         let start = p.start().await.unwrap();
         // Poll 1 → Pending, 2 → Pending (polls_until_scanning=2),
@@ -383,6 +408,15 @@ mod tests {
         // Terminal — subsequent polls stay on Scanned.
         let r5 = p.poll(&start.qr_id).await.unwrap();
         assert_eq!(r5.status, QrStatus::Scanned);
+
+        match original_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+        match original_userprofile {
+            Some(v) => std::env::set_var("USERPROFILE", v),
+            None => std::env::remove_var("USERPROFILE"),
+        }
     }
 
     #[tokio::test]
@@ -413,17 +447,18 @@ mod tests {
         assert!(a1.starts_with("<svg xmlns"));
     }
 
-    // Whole test body runs under the HOME lock — that's the entire point.
-    // Parallel tests can't touch HOME until we're done.
+    // Whole test body runs under the HOME lock — we mutate `$HOME`
+    // to isolate the `.env` write, so no other test in the crate may
+    // touch HOME concurrently.
     #[tokio::test]
     #[allow(clippy::await_holding_lock)]
     async fn scanned_write_uses_stub_token_matching_qr_id() {
-        // Serialise HOME mutations across the whole crate — otherwise
-        // `skills::tests::*` (which also set_var("HOME", …)) can race.
         let _home_guard = crate::skills::HOME_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        // Point HOME at a tempdir so write_env_key has somewhere to land.
+
+        // Point HOME (and USERPROFILE, for Windows CI where `$HOME`
+        // isn't populated) at a fresh tempdir.
         let tmp = std::env::temp_dir().join(format!(
             "caduceus-wechat-stub-{}-{}",
             std::process::id(),
@@ -434,7 +469,9 @@ mod tests {
         ));
         std::fs::create_dir_all(tmp.join(".hermes")).unwrap();
         let original_home = std::env::var_os("HOME");
+        let original_userprofile = std::env::var_os("USERPROFILE");
         std::env::set_var("HOME", &tmp);
+        std::env::set_var("USERPROFILE", &tmp);
 
         let p = StubQrProvider::new(None);
         let s = p.start().await.unwrap();
@@ -446,10 +483,13 @@ mod tests {
         assert!(env_raw.contains("WECHAT_SESSION="));
         assert!(env_raw.contains(&s.qr_id));
 
-        if let Some(v) = original_home {
-            std::env::set_var("HOME", v);
-        } else {
-            std::env::remove_var("HOME");
+        match original_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+        match original_userprofile {
+            Some(v) => std::env::set_var("USERPROFILE", v),
+            None => std::env::remove_var("USERPROFILE"),
         }
     }
 }

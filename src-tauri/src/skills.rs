@@ -24,8 +24,16 @@ const HERMES_DIR: &str = ".hermes";
 const SKILLS_DIR: &str = "skills";
 
 fn hermes_dir() -> io::Result<PathBuf> {
+    // Match hermes_config::hermes_dir — `$HOME` first, `%USERPROFILE%`
+    // as the Windows fallback so tests + CI on Windows resolve too.
     let home = std::env::var_os("HOME")
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "$HOME not set"))?;
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "neither $HOME nor %USERPROFILE% set",
+            )
+        })?;
     Ok(PathBuf::from(home).join(HERMES_DIR))
 }
 

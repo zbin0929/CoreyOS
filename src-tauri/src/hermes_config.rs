@@ -54,9 +54,19 @@ pub struct HermesConfigView {
 }
 
 /// Resolve `~/.hermes/`. Pure std, no `dirs` crate needed.
+///
+/// Reads `$HOME` first (covers macOS, Linux, and WSL), then falls back
+/// to `%USERPROFILE%` so Windows CI and native Windows hosts — where
+/// `$HOME` isn't populated by default — also resolve.
 fn hermes_dir() -> io::Result<PathBuf> {
     let home = std::env::var_os("HOME")
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "$HOME not set"))?;
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "neither $HOME nor %USERPROFILE% set",
+            )
+        })?;
     Ok(PathBuf::from(home).join(HERMES_DIR))
 }
 

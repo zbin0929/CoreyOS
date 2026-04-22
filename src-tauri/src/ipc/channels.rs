@@ -237,13 +237,25 @@ fn read_nonempty_env_keys() -> std::io::Result<std::collections::HashSet<String>
 
 fn env_path() -> std::io::Result<std::path::PathBuf> {
     let home = std::env::var_os("HOME")
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "$HOME not set"))?;
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "neither $HOME nor %USERPROFILE% set",
+            )
+        })?;
     Ok(Path::new(&home).join(".hermes/.env"))
 }
 
 fn read_config_yaml_value() -> std::io::Result<YamlValue> {
     let home = std::env::var_os("HOME")
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "$HOME not set"))?;
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "neither $HOME nor %USERPROFILE% set",
+            )
+        })?;
     let path = Path::new(&home).join(".hermes/config.yaml");
     let raw = match std::fs::read_to_string(&path) {
         Ok(s) => s,

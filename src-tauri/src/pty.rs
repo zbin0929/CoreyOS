@@ -127,7 +127,13 @@ fn default_shell() -> String {
     }
 }
 
-#[cfg(test)]
+// Unix-only: Windows `cmd.exe` echoes `echo caduceus-pty-hi\r`
+// differently (the command itself is printed verbatim along with a
+// prompt line) and the timing of its output stream isn't predictable
+// enough to assert a marker round-trip without flakes. The spawn /
+// write / resize / kill wiring is still exercised on Windows through
+// Tauri E2E harnesses at integration time.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::sync::mpsc;
