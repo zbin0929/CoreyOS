@@ -6,6 +6,65 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — T1.5b · Multimodal chat wire format
+
+Upgrades the chat IPC wire so vision-capable providers actually receive
+images instead of just a `[attached: …]` text hint. Frontend sends
+`{role, content, attachments: [{path, mime, name}]}`; the Hermes adapter
+reads each staged file, base64-encodes it into a `data:…` URL, and
+assembles OpenAI's multimodal `content` array (`{type:"text"}` +
+`{type:"image_url"}` parts). Plain-text turns still serialise as bare
+strings — parity with providers that reject the array shape when there
+are no image parts.
+
+### Shipped
+
+- **`ChatMessageDto` extended** (Rust + TS) with optional
+  `attachments: Vec<ChatAttachmentRef>` (`skip_serializing_if` empty so
+  the wire stays minimal for plain turns). `ChatAttachmentRef` carries
+  `{path, mime, name}`.
+- **Gateway DTOs upgraded** — `ChatMessage.content` is now the
+  untagged `ChatMessageContent { Text(String) | Parts(Vec<…>) }`;
+  `ChatContentPart` is tagged with `{type:"text"|"image_url"}`.
+- **`resolve_turn` / `build_content`** in the Hermes adapter read image
+  attachments from disk, base64-encode, and build the parts array. Text
+  part leads (OpenAI's recommended ordering). Non-image MIMEs and
+  failed reads degrade to a `[attached: name]` marker appended to the
+  text part — the user's words still reach the model on a bad read.
+- **Frontend composer** stops baking `[attached: …]` into the bubble
+  content. Stored text is now verbatim user input; attachments render
+  as chips only. Prior turns' attachments ride along in `historyForIpc`
+  so multi-turn context ("what colour was that?") works.
+
+### Fixed
+
+- Chat bubbles no longer show `[attached: foo.png]` noise after an
+  attachment send. Users see their text; chips render separately.
+
+### Test totals
+
+- **Rust**: 96 → **101** (+5 tests in `adapters::hermes::tests` covering
+  text-only passthrough, image→data URL, non-image marker fallback,
+  missing-file graceful degrade, and mixed-attachment ordering).
+- **E2E**: 45 → **46** (+1 — asserts the outgoing IPC payload carries
+  the `attachments` array and clean `content` string; existing 3 tests
+  adjusted to the new bubble content shape).
+
+### Deferred
+
+- **Vision-capability gating on Paperclip** — the button is still
+  unconditionally enabled; a non-vision model attached an image just
+  ignores it (or errors, depending on the provider). Next T1.5-series
+  follow-up.
+- **Attachment thumbnail preview** in chat bubbles. Needs an
+  `attachment_preview` IPC reading staged bytes into a data URL the UI
+  can hang off `<img src>`.
+- **Orphan-file GC** for `~/.hermes/attachments/` when sessions are
+  deleted. DB cascades the rows; disk still leaks until a `hermes
+  attachments gc` helper lands.
+
+---
+
 ## 2026-04-22 — Phase 4 complete · T4.2–T4.6 rollup
 
 Wraps up Phase 4. All six differentiator tasks now ship; the last five

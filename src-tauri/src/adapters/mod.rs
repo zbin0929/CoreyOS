@@ -81,10 +81,38 @@ pub struct ModelCapabilities {
 }
 
 /// A single OpenAI-style chat message: role = "system" | "user" | "assistant".
+///
+/// `attachments` was added in T1.5b to support multimodal providers. When
+/// present, the adapter is responsible for:
+///   1. reading each `path` (bytes live under `~/.hermes/attachments/`),
+///   2. base64-encoding them into `data:<mime>;base64,…` URLs,
+///   3. assembling an OpenAI-style `content` array with text + image parts.
+///
+/// The frontend only ever sends the paths + mimes — it never ships bytes
+/// through IPC. Messages without attachments keep the classic string
+/// `content` shape, so upstream providers that don't speak multimodal
+/// (and our own stub-mode adapters) stay untouched.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessageDto {
     pub role: String,
     pub content: String,
+    /// Empty in the overwhelming majority of turns — most messages are
+    /// plain text. Omitted from the JSON payload when empty via
+    /// `skip_serializing_if` so the wire format stays minimal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<ChatAttachmentRef>,
+}
+
+/// Reference to a staged attachment accompanying a chat message. The three
+/// fields mirror the slice of `AttachmentRow` the adapter needs; we keep
+/// them decoupled from the DB row so the trait doesn't drag SQLite types
+/// into every adapter. `name` is kept around for text fallback when a
+/// provider can't consume the file (e.g. a PDF to a non-document model).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatAttachmentRef {
+    pub path: String,
+    pub mime: String,
+    pub name: String,
 }
 
 /// Phase 1 Sprint 1 chat request: stateless single-turn completion.

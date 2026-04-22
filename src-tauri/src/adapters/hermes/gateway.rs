@@ -370,10 +370,49 @@ pub struct ChatOnceResponse {
     pub completion_tokens: Option<u32>,
 }
 
+/// OpenAI-compatible chat message. `content` is either a plain string
+/// (the classic shape) or an array of typed content parts (OpenAI's
+/// multimodal shape, `{type: "text", ...} | {type: "image_url", ...}`).
+/// T1.5b chose the untagged-enum route so non-vision turns keep emitting
+/// the minimal string payload — important for provider parity because
+/// some gateways reject the array form when there are no image parts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String, // "system" | "user" | "assistant"
-    pub content: String,
+    pub content: ChatMessageContent,
+}
+
+/// Either a plain text body or an OpenAI multimodal `content` array.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ChatMessageContent {
+    Text(String),
+    Parts(Vec<ChatContentPart>),
+}
+
+impl ChatMessageContent {
+    /// Convenience for plain text turns.
+    pub fn text(s: impl Into<String>) -> Self {
+        Self::Text(s.into())
+    }
+}
+
+/// A single part of a multimodal `content` array. Mirrors OpenAI's
+/// `chat.completions` multimodal input — the only shapes we emit today
+/// are `text` and `image_url`; room to add `audio` / `file` later.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ChatContentPart {
+    Text { text: String },
+    ImageUrl { image_url: ChatImageUrl },
+}
+
+/// OpenAI wraps image data in `{ url: "data:…" | "https://…" }`. `detail`
+/// is optional and gateway-specific (some providers honour `"low"` /
+/// `"high"` / `"auto"`); we don't set it for now.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatImageUrl {
+    pub url: String,
 }
 
 #[derive(Debug, Serialize)]

@@ -19,6 +19,21 @@ export type ChatRole = 'system' | 'user' | 'assistant';
 export interface ChatMessageDto {
   role: ChatRole;
   content: string;
+  /** T1.5b — optional multimodal attachment pointers. The Rust adapter
+   *  reads the paths, base64-encodes the bytes, and assembles an OpenAI
+   *  `content` array for vision-capable providers. Non-image MIMEs
+   *  degrade to a `[attached: foo.pdf]` text marker. Omit entirely for
+   *  plain-text turns so the wire stays minimal. */
+  attachments?: ChatMessageAttachment[];
+}
+
+/** Thin reference to a staged attachment — matches the Rust
+ *  `ChatAttachmentRef` DTO. Paths are whatever `attachment_stage_*`
+ *  returned; the frontend treats them as opaque. */
+export interface ChatMessageAttachment {
+  path: string;
+  mime: string;
+  name: string;
 }
 
 export interface ChatSendArgs {

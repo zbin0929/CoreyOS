@@ -266,14 +266,12 @@ function ChatPane({
       path: a.path,
       createdAt: a.created_at,
     }));
-    // Compose the content shown both in the bubble AND sent to the LLM:
-    // the user's text plus a trailing marker listing filenames. Providers
-    // that don't support multimodal still get a readable hint; a future
-    // follow-up will upgrade `ChatMessageDto.content` to a multimodal
-    // array for vision-capable models.
-    const contentForMessage = hasAttachments
-      ? `${trimmed}${trimmed ? '\n\n' : ''}[attached: ${attachmentsSnapshot.map((a) => a.name).join(', ')}]`
-      : trimmed;
+    // T1.5b — the stored bubble content is now just the user's typed
+    // text (attachments render as chips above/inside the bubble). The
+    // LLM receives the same clean text PLUS an `attachments` array on
+    // the outgoing ChatMessageDto; the Rust adapter expands that into
+    // OpenAI's multimodal content array (text part + image_url parts).
+    const contentForMessage = trimmed;
 
     const userMsg: UiMessage = {
       id: newMessageId(),
@@ -306,11 +304,33 @@ function ChatPane({
     // pending runbook draft so a back-navigation doesn't re-seed it.
     clearPendingDraftIfSet();
 
+    // Build the wire history. Prior messages' attachments ride along
+    // too — if the user references an earlier image in the next turn
+    // ("what colour was it?"), the provider needs that image back in
+    // context. `attachments` is `undefined` on plain-text turns so the
+    // Rust adapter keeps the classic string content shape.
+    const toDto = (
+      role: 'user' | 'assistant',
+      content: string,
+      atts: UiAttachment[] | undefined,
+    ): ChatMessageDto =>
+      atts && atts.length > 0
+        ? {
+            role,
+            content,
+            attachments: atts.map((a) => ({
+              path: a.path,
+              mime: a.mime,
+              name: a.name,
+            })),
+          }
+        : { role, content };
+
     const historyForIpc: ChatMessageDto[] = [
       ...messages
         .filter((m) => !m.error && !m.pending)
-        .map<ChatMessageDto>((m) => ({ role: m.role, content: m.content })),
-      { role: 'user', content: contentForMessage },
+        .map<ChatMessageDto>((m) => toDto(m.role, m.content, m.attachments)),
+      toDto('user', contentForMessage, hasAttachments ? attachmentsSnapshot : undefined),
     ];
 
     try {

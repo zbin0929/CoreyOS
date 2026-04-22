@@ -6,6 +6,47 @@
 
 **Depends on**: Phase 0.
 
+## Shipped (2026-04-22)
+
+| Task   | Status | Notes                                                                 |
+|--------|--------|-----------------------------------------------------------------------|
+| T1.1 Gateway probe                  | ✅ | `/health` + `/v1/models` with latency + version readouts.              |
+| T1.2 Session list                   | ✅ | Sessions panel with MRU ordering, rename, delete. `db_load_all` hydrates on startup. |
+| T1.3 Streaming chat + tool cards    | ✅ | SSE via `chat_stream_start`; tool progress cards render inline above assistant bubbles. |
+| T1.4 Markdown + code copy           | ✅ | `react-markdown` + `rehype-highlight`; per-bubble copy button.        |
+| T1.5 Attachments                    | ✅ | Staging under `~/.hermes/attachments/<uuid>.<ext>`, 25 MB cap, atomic writes, v4 DB migration with cascade delete. Composer supports file picker, paste, drag-and-drop. |
+| T1.5b Multimodal wire format        | ✅ | `ChatMessageDto.attachments` → OpenAI `content: [{type:"text"},{type:"image_url"}]` array assembled by the Hermes adapter from staged bytes. Non-image MIMEs degrade to `[attached: …]` markers. |
+| T1.6 Per-session model override     | ✅ | Zustand-persisted; composer dropdown.                                 |
+| T1.7 Cancel mid-stream              | ✅ | Stop button swaps in during a stream; partial text preserved.         |
+| T1.8 Reconnect                      | ⚠️ | Works on next send after a gateway restart; there's no auto-health-poll yet. Acceptable for a local-gateway use case. |
+| T1.9 10k-message virtualisation     | ⚠️ | No virtualisation implemented; scroll perf is fine up to ~2k messages on M1. Re-open when a user hits the wall. |
+
+### Deferred to later phases
+
+- **T1.5 follow-ups (all belong to a future T1.5c/d):**
+  - Vision-capability gating on the Paperclip button (hide / disable
+    when the active model can't consume images).
+  - Attachment thumbnails in chat bubbles (`attachment_preview` IPC
+    returning a data URL).
+  - Orphan-file GC for `~/.hermes/attachments/`.
+- **T1.9 virtualisation** — revisit only if real usage hits a perf
+  ceiling. Current `overflow-y-auto` with smooth scroll is fine for the
+  typical few-hundred-message sessions.
+
+### Deltas vs original plan
+
+- **Attachment staging path.** The spec said `~/.caduceus/attachments/{session}/…`;
+  we shipped under `~/.hermes/attachments/<uuid>.<ext>` — flat UUID
+  naming matches how other Hermes tools lay out scratch space and
+  avoids a pre-stage "which session are we in?" round-trip for the
+  paste / drop flows.
+- **Multimodal wire format (T1.5b) wasn't in the original Phase 1
+  task list** — it was carved out as a follow-up once T1.5 landed with
+  a text-only `[attached: …]` marker and the vision models couldn't
+  see anything. Net effect on the exit criteria: strictly better; the
+  "file upload works for ≥ 3 types" bar now includes multimodal
+  delivery for image types.
+
 ## Exit criteria
 
 1. User connects to a running Hermes gateway via a discovery step; status goes green.
