@@ -194,19 +194,74 @@ src/locales/{en,zh}.json   (+ channel strings)
   (b) token fill → diff never leaks the value → card flips to
   Configured without the raw token appearing anywhere in the DOM.
 
+### T3.3 — WeChat QR scaffolding · **Shipped** (2026-04-22)
+
+Shipped the state-machine skeleton + UI; the real Tencent iLink
+HTTP client is deliberately deferred until we have credentials to
+test against. The surface the frontend talks to is stable and
+won't change when the real provider lands.
+
+- **Rust `wechat.rs`** with:
+  - `QrProvider` async trait (`start` / `poll` / `cancel`). A thin
+    contract — the real iLink impl drops in as a second struct
+    without touching the IPC layer.
+  - `QrStatus` discriminated union: `Pending` / `Scanning` /
+    `Scanned` / `Expired` / `Cancelled` / `Failed { detail }`.
+    `is_terminal()` is the single source of truth for "stop
+    polling".
+  - `StubQrProvider` — deterministic mock that advances on poll
+    count (2 Pending, 1 Scanning, 1 Scanned). On `Scanned` it
+    writes `WECHAT_SESSION=stub-session-{qr_id}` through
+    `hermes_config::write_env_key` so the rest of the app (card
+    state, changelog revert) behaves end-to-end.
+  - `synth_qr_svg(seed)` — a seeded placeholder SVG (21×21 cells,
+    conventional finder patterns, deterministic per id). Zero new
+    crates; the real provider returns a proper scannable image and
+    this fn is replaced wholesale.
+- **Three IPCs** in `ipc/wechat.rs`: `wechat_qr_start`,
+  `wechat_qr_poll`, `wechat_qr_cancel`. Each just delegates to
+  `state.wechat.provider()`; the `WechatRegistry` on `AppState`
+  hides which implementation is wired up.
+- **Frontend `WeChatQr.tsx`** — mounted inline inside the WeChat
+  card's edit form. Two visible states:
+  - *Idle*: intro copy + "Start QR session" CTA.
+  - *Active*: inline SVG + status line + Cancel (or "Start over"
+    once terminal). Poll cadence is 2s via recursive `setTimeout`
+    (never stacking). Unmount triggers a best-effort `cancel`.
+- **Card integration** — when the QR panel reports `scanned`, the
+  form fires `onWechatScanned`; the card re-reads `ChannelState`
+  (so `env_present.WECHAT_SESSION` flips to `true`) and surfaces
+  the same amber restart prompt non-hot-reloadable channels show
+  after a normal save.
+- **i18n** `channels.wechat.*` (en + zh): intro, start/restart/
+  cancel, six status lines, expiry countdown, "written by QR"
+  marker.
+- **Tests**:
+  - Rust unit: +5 (stub advances through the full state machine,
+    cancel idempotency + wins, unknown-id = NotFound, SVG
+    determinism, scanned writes the expected token through
+    `write_env_key`).
+  - Playwright: +1 covering the whole stub flow — start → QR SVG
+    visible → pending → scanning → restart prompt → env_present
+    flips. ~10s wall clock because the stub cadence is intentionally
+    real-time.
+
 ### Deferred within Phase 3
 
 Will land with subsequent Txx:
 
-- **T3.3** — WeChat QR flow (Tencent iLink).
+- **Real Tencent iLink client** — `ILinkQrProvider` living next to
+  `StubQrProvider`, wired in via the same registry. Out-of-scope
+  while we lack live credentials + a documented endpoint to hit.
+  Expected work: ~300 LoC of `reqwest` glue + cookie handling +
+  retry logic. No UI or IPC changes.
 - **T3.4** — live status probing + log-grep fallback.
-- **T3.5** — mobile layout (Drawer instead of card-flip below 720px).
-- **Delete-an-existing-secret** affordance is NOT in T3.2. Users can
-  still remove a channel token via the changelog revert or by hand
-  editing `~/.hermes/.env`; an explicit "Clear" button lands once
-  T3.4 gives us live-status to show the side effect.
-- WhatsApp env name is still a placeholder (`WHATSAPP_TOKEN`); verify
-  against a live Hermes once we have one wired up.
-- Phase-2 deferrals that cluster here: profile tar.gz import/export,
-  per-profile gateway start/stop, active-profile switching, streaming
-  log tail.
+- **T3.5** — mobile layout (Drawer instead of card-flip below
+  720px).
+- **Delete-an-existing-secret** affordance. Still via the
+  changelog revert or hand-editing `.env`; explicit "Clear"
+  button lands with T3.4.
+- WhatsApp env name is still a placeholder (`WHATSAPP_TOKEN`).
+- Phase-2 deferrals that cluster here: profile tar.gz import /
+  export, per-profile gateway start/stop, active-profile
+  switching, streaming log tail.

@@ -123,4 +123,52 @@ test.describe('channels', () => {
     // The token string never appears in the rendered DOM anywhere.
     await expect(page.getByText('super-secret-bot-token')).toHaveCount(0);
   });
+
+  // ───────────────────────── T3.3 — WeChat QR flow ─────────────────────────
+
+  test('WeChat QR: start → scan progression → env_present flips to set', async ({ page }) => {
+    await page.goto('/channels');
+
+    await page.getByTestId('channel-edit-wechat').click();
+
+    // Idle panel is visible; no poll in flight yet.
+    await expect(page.getByTestId('wechat-qr-idle')).toBeVisible();
+
+    // Start a session → QR SVG appears, status starts at pending.
+    await page.getByTestId('wechat-qr-start').click();
+    await expect(page.getByTestId('wechat-qr-svg')).toBeVisible();
+    await expect(page.getByTestId('wechat-qr-status-pending')).toBeVisible();
+
+    // Stub advances on polls (2s cadence): pending × 2 → scanning × 1 → scanned.
+    // Once scanned the parent card unmounts the form to show the
+    // restart prompt, so the `scanned` status line is transient —
+    // we assert on `scanning` (long enough to observe) and then
+    // wait for the restart prompt (the real user-visible outcome).
+    await expect(page.getByTestId('wechat-qr-status-scanning')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId('channel-restart-prompt-wechat')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // env_present for WECHAT_SESSION flipped to true in the fixture —
+    // dismiss the restart prompt and the card should read as Configured.
+    await page
+      .getByTestId('channel-restart-prompt-wechat')
+      .getByRole('button')
+      .first()
+      .click();
+    // WeChat keeps its QR pill even when configured (see computeStatus);
+    // the key assertion is env_present changed, which the mock state
+    // exposes directly.
+    const env = await page.evaluate(() => {
+      const chan = (
+        window as unknown as {
+          __CADUCEUS_MOCK__: { state: { channels: { id: string; env_present: Record<string, boolean> }[] } };
+        }
+      ).__CADUCEUS_MOCK__.state.channels.find((c) => c.id === 'wechat');
+      return chan?.env_present;
+    });
+    expect(env).toEqual({ WECHAT_SESSION: true });
+  });
 });

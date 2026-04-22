@@ -22,6 +22,7 @@ mod hermes_profiles;
 mod ipc;
 mod sandbox;
 mod state;
+mod wechat;
 
 use std::sync::Arc;
 
@@ -86,6 +87,9 @@ pub fn run() {
             ipc::paths::app_paths,
             ipc::channels::hermes_channel_list,
             ipc::channels::hermes_channel_save,
+            ipc::wechat::wechat_qr_start,
+            ipc::wechat::wechat_qr_poll,
+            ipc::wechat::wechat_qr_cancel,
             ipc::hermes_logs::hermes_log_tail,
             ipc::hermes_profiles::hermes_profile_list,
             ipc::hermes_profiles::hermes_profile_create,
@@ -140,6 +144,14 @@ pub fn run() {
             // install; appended forever (Phase 2.8 will add a viewer + revert).
             let changelog_path = app_data_dir.join("changelog.jsonl");
 
+            // Phase 3 · T3.3: the stub QR provider. Swap for
+            // `ILinkQrProvider::new(..)` once that ships; no other
+            // wiring needs to change. `Some(changelog_path.clone())`
+            // so scanned sessions journal their `.env` write.
+            let wechat = Arc::new(wechat::WechatRegistry::new(Arc::new(
+                wechat::StubQrProvider::new(Some(changelog_path.clone())),
+            )));
+
             app.manage(AppState::new(
                 registry,
                 cfg,
@@ -148,6 +160,7 @@ pub fn run() {
                 changelog_path,
                 app_data_dir,
                 db_path,
+                wechat,
             ));
 
             if let Some(window) = app.get_webview_window("main") {

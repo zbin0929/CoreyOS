@@ -179,8 +179,25 @@
     "restart_prompt": "已保存。现在重启 Hermes 网关让改动立即生效？",
     "restart_now": "立即重启",
     "restart_later": "稍后",
-    "qr_cta": "扫码登录（T3.3 会接入）。",
-    "qr_pending": "扫码登录将在 T3.3 接入 —— 先在这里保存字段，凭证将通过扫码流程写入。",
+    "qr_cta": "扫码登录。",
+    "qr_pending": "微信凭证通过下方扫码流程写入，无需手动输入。",
+    "wechat": {
+      "hint_qr": "微信登录仅支持扫码（Tencent iLink）。",
+      "qr_intro": "开启扫码会话，用微信 App 扫一下并在手机上确认。Session Token 将自动写入 ~/.hermes/.env。",
+      "start": "开启扫码",
+      "restart": "重新开始",
+      "cancel": "取消",
+      "written_by_qr": "由扫码写入",
+      "expires_in_s": "{{s}} 秒后过期",
+      "status": {
+        "pending": "等待扫码…",
+        "scanning": "已扫码 —— 请在手机上确认",
+        "scanned": "已登录 —— 凭证已保存",
+        "expired": "二维码已过期",
+        "cancelled": "会话已取消",
+        "failed": "扫码登录失败：{{detail}}"
+      }
+    },
     "diff": {
       "env_set": "已设置",
       "env_unset": "未设置"
@@ -227,9 +244,6 @@
     "feishu": {
       "hint_app_id": "飞书开放平台 → 应用凭证。",
       "hint_app_secret": "与 App ID 配对，请保密。"
-    },
-    "wechat": {
-      "hint_qr": "打开微信 App 扫码登录（Tencent iLink）。"
     },
     "wecom": {
       "hint_bot_id": "企业微信管理后台 → 机器人 ID。",

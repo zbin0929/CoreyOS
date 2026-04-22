@@ -5,6 +5,7 @@ use crate::adapters::AdapterRegistry;
 use crate::config::GatewayConfig;
 use crate::db::Db;
 use crate::sandbox::PathAuthority;
+use crate::wechat::WechatRegistry;
 
 /// Shared application state managed by Tauri.
 pub struct AppState {
@@ -35,9 +36,16 @@ pub struct AppState {
     /// Resolved path to the SQLite DB (`<data_dir>/caduceus.db`). Stored so
     /// the `app_paths` IPC doesn't have to re-derive it.
     pub db_path: PathBuf,
+    /// WeChat QR-login provider registry (Phase 3 · T3.3). Wraps an
+    /// `Arc<dyn QrProvider>`, so swapping from the stub to the real
+    /// iLink client is a one-line change at startup with zero UI
+    /// impact. Sessions live in the provider (not here) — this
+    /// struct is effectively a lazy accessor.
+    pub wechat: Arc<WechatRegistry>,
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         registry: AdapterRegistry,
         config: GatewayConfig,
@@ -46,6 +54,7 @@ impl AppState {
         changelog_path: PathBuf,
         data_dir: PathBuf,
         db_path: PathBuf,
+        wechat: Arc<WechatRegistry>,
     ) -> Self {
         Self {
             adapters: Arc::new(registry),
@@ -56,6 +65,7 @@ impl AppState {
             changelog_path,
             data_dir,
             db_path,
+            wechat,
         }
     }
 }

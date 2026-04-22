@@ -6,6 +6,94 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 3 Sprint 3 (T3.3): WeChat QR-login scaffolding
+
+### Context
+
+WeChat credentials can't be typed — they arrive via a QR scan
+against Tencent's iLink service. T3.3 ships the state-machine
+skeleton + UI behind a `QrProvider` trait so the real iLink HTTP
+client can drop in later without touching the frontend or IPC
+layer. The live iLink integration is deferred until we have
+credentials to test against (out-of-scope while upstream is a
+black box we can't exercise).
+
+### Shipped
+
+- **Rust `wechat.rs`**:
+  - `QrProvider` async trait (`start` / `poll` / `cancel`). Thin
+    contract; real iLink impl drops in as a second struct.
+  - `QrStatus`: `Pending` / `Scanning` / `Scanned` / `Expired` /
+    `Cancelled` / `Failed { detail }`, with `is_terminal()` as the
+    single source of truth for "stop polling".
+  - `StubQrProvider` — deterministic mock that advances on poll
+    count (2 Pending, 1 Scanning, 1 Scanned). On `Scanned` writes
+    `WECHAT_SESSION=stub-session-{qr_id}` through
+    `hermes_config::write_env_key` so changelog revert, card state,
+    etc. all behave end-to-end.
+  - `synth_qr_svg(seed)` — seeded placeholder SVG (21×21 cells +
+    conventional finder patterns, deterministic per id). Zero new
+    crates; the real provider returns a proper scannable image that
+    replaces this fn wholesale.
+- **Three IPCs** `wechat_qr_start`, `wechat_qr_poll`,
+  `wechat_qr_cancel` — each a thin wrapper around the provider.
+- **`WechatRegistry`** on `AppState` hides which implementation is
+  wired up. `lib.rs` constructs `StubQrProvider` today; swapping
+  to `ILinkQrProvider::new(..)` is a one-line change when that
+  ships.
+- **Frontend `WeChatQr.tsx`** (inline inside the WeChat card's
+  edit form). Two visible states:
+  - *Idle*: intro copy + "Start QR session" CTA.
+  - *Active*: inline SVG + status line + Cancel (or "Start over"
+    once terminal).
+  - 2s poll cadence via recursive `setTimeout` (never stacks on a
+    slow network); unmount triggers best-effort cancel so
+    navigating away doesn't leave an orphan session.
+- **Card integration** — on `scanned`, the form fires
+  `onWechatScanned`; the parent card re-reads `ChannelState` and
+  surfaces the same amber "Restart gateway?" prompt that normal
+  non-hot-reloadable saves use.
+- **i18n** `channels.wechat.*` (en + zh): intro, start/restart/
+  cancel, six status lines, expiry countdown, "written by QR"
+  marker, adjusted `qr_cta` / `qr_pending` to drop the "coming in
+  T3.3" qualifier.
+
+### Fixed
+
+- Clippy `needless_range_loop` on `synth_qr_svg`'s grid-paint
+  loops (kept index loops — cleaner than `enumerate()` with an
+  unused value; `#[allow(..)]` at fn level).
+
+### Deferred
+
+- **Real Tencent iLink HTTP client** — expected ~300 LoC of
+  `reqwest` + cookies + retry. Waiting on upstream docs /
+  credentials.
+- **T3.4** live status probing, **T3.5** mobile layout, explicit
+  "Clear an existing secret" button, WhatsApp env name
+  verification.
+
+### Test totals
+
+- Rust `cargo test`: **70 passed** (+5): stub state machine,
+  cancel idempotency, unknown-id = NotFound, SVG determinism,
+  scanned writes expected token through `write_env_key`.
+- Vitest: **11 passed** (unchanged).
+- Playwright `channels.spec.ts`: **5/5 passed** (+1): start → QR
+  SVG visible → pending → scanning → restart prompt → env_present
+  flips for `WECHAT_SESSION`. ~10s wall clock (stub cadence is
+  real-time by design).
+- `cargo fmt` + `cargo clippy --all-targets -- -D warnings`:
+  clean.
+- `pnpm typecheck` + `pnpm lint`: clean.
+
+### Next
+
+- **T3.4** live status probing + log-grep fallback.
+- **T3.5** mobile layout.
+
+---
+
 ## 2026-04-22 — Phase 3 Sprint 2 (T3.2): Channels inline forms + atomic writes
 
 ### Context

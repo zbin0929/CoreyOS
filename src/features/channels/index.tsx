@@ -23,6 +23,9 @@ import {
   ipcErrorMessage,
   type ChannelState,
 } from '@/lib/ipc';
+// hermesChannelList is re-used by the WeChat scan handler to re-read
+// env_present after the backend writes WECHAT_SESSION; pulling it
+// via the top-level import keeps the card component synchronous.
 import {
   ChannelForm,
   type ChannelDiffLine,
@@ -355,6 +358,21 @@ function ChannelCard({
           channel={channel}
           busy={false}
           onCancel={() => setMode({ kind: 'view' })}
+          onWechatScanned={async () => {
+            // WeChat wrote WECHAT_SESSION directly via the QR flow;
+            // no hermes_channel_save call happened. Re-read the
+            // channel so the presence pill flips to Configured, then
+            // surface the restart prompt (WeChat is
+            // hot_reloadable=false).
+            try {
+              const rows = await hermesChannelList();
+              const fresh = rows.find((r) => r.id === channel.id);
+              if (fresh) onSaved(fresh);
+              setMode({ kind: 'restart-prompt' });
+            } catch (e) {
+              setMode({ kind: 'error', message: ipcErrorMessage(e) });
+            }
+          }}
           onSubmit={(submission) => {
             // Empty patches → no-op. Keep the user in edit mode so
             // they notice nothing changed rather than silently

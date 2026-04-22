@@ -179,8 +179,25 @@
     "restart_prompt": "Saved. Restart the Hermes gateway so the change takes effect now?",
     "restart_now": "Restart now",
     "restart_later": "Later",
-    "qr_cta": "Scan to log in (coming in T3.3).",
-    "qr_pending": "QR login is still landing in T3.3 — save fields here; credentials will arrive via the QR flow.",
+    "qr_cta": "Scan to log in.",
+    "qr_pending": "WeChat credentials arrive via the QR scan below; there's nothing to type.",
+    "wechat": {
+      "hint_qr": "WeChat login is QR-only (Tencent iLink).",
+      "qr_intro": "Start a QR session, scan it with the WeChat app, and confirm on your phone. The session token is written to ~/.hermes/.env automatically.",
+      "start": "Start QR session",
+      "restart": "Start over",
+      "cancel": "Cancel",
+      "written_by_qr": "written by QR scan",
+      "expires_in_s": "expires in {{s}}s",
+      "status": {
+        "pending": "Waiting for scan…",
+        "scanning": "Scanned — confirm on your phone",
+        "scanned": "Signed in — credentials saved",
+        "expired": "QR code expired",
+        "cancelled": "Session cancelled",
+        "failed": "QR login failed: {{detail}}"
+      }
+    },
     "diff": {
       "env_set": "set",
       "env_unset": "unset"
@@ -227,9 +244,6 @@
     "feishu": {
       "hint_app_id": "Feishu Open Platform → app credentials.",
       "hint_app_secret": "Paired with App ID; keep secret."
-    },
-    "wechat": {
-      "hint_qr": "Scan with your WeChat app to log in (Tencent iLink)."
     },
     "wecom": {
       "hint_bot_id": "WeCom admin console → bot ID.",

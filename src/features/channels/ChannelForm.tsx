@@ -1,16 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AlertCircle,
-  Check,
-  Eye,
-  EyeOff,
-  Loader2,
-  QrCode,
-  X,
-} from 'lucide-react';
+import { Check, Eye, EyeOff, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ChannelFieldKind, ChannelState } from '@/lib/ipc';
+import { WeChatQr } from './WeChatQr';
 
 /**
  * Phase 3 · T3.2 — dynamic channel form.
@@ -56,11 +49,18 @@ export function ChannelForm({
   busy,
   onCancel,
   onSubmit,
+  onWechatScanned,
 }: {
   channel: ChannelState;
   busy: boolean;
   onCancel: () => void;
   onSubmit: (submission: ChannelFormSubmission) => void;
+  /** Called after a successful WeChat QR scan wrote
+   *  `WECHAT_SESSION` to disk. The parent card should refetch its
+   *  `ChannelState` so the env_present map reflects the new token.
+   *  Separate from `onSubmit` because the form save path doesn't
+   *  fire — the backend wrote the env directly. */
+  onWechatScanned?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -126,8 +126,6 @@ export function ChannelForm({
     onSubmit({ envUpdates, yamlUpdates, diffs });
   }
 
-  const qrOnly = channel.has_qr_login && channel.env_keys.every((k) => !k.required);
-
   return (
     <form
       onSubmit={handleSubmit}
@@ -148,10 +146,13 @@ export function ChannelForm({
             </span>
           </div>
           {channel.has_qr_login && !k.required ? (
-            <div className="flex items-center gap-2 rounded border border-gold-500/30 bg-gold-500/5 px-2 py-1.5 text-gold-500">
-              <QrCode className="h-3.5 w-3.5" />
-              <span>{t('channels.qr_cta')}</span>
-            </div>
+            // T3.3: the optional "sentinel" env key for QR-login
+            // channels (WeChat's WECHAT_SESSION) isn't typed — it's
+            // written by the QR flow below. Suppress the password
+            // input entirely; the `WeChatQr` panel handles it.
+            <span className="text-[10px] text-fg-subtle">
+              {t('channels.wechat.written_by_qr')}
+            </span>
           ) : (
             <div className="flex items-center gap-1">
               <input
@@ -205,11 +206,12 @@ export function ChannelForm({
         />
       ))}
 
-      {qrOnly && channel.env_keys.length === 0 && (
-        <div className="rounded border border-gold-500/30 bg-gold-500/5 p-2 text-[11px] text-gold-500">
-          <AlertCircle className="mr-1 inline h-3 w-3" />
-          {t('channels.qr_pending')}
-        </div>
+      {/* T3.3: QR-login panel. Rendered for channels whose spec
+          sets `has_qr_login = true` (today only WeChat). Owns its
+          own network + timing; on success it calls back to the
+          parent card so the env_present map refreshes. */}
+      {channel.has_qr_login && (
+        <WeChatQr onScanned={() => onWechatScanned?.()} />
       )}
 
       {/* Footer ------------------------------------------------- */}

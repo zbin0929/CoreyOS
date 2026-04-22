@@ -11,3 +11,4 @@ pub mod hermes_profiles;
 pub mod model;
 pub mod paths;
 pub mod session;
+pub mod wechat;
