@@ -28,6 +28,15 @@ export const tauriMockInitScript = /* js */ `
   // ── user-editable fixture state ──
   const state = {
     homeStats: { path: '/tmp/caduceus', entry_count: 3, sandbox_mode: 'dev-allow' },
+    // T2.7 profile fixture. The mock treats the list as mutable state so
+    // create/rename/delete/clone round-trip through the same array the UI
+    // reads back in its subsequent hermes_profile_list call.
+    profilesRoot: '/Users/test/.hermes/profiles',
+    profilesActive: 'dev',
+    profiles: [
+      { name: 'dev', is_active: true, updated_at: 1714000000000 },
+      { name: 'prod', is_active: false, updated_at: 1713000000000 },
+    ],
     // Fixture lines for hermes_log_tail, keyed by kind. Tests can override
     // lines or missing at runtime via window.__CADUCEUS_MOCK__.state.
     hermesLogs: {
@@ -181,6 +190,65 @@ export const tauriMockInitScript = /* js */ `
 
       case 'app_paths':
         return state.appPaths;
+
+      case 'hermes_profile_list': {
+        return {
+          root: state.profilesRoot,
+          missing_root: false,
+          active: state.profilesActive,
+          profiles: state.profiles.map((p) => ({
+            name: p.name,
+            path: state.profilesRoot + '/' + p.name,
+            is_active: p.name === state.profilesActive,
+            updated_at: p.updated_at,
+          })),
+        };
+      }
+      case 'hermes_profile_create': {
+        if (state.profiles.some((p) => p.name === args.name)) {
+          throw new Error('profile already exists: ' + args.name);
+        }
+        const row = { name: args.name, is_active: false, updated_at: Date.now() };
+        state.profiles.push(row);
+        return {
+          name: row.name,
+          path: state.profilesRoot + '/' + row.name,
+          is_active: false,
+          updated_at: row.updated_at,
+        };
+      }
+      case 'hermes_profile_rename': {
+        const row = state.profiles.find((p) => p.name === args.from);
+        if (!row) throw new Error('not found: ' + args.from);
+        if (state.profiles.some((p) => p.name === args.to)) {
+          throw new Error('already exists: ' + args.to);
+        }
+        row.name = args.to;
+        if (state.profilesActive === args.from) state.profilesActive = args.to;
+        return;
+      }
+      case 'hermes_profile_delete': {
+        if (args.name === state.profilesActive) {
+          throw new Error('refusing to delete active profile');
+        }
+        const i = state.profiles.findIndex((p) => p.name === args.name);
+        if (i < 0) throw new Error('not found: ' + args.name);
+        state.profiles.splice(i, 1);
+        return;
+      }
+      case 'hermes_profile_clone': {
+        if (state.profiles.some((p) => p.name === args.dst)) {
+          throw new Error('already exists: ' + args.dst);
+        }
+        const row = { name: args.dst, is_active: false, updated_at: Date.now() };
+        state.profiles.push(row);
+        return {
+          name: row.name,
+          path: state.profilesRoot + '/' + row.name,
+          is_active: false,
+          updated_at: row.updated_at,
+        };
+      }
 
       case 'hermes_log_tail': {
         const bucket = state.hermesLogs[args.kind];

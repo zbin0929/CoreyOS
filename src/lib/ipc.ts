@@ -311,6 +311,56 @@ export function analyticsSummary(): Promise<AnalyticsSummaryDto> {
   return invoke<AnalyticsSummaryDto>('analytics_summary');
 }
 
+// ───────────────────────── Hermes profiles ─────────────────────────
+
+export interface HermesProfileInfo {
+  name: string;
+  path: string;
+  is_active: boolean;
+  updated_at: number;
+}
+
+export interface HermesProfilesView {
+  /** Absolute path the backend scanned, e.g. `/Users/x/.hermes/profiles`. */
+  root: string;
+  /** `true` if that directory doesn't exist yet — Hermes not installed or
+   *  a brand-new install. */
+  missing_root: boolean;
+  profiles: HermesProfileInfo[];
+  /** Name of the active profile per `~/.hermes/active_profile`. `null`
+   *  when the pointer file is missing or empty. */
+  active: string | null;
+}
+
+/** Scan `~/.hermes/profiles/`. Pure read; never mutates state. */
+export function hermesProfileList(): Promise<HermesProfilesView> {
+  return invoke<HermesProfilesView>('hermes_profile_list');
+}
+
+/** Create a new profile directory with a minimal seed `config.yaml`. */
+export function hermesProfileCreate(name: string): Promise<HermesProfileInfo> {
+  return invoke<HermesProfileInfo>('hermes_profile_create', { name });
+}
+
+/** Rename in place. Fails on collision or if `from` doesn't exist. */
+export function hermesProfileRename(args: { from: string; to: string }): Promise<void> {
+  return invoke<void>('hermes_profile_rename', args);
+}
+
+/** Remove the directory tree. Refuses the active profile. */
+export function hermesProfileDelete(name: string): Promise<void> {
+  return invoke<void>('hermes_profile_delete', { name });
+}
+
+/** Recursive copy. The clone starts inactive; switching is a Phase 3
+ *  concern alongside per-profile gateway control. */
+export function hermesProfileClone(args: {
+  src: string;
+  dst: string;
+}): Promise<HermesProfileInfo> {
+  return invoke<HermesProfileInfo>('hermes_profile_clone', args);
+}
+
 // ───────────────────────── Hermes logs ─────────────────────────
 
 export type HermesLogKind = 'agent' | 'gateway' | 'error';

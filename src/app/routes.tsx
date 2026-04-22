@@ -19,6 +19,7 @@ import { ModelsRoute } from '@/features/models';
 import { SettingsRoute } from '@/features/settings';
 import { AnalyticsRoute } from '@/features/analytics';
 import { LogsRoute } from '@/features/logs';
+import { ProfilesRoute } from '@/features/profiles';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -149,6 +150,12 @@ const settingsRoute = createRoute({
   component: SettingsRoute,
 });
 
+const profilesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/profiles',
+  component: ProfilesRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   chatRoute,
@@ -161,6 +168,7 @@ const routeTree = rootRoute.addChildren([
   schedulerRoute,
   channelsRoute,
   modelsRoute,
+  profilesRoute,
   settingsRoute,
 ]);
 

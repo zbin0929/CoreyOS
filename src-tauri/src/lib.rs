@@ -17,6 +17,7 @@ mod error;
 mod fs_atomic;
 mod hermes_config;
 mod hermes_logs;
+mod hermes_profiles;
 mod ipc;
 mod sandbox;
 mod state;
@@ -83,6 +84,11 @@ pub fn run() {
             ipc::db::analytics_summary,
             ipc::paths::app_paths,
             ipc::hermes_logs::hermes_log_tail,
+            ipc::hermes_profiles::hermes_profile_list,
+            ipc::hermes_profiles::hermes_profile_create,
+            ipc::hermes_profiles::hermes_profile_rename,
+            ipc::hermes_profiles::hermes_profile_delete,
+            ipc::hermes_profiles::hermes_profile_clone,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

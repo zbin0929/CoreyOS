@@ -15,6 +15,7 @@
     "scheduler": "定时任务",
     "channels": "平台通道",
     "models": "大模型",
+    "profiles": "配置集",
     "settings": "设置"
   },
   "topbar": {
@@ -154,6 +155,29 @@
       "hermes.config.model": "Hermes 模型",
       "hermes.env.key": "API Key"
     }
+  },
+  "profiles": {
+    "title": "配置集",
+    "subtitle": "每个配置集是一个独立的 Hermes 配置目录（~/.hermes/profiles/）。",
+    "refresh": "刷新",
+    "retry": "重试",
+    "error_title": "无法列出配置集",
+    "new": "新建配置集",
+    "create": "创建",
+    "rename": "重命名",
+    "clone": "克隆",
+    "delete": "删除",
+    "cancel": "取消",
+    "confirm": "确定",
+    "active": "使用中",
+    "updated_at": "更新于 {{when}}",
+    "name_placeholder": "my-profile",
+    "missing_title": "尚无配置集目录",
+    "missing_desc": "Hermes 还未创建该目录。预期路径：{{path}}",
+    "empty_title": "暂无配置集",
+    "empty_desc": "新建一个，可分别保存生产 / 开发 / 演示账户的配置。",
+    "confirm_delete": "确认删除配置集 \"{{name}}\"？这将从磁盘删除其目录。",
+    "cant_delete_active": "请先切换到其他配置集。"
   },
   "hermes_logs": {
     "page_subtitle": "Agent · 网关 · 错误 · 配置历史",
