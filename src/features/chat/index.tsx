@@ -24,6 +24,7 @@ import {
   type StagedAttachment,
 } from '@/lib/ipc';
 import { visionSupport } from '@/lib/modelCapabilities';
+import { describeBreach, evaluateBudgetGate } from './budgetGate';
 import { useAppStatusStore } from '@/stores/appStatus';
 import {
   newMessageId,
@@ -136,6 +137,10 @@ function ChatPane({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Transient error shown above the chip row when a stage fails.
   const [attachError, setAttachError] = useState<string | null>(null);
+  // T4.4b — breaches flagged by the budget gate on the LAST send attempt.
+  // Re-populated (or cleared) every time send() runs so the list reflects
+  // the current turn, not stale state from minutes ago.
+  const [budgetWarnings, setBudgetWarnings] = useState<string[]>([]);
 
   // T1.5c — resolve the effective model: per-session override wins over
   // the gateway-wide default. Subscribed so the composer reacts live to
@@ -270,6 +275,28 @@ function ChatPane({
     // Let the user send a message whose payload is purely attachments —
     // the provider still gets a "[attached: …]" marker in the content.
     if ((!trimmed && !hasAttachments) || sending) return;
+
+    // T4.4b — budget gate. Runs BEFORE we commit the message to the
+    // store so a blocked send leaves the composer exactly as the user
+    // typed it. `evaluateBudgetGate` fails-safe on IPC errors (returns
+    // empty verdict), so a transient db/analytics hiccup never locks
+    // the user out of chatting.
+    const verdict = await evaluateBudgetGate({ effectiveModel });
+    if (verdict.blocks.length > 0) {
+      const lines = verdict.blocks.map((b) => '  · ' + describeBreach(b)).join('\n');
+      const ok = window.confirm(
+        `One or more budgets are over cap:\n\n${lines}\n\nSend anyway?`,
+      );
+      if (!ok) return;
+    }
+    if (verdict.warns.length > 0) {
+      // Non-blocking: surface above the chip row for the next render.
+      // We reset it once the stream starts so it's clearly tied to
+      // this single send, not stale state.
+      setBudgetWarnings(verdict.warns.map(describeBreach));
+    } else {
+      setBudgetWarnings([]);
+    }
 
     // Bake pending attachments into the user message. Snapshot before
     // we clear so a fast follow-up paste doesn't attach to the wrong turn.
@@ -516,6 +543,26 @@ function ChatPane({
               data-testid="chat-attach-error"
             >
               {attachError}
+            </div>
+          )}
+
+          {/* T4.4b — non-blocking budget warnings from the last send.
+              Blocking breaches are handled by a modal confirm in
+              send() itself, not here. */}
+          {budgetWarnings.length > 0 && (
+            <div
+              className="flex flex-col gap-0.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
+              data-testid="chat-budget-warning"
+            >
+              <div className="inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span className="font-medium">Budget over cap</span>
+              </div>
+              {budgetWarnings.map((line, i) => (
+                <div key={i} className="pl-5 font-mono text-[11px] opacity-90">
+                  {line}
+                </div>
+              ))}
             </div>
           )}
 
