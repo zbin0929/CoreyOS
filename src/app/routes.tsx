@@ -21,6 +21,7 @@ import { LogsRoute } from '@/features/logs';
 import { ProfilesRoute } from '@/features/profiles';
 import { ChannelsRoute } from '@/features/channels';
 import { RunbooksRoute } from '@/features/runbooks';
+import { BudgetsRoute } from '@/features/budgets';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -147,6 +148,12 @@ const runbooksRoute = createRoute({
   component: RunbooksRoute,
 });
 
+const budgetsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/budgets',
+  component: BudgetsRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   chatRoute,
@@ -161,6 +168,7 @@ const routeTree = rootRoute.addChildren([
   modelsRoute,
   profilesRoute,
   runbooksRoute,
+  budgetsRoute,
   settingsRoute,
 ]);
 

@@ -68,6 +68,42 @@
       "detected": "已检测参数: {{list}}"
     }
   },
+  "budgets": {
+    "title": "预算",
+    "subtitle": "按范围/周期/超额动作限制花费。基于本地使用历史 + 内置价格表做预估。",
+    "new": "新建预算",
+    "edit": "编辑",
+    "save": "保存",
+    "cancel": "取消",
+    "breached": "已超预算 — 下次发送将触发动作。",
+    "warning_80": "已用 80%。",
+    "empty_title": "还没有预算",
+    "empty_desc": "新建一条以查看预估花费。所有数据存储在本地，不上云。",
+    "field": {
+      "scope_kind": "范围",
+      "scope_value": "范围值",
+      "amount_usd": "金额（美元）",
+      "period": "周期",
+      "action": "超额动作"
+    },
+    "scope": {
+      "global": "全局",
+      "model": "模型",
+      "profile": "配置集",
+      "adapter": "适配器",
+      "channel": "通道"
+    },
+    "period": {
+      "day": "每日",
+      "week": "每周",
+      "month": "每月"
+    },
+    "action": {
+      "notify": "通知",
+      "block": "阻断",
+      "notify_block": "通知 + 阻断"
+    }
+  },
   "analytics": {
     "title": "数据分析",
     "subtitle": "基于本地会话历史的使用统计。",

@@ -68,6 +68,42 @@
       "detected": "Detected parameters: {{list}}"
     }
   },
+  "budgets": {
+    "title": "Budgets",
+    "subtitle": "Cap spend per scope, period, and breach action. Projection uses local usage history and a built-in price table.",
+    "new": "New budget",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "breached": "Over budget — action will fire on the next send.",
+    "warning_80": "80% of budget spent.",
+    "empty_title": "No budgets yet",
+    "empty_desc": "Add one to see your projected spend against a cap. All storage is local — no cloud sync.",
+    "field": {
+      "scope_kind": "Scope",
+      "scope_value": "Scope value",
+      "amount_usd": "Amount (USD)",
+      "period": "Period",
+      "action": "Action on breach"
+    },
+    "scope": {
+      "global": "Global",
+      "model": "Model",
+      "profile": "Profile",
+      "adapter": "Adapter",
+      "channel": "Channel"
+    },
+    "period": {
+      "day": "Daily",
+      "week": "Weekly",
+      "month": "Monthly"
+    },
+    "action": {
+      "notify": "Notify",
+      "block": "Block",
+      "notify_block": "Notify + block"
+    }
+  },
   "home": {
     "title": "Welcome to Corey",
     "subtitle": "A control plane for AI agents — beautiful, fast, and not locked to one.",

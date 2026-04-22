@@ -12,6 +12,7 @@ import {
   Boxes,
   FolderTree,
   BookMarked,
+  PiggyBank,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -40,5 +41,6 @@ export const NAV: NavEntry[] = [
   { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'ops', phase: 2 },
   { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree, group: 'ops', phase: 2 },
   { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked, group: 'ops', phase: 4 },
+  { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank, group: 'ops', phase: 4 },
   { id: 'settings', path: '/settings', labelKey: 'nav.settings', icon: Settings, group: 'ops', phase: 2, shortcut: ['mod', ','] },
 ];
