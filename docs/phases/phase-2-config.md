@@ -127,3 +127,65 @@ src/features/
 - No platform channel configs (that's Phase 3).
 - No multi-model compare, trajectory, budgets-with-alerts (Phase 4).
 - No other adapters (Phase 5).
+
+---
+
+## Shipped (2026-04-22)
+
+All eight task buckets landed. Final gate: Rust unit 51/51 · Vitest 11/11 ·
+Playwright 23/23 · CI green on macOS / Windows / Linux matrix.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| T2.1 | Config safety layer (atomic writes + JSONL journal) | ✅ | `src-tauri/src/fs_atomic.rs` + `changelog.rs`. Every Hermes model / env write goes through this; SIGKILL mid-write leaves the original file intact (tested). |
+| T2.2 | Models page discovery | ✅ | `hermes_config_read/write_model`, `hermes_env_set_key`, `model_provider_probe`. Discover button hits `/v1/models` and populates the model combobox. Restart banner surfaces the post-write gateway-restart requirement. |
+| T2.3 | Settings page (full) | ✅ | Appearance (theme 3-way + language) + Gateway (base_url / api_key / default model with Test connection) + Storage (config_dir, data_dir, db_path, changelog_path with copy-to-clipboard). Fully i18n'd. |
+| T2.4 | Usage ingestion | ✅ | `messages` schema v2 adds `prompt_tokens` / `completion_tokens`; streaming `onDone` callback stamps them via `db_message_set_usage`. Analytics now shows lifetime token totals and a 30-day tokens-per-day chart. |
+| T2.5 | Analytics | ✅ | `analytics_summary` IPC, KPIs (sessions / messages / tool_calls / active_days / tokens), activity chart, tokens chart, top models, top tools. Single-shot rollup, no streaming. |
+| T2.6 | Logs | ✅ | `/logs` is tabbed: Agent / Gateway / Error (tailing `~/.hermes/logs/*.log` via `hermes_log_tail`) + Changelog. Client-side substring filter. Missing-file EmptyState surfaces the resolved path. |
+| T2.7 | Profiles | ⚠️ | List / create / rename / delete / clone all working via pure-FS ops on `~/.hermes/profiles/*`. Every write is journaled (`hermes.profile.*`). See deferred items below. |
+| T2.8 | Undo & changelog | ⚠️ | `/logs` → Changelog tab lists entries with Revert for `hermes.config.model` and an unrevertible pill for `hermes.env.key` (values never stored). Revert for `hermes.profile.*` ops not yet dispatched. |
+
+### Deferred to later phases
+
+Items captured in the original breakdown but consciously held out of this
+phase's scope. None are blockers for demoing Phase 2.
+
+- **tar.gz export / import of profiles** — needs a Tauri file-picker
+  integration + a manifest-preview dialog; queued under Phase 3 since it
+  intersects the per-profile gateway lifecycle work.
+- **Per-profile gateway start / stop with port auto-resolution** —
+  gateway lifecycle control is a Phase 3 concern alongside the channels
+  work; current Phase 2 UI only restarts the single shared gateway.
+- **Switching the active profile** — `~/.hermes/active_profile` is
+  Hermes-owned; doing the swap safely requires first quiescing the
+  gateway. Phase 3.
+- **Profile revert dispatch** — `ipc::changelog::revert` currently
+  handles `hermes.config.model` and (by policy) refuses `hermes.env.key`.
+  Extending it to `hermes.profile.{create,rename,delete,clone}` is a
+  small follow-up; landed behind T2.8's current surface.
+- **Streaming log tail (`notify` watcher + SSE events)** — manual refresh
+  is adequate for single-digit-MB log files. Revisit when log volume
+  warrants it.
+- **`/logs?tab=...` URL deep-linking** — noted; trivial but adds router
+  churn.
+- **OAuth for Codex, Provider add/update/delete forms** — the Models
+  page currently edits the existing Hermes `config.yaml` + `.env`
+  credentials; provider-pool management lives in `auth.json` and was
+  left at the discovery/read layer for this phase.
+- **"Apply & restart gateway" diff modal** — the Models page has an
+  inline RestartBanner covering the main path; a full diff-then-confirm
+  modal is a polish item.
+- **Command-palette deep-links into specific settings sections** —
+  palette currently jumps to `/settings` as a whole.
+
+### Deltas vs the original Task breakdown
+
+- T2.4 was originally speced with a broader `store/` crate including
+  `events` and `budgets` tables; only `messages` gained token columns in
+  this sprint. `events` / `budgets` will land with Phase 4 Budgets.
+- T2.6's `notify` + ring buffer plan was descoped to read-on-demand full
+  tail; see deferred list above.
+- T2.3's per-section sub-routes (`/settings/{section}`) were rolled into
+  a single scrollable page. A sub-route split is easy to add later if
+  the page grows.

@@ -7,7 +7,7 @@
 | 0     | Foundation            | App shell + palette + Hermes stub adapter + CI green   | 1–2 days  | **Core shipped** (2026-04-21), 7/10 exit criteria |
 | 0.5   | Hardening             | CI matrix + lint/format/test gates + Windows sandbox fix + nav shortcuts | 1–2 days | **Shipped** (2026-04-21) — Playwright + Storybook deferred; see CHANGELOG |
 | 1     | Chat core             | Real SSE chat, sessions, tool calls, attachments       | 3–4 days  | **Sprints 1+2 shipped** (2026-04-21) — streaming chat, markdown + syntax highlighting, client-side sessions, stop button. Tools/attachments/SQLite backend in Sprint 2B |
-| 2     | Config & Ops          | Models, Analytics, Logs, Settings, Profiles            | ~1 week   | Planned |
+| 2     | Config & Ops          | Models, Analytics, Logs, Settings, Profiles            | ~1 week   | **Shipped** (2026-04-22) — T2.1–T2.8 all green; tar.gz import/export + per-profile gateway control deferred to Phase 3 (see `docs/phases/phase-2-config.md`) |
 | 3     | Platform channels     | 8 channels + gateway restart + WeChat QR               | ~1 week   | Planned |
 | 4     | Differentiators       | Multi-model compare, skill editor, trajectory, budgets, terminal | 1–2 weeks | Planned |
 | 5     | Multi-agent console   | 2+ non-Hermes adapters running side-by-side            | ~1 week   | Planned |

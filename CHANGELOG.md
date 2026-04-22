@@ -6,6 +6,158 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-22 — Phase 2 complete (T2.1–T2.8)
+
+### Context
+
+One-day sprint that closed out every remaining Phase 2 task bucket on top
+of the analytics baseline shipped the day before. The goal was to land
+end-to-end control of Hermes's config surface (models, env keys,
+profiles, logs, changelog) with every write atomic and reversible. Also
+included the rebrand from "Caduceus" to **Corey** and the live
+gateway-status badge that had been pending since Phase 1.
+
+### Shipped
+
+- **T2.1 — Config safety layer.** `src-tauri/src/fs_atomic.rs` with
+  `atomic_write(path, bytes)` (tmp file + rename) and `append_line`
+  (JSONL journaling). `changelog.rs` appends one entry per mutation
+  with `{ id, ts, op, before, after, summary }` and a torn-line-tolerant
+  tail reader. Every Hermes model / env / profile write funnels through
+  this layer; the original file survives a mid-write SIGKILL (tested).
+
+- **T2.2 — Model provider discovery.** `hermes_config_read/write_model`
+  IPCs (Hermes's own `~/.hermes/config.yaml` `model` section),
+  `hermes_env_set_key` (upsert / delete `*_API_KEY` in `~/.hermes/.env`;
+  values never read back to the UI), `model_provider_probe` (hits
+  OpenAI-compatible `/v1/models`). Models page gained a Discover button
+  that populates the default-model combobox from the probe. Post-write
+  RestartBanner surfaces the gateway-restart requirement and wires
+  `hermes_gateway_restart` (shells to `hermes gateway restart`; falls
+  back to `~/.local/bin/hermes`).
+
+- **T2.3 — Settings page full.** Three sections:
+  - **Appearance** — theme 3-way segmented control (Dark / Light /
+    System) with proper `role=radiogroup`; language `<select>`
+    (English / 中文). Theme writes to the existing zustand store;
+    language fires `i18n.changeLanguage` with no reload. No new IPC, no
+    new store — both controls piggyback on infrastructure that was
+    already in place.
+  - **Gateway** — base_url / api_key / default model with Test
+    connection (latency readout); fully i18n'd.
+  - **Storage** — read-only panel listing `config_dir`, `data_dir`,
+    `db_path`, `changelog_path` with copy-to-clipboard. New IPC
+    `app_paths` projects the already-cached `AppState` paths.
+
+- **T2.4 — Usage ingestion.** `messages` schema v2 adds
+  `prompt_tokens` / `completion_tokens` (nullable; backfill is safe).
+  `upsert_message` uses `COALESCE` on conflict so content-only upserts
+  don't wipe tokens. New `db_message_set_usage` IPC, called
+  fire-and-forget from the chat stream's `onDone` with the real
+  provider-reported values. Analytics now shows lifetime token totals
+  (5th KPI) and a 30-day tokens-per-day chart alongside the existing
+  activity chart.
+
+- **T2.5 — Analytics.** Already landed 2026-04-21; extended above.
+
+- **T2.6 — Hermes log tail.** New `/logs` is a tabbed surface: **Agent
+  / Gateway / Error** (each tails `~/.hermes/logs/<kind>.log` via
+  `hermes_log_tail`) plus **Changelog** (pre-existing). Read-on-demand
+  with a client-side substring filter; no streaming / no `notify`
+  watcher in this pass. Missing-file EmptyState surfaces the resolved
+  path so users can verify their Hermes install. `LogLine` tints
+  WARN/ERROR rows amber/red with a loose regex that catches both
+  Python-logging and Rust-tracing formats.
+
+- **T2.7 — Profiles.** New `/profiles` route over `~/.hermes/profiles/*`.
+  Pure-FS ops: list (dir scan, active-first sort, hidden entries
+  skipped), create (seeds a minimal `config.yaml`), rename
+  (`fs::rename` with collision guards), delete (refuses the active
+  profile), clone (recursive copy, skips symlinks). Name validation
+  blocks traversal chars and `.`-prefixes. Every write appends a
+  `hermes.profile.{create,rename,delete,clone}` entry.
+
+- **T2.8 — Changelog viewer & revert.** `/logs` → Changelog tab shows
+  each entry (time, op, summary, before/after JSON diff) with a Revert
+  button. Dispatching currently covers `hermes.config.model`;
+  `hermes.env.key` deletes are marked "Not revertible" (we never store
+  the key value). Reverts themselves append a new entry describing the
+  revert so the list stays honest.
+
+- **Rebrand.** "Caduceus" → **Corey** everywhere user-visible
+  (`app.name`, Topbar, Home hero). `docs/` and internal package names
+  left alone.
+
+- **Live gateway status badge.** Topbar dot polls `/health` every few
+  seconds; flips online / offline / unknown with click-to-reprobe.
+
+### Fixed
+
+- Session rows now stamp `model` at creation so Analytics can bucket by
+  model without retroactive patching.
+- Clippy `io_other_error` lint on `hermes_profiles.rs` (used
+  `io::Error::other` over the deprecated `::new(ErrorKind::Other, …)`
+  pattern).
+
+### Deferred
+
+Kept out of Phase 2 deliberately; captured in
+`docs/phases/phase-2-config.md` under **Deferred to later phases**.
+Highlights:
+
+- **tar.gz import / export of profiles** — needs a Tauri file-picker +
+  manifest-preview dialog; rolls into Phase 3.
+- **Per-profile gateway start / stop with port resolution** — gateway
+  lifecycle control is Phase 3's territory.
+- **Switching the active profile** — writing
+  `~/.hermes/active_profile` safely requires quiescing the gateway
+  first; Phase 3.
+- **Revert dispatch for `hermes.profile.*`** — journal entries are
+  already being written; extending the dispatcher is a small follow-up.
+- **Streaming log tail (`notify` + SSE)** — manual refresh is adequate
+  for single-digit-MB log files.
+- **Command palette → specific settings section** — palette currently
+  lands on `/settings` as a whole.
+- **Per-section Settings sub-routes** (`/settings/{section}`) — rolled
+  into the single scrollable page; easy to split later.
+
+### Test totals at close
+
+- Rust unit: **51** (up from 32)
+- Vitest: 11
+- Playwright: **23** (up from 7 at Phase 1 end)
+- CI: clean on macOS · Windows · Linux matrix (3/3)
+
+### Files added (selected)
+
+```
+src-tauri/src/
+├── fs_atomic.rs                 (T2.1)
+├── changelog.rs                 (T2.1)
+├── hermes_config.rs             (T2.2)
+├── hermes_logs.rs               (T2.6)
+├── hermes_profiles.rs           (T2.7)
+├── adapters/hermes/probe.rs     (T2.2)
+└── ipc/{changelog,hermes_config,hermes_logs,hermes_profiles,paths}.rs
+
+src/features/
+├── logs/{index,ChangelogPanel,HermesLogPanel}.tsx  (T2.6 + T2.8)
+├── profiles/index.tsx                              (T2.7)
+├── analytics/index.tsx                             (T2.4 extension)
+└── settings/index.tsx                              (T2.3 rewrite)
+
+e2e/
+├── analytics.spec.ts  · hermes-logs.spec.ts  · logs.spec.ts
+├── profiles.spec.ts   · settings.spec.ts     · llms.spec.ts (extended)
+```
+
+### Next
+
+Phase 3 — **Platform channels + gateway lifecycle + WeChat QR**. The
+Phase 2 deferrals cluster naturally here.
+
+---
+
 ## 2026-04-21 — Phase 2 Sprint 1: Analytics page
 
 ### Context
