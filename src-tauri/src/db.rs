@@ -306,6 +306,43 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v3: Phase 4 T4.6 runbooks. `template` holds the raw prompt body with
+    // `{{param}}` placeholders; parameters are derived at render time so we
+    // don't need a separate schema column. `scope_profile` is NULL for
+    // "global" runbooks (usable in any profile) or a profile name otherwise.
+    // v3 also adds the budgets table (T4.4) so a single migration bump
+    // covers both — neither feature ships a separate v.
+    if version < 3 {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS runbooks (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                template TEXT NOT NULL,
+                scope_profile TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_runbooks_updated ON runbooks(updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS budgets (
+                id TEXT PRIMARY KEY,
+                scope_kind TEXT NOT NULL,
+                scope_value TEXT,
+                amount_cents INTEGER NOT NULL,
+                period TEXT NOT NULL,
+                action_on_breach TEXT NOT NULL DEFAULT 'notify',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_budgets_scope ON budgets(scope_kind, scope_value);
+
+            PRAGMA user_version = 3;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -526,6 +563,164 @@ impl Db {
             tool_usage,
             generated_at: now_ms,
         })
+    }
+}
+
+// ───────────────────────── Runbooks (T4.6) ─────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunbookRow {
+    pub id: String,
+    pub name: String,
+    /// Short human description. Shown in the palette subtitle + detail view.
+    pub description: Option<String>,
+    /// Raw template with `{{param}}` placeholders. No server-side rendering;
+    /// the frontend substitutes before sending.
+    pub template: String,
+    /// `None` = global (usable from any profile); otherwise a profile name.
+    /// We don't currently filter on this, but keep it so a future "scope"
+    /// switch doesn't require a migration.
+    pub scope_profile: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl Db {
+    pub fn list_runbooks(&self) -> rusqlite::Result<Vec<RunbookRow>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, template, scope_profile, created_at, updated_at
+             FROM runbooks
+             ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(RunbookRow {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    description: r.get(2)?,
+                    template: r.get(3)?,
+                    scope_profile: r.get(4)?,
+                    created_at: r.get(5)?,
+                    updated_at: r.get(6)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    pub fn upsert_runbook(&self, rb: &RunbookRow) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO runbooks
+               (id, name, description, template, scope_profile, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 description = excluded.description,
+                 template = excluded.template,
+                 scope_profile = excluded.scope_profile,
+                 updated_at = excluded.updated_at",
+            params![
+                rb.id,
+                rb.name,
+                rb.description,
+                rb.template,
+                rb.scope_profile,
+                rb.created_at,
+                rb.updated_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_runbook(&self, id: &str) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute("DELETE FROM runbooks WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+}
+
+// ───────────────────────── Budgets (T4.4) ─────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetRow {
+    pub id: String,
+    /// One of `"global"`, `"model"`, `"profile"`, `"adapter"`, `"channel"`.
+    /// String rather than enum so adding new scopes later doesn't force a
+    /// schema change.
+    pub scope_kind: String,
+    /// Scope identifier (e.g. a model id). Ignored when `scope_kind="global"`.
+    pub scope_value: Option<String>,
+    /// Budget cap in cents. Tokens → cost is done frontend-side against a
+    /// price table; the DB is purely the store.
+    pub amount_cents: i64,
+    /// `"day"`, `"week"`, `"month"`.
+    pub period: String,
+    /// `"notify"`, `"block"`, or `"notify_block"`.
+    pub action_on_breach: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl Db {
+    pub fn list_budgets(&self) -> rusqlite::Result<Vec<BudgetRow>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, scope_kind, scope_value, amount_cents, period,
+                    action_on_breach, created_at, updated_at
+             FROM budgets
+             ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(BudgetRow {
+                    id: r.get(0)?,
+                    scope_kind: r.get(1)?,
+                    scope_value: r.get(2)?,
+                    amount_cents: r.get(3)?,
+                    period: r.get(4)?,
+                    action_on_breach: r.get(5)?,
+                    created_at: r.get(6)?,
+                    updated_at: r.get(7)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    pub fn upsert_budget(&self, b: &BudgetRow) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO budgets
+               (id, scope_kind, scope_value, amount_cents, period,
+                action_on_breach, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+                 scope_kind = excluded.scope_kind,
+                 scope_value = excluded.scope_value,
+                 amount_cents = excluded.amount_cents,
+                 period = excluded.period,
+                 action_on_breach = excluded.action_on_breach,
+                 updated_at = excluded.updated_at",
+            params![
+                b.id,
+                b.scope_kind,
+                b.scope_value,
+                b.amount_cents,
+                b.period,
+                b.action_on_breach,
+                b.created_at,
+                b.updated_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_budget(&self, id: &str) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute("DELETE FROM budgets WHERE id = ?1", params![id])?;
+        Ok(())
     }
 }
 
@@ -765,6 +960,126 @@ mod tests {
 
         let tree = db.load_all().unwrap();
         assert_eq!(tree[0].messages[0].msg.content, "hello world");
+    }
+
+    // ──── T4.6 Runbooks ────
+
+    #[test]
+    fn runbook_upsert_list_delete_round_trip() {
+        let db = Db::open_in_memory().unwrap();
+        let rb = RunbookRow {
+            id: "rb1".into(),
+            name: "daily-standup".into(),
+            description: Some("Daily standup summary".into()),
+            template: "Summarize: {{bullets}}".into(),
+            scope_profile: None,
+            created_at: 100,
+            updated_at: 100,
+        };
+        db.upsert_runbook(&rb).unwrap();
+
+        // Upsert a second runbook — list comes back MRU-first.
+        let rb2 = RunbookRow {
+            id: "rb2".into(),
+            name: "pr-review".into(),
+            description: None,
+            template: "Review: {{diff}}".into(),
+            scope_profile: Some("work".into()),
+            created_at: 200,
+            updated_at: 200,
+        };
+        db.upsert_runbook(&rb2).unwrap();
+        let rows = db.list_runbooks().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, "rb2");
+        assert_eq!(rows[1].id, "rb1");
+
+        // Update rb1 → should bubble to the top.
+        db.upsert_runbook(&RunbookRow {
+            updated_at: 300,
+            name: "daily-standup-v2".into(),
+            ..rb.clone()
+        })
+        .unwrap();
+        let rows = db.list_runbooks().unwrap();
+        assert_eq!(rows[0].id, "rb1");
+        assert_eq!(rows[0].name, "daily-standup-v2");
+
+        // Delete.
+        db.delete_runbook("rb1").unwrap();
+        let rows = db.list_runbooks().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "rb2");
+    }
+
+    #[test]
+    fn runbook_name_uniqueness_rejects_duplicates() {
+        let db = Db::open_in_memory().unwrap();
+        let rb = RunbookRow {
+            id: "rb1".into(),
+            name: "dup".into(),
+            description: None,
+            template: "a".into(),
+            scope_profile: None,
+            created_at: 1,
+            updated_at: 1,
+        };
+        db.upsert_runbook(&rb).unwrap();
+
+        // Same name, different id → UNIQUE constraint fails.
+        let err = db.upsert_runbook(&RunbookRow {
+            id: "rb2".into(),
+            ..rb
+        });
+        assert!(err.is_err());
+    }
+
+    // ──── T4.4 Budgets ────
+
+    #[test]
+    fn budget_upsert_list_delete_round_trip() {
+        let db = Db::open_in_memory().unwrap();
+        let b = BudgetRow {
+            id: "b1".into(),
+            scope_kind: "global".into(),
+            scope_value: None,
+            amount_cents: 500,
+            period: "day".into(),
+            action_on_breach: "notify".into(),
+            created_at: 10,
+            updated_at: 10,
+        };
+        db.upsert_budget(&b).unwrap();
+
+        let b2 = BudgetRow {
+            id: "b2".into(),
+            scope_kind: "model".into(),
+            scope_value: Some("gpt-4o".into()),
+            amount_cents: 2000,
+            period: "month".into(),
+            action_on_breach: "notify_block".into(),
+            created_at: 20,
+            updated_at: 20,
+        };
+        db.upsert_budget(&b2).unwrap();
+
+        let rows = db.list_budgets().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, "b2");
+
+        // Update the amount → upsert returns the new value.
+        db.upsert_budget(&BudgetRow {
+            amount_cents: 3000,
+            updated_at: 30,
+            ..b2.clone()
+        })
+        .unwrap();
+        let rows = db.list_budgets().unwrap();
+        assert_eq!(rows[0].amount_cents, 3000);
+
+        db.delete_budget("b1").unwrap();
+        db.delete_budget("b2").unwrap();
+        assert!(db.list_budgets().unwrap().is_empty());
     }
 
     #[test]

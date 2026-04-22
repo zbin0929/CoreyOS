@@ -91,6 +91,10 @@ export const tauriMockInitScript = /* js */ `
     // scanned we flip WECHAT_SESSION on the WeChat card so the UI
     // sees the same end state the real backend would produce.
     wechatSessions: /** @type {any} */ ({}),
+    // T4.6 Runbooks — mutable in-memory list.
+    runbooks: /** @type {any[]} */ ([]),
+    // T4.4 Budgets — mutable in-memory list.
+    budgets: /** @type {any[]} */ ([]),
     // T3.4: per-channel live-status overrides keyed by channel id.
     // Tests push values here via page.evaluate() before navigating
     // so the first hermes_channel_status_list call returns the
@@ -583,6 +587,34 @@ export const tauriMockInitScript = /* js */ `
         return h;
       }
       case 'chat_stop':
+        return;
+
+      // T4.6 Runbooks — simple in-memory CRUD keyed by id.
+      case 'runbook_list':
+        return [...state.runbooks];
+      case 'runbook_upsert': {
+        const rb = args.runbook;
+        const idx = state.runbooks.findIndex((r) => r.id === rb.id);
+        if (idx >= 0) state.runbooks[idx] = rb;
+        else state.runbooks.unshift(rb);
+        return;
+      }
+      case 'runbook_delete':
+        state.runbooks = state.runbooks.filter((r) => r.id !== args.id);
+        return;
+
+      // T4.4 Budgets — same pattern.
+      case 'budget_list':
+        return [...state.budgets];
+      case 'budget_upsert': {
+        const b = args.budget;
+        const idx = state.budgets.findIndex((x) => x.id === b.id);
+        if (idx >= 0) state.budgets[idx] = b;
+        else state.budgets.unshift(b);
+        return;
+      }
+      case 'budget_delete':
+        state.budgets = state.budgets.filter((b) => b.id !== args.id);
         return;
     }
 

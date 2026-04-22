@@ -1,3 +1,4 @@
+pub mod budgets;
 pub mod changelog;
 pub mod channel_status;
 pub mod channels;
@@ -11,5 +12,6 @@ pub mod hermes_logs;
 pub mod hermes_profiles;
 pub mod model;
 pub mod paths;
+pub mod runbooks;
 pub mod session;
 pub mod wechat;

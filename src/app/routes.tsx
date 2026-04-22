@@ -20,6 +20,7 @@ import { AnalyticsRoute } from '@/features/analytics';
 import { LogsRoute } from '@/features/logs';
 import { ProfilesRoute } from '@/features/profiles';
 import { ChannelsRoute } from '@/features/channels';
+import { RunbooksRoute } from '@/features/runbooks';
 import { Placeholder } from '@/features/_lib/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -140,6 +141,12 @@ const profilesRoute = createRoute({
   component: ProfilesRoute,
 });
 
+const runbooksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/runbooks',
+  component: RunbooksRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   chatRoute,
@@ -153,6 +160,7 @@ const routeTree = rootRoute.addChildren([
   channelsRoute,
   modelsRoute,
   profilesRoute,
+  runbooksRoute,
   settingsRoute,
 ]);
 

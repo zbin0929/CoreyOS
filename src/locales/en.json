@@ -16,6 +16,8 @@
     "channels": "Channels",
     "models": "LLMs",
     "profiles": "Profiles",
+    "runbooks": "Runbooks",
+    "budgets": "Budgets",
     "settings": "Settings"
   },
   "topbar": {
@@ -35,10 +37,35 @@
     "group": {
       "goto": "Go to",
       "actions": "Actions",
+      "runbooks": "Runbooks",
       "preferences": "Preferences"
     },
     "theme": {
       "toggle": "Toggle light / dark theme"
+    }
+  },
+  "runbooks": {
+    "title": "Runbooks",
+    "subtitle": "Named prompt templates with placeholders. Invoke from the command palette or this page.",
+    "new": "New runbook",
+    "use": "Use",
+    "edit": "Edit",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "launch": "Launch in Chat",
+    "empty_title": "No runbooks yet",
+    "empty_desc": "Create one to reuse a prompt with named placeholders across sessions.",
+    "params_count": "{{n}} parameter(s)",
+    "no_params": "No parameters",
+    "no_params_to_fill": "This runbook has no parameters — launches the template as-is.",
+    "field": {
+      "name": "Name",
+      "description": "Description (optional)",
+      "description_placeholder": "Shown in the palette subtitle",
+      "template": "Template",
+      "template_hint": "— wrap placeholders in double curly braces",
+      "detected": "Detected parameters: {{list}}"
     }
   },
   "home": {
@@ -362,6 +389,7 @@
   },
   "common": {
     "coming_soon": "Coming soon",
+    "loading": "Loading…",
     "phase": "Phase {{n}}"
   }
 }

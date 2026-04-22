@@ -11,6 +11,7 @@ import {
   Radio,
   Boxes,
   FolderTree,
+  BookMarked,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -38,5 +39,6 @@ export const NAV: NavEntry[] = [
   { id: 'channels', path: '/channels', labelKey: 'nav.channels', icon: Radio, group: 'ops', phase: 3, shortcut: ['mod', '9'] },
   { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'ops', phase: 2 },
   { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree, group: 'ops', phase: 2 },
+  { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked, group: 'ops', phase: 4 },
   { id: 'settings', path: '/settings', labelKey: 'nav.settings', icon: Settings, group: 'ops', phase: 2, shortcut: ['mod', ','] },
 ];

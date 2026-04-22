@@ -98,6 +98,12 @@ pub fn run() {
             ipc::hermes_profiles::hermes_profile_rename,
             ipc::hermes_profiles::hermes_profile_delete,
             ipc::hermes_profiles::hermes_profile_clone,
+            ipc::runbooks::runbook_list,
+            ipc::runbooks::runbook_upsert,
+            ipc::runbooks::runbook_delete,
+            ipc::budgets::budget_list,
+            ipc::budgets::budget_upsert,
+            ipc::budgets::budget_delete,
             ipc::demo::home_stats,
         ])
         .setup(|app| {

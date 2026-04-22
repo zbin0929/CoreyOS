@@ -1,12 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Command } from 'cmdk';
 import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { Sun, Moon, ArrowRight, type LucideIcon } from 'lucide-react';
+import { BookMarked, Sun, Moon, ArrowRight, type LucideIcon } from 'lucide-react';
 import { usePaletteStore } from '@/stores/palette';
 import { useUIStore } from '@/stores/ui';
+import { useComposerStore } from '@/stores/composer';
 import { NAV } from '@/app/nav-config';
 import { Kbd } from '@/components/ui/kbd';
+import { runbookList, type RunbookRow } from '@/lib/ipc';
+import { detectParams, renderRunbook } from '@/features/runbooks';
 
 export function CommandPalette() {
   const open = usePaletteStore((s) => s.open);
@@ -14,6 +17,20 @@ export function CommandPalette() {
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const navigate = useNavigate();
   const { t } = useTranslation();
+  // T4.6: Runbooks live in SQLite, so we only fetch once per palette open
+  // (cheap but not free). Clears on close so a delete/edit elsewhere is
+  // picked up next time.
+  const [runbooks, setRunbooks] = useState<RunbookRow[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void runbookList().then((rows) => {
+      if (!cancelled) setRunbooks(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Global ⌘K / Ctrl+K
   useEffect(() => {
@@ -71,6 +88,37 @@ export function CommandPalette() {
                 />
               ))}
             </Command.Group>
+
+            {runbooks.length > 0 && (
+              <Command.Group
+                heading={t('palette.group.runbooks')}
+                className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-fg-subtle"
+              >
+                {runbooks.map((rb) => (
+                  <PaletteItem
+                    key={rb.id}
+                    value={`run ${rb.name} ${rb.description ?? ''}`}
+                    onSelect={() =>
+                      run(() => {
+                        // If the runbook has params, take the user to
+                        // /runbooks where the fill-form lives; otherwise
+                        // substitute (no-op) and drop straight into chat.
+                        if (detectParams(rb.template).length > 0) {
+                          void navigate({ to: '/runbooks' });
+                        } else {
+                          useComposerStore
+                            .getState()
+                            .setPendingDraft(renderRunbook(rb.template, {}));
+                          void navigate({ to: '/chat' });
+                        }
+                      })
+                    }
+                    icon={BookMarked}
+                    label={rb.name}
+                  />
+                ))}
+              </Command.Group>
+            )}
 
             <Command.Group
               heading={t('palette.group.preferences')}

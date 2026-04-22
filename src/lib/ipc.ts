@@ -311,6 +311,64 @@ export function analyticsSummary(): Promise<AnalyticsSummaryDto> {
   return invoke<AnalyticsSummaryDto>('analytics_summary');
 }
 
+// ───────────────────────── Runbooks (T4.6) ─────────────────────────
+
+export interface RunbookRow {
+  id: string;
+  name: string;
+  description: string | null;
+  /** Raw template string with `{{param}}` placeholders. Substitution is a
+   *  frontend concern — `renderRunbook()` in `features/runbooks` does it. */
+  template: string;
+  /** `null` = usable from any profile. Not currently filtered on. */
+  scope_profile: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export function runbookList(): Promise<RunbookRow[]> {
+  return invoke<RunbookRow[]>('runbook_list');
+}
+
+export function runbookUpsert(runbook: RunbookRow): Promise<void> {
+  return invoke<void>('runbook_upsert', { runbook });
+}
+
+export function runbookDelete(id: string): Promise<void> {
+  return invoke<void>('runbook_delete', { id });
+}
+
+// ───────────────────────── Budgets (T4.4) ─────────────────────────
+
+export type BudgetScopeKind = 'global' | 'model' | 'profile' | 'adapter' | 'channel';
+export type BudgetPeriod = 'day' | 'week' | 'month';
+export type BudgetAction = 'notify' | 'block' | 'notify_block';
+
+export interface BudgetRow {
+  id: string;
+  scope_kind: BudgetScopeKind;
+  /** Null for `scope_kind="global"`; a scope identifier otherwise. */
+  scope_value: string | null;
+  /** Cap in cents. Cost projection lives in the frontend price table. */
+  amount_cents: number;
+  period: BudgetPeriod;
+  action_on_breach: BudgetAction;
+  created_at: number;
+  updated_at: number;
+}
+
+export function budgetList(): Promise<BudgetRow[]> {
+  return invoke<BudgetRow[]>('budget_list');
+}
+
+export function budgetUpsert(budget: BudgetRow): Promise<void> {
+  return invoke<void>('budget_upsert', { budget });
+}
+
+export function budgetDelete(id: string): Promise<void> {
+  return invoke<void>('budget_delete', { id });
+}
+
 // ───────────────────────── Hermes channels ─────────────────────────
 
 /** Field shape drives how a form cell is rendered. Mirrors the Rust

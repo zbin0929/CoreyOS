@@ -16,6 +16,8 @@
     "channels": "平台通道",
     "models": "大模型",
     "profiles": "配置集",
+    "runbooks": "运行手册",
+    "budgets": "预算",
     "settings": "设置"
   },
   "topbar": {
@@ -35,10 +37,35 @@
     "group": {
       "goto": "跳转",
       "actions": "操作",
+      "runbooks": "运行手册",
       "preferences": "偏好"
     },
     "theme": {
       "toggle": "切换 浅色 / 深色"
+    }
+  },
+  "runbooks": {
+    "title": "运行手册",
+    "subtitle": "带占位符的命名 prompt 模板。可在命令面板或此页面调用。",
+    "new": "新建",
+    "use": "使用",
+    "edit": "编辑",
+    "delete": "删除",
+    "cancel": "取消",
+    "save": "保存",
+    "launch": "发送到 Chat",
+    "empty_title": "还没有运行手册",
+    "empty_desc": "创建一个以复用带命名占位符的 prompt。",
+    "params_count": "{{n}} 个参数",
+    "no_params": "无参数",
+    "no_params_to_fill": "此运行手册没有参数 — 直接发送模板。",
+    "field": {
+      "name": "名称",
+      "description": "描述（可选）",
+      "description_placeholder": "显示在命令面板副标题",
+      "template": "模板",
+      "template_hint": "— 用双花括号 包裹占位符",
+      "detected": "已检测参数: {{list}}"
     }
   },
   "analytics": {
@@ -362,6 +389,7 @@
   },
   "common": {
     "coming_soon": "即将推出",
+    "loading": "加载中…",
     "phase": "Phase {{n}}"
   }
 }

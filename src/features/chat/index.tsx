@@ -19,6 +19,7 @@ import {
   type ChatStreamHandle,
 } from '@/lib/ipc';
 import { newMessageId, useChatStore, type UiMessage, type UiToolCall } from '@/stores/chat';
+import { useComposerStore } from '@/stores/composer';
 import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { MessageBubble } from './MessageBubble';
 import { SessionsPanel } from './SessionsPanel';
@@ -94,7 +95,14 @@ function ChatPane({
   appendToolCall,
   renameSession,
 }: ChatPaneProps) {
-  const [draft, setDraft] = useState('');
+  // T4.6: read pendingDraft as initial state so a Runbook launch is
+  // reflected on the very first paint. Clearing it happens in the mount
+  // effect below — doing it inside the initializer would race with
+  // React StrictMode's double-invocation (the second mount would see an
+  // already-cleared store and reset the composer to empty).
+  const [draft, setDraft] = useState<string>(
+    () => useComposerStore.getState().pendingDraft ?? '',
+  );
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Live handle for the current stream, so Stop can cancel it.
@@ -102,13 +110,24 @@ function ChatPane({
   // Also track the pending id to null-out the spinner on stop.
   const pendingRef = useRef<string | null>(null);
 
-  // Reset composer when switching sessions.
+  // Reset composer when switching sessions. Also re-seeds from
+  // pendingDraft so launching a runbook into a brand-new session reaches
+  // the freshly-mounted pane. We do NOT clear pendingDraft here — the
+  // clear is deferred to `send()` and `onDraftChange()` so StrictMode's
+  // double-mount doesn't wipe it before the user sees it.
   useEffect(() => {
-    setDraft('');
+    const pending = useComposerStore.getState().pendingDraft;
+    setDraft(pending ?? '');
     setSending(false);
     streamRef.current = null;
     pendingRef.current = null;
   }, [sessionId]);
+
+  function clearPendingDraftIfSet() {
+    if (useComposerStore.getState().pendingDraft !== null) {
+      useComposerStore.getState().setPendingDraft(null);
+    }
+  }
 
   // Auto-scroll on new messages / growing content.
   useEffect(() => {
@@ -142,6 +161,9 @@ function ChatPane({
     setDraft('');
     setSending(true);
     pendingRef.current = pendingId;
+    // T4.6: the user has taken ownership of the prompt — drop any
+    // pending runbook draft so a back-navigation doesn't re-seed it.
+    clearPendingDraftIfSet();
 
     const historyForIpc: ChatMessageDto[] = [
       ...messages
@@ -290,7 +312,10 @@ function ChatPane({
         <form onSubmit={onSubmit} className="mx-auto flex max-w-3xl items-end gap-2 px-6 pb-4 pt-2">
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              clearPendingDraftIfSet();
+            }}
             onKeyDown={onTextareaKeyDown}
             rows={1}
             placeholder="Message Hermes…  (Enter to send, Shift+Enter for newline)"
