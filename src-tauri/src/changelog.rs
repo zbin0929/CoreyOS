@@ -66,8 +66,8 @@ pub fn append(
         after,
         summary: summary.into(),
     };
-    let line = serde_json::to_string(&entry)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let line =
+        serde_json::to_string(&entry).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     fs_atomic::append_line(path, &line)?;
     Ok(entry)
 }
@@ -118,7 +118,14 @@ mod tests {
             "x: 1 → 2",
         )
         .unwrap();
-        append(&path, "test.op", None, Some(serde_json::json!({"y": true})), "init y").unwrap();
+        append(
+            &path,
+            "test.op",
+            None,
+            Some(serde_json::json!({"y": true})),
+            "init y",
+        )
+        .unwrap();
 
         let entries = tail(&path, 10).unwrap();
         assert_eq!(entries.len(), 2);
@@ -154,7 +161,14 @@ mod tests {
     fn tail_respects_limit() {
         let path = tmp("limit");
         for i in 0..5 {
-            append(&path, "n", None, Some(serde_json::json!({"i": i})), format!("{i}")).unwrap();
+            append(
+                &path,
+                "n",
+                None,
+                Some(serde_json::json!({"i": i})),
+                format!("{i}"),
+            )
+            .unwrap();
         }
         let entries = tail(&path, 2).unwrap();
         assert_eq!(entries.len(), 2);

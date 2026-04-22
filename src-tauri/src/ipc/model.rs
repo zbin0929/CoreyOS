@@ -35,10 +35,11 @@ pub async fn model_provider_probe(
     // is not an error — we probe anonymously and the upstream will 401 if that
     // matters (which the frontend surfaces as "Unauthorized").
     let resolved_key = match env_key.as_deref().filter(|k| !k.is_empty()) {
-        Some(name) => crate::hermes_config::read_env_value(name)
-            .map_err(|e| IpcError::Internal {
+        Some(name) => {
+            crate::hermes_config::read_env_value(name).map_err(|e| IpcError::Internal {
                 message: format!("read env for probe: {e}"),
-            })?,
+            })?
+        }
         None => api_key,
     };
     probe::probe_models(&base_url, resolved_key.as_deref())

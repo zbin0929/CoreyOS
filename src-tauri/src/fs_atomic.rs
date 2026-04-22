@@ -45,9 +45,7 @@ pub fn atomic_write(
     let nonce = TMP_NONCE.fetch_add(1, Ordering::Relaxed);
     let tmp_name = format!(
         "{}.caduceus.tmp-{}-{}",
-        path.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("tmp"),
+        path.file_name().and_then(|s| s.to_str()).unwrap_or("tmp"),
         std::process::id(),
         nonce,
     );
@@ -85,7 +83,10 @@ pub fn append_line(path: &Path, line: &str) -> io::Result<()> {
             fs::create_dir_all(parent)?;
         }
     }
-    let mut f = fs::OpenOptions::new().create(true).append(true).open(path)?;
+    let mut f = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
     f.write_all(line.as_bytes())?;
     if !line.ends_with('\n') {
         f.write_all(b"\n")?;
@@ -133,11 +134,7 @@ mod tests {
         let remaining: Vec<_> = fs::read_dir(&dir)
             .unwrap()
             .filter_map(Result::ok)
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .contains(".caduceus.tmp-")
-            })
+            .filter(|e| e.file_name().to_string_lossy().contains(".caduceus.tmp-"))
             .collect();
         assert!(remaining.is_empty(), "tmp file leaked: {remaining:?}");
     }

@@ -126,10 +126,7 @@ fn extract_model(root: &Value) -> HermesModelSection {
 /// `journal_path`, when provided, receives one `hermes.config.model` entry
 /// with the before/after model sections. Pass `None` in contexts where a
 /// journal isn't available (tests, early boot).
-pub fn write_model(
-    new_model: &HermesModelSection,
-    journal_path: Option<&Path>,
-) -> io::Result<()> {
+pub fn write_model(new_model: &HermesModelSection, journal_path: Option<&Path>) -> io::Result<()> {
     let config_path = config_path()?;
     let raw = fs::read_to_string(&config_path).unwrap_or_default();
 
