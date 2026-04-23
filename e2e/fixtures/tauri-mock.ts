@@ -37,6 +37,12 @@ export const tauriMockInitScript = /* js */ `
       session_grants: [],
       config_path: '/tmp/corey/sandbox.json',
     }),
+    // T6.5 — named sandbox scopes. Default is always present; tests
+    // that exercise per-agent scoping push additional scopes via
+    // window.__CADUCEUS_MOCK__.state.sandboxScopes.
+    sandboxScopes: /** @type {Array<{id: string, label: string, roots: Array<{path: string, label: string, mode: string}>}>} */ ([
+      { id: 'default', label: 'Default', roots: [] },
+    ]),
     // T3.2 channel state — kept as mutable state so save round-trips.
     // Shape mirrors the hermes_channel_list response exactly.
     channels: /** @type {any[]} */ ([
@@ -332,6 +338,33 @@ export const tauriMockInitScript = /* js */ `
       case 'sandbox_clear_session_grants':
         state.sandbox.session_grants = [];
         return null;
+
+      // T6.5 — scope CRUD. The mock mirrors the Rust invariant that
+      // the \`default\` scope is always present and undeletable.
+      case 'sandbox_scope_list':
+        return state.sandboxScopes.map((s) => ({ ...s, roots: [...s.roots] }));
+
+      case 'sandbox_scope_upsert': {
+        const inc = args.args;
+        const idx = state.sandboxScopes.findIndex((s) => s.id === inc.id);
+        const stored = {
+          id: inc.id,
+          label: inc.label || 'Untitled',
+          roots: Array.isArray(inc.roots) ? inc.roots : [],
+        };
+        if (idx >= 0) state.sandboxScopes[idx] = stored;
+        else state.sandboxScopes.push(stored);
+        return { ...stored };
+      }
+
+      case 'sandbox_scope_delete': {
+        const { id } = args.args;
+        if (id === 'default') {
+          throw { kind: 'internal', message: 'cannot delete the default scope' };
+        }
+        state.sandboxScopes = state.sandboxScopes.filter((s) => s.id !== id);
+        return null;
+      }
 
       case 'hermes_channel_list': {
         // Return a deep clone so the UI can't accidentally mutate

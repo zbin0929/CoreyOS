@@ -344,11 +344,26 @@
       "field_api_key_placeholder": "（未鉴权网关可留空）",
       "field_default_model": "默认模型",
       "field_default_model_placeholder": "（可选，留空则使用网关自带默认模型）",
+      "field_sandbox_scope": "沙箱范围",
+      "field_sandbox_scope_hint": "按 Agent 隔离文件系统。未设置则回落到默认范围。",
+      "scope_default": "默认范围",
       "test": "测试",
       "test_ok": "健康 · {{ms}} ms",
       "save": "保存",
       "create": "创建",
       "confirm_delete": "删除实例“{{id}}”？其已有会话仍保留在历史中，但无法再发送新消息。"
+    },
+    "sandbox_scopes": {
+      "title": "沙箱范围",
+      "desc": "工作区根目录的命名分组。为 Hermes 实例指定一个范围，可限制该 Agent 通过 IPC 发起的文件操作能触达的路径。",
+      "new_id": "范围 ID",
+      "new_label": "标签",
+      "new_label_placeholder": "Worker",
+      "add": "新建范围",
+      "delete": "删除",
+      "default_locked": "锁定",
+      "root_count": "{{count}} 个根目录",
+      "confirm_delete": "删除范围“{{id}}”？所有指向它的实例会回落到默认范围。"
     },
     "model": {
       "title": "默认语言模型",

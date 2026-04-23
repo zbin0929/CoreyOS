@@ -345,11 +345,28 @@
       "field_api_key_placeholder": "(leave empty if unauthenticated)",
       "field_default_model": "Default model",
       "field_default_model_placeholder": "(optional, falls back to the gateway's own default)",
+      "field_sandbox_scope": "Sandbox scope",
+      "field_sandbox_scope_hint": "Per-agent filesystem isolation. Falls back to the default scope if unset.",
+      "scope_default": "Default scope",
       "test": "Test",
       "test_ok": "Healthy · {{ms}} ms",
       "save": "Save",
       "create": "Create",
       "confirm_delete": "Delete instance \"{{id}}\"? Its sessions remain in history but can no longer send new turns."
+    },
+    "sandbox_scopes": {
+      "title": "Sandbox scopes",
+      "desc": "Named groups of workspace roots. Assign one to a Hermes instance to restrict what that agent's IPC-originated file ops can touch.",
+      "new_id": "Scope id",
+      "new_label": "Label",
+      "new_label_placeholder": "Worker",
+      "add": "Add scope",
+      "delete": "Delete",
+      "default_locked": "Locked",
+      "root_count_one": "{{count}} root",
+      "root_count_other": "{{count}} roots",
+      "root_count": "{{count}} roots",
+      "confirm_delete": "Delete scope \"{{id}}\"? Any instance pointed at it will fall back to the default scope."
     },
     "model": {
       "title": "Default language model",

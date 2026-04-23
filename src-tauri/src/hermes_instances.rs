@@ -55,6 +55,13 @@ pub struct HermesInstance {
     pub api_key: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    /// T6.5 — sandbox scope id this instance runs under. `None`
+    /// (or `Some("default")`) resolves to the always-present default
+    /// scope. Persisted verbatim; no runtime validation at load time
+    /// because a scope may exist or not depending on load order —
+    /// callers handle `UnknownScope` if the id is stale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_scope_id: Option<String>,
 }
 
 /// Top-level wrapper so we can add fields later without a migration.
@@ -196,6 +203,7 @@ mod tests {
                 base_url: "http://10.0.0.2:8642".into(),
                 api_key: Some("sk-xxx".into()),
                 default_model: Some("deepseek-chat".into()),
+                sandbox_scope_id: None,
             },
             HermesInstance {
                 id: "home".into(),
@@ -203,6 +211,7 @@ mod tests {
                 base_url: "http://192.168.1.10:8642".into(),
                 api_key: None,
                 default_model: None,
+                sandbox_scope_id: None,
             },
         ];
         save(&dir, &list).unwrap();
@@ -246,6 +255,7 @@ mod tests {
                 base_url: "http://a".into(),
                 api_key: None,
                 default_model: None,
+                sandbox_scope_id: None,
             },
             HermesInstance {
                 id: "b".into(),
@@ -253,6 +263,7 @@ mod tests {
                 base_url: "http://b".into(),
                 api_key: None,
                 default_model: None,
+                sandbox_scope_id: None,
             },
         ];
         let updated = upsert(
@@ -263,6 +274,7 @@ mod tests {
                 base_url: "http://a2".into(),
                 api_key: None,
                 default_model: None,
+                sandbox_scope_id: None,
             },
         );
         assert_eq!(updated[0].id, "a");
@@ -280,6 +292,7 @@ mod tests {
                 base_url: "http://a".into(),
                 api_key: None,
                 default_model: None,
+                sandbox_scope_id: None,
             },
             HermesInstance {
                 id: "b".into(),
@@ -287,6 +300,7 @@ mod tests {
                 base_url: "http://b".into(),
                 api_key: None,
                 default_model: None,
+                sandbox_scope_id: None,
             },
         ];
         let (next, removed) = delete(base.clone(), "a");

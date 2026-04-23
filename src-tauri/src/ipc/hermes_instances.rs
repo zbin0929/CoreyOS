@@ -62,6 +62,11 @@ pub async fn hermes_instance_upsert(
         base_url,
         api_key: instance.api_key.filter(|s| !s.is_empty()),
         default_model: instance.default_model.filter(|s| !s.is_empty()),
+        // T6.5 — normalise empty string to None (same as api_key) and
+        // drop an explicit "default" since None already resolves there.
+        sandbox_scope_id: instance
+            .sandbox_scope_id
+            .filter(|s| !s.is_empty() && s != crate::sandbox::DEFAULT_SCOPE_ID),
     };
 
     // 1. Build the adapter (fail-fast on bad URL before we touch disk).

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
-use crate::sandbox::{AccessMode, SandboxMode, WorkspaceRoot};
+use crate::sandbox::{AccessMode, SandboxMode, SandboxScope, WorkspaceRoot};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -134,4 +134,93 @@ pub async fn sandbox_set_enforced(state: State<'_, AppState>) -> IpcResult<()> {
 pub async fn sandbox_clear_session_grants(state: State<'_, AppState>) -> IpcResult<()> {
     state.authority.clear_session_grants();
     Ok(())
+}
+
+// ───────────────────────── T6.5 — scope CRUD ─────────────────────────
+
+/// Serialized form of a `SandboxScope` for the UI. `roots` are plain
+/// strings so the frontend doesn't need to know about `PathBuf`. The
+/// `id` / `label` are verbatim from the backing `SandboxScope`.
+#[derive(Debug, Serialize)]
+pub struct SandboxScopeDto {
+    pub id: String,
+    pub label: String,
+    pub roots: Vec<SandboxRootDto>,
+}
+
+impl From<SandboxScope> for SandboxScopeDto {
+    fn from(s: SandboxScope) -> Self {
+        SandboxScopeDto {
+            id: s.id,
+            label: s.label,
+            roots: s.roots.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+/// List all scopes. The `default` scope is always first. Used by the
+/// Settings UI to render the scope picker + the scope-management
+/// section.
+#[tauri::command]
+pub async fn sandbox_scope_list(
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<SandboxScopeDto>> {
+    Ok(state
+        .authority
+        .scopes()
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
+
+/// Payload for `sandbox_scope_upsert`. Roots carry the same shape the
+/// UI already uses for the default scope — reusing `AddRootArgs`
+/// keeps the form code symmetric.
+#[derive(Debug, Deserialize)]
+pub struct SandboxScopeUpsertArgs {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub roots: Vec<AddRootArgs>,
+}
+
+#[tauri::command]
+pub async fn sandbox_scope_upsert(
+    state: State<'_, AppState>,
+    args: SandboxScopeUpsertArgs,
+) -> IpcResult<SandboxScopeDto> {
+    let roots = args
+        .roots
+        .into_iter()
+        .map(|r| WorkspaceRoot {
+            path: PathBuf::from(r.path),
+            label: r.label.trim().to_string(),
+            mode: r.mode,
+        })
+        .collect();
+    let scope = state
+        .authority
+        .upsert_scope(SandboxScope {
+            id: args.id,
+            label: args.label,
+            roots,
+        })
+        .map_err(IpcError::from)?;
+    Ok(scope.into())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SandboxScopeDeleteArgs {
+    pub id: String,
+}
+
+#[tauri::command]
+pub async fn sandbox_scope_delete(
+    state: State<'_, AppState>,
+    args: SandboxScopeDeleteArgs,
+) -> IpcResult<()> {
+    state
+        .authority
+        .delete_scope(&args.id)
+        .map_err(IpcError::from)
 }

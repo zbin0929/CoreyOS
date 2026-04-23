@@ -1094,6 +1094,10 @@ export interface HermesInstance {
   base_url: string;
   api_key?: string | null;
   default_model?: string | null;
+  /** T6.5 — id of the sandbox scope this instance's IPC-originated
+   *  filesystem ops gate through. `null` or `"default"` resolves to
+   *  the always-present default scope. */
+  sandbox_scope_id?: string | null;
 }
 
 export interface HermesInstancesFile {
@@ -1296,6 +1300,39 @@ export function sandboxSetEnforced(): Promise<void> {
 
 export function sandboxClearSessionGrants(): Promise<void> {
   return invoke<void>('sandbox_clear_session_grants');
+}
+
+// ───────────────────────── T6.5 — sandbox scopes ─────────────────────────
+
+/** A named root collection. The scope with id `"default"` is always
+ *  present and is what every legacy caller (AppState's single
+ *  `sandbox_*` IPCs, IPC-originated file ops without an adapter_id
+ *  context) resolves to. Per-agent scoping opts in by pointing a
+ *  `HermesInstance.sandbox_scope_id` at a non-default id. */
+export interface SandboxScope {
+  id: string;
+  label: string;
+  roots: SandboxRoot[];
+}
+
+export function sandboxScopeList(): Promise<SandboxScope[]> {
+  return invoke<SandboxScope[]>('sandbox_scope_list');
+}
+
+/** Create-or-replace by id. The `default` scope is upsertable but
+ *  never removable. Backend enforces the id slug regex
+ *  (`[a-z0-9_-]{1,32}`); errors surface as plain internal errors. */
+export function sandboxScopeUpsert(args: {
+  id: string;
+  label: string;
+  roots: Array<{ path: string; label: string; mode: SandboxAccessMode }>;
+}): Promise<SandboxScope> {
+  return invoke<SandboxScope>('sandbox_scope_upsert', { args });
+}
+
+/** Idempotent delete. Backend refuses to delete the `default` scope. */
+export function sandboxScopeDelete(id: string): Promise<void> {
+  return invoke<void>('sandbox_scope_delete', { args: { id } });
 }
 
 /** Narrow an unknown rejection into a SandboxConsentRequired payload. */
