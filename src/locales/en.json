@@ -174,6 +174,10 @@
       "content": "Content",
       "tokens": "Tokens",
       "tools": "Tool calls"
+    },
+    "subagent": {
+      "step_count": "{{n}} subagent step",
+      "step_count_plural": "{{n}} subagent steps"
     }
   },
   "budgets": {

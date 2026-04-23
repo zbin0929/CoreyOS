@@ -47,6 +47,9 @@ The smallest, highest-leverage item on the phase. Ships alone as the first PR.
 
 ### T6.3 — Surface Hermes' native delegation · ~2 days (refactored 2026-04-23 pm)
 
+**Progress (2026-04-23 pm)**:
+- ✅ **T6.3 shipped (MVP)** — pure UI surface in the Trajectory page. New `src/features/trajectory/subagents.ts` infers a parent → children tree from event ordering: `delegate_task` adopts every subsequent tool call in the same assistant turn until the next `delegate_task`. `ToolCallTree` + `ToolCallTreeNode` + `ToolCallChip` render gold-tinted expandable parent cards with a `"N subagent steps"` count; flat ribbon preserved for the no-delegation common case so regression risk on the happy path is zero. 9 new Vitest cases (suite now 46/46). No backend change, no schema change. Deferred: live chat-bubble tree rendering, explicit `parent_tool_call_id` linkage once upstream Hermes adds it, nested (multi-level) delegations.
+
 **Re-scoped from ~5 days of building our own orchestration protocol to ~2 days of visualisation.** Reason: Hermes Agent natively ships a `delegate_task` tool that spawns isolated subagents for parallel workstreams (see [Hermes README features table](https://github.com/NousResearch/hermes-agent#readme) and `docs/user-guide/features` upstream). Building a parallel JSON-line protocol on top would be pure duplication.
 
 - **No Orchestrator meta-adapter.** Drop the `adapters/orchestrator/` plan. `HermesAdapter` stays single-instance.

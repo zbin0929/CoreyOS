@@ -174,6 +174,9 @@
       "content": "内容",
       "tokens": "Token",
       "tools": "工具调用"
+    },
+    "subagent": {
+      "step_count": "{{n}} 次子代理操作"
     }
   },
   "budgets": {

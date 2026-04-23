@@ -6,6 +6,53 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.3 · Subagent tree in Trajectory (delegate_task grouping)
+
+The Trajectory page now visualises Hermes's native `delegate_task` calls as a collapsible tree: the parent shows the delegation kickoff, and every subsequent tool call in the same assistant turn nests under it until the next `delegate_task`. Pure UI change — no new protocol, no backend schema change, no DB migration.
+
+### Context
+
+Per the 2026-04-23 product audit, T6.3 was explicitly re-scoped away from building a parallel meta-adapter protocol. Hermes already emits `hermes.tool.progress` events for every tool call (including `delegate_task`); the UI's job is to SURFACE that structure, not rebuild it. Today the flat list mixes the main agent's calls with its subagent's, which hides the shape of multi-step delegations. This task is the smallest change that makes the hierarchy visible.
+
+Upstream Hermes doesn't currently stamp `parent_tool_call_id` on nested events, so we infer the tree by event ordering: a `delegate_task` adopts every subsequent tool call in the same `DbMessageWithTools.tool_calls` list until another `delegate_task` appears. This covers the dominant "one delegation per turn" shape and degrades to the classic flat ribbon when there's no delegation.
+
+### Shipped
+
+**Pure helper** (`src/features/trajectory/subagents.ts`):
+- `ToolCallLike` — shape-compatible with both `DbToolCallRow` and the live zustand `UiToolCall`.
+- `SubagentNode { call, children }` with `children` non-empty only for `delegate_task` parents.
+- `groupToolCallsBySubagent(calls)` — first-pass stateful walk that assigns each non-`delegate_task` call to the most recent parent (or top-level if none). Stable ordering, total node count equals input length (no duplicates, no drops) so analytics still reports accurate totals.
+- `hasDelegation(calls)` fast predicate so renderers can branch without paying the tree-construction cost when nothing is delegated.
+- `DELEGATE_TASK_TOOL = 'delegate_task'` exported constant so any rename upstream is a one-line change.
+
+**Vitest coverage** (`src/features/trajectory/subagents.test.ts`): 9 cases — empty input, flat pass-through, single parent, chained parents, empty-children delegation, stable ordering, input/output count invariant.
+
+**Trajectory render** (`src/features/trajectory/index.tsx`):
+- Replaced the flat tool-call `<ul>` under each message with `ToolCallTree`.
+- `ToolCallTree` uses `hasDelegation` to fast-path the no-delegation case (unchanged rendering, zero regression risk for the common case).
+- `ToolCallTreeNode` wraps `delegate_task` parents in a gold-tinted container with an expand/collapse chevron, a Network icon, and a `"N subagent steps"` count. Default expanded so users see the full trace immediately; state is local per node so collapsing one parent doesn't hide others.
+- `ToolCallChip` extracted as the shared leaf renderer for both top-level and nested calls. Nested chips get a dimmer border so the hierarchy reads at a glance.
+
+**i18n** (`en.json` + `zh.json`): `trajectory.subagent.step_count` (with `_plural` on the English side so i18next picks the right form at render time).
+
+### Test totals
+
+- Rust: unchanged (168 pass).
+- Frontend: TSC clean, ESLint clean, Vitest **46 pass** (+9 in `subagents.test.ts`).
+
+### Deferred
+
+- **Chat bubble live view**: the bubble still shows the flat strip while streaming. Nesting during a live stream needs careful handling of partial trees (a `delegate_task` with zero children yet should still render a parent shell). Outside MVP; add if real usage shows the live flat view is confusing.
+- **Explicit parent linkage**: when upstream Hermes starts emitting `parent_tool_call_id` or `agent_id` in `HermesToolProgress`, extend the `ToolCallLike` shape and swap the heuristic for a direct lookup in `groupToolCallsBySubagent`. The public helper signature stays the same — no call-site churn.
+- **Nested delegations**: a subagent delegating to a sub-subagent would today be rendered as two peer parents, not grandparent → child. Needs explicit linkage to distinguish.
+
+### Next
+
+- T6.5: per-agent sandbox (highest risk remaining Phase 6 item).
+- T6.7b/c: Telegram e2e smoke test + Discord/Slack/CN verification (closes out T6.7).
+
+---
+
 ## 2026-04-23 — T6.4 · Rules-based routing (auto-pick adapter by content)
 
 Corey can now auto-pick which adapter (including a named Hermes instance from T6.2) handles the next chat turn, based on a user-defined list of predicates against the composed text. First visible "smart routing" surface — users no longer have to manually flip the AgentSwitcher to send `/code` prompts to Claude Code.
