@@ -6,6 +6,71 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — UI polish · drag region, zoom suppression, themed Select, layout hardening
+
+Post-close-out polish session driven by `pnpm tauri:dev` user report.
+Five user-visible UX papercuts land; no functional scope changes. No
+Phase status moves — this is hygiene on top of the 2026-04-23 Phase
+1–4 close-out below.
+
+### Fixed
+
+- **Window drag region covers full topbar** (`1b67996`). Moved
+  `data-tauri-drag-region` onto the `<header>` element itself; the
+  prior `absolute inset-0 -z-10` child was mis-stacked below
+  `bg-bg-elev-1` so mousedowns on empty header space never reached
+  it. Interactive children (model pill, gateway pill, palette, theme
+  toggle) still fire their own click handlers — Tauri dispatches on
+  `event.target`.
+- **Webview zoom suppressed** (`1b67996`). `<Providers>` now installs
+  a `keydown` + non-passive `wheel` listener that swallows Cmd/Ctrl
+  `+` / `-` / `=` / `0` and Cmd/Ctrl+wheel. Desktop apps resize with
+  the window; they do not zoom. This fixes chat-bubble compression,
+  Sidebar `pl-20` misalignment, and the overall scale drift users
+  saw at non-100% zoom.
+- **Native `<select>` → themed `Select`** (`1b67996`). New
+  `src/components/ui/select.tsx` (~250 LoC, `role=combobox` +
+  `listbox` pair, keyboard: ArrowUp/Down wrap + Home/End + type-ahead
+  + Enter/Space commit + Escape cancel + outside-click + active-option
+  scroll-into-view + `aria-activedescendant`). Replaces all 4 native
+  selects in Budgets editor (scope / period / action) + Settings
+  appearance (language). Playwright specs (`budgets.spec.ts`,
+  `settings.spec.ts`) switched from `selectOption()` to
+  `click(trigger) → getByRole('option', { name }).click()`.
+- **CoreyMark alt-text ghost removed** (`14a03d5`). `<img alt="Corey">`
+  was rendering its alt string inside the image box while the PNG
+  decoded (cold start, HMR reload), producing a ghostly second
+  "Corey" label next to the real `{t('app.name')}` span. Now
+  `alt=""` + `role="presentation"`; TS prop type `Omit`s `alt` to
+  prevent regressions.
+- **Narrow-window layout hardened** (`14a03d5`). Added `shrink-0` to
+  Sidebar brand row + `CoreyMark` + every Topbar pill (model picker,
+  gateway pill, palette trigger, theme toggle) so flexbox stops
+  proportionally compressing interactive elements. Sidebar
+  `pl-20 → pl-4` under `@media (display-mode: fullscreen)` — macOS
+  hides traffic lights in fullscreen, so the reserve was dead weight.
+
+### Deferred
+
+- **Icon system replacement** — audit landed at `docs/icon-audit.md`
+  (~80 icons across 30 files, with current + suggested sizes); the
+  replacement itself (custom SVG / alt library / unified wrapper)
+  is deferred pending user decision on approach.
+
+### Test totals
+
+- **E2E (Playwright)**: 52 passing (unchanged; 2 specs rewritten
+  for the new Select).
+- typecheck + lint: clean.
+
+### Next
+
+- Pick icon strategy, then batch-replace per `docs/icon-audit.md`.
+- Resume Phase 5 kickoff (multi-agent console) — no open
+  regressions blocking it.
+
+---
+
 ## 2026-04-23 — Phase 1–4 close-out · six follow-ups shipped
 
 Final sweep before Phase 5: six high-value follow-ups across Phase 1,

@@ -196,3 +196,16 @@ Categories, newest-phase first:
   tight. A future "/scope all" modifier could unlock it.
 - **Re-open when**: users start using runbooks cross-profile in
   the palette.
+
+### Icon system replacement (lucide-react → custom / alt library)
+- **Priority**: medium
+- **Why parked**: full audit shipped at `docs/icon-audit.md` —
+  ~80 icons across 30 files, categorised by surface (nav / topbar
+  / UI components / action buttons / empty-states) with current
+  and recommended sizes. Replacement itself is a mechanical sweep
+  once a strategy is picked (custom SVG assets, switch to Tabler
+  / Phosphor / Heroicons / Remix, or wrap lucide-react in a
+  unified `<Icon>` component with theme tokens).
+- **Re-open when**: user selects a strategy. Driving reasons:
+  brand consistency (Corey mark + nav glyphs feel different) or
+  a11y (stroke-width standardisation).
