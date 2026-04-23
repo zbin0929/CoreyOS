@@ -6,6 +6,48 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.7c · Channel smoke tests for Discord / Slack / Feishu / WeiXin / WeCom
+
+Five more channels now carry the "Verified" badge. One parameterised Playwright spec (`e2e/channels-smoke.spec.ts`) walks the full configure-save-restart-online loop per channel, mirroring `telegram-smoke.spec.ts` from T6.7b. Closes out Phase 6 channel verification.
+
+### Context
+
+T6.7b shipped Telegram as the proof-of-concept smoke test. T6.7c was always the "do the same for the rest" step — valuable because the T6.7a schema hotfix touched WhatsApp/WeCom/WeiXin env-var names and there was no end-to-end guarantee those corrections actually drove a working save flow.
+
+Chose a single parameterised spec over five separate files because the loop is genuinely identical — only the channel id and env-key list differ. Per-channel test names keep the failure message pointed at the specific integration that regressed (`T6.7c — channel smoke tests › wecom: configure → save → restart → online`).
+
+### Shipped
+
+**New spec** (`e2e/channels-smoke.spec.ts`):
+- `SmokeChannel` descriptor + `CHANNELS` table with Discord / Slack / Feishu / WeiXin / WeCom and their required env keys. Slack has both `SLACK_BOT_TOKEN` and the optional `SLACK_APP_TOKEN` filled because real deployments need Socket Mode.
+- `runSmoke(page, c)` helper drives: goto → wait for mock init → seed offline live-status → refresh → assert card starts unconfigured → open editor → fill each env key → submit → assert diff surfaces key names but NOT values → confirm save → assert captured `channelSaves` payload matches typed values verbatim → flip live-status to online → confirm restart → assert status pill flips to configured → force-probe → assert online pill → final DOM scan for any leaked secret.
+- One `test()` per channel, looping over `CHANNELS`.
+
+**Fixture extension** (`e2e/fixtures/tauri-mock.ts`):
+- Added `slack`, `feishu`, `wecom` channel entries starting unconfigured. `discord` and `weixin` were already present. The existing `channels.spec.ts` assertions only check visibility of named ids, not list length, so adding channels doesn't regress anything.
+
+**Verified badge catalog** (`src/features/channels/verified.ts`):
+- `VERIFIED_CHANNELS` grows from `{telegram}` to the full 6-item set (telegram + discord + slack + feishu + weixin + wecom). The Channels page's Verified pill automatically shows on every listed channel.
+- Doc comment updated with the coverage note + explicit "WhatsApp intentionally excluded (schema still in flux), Matrix low priority".
+
+### Test totals
+
+- Playwright: **61 pass** (was 56, +5 from channels-smoke × 5 tests). All existing specs (including `channels.spec.ts`, `telegram-smoke.spec.ts`, `sandbox-scopes.spec.ts`) still green.
+- Rust: unchanged (179 pass — no backend change).
+- Vitest: unchanged (46 pass).
+- TSC clean, ESLint clean.
+
+### Deferred
+
+- **WhatsApp smoke** — schema still in flux; re-adding this channel to the fixture + a smoke test waits on a post-audit decision about whether we keep the WHATSAPP_ENABLED/MODE/ALLOWED_USERS shape or switch to a different bridge protocol.
+- **Matrix smoke** — low-priority integration today; add if/when a user actually asks. Existing `channels.spec.ts` already exercises Matrix's partial-configured rendering, which is the most important visual check.
+
+### Next
+
+With T6.7c landed, **Phase 6 is done**. Remaining Phase 6 items (T6.5 per-agent sandbox, T6.7b Telegram smoke, T6.7c the rest) are all shipped. Everything that was tagged "KEEP" in the 2026-04-23 product audit and sized into Phase 6 is in. **Phase 7 is next** — starting with T7.3 Memory page wrap over `~/.hermes/MEMORY.md` + `USER.md` + `session_search`, the highest user-value item per the audit.
+
+---
+
 ## 2026-04-23 — T6.5 · Per-agent sandbox isolation (named scopes + runtime enforcement)
 
 Each Hermes instance can now be pinned to a named sandbox scope with its own root list. IPC-originated file ops (currently just `attachment_stage_path`; more to follow) gate through that scope, so a "worker" instance configured with zero roots can't read arbitrary paths on disk even when the default scope has broad access. Ships as four focused commits (C1–C4) so each step is green and reviewable.

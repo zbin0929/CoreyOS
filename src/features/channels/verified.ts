@@ -1,5 +1,5 @@
 /**
- * T6.7b — channels with a shipping end-to-end smoke test.
+ * Channels with a shipping end-to-end smoke test.
  *
  * Each id here corresponds to a Playwright spec that walks the full
  * configure-and-save loop through the mocked Tauri IPC layer. The
@@ -13,12 +13,22 @@
  * sync at the same commit.
  *
  * Current coverage:
- *   - `telegram` → `e2e/telegram-smoke.spec.ts` (T6.7b).
+ *   - `telegram` (T6.7b) → `e2e/telegram-smoke.spec.ts`.
+ *   - `discord`, `slack`, `feishu`, `weixin`, `wecom` (T6.7c) →
+ *     `e2e/channels-smoke.spec.ts` (one parameterised test per id).
  *
- * Planned next (see `docs/phases/phase-6-orchestration.md` T6.7c):
- *   - `discord`, `slack`, `feishu`, `weixin`, `wecom`, `whatsapp`.
+ * WhatsApp intentionally excluded — the schema is still in flux per
+ * T6.7a's changelog entry. Matrix has no smoke spec yet either;
+ * it's a low-priority integration today.
  */
-export const VERIFIED_CHANNELS: ReadonlySet<string> = new Set<string>(['telegram']);
+export const VERIFIED_CHANNELS: ReadonlySet<string> = new Set<string>([
+  'telegram',
+  'discord',
+  'slack',
+  'feishu',
+  'weixin',
+  'wecom',
+]);
 
 /** True when the channel has a shipping e2e smoke test. */
 export function isVerifiedChannel(id: string): boolean {

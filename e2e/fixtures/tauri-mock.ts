@@ -99,6 +99,53 @@ export const tauriMockInitScript = /* js */ `
         env_present: { WEIXIN_ACCOUNT_ID: false, WEIXIN_TOKEN: false },
         yaml_values: {},
       },
+      // T6.7c — extra channels for smoke-test coverage. Kept here
+      // alongside the four channels the original channels.spec.ts
+      // asserts against (which doesn't check list length — only
+      // visibility of the channels it cares about, so adding more is
+      // safe).
+      {
+        id: 'slack',
+        display_name: 'Slack',
+        yaml_root: 'channels.slack',
+        env_keys: [
+          { name: 'SLACK_BOT_TOKEN', required: true },
+          { name: 'SLACK_APP_TOKEN', required: false },
+        ],
+        yaml_fields: [],
+        hot_reloadable: false,
+        has_qr_login: false,
+        env_present: { SLACK_BOT_TOKEN: false, SLACK_APP_TOKEN: false },
+        yaml_values: {},
+      },
+      {
+        id: 'feishu',
+        display_name: 'Feishu (Lark)',
+        yaml_root: 'channels.feishu',
+        env_keys: [
+          { name: 'FEISHU_APP_ID', required: true },
+          { name: 'FEISHU_APP_SECRET', required: true },
+        ],
+        yaml_fields: [],
+        hot_reloadable: false,
+        has_qr_login: false,
+        env_present: { FEISHU_APP_ID: false, FEISHU_APP_SECRET: false },
+        yaml_values: {},
+      },
+      {
+        id: 'wecom',
+        display_name: 'WeCom',
+        yaml_root: 'channels.wecom',
+        env_keys: [
+          { name: 'WECOM_BOT_ID', required: true },
+          { name: 'WECOM_SECRET', required: true },
+        ],
+        yaml_fields: [],
+        hot_reloadable: false,
+        has_qr_login: false,
+        env_present: { WECOM_BOT_ID: false, WECOM_SECRET: false },
+        yaml_values: {},
+      },
     ]),
     // Captured save payloads, so tests can assert the exact
     // env_updates / yaml_updates the UI sent.

@@ -107,8 +107,8 @@ Reclaimed: ~4 days.
 
 **Progress (2026-04-23 pm)**:
 - ✅ **T6.7a shipped** — channel schema hotfix. Catalog reconciled vs `hermes-agent` upstream; 3 live bugs gone; WeChat QR stack deleted. 146 Rust tests pass, +2 new schema-lock tests (`no_channel_uses_qr_login_post_t6_7a`, `t6_7a_schema_fixes_in_place`). Frontend: TSC clean, lint clean, Vitest 27/27.
-- ⏳ T6.7b — Telegram smoke test + `channels_verified.json` + badges.
-- ⏳ T6.7c — Discord / Slack / CN channel verification.
+- ✅ **T6.7b shipped** — Telegram end-to-end smoke test (`e2e/telegram-smoke.spec.ts`) + Verified-badge catalog (`src/features/channels/verified.ts`) + `/* js */` template mock hotfix. 55/55 Playwright green (was 7/55 before the mock fix).
+- ✅ **T6.7c shipped** — Discord / Slack / Feishu / WeiXin / WeCom smoke tests via one parameterised `e2e/channels-smoke.spec.ts`. `VERIFIED_CHANNELS` now contains all 6 tested channels (WhatsApp excluded — schema in flux; Matrix low priority). 61/61 Playwright green (+5).
 
 
 
