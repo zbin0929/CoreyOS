@@ -212,6 +212,10 @@ export interface DbSessionRow {
   model: string | null;
   created_at: number;
   updated_at: number;
+  /** T5.5c — which adapter created this session. Frozen at creation
+   *  (see `db.rs :: upsert_session` COALESCE). Pre-T5.5c rows were
+   *  backfilled to `'hermes'` by the v5 migration. */
+  adapter_id: string;
 }
 
 export interface DbMessageRow {

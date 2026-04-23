@@ -171,11 +171,21 @@ Split into **T5.5a — read-only switcher** (shipped 2026-04-23) and
   `useAgentsStore.getState().activeId` imperatively so switching
   adapters mid-stream doesn't retroactively hijack an in-flight send.
 
-#### T5.5c — pending
+#### T5.5c · **Shipped** (2026-04-23)
 
-- **Unified inbox** — merge sessions from every enabled adapter into
-  the chat SessionsPanel with per-row adapter badges; add an
-  "All agents" filter pill.
+- DB v5 migration: `sessions.adapter_id TEXT`, backfill `'hermes'`
+  for legacy rows, index `(adapter_id, updated_at DESC)`. Upsert
+  preserves adapter via `COALESCE` — sessions can't migrate
+  between adapters.
+- `SessionRow.adapter_id` + `ChatSession.adapterId` plumbed through
+  all Rust DTOs, TS types, and every `dbSessionUpsert` call site in
+  `useChatStore`. `newSession()` stamps from
+  `useAgentsStore.activeId` (with fallbacks).
+- `SessionsPanel` gains an Active/All-agents scope toggle
+  (auto-hidden when only one adapter has sessions) and per-row
+  adapter badges — gold/cyan/violet for Hermes/Claude Code/Aider.
+- Empty-state copy adapts per-scope (prompts to switch to "All
+  agents" when the active adapter's bucket is empty).
 
 ### T5.6 — Cross-adapter analytics & budgets (half day)
 

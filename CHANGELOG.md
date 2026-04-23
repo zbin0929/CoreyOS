@@ -6,6 +6,57 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T5.5c · Unified session inbox
+
+Sessions are now adapter-aware end-to-end. The chat SessionsPanel
+filters/badges by adapter and offers an "All agents" toggle; the DB
+persists `adapter_id` per row via a v5 migration that backfills
+pre-T5.5c sessions to `'hermes'`.
+
+### Shipped
+
+- **DB v5 migration** (`src-tauri/src/db.rs`):
+  `ALTER TABLE sessions ADD COLUMN adapter_id TEXT`, backfill
+  `'hermes'` for existing rows, add
+  `idx_sessions_adapter_updated(adapter_id, updated_at DESC)` for
+  the inbox-filter query path. `upsert_session` now preserves
+  `adapter_id` via `COALESCE(sessions.adapter_id, excluded.adapter_id)` —
+  sessions can't migrate across adapters via a late upsert (the
+  per-session adapter is frozen at creation).
+- **`SessionRow.adapter_id`** plumbed through Rust DTO (`#[serde(default)]`
+  → `"hermes"` for back-compat) and TS `DbSessionRow.adapter_id`.
+- **`ChatSession.adapterId`** in `useChatStore` — hydrated from
+  `sessionFromDb`, set at `newSession()` time from
+  `useAgentsStore.activeId` (with full fallback chain to registry
+  default → first entry → literal `'hermes'`). All five
+  `dbSessionUpsert` call sites now forward `adapter_id`.
+- **Unified `<SessionsPanel />`** (`src/features/chat/SessionsPanel.tsx`):
+    - Scope toggle (`Active <N>` / `All agents <N>`). Hidden when
+      only one adapter is registered OR when every session belongs
+      to the active adapter (no noise).
+    - Per-row 3-char adapter badge — gold for Hermes, cyan for
+      Claude Code, violet for Aider. Rendered in "all" mode AND
+      whenever a row's adapter differs from the active one, so
+      outliers are never camouflaged.
+    - Empty-state copy adapts: "No Claude Code sessions. Switch
+      to 'All agents' to see others." when the active adapter has
+      zero rows in a multi-adapter DB.
+
+### Tests
+
+- **Rust**: 132 → **133** (+1
+  `t55c_session_adapter_id_roundtrips_and_is_frozen` — covers
+  round-trip + the "re-upsert can't hijack adapter_id" invariant).
+- typecheck + lint clean.
+
+### Deferred
+
+- **Per-adapter empty-state illustrations** — current copy is
+  functional but not visually engaging. Low priority until real
+  CLIs land and users actually use multi-adapter mode.
+
+---
+
 ## 2026-04-23 — T5.3a · Aider mock adapter (third citizen)
 
 Registers the third first-class `AgentAdapter`. With Hermes + Claude

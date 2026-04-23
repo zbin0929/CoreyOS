@@ -9,6 +9,7 @@ import {
   dbToolCallAppend,
   type DbSessionWithMessages,
 } from '@/lib/ipc';
+import { useAgentsStore } from './agents';
 import { useAppStatusStore } from './appStatus';
 
 export interface UiMessage {
@@ -61,6 +62,11 @@ export interface ChatSession {
    * configured default" (read from Settings).
    */
   model?: string | null;
+  /** T5.5c — which adapter owns this session. Frozen at creation (matches
+   *  the DB COALESCE in `upsert_session`); drives the unified inbox's
+   *  per-row badge + adapter filter. Sessions created before T5.5c
+   *  shipped land here as `'hermes'` (db v5 backfill). */
+  adapterId: string;
 }
 
 interface ChatState {
@@ -116,6 +122,7 @@ function sessionFromDb(s: DbSessionWithMessages): ChatSession {
     model: s.model,
     createdAt: s.created_at,
     updatedAt: s.updated_at,
+    adapterId: s.adapter_id,
     messages: s.messages.map((m) => ({
       id: m.id,
       role: (m.role === 'user' ? 'user' : 'assistant') as UiMessage['role'],
@@ -233,6 +240,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     // if the app hasn't resolved a model yet we still write `null` (which
     // SQL's `COALESCE(NULLIF(...), 'unknown')` catches cleanly).
     const defaultModel = useAppStatusStore.getState().currentModel;
+    // T5.5c — stamp the active adapter so the unified inbox can badge
+    // + filter. Fallback to the registry default's id (usually
+    // `'hermes'`); if the registry hasn't loaded yet, fall back to a
+    // hard-coded `'hermes'` so offline-boot sessions still land in a
+    // valid bucket (they'll be merged with real Hermes sessions on
+    // next hydration).
+    const agents = useAgentsStore.getState();
+    const adapterId =
+      agents.activeId ??
+      agents.adapters?.find((a) => a.is_default)?.id ??
+      agents.adapters?.[0]?.id ??
+      'hermes';
     const session: ChatSession = {
       id,
       title: 'New chat',
@@ -240,6 +259,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       messages: [],
       createdAt: now,
       updatedAt: now,
+      adapterId,
     };
     set((s) => ({
       sessions: { ...s.sessions, [id]: session },
@@ -253,6 +273,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         model: defaultModel,
         created_at: now,
         updated_at: now,
+        adapter_id: adapterId,
       }),
       'newSession',
     );
@@ -305,6 +326,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           model: sess.model ?? null,
           created_at: sess.createdAt,
           updated_at: now,
+          adapter_id: sess.adapterId,
         }),
         'renameSession',
       );
@@ -332,6 +354,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           model,
           created_at: sess.createdAt,
           updated_at: now,
+          adapter_id: sess.adapterId,
         }),
         'setSessionModel',
       );
@@ -378,6 +401,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           model: sess.model ?? null,
           created_at: sess.createdAt,
           updated_at: sess.updatedAt,
+          adapter_id: sess.adapterId,
         }),
         'appendMessage.session',
       );

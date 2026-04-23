@@ -51,13 +51,25 @@ impl Db {
     pub fn upsert_session(&self, s: &SessionRow) -> rusqlite::Result<()> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO sessions (id, title, model, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO sessions (id, title, model, created_at, updated_at, adapter_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(id) DO UPDATE SET
                  title = excluded.title,
                  model = excluded.model,
-                 updated_at = excluded.updated_at",
-            params![s.id, s.title, s.model, s.created_at, s.updated_at],
+                 updated_at = excluded.updated_at,
+                 -- T5.5c — don't let a late upsert migrate a session across
+                 -- adapters. adapter_id is set at creation and frozen for
+                 -- the session's lifetime; the COALESCE preserves whatever
+                 -- was there even if the caller forgets to pass it.
+                 adapter_id = COALESCE(sessions.adapter_id, excluded.adapter_id)",
+            params![
+                s.id,
+                s.title,
+                s.model,
+                s.created_at,
+                s.updated_at,
+                s.adapter_id,
+            ],
         )?;
         Ok(())
     }
@@ -179,9 +191,14 @@ impl Db {
     pub fn load_all(&self) -> rusqlite::Result<Vec<SessionWithMessages>> {
         let conn = self.conn.lock();
 
-        // 1) Sessions (MRU first).
+        // 1) Sessions (MRU first). `adapter_id` comes out of the v5
+        // migration with a backfilled `'hermes'` for pre-T5.5c rows; we
+        // still COALESCE to `'hermes'` defensively in case a row was
+        // written via a buggy path that left it NULL.
         let mut stmt = conn.prepare(
-            "SELECT id, title, model, created_at, updated_at FROM sessions ORDER BY updated_at DESC",
+            "SELECT id, title, model, created_at, updated_at,
+                    COALESCE(adapter_id, 'hermes')
+             FROM sessions ORDER BY updated_at DESC",
         )?;
         let sessions: Vec<SessionRow> = stmt
             .query_map([], |row| {
@@ -191,6 +208,7 @@ impl Db {
                     model: row.get(2)?,
                     created_at: row.get(3)?,
                     updated_at: row.get(4)?,
+                    adapter_id: row.get(5)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -425,6 +443,23 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v5: Phase 5 T5.5c — per-session `adapter_id` for the unified inbox.
+    // Legacy rows predate multi-adapter support and all came from Hermes,
+    // so we backfill `'hermes'` (NOT NULL after the backfill to keep the
+    // UI's merge/filter logic total). The index gets the inbox-filter
+    // query path (list-by-adapter, MRU-first) to an index lookup.
+    if version < 5 {
+        conn.execute_batch(
+            r#"
+            ALTER TABLE sessions ADD COLUMN adapter_id TEXT;
+            UPDATE sessions SET adapter_id = 'hermes' WHERE adapter_id IS NULL;
+            CREATE INDEX IF NOT EXISTS idx_sessions_adapter_updated
+                ON sessions(adapter_id, updated_at DESC);
+            PRAGMA user_version = 5;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -439,6 +474,17 @@ pub struct SessionRow {
     pub model: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    /// T5.5c — which adapter created this session. Drives the unified
+    /// inbox's per-row adapter badge + active-adapter filter.
+    /// `#[serde(default)]` so pre-T5.5c callers (e.g. an older frontend)
+    /// still deserialise; the DB backfills `'hermes'` for rows that
+    /// predate the column.
+    #[serde(default = "default_adapter_id")]
+    pub adapter_id: String,
+}
+
+fn default_adapter_id() -> String {
+    "hermes".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -835,6 +881,7 @@ mod tests {
             model: None,
             created_at: ts,
             updated_at: ts,
+            adapter_id: "hermes".into(),
         }
     }
 
@@ -884,6 +931,61 @@ mod tests {
         assert_eq!(ids, vec!["new", "mid", "old"]);
     }
 
+    /// T5.5c — adapter_id round-trips through upsert/load and upserting
+    /// an existing session MUST NOT migrate it to a different adapter.
+    #[test]
+    fn t55c_session_adapter_id_roundtrips_and_is_frozen() {
+        let db = Db::open_in_memory().unwrap();
+
+        db.upsert_session(&SessionRow {
+            id: "s-hermes".into(),
+            title: "t".into(),
+            model: None,
+            created_at: 100,
+            updated_at: 100,
+            adapter_id: "hermes".into(),
+        })
+        .unwrap();
+        db.upsert_session(&SessionRow {
+            id: "s-claude".into(),
+            title: "t".into(),
+            model: None,
+            created_at: 200,
+            updated_at: 200,
+            adapter_id: "claude_code".into(),
+        })
+        .unwrap();
+
+        let tree = db.load_all().unwrap();
+        assert_eq!(tree.len(), 2);
+        let by_id: std::collections::HashMap<&str, &str> = tree
+            .iter()
+            .map(|s| (s.session.id.as_str(), s.session.adapter_id.as_str()))
+            .collect();
+        assert_eq!(by_id["s-hermes"], "hermes");
+        assert_eq!(by_id["s-claude"], "claude_code");
+
+        // Re-upsert with a DIFFERENT adapter id — the COALESCE in the
+        // ON CONFLICT branch must preserve the original (adapter is
+        // frozen at creation; sessions don't migrate).
+        db.upsert_session(&SessionRow {
+            id: "s-hermes".into(),
+            title: "t2".into(),
+            model: None,
+            created_at: 100,
+            updated_at: 500,
+            adapter_id: "aider".into(), // attempted hijack — should be ignored
+        })
+        .unwrap();
+        let tree = db.load_all().unwrap();
+        let hermes_row = tree.iter().find(|s| s.session.id == "s-hermes").unwrap();
+        assert_eq!(
+            hermes_row.session.adapter_id, "hermes",
+            "adapter_id must not migrate across upserts"
+        );
+        assert_eq!(hermes_row.session.title, "t2", "other fields DO update");
+    }
+
     #[test]
     fn deleting_session_cascades_messages_and_tools() {
         let db = Db::open_in_memory().unwrap();
@@ -926,6 +1028,7 @@ mod tests {
             model: Some("deepseek-chat".into()),
             created_at: 1_000,
             updated_at: 1_000,
+            adapter_id: "hermes".into(),
         })
         .unwrap();
         db.upsert_session(&SessionRow {
@@ -934,6 +1037,7 @@ mod tests {
             model: None,
             created_at: 2_000,
             updated_at: 2_000,
+            adapter_id: "hermes".into(),
         })
         .unwrap();
 
