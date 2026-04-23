@@ -124,6 +124,16 @@ impl From<crate::sandbox::SandboxError> for IpcError {
             S::Invalid { path } => IpcError::Internal {
                 message: format!("invalid path: {path}"),
             },
+            // T6.5 — scope-related errors surface as plain internal
+            // errors to the frontend; the scope UI re-fetches the list
+            // on any failure so a stale-cache UnknownScope resolves
+            // itself on the next render.
+            S::UnknownScope { id } => IpcError::Internal {
+                message: format!("unknown sandbox scope: {id}"),
+            },
+            S::InvalidScope { reason } => IpcError::Internal {
+                message: format!("invalid scope operation: {reason}"),
+            },
         }
     }
 }

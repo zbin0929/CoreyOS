@@ -36,7 +36,7 @@
 pub mod fs;
 pub mod persistence;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
@@ -44,6 +44,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use persistence::{sandbox_config_path, SandboxConfig};
+
+/// Stable id of the always-present "default" sandbox scope. Every legacy
+/// adapter and every IPC command that doesn't know about scopes resolves
+/// to this one; T6.5 per-agent scoping opts in by pointing a
+/// `HermesInstance` at a different scope id.
+pub const DEFAULT_SCOPE_ID: &str = "default";
 
 // ───────────────────────── Types ─────────────────────────
 
@@ -70,6 +76,46 @@ pub struct WorkspaceRoot {
     /// Human label used in UI.
     pub label: String,
     pub mode: AccessMode,
+}
+
+/// T6.5 — a named collection of `WorkspaceRoot`s. Each Hermes instance
+/// (and any other adapter that grows a scope affinity later) can be
+/// pinned to a single scope via its `sandbox_scope_id` config field; all
+/// filesystem operations for that adapter then gate through the scope's
+/// roots instead of a process-wide shared list.
+///
+/// The scope named `DEFAULT_SCOPE_ID` is always present; legacy callers
+/// that pre-date T6.5 resolve to it automatically.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SandboxScope {
+    /// URL-safe slug: 1..32 chars of `[a-z0-9_-]`. Used as both the
+    /// foreign key from `HermesInstance` and the stable identifier
+    /// across renames. `"default"` is reserved for the always-present
+    /// scope.
+    pub id: String,
+    /// Human-friendly label shown in the scope dropdown. Defaults to
+    /// the id at creation time; can be renamed without breaking
+    /// references.
+    pub label: String,
+    /// Roots visible to any adapter pinned to this scope. Same
+    /// `WorkspaceRoot` shape used by the legacy single-scope
+    /// architecture, so existing per-root semantics (read/read-write,
+    /// canonicalisation) carry over unchanged.
+    #[serde(default)]
+    pub roots: Vec<WorkspaceRoot>,
+}
+
+impl SandboxScope {
+    /// Convenience constructor for the mandatory `"default"` scope with
+    /// an empty roots list. Used by tests and by the first-launch
+    /// bootstrap in `PathAuthority::init_from_disk`.
+    pub fn default_empty() -> Self {
+        Self {
+            id: DEFAULT_SCOPE_ID.into(),
+            label: "Default".into(),
+            roots: Vec::new(),
+        }
+    }
 }
 
 /// Runtime sandbox mode. `DevAllow` is a first-launch convenience; as soon
@@ -102,6 +148,18 @@ pub enum SandboxError {
 
     #[error("invalid path (empty or relative after normalization): {path}")]
     Invalid { path: String },
+
+    /// T6.5 — a caller asked for a scope id that isn't in the
+    /// `sandbox.json` scopes list. Frontends generally treat this as a
+    /// stale cache / race condition and refresh.
+    #[error("unknown sandbox scope id: {id}")]
+    UnknownScope { id: String },
+
+    /// T6.5 — the caller tried to mutate a scope in a way that's not
+    /// allowed (deleting the `default` scope, upserting with an invalid
+    /// id, etc.).
+    #[error("invalid scope operation: {reason}")]
+    InvalidScope { reason: String },
 }
 
 pub type SandboxResult<T> = Result<T, SandboxError>;
@@ -219,23 +277,32 @@ fn dirs_home() -> Option<PathBuf> {
 // ───────────────────────── Authority ─────────────────────────
 
 pub struct PathAuthority {
-    roots: RwLock<Vec<WorkspaceRoot>>,
-    /// One-shot grants valid for this process only. Not persisted.
-    session_grants: RwLock<HashSet<PathBuf>>,
+    /// All scopes known to the process. The scope with id
+    /// `DEFAULT_SCOPE_ID` is an invariant that's always present at
+    /// position 0; `set_roots` and `add_root`/`remove_root` without a
+    /// scope id operate on it.
+    scopes: RwLock<Vec<SandboxScope>>,
+    /// One-shot grants valid for this process only. Keyed by scope id,
+    /// so a grant for scope `worker` does NOT grant access to the same
+    /// path when checked against scope `default` — crucial for T6.5's
+    /// security property.
+    session_grants: RwLock<HashMap<String, HashSet<PathBuf>>>,
     /// Absolute path to `sandbox.json`. `None` in tests or before
     /// `init_from_disk` has run — in that case mutations are in-memory only.
     config_path: RwLock<Option<PathBuf>>,
     /// `DevAllow` on first launch (no config file seen yet); `Enforced`
     /// after the user has touched Settings > Workspace. Persisted as part
-    /// of `sandbox.json`.
+    /// of `sandbox.json`. Applies to every scope uniformly — per-scope
+    /// modes would confuse users and don't align with any current
+    /// threat model.
     mode: RwLock<SandboxMode>,
 }
 
 impl PathAuthority {
     pub fn new() -> Self {
         Self {
-            roots: RwLock::new(Vec::new()),
-            session_grants: RwLock::new(HashSet::new()),
+            scopes: RwLock::new(vec![SandboxScope::default_empty()]),
+            session_grants: RwLock::new(HashMap::new()),
             config_path: RwLock::new(None),
             mode: RwLock::new(SandboxMode::DevAllow),
         }
@@ -254,12 +321,16 @@ impl PathAuthority {
             Ok(Some(cfg)) => {
                 tracing::info!(
                     path = %cfg_path.display(),
-                    roots = cfg.roots.len(),
+                    scopes = cfg.scopes.len(),
                     mode = ?cfg.mode,
                     "sandbox: loaded config",
                 );
-                self.set_roots(cfg.roots);
+                self.replace_scopes(cfg.scopes);
                 *self.mode.write().expect("poisoned") = cfg.mode;
+                // If the load path migrated v1 → v2, persist immediately
+                // so subsequent launches skip the migration codepath.
+                // `save` is idempotent w.r.t. already-v2 files.
+                self.persist();
             }
             Ok(None) => {
                 // First launch. Seed ~/.hermes/ as a default root so the app
@@ -296,46 +367,177 @@ impl PathAuthority {
         }
     }
 
-    /// Replaces the roots list. Each path is canonicalized; invalid roots are
-    /// silently dropped with a tracing warning (caller-UI should prevalidate).
-    pub fn set_roots(&self, roots: Vec<WorkspaceRoot>) {
-        let mut canon = Vec::with_capacity(roots.len());
-        for mut r in roots {
-            match dunce::canonicalize(&r.path) {
-                Ok(c) => {
-                    r.path = c;
-                    canon.push(r);
-                }
-                Err(e) => {
-                    tracing::warn!(path = %r.path.display(), error = %e, "dropping invalid root")
-                }
-            }
+    // ───────────────────────── Scope-level API (T6.5) ─────────────────────
+
+    /// Replace the entire scopes list. The `default` scope is re-inserted
+    /// if missing so the "default always exists" invariant holds. Each
+    /// root inside each scope is canonicalized; invalid roots are
+    /// dropped silently with a warning (same policy as `set_roots`).
+    pub fn replace_scopes(&self, scopes: Vec<SandboxScope>) {
+        let mut canon: Vec<SandboxScope> = Vec::with_capacity(scopes.len());
+        for mut s in scopes {
+            s.roots = canonicalize_roots(s.roots);
+            canon.push(s);
         }
-        *self.roots.write().expect("poisoned") = canon;
+        if !canon.iter().any(|s| s.id == DEFAULT_SCOPE_ID) {
+            canon.insert(0, SandboxScope::default_empty());
+        }
+        *self.scopes.write().expect("poisoned") = canon;
     }
 
+    /// Snapshot all scopes (cloned). Used by IPC for listing.
+    pub fn scopes(&self) -> Vec<SandboxScope> {
+        self.scopes.read().expect("poisoned").clone()
+    }
+
+    /// Upsert a scope by id. Id must be valid (`is_valid_scope_id`).
+    /// Returns the stored scope. Persists on success.
+    pub fn upsert_scope(&self, scope: SandboxScope) -> SandboxResult<SandboxScope> {
+        if !is_valid_scope_id(&scope.id) {
+            return Err(SandboxError::InvalidScope {
+                reason: format!("bad id {:?}", scope.id),
+            });
+        }
+        let stored = SandboxScope {
+            id: scope.id,
+            label: if scope.label.trim().is_empty() {
+                "Untitled".into()
+            } else {
+                scope.label
+            },
+            roots: canonicalize_roots(scope.roots),
+        };
+        {
+            let mut scopes = self.scopes.write().expect("poisoned");
+            if let Some(existing) = scopes.iter_mut().find(|s| s.id == stored.id) {
+                existing.label = stored.label.clone();
+                existing.roots = stored.roots.clone();
+            } else {
+                scopes.push(stored.clone());
+            }
+        }
+        self.persist();
+        Ok(stored)
+    }
+
+    /// Delete a scope by id. The `default` scope is not deletable.
+    pub fn delete_scope(&self, id: &str) -> SandboxResult<()> {
+        if id == DEFAULT_SCOPE_ID {
+            return Err(SandboxError::InvalidScope {
+                reason: "cannot delete the default scope".into(),
+            });
+        }
+        let removed = {
+            let mut scopes = self.scopes.write().expect("poisoned");
+            let before = scopes.len();
+            scopes.retain(|s| s.id != id);
+            before != scopes.len()
+        };
+        if removed {
+            // Drop any session grants held under the removed scope so we
+            // don't leak memory and so a later scope re-added with the
+            // same id doesn't inherit stale grants.
+            self.session_grants
+                .write()
+                .expect("poisoned")
+                .remove(id);
+            self.persist();
+        }
+        Ok(())
+    }
+
+    /// Lookup helper — returns `Err(UnknownScope)` if the id isn't
+    /// present. Used by every scoped API below.
+    fn with_scope<R>(
+        &self,
+        scope_id: &str,
+        f: impl FnOnce(&SandboxScope) -> R,
+    ) -> SandboxResult<R> {
+        let scopes = self.scopes.read().expect("poisoned");
+        let s = scopes
+            .iter()
+            .find(|s| s.id == scope_id)
+            .ok_or_else(|| SandboxError::UnknownScope {
+                id: scope_id.to_string(),
+            })?;
+        Ok(f(s))
+    }
+
+    /// Snapshot the roots for the given scope id.
+    pub fn roots_for(&self, scope_id: &str) -> SandboxResult<Vec<WorkspaceRoot>> {
+        self.with_scope(scope_id, |s| s.roots.clone())
+    }
+
+    // ───────────────────────── Legacy (default scope) API ─────────────────
+    //
+    // Everything below is a thin wrapper that targets `DEFAULT_SCOPE_ID`.
+    // Pre-T6.5 callers (IPC, adapters) keep working unchanged; new
+    // per-scope behaviour is opt-in by calling the `*_scoped` / `*_in`
+    // variants directly.
+
+    /// Replaces the **default scope's** roots list. Each path is
+    /// canonicalized; invalid roots are silently dropped with a
+    /// tracing warning (caller-UI should prevalidate).
+    pub fn set_roots(&self, roots: Vec<WorkspaceRoot>) {
+        let canon = canonicalize_roots(roots);
+        let mut scopes = self.scopes.write().expect("poisoned");
+        if let Some(def) = scopes.iter_mut().find(|s| s.id == DEFAULT_SCOPE_ID) {
+            def.roots = canon;
+        } else {
+            scopes.insert(
+                0,
+                SandboxScope {
+                    id: DEFAULT_SCOPE_ID.into(),
+                    label: "Default".into(),
+                    roots: canon,
+                },
+            );
+        }
+    }
+
+    /// Default scope's roots. See also [`roots_for`] for a specific scope.
     pub fn roots(&self) -> Vec<WorkspaceRoot> {
-        self.roots.read().expect("poisoned").clone()
+        self.roots_for(DEFAULT_SCOPE_ID).unwrap_or_default()
     }
 
     pub fn mode(&self) -> SandboxMode {
         *self.mode.read().expect("poisoned")
     }
 
+    /// Default scope's session grants. [`session_grants_in`] reads a
+    /// specific scope.
     pub fn session_grants(&self) -> Vec<PathBuf> {
+        self.session_grants_in(DEFAULT_SCOPE_ID)
+    }
+
+    /// Snapshot session grants for a specific scope. Empty list if the
+    /// scope has no grants (or doesn't exist — callers treat "no grants"
+    /// and "missing scope" identically for listing purposes).
+    pub fn session_grants_in(&self, scope_id: &str) -> Vec<PathBuf> {
         self.session_grants
             .read()
             .expect("poisoned")
-            .iter()
-            .cloned()
-            .collect()
+            .get(scope_id)
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
-    /// Add a new workspace root. Canonicalizes, rejects bad paths with an
-    /// error (unlike `set_roots` which drops silently), dedupes against
-    /// existing roots, flips the mode to `Enforced`, and persists the new
-    /// config. Returns the stored `WorkspaceRoot`.
+    /// Add a new workspace root to the **default scope**. Canonicalizes,
+    /// rejects bad paths with an error (unlike `set_roots` which drops
+    /// silently), dedupes against existing roots, flips the mode to
+    /// `Enforced`, and persists the new config. Returns the stored
+    /// `WorkspaceRoot`.
     pub fn add_root(&self, root: WorkspaceRoot) -> SandboxResult<WorkspaceRoot> {
+        self.add_root_to(DEFAULT_SCOPE_ID, root)
+    }
+
+    /// Add a root to the given scope. Flips the mode to `Enforced` and
+    /// persists. Errors with `UnknownScope` if the scope id is missing.
+    pub fn add_root_to(
+        &self,
+        scope_id: &str,
+        root: WorkspaceRoot,
+    ) -> SandboxResult<WorkspaceRoot> {
         let canon =
             dunce::canonicalize(&root.path).map_err(|e| SandboxError::Canonicalize {
                 path: root.path.display().to_string(),
@@ -347,12 +549,18 @@ impl PathAuthority {
             mode: root.mode,
         };
         {
-            let mut roots = self.roots.write().expect("poisoned");
-            if let Some(existing) = roots.iter_mut().find(|r| r.path == stored.path) {
+            let mut scopes = self.scopes.write().expect("poisoned");
+            let s = scopes
+                .iter_mut()
+                .find(|s| s.id == scope_id)
+                .ok_or_else(|| SandboxError::UnknownScope {
+                    id: scope_id.to_string(),
+                })?;
+            if let Some(existing) = s.roots.iter_mut().find(|r| r.path == stored.path) {
                 existing.label = stored.label.clone();
                 existing.mode = stored.mode;
             } else {
-                roots.push(stored.clone());
+                s.roots.push(stored.clone());
             }
         }
         *self.mode.write().expect("poisoned") = SandboxMode::Enforced;
@@ -360,16 +568,28 @@ impl PathAuthority {
         Ok(stored)
     }
 
-    /// Remove a root by canonical path. No-op if not present. Persists on
-    /// any mutation.
+    /// Remove a root by canonical path from the **default scope**. No-op
+    /// if not present. Persists on any mutation.
     pub fn remove_root(&self, path: &Path) -> SandboxResult<()> {
+        self.remove_root_from(DEFAULT_SCOPE_ID, path)
+    }
+
+    /// Remove a root from the given scope. No-op if the root isn't in
+    /// that scope. Errors with `UnknownScope` if the scope id is missing.
+    pub fn remove_root_from(&self, scope_id: &str, path: &Path) -> SandboxResult<()> {
         let canon = dunce::canonicalize(path).map_err(|e| SandboxError::Canonicalize {
             path: path.display().to_string(),
             source: e,
         })?;
         {
-            let mut roots = self.roots.write().expect("poisoned");
-            roots.retain(|r| r.path != canon);
+            let mut scopes = self.scopes.write().expect("poisoned");
+            let s = scopes
+                .iter_mut()
+                .find(|s| s.id == scope_id)
+                .ok_or_else(|| SandboxError::UnknownScope {
+                    id: scope_id.to_string(),
+                })?;
+            s.roots.retain(|r| r.path != canon);
         }
         self.persist();
         Ok(())
@@ -382,12 +602,21 @@ impl PathAuthority {
         self.persist();
     }
 
+    /// Grant one-shot access to the **default scope**.
     pub fn grant_once(&self, path: PathBuf) -> SandboxResult<PathBuf> {
+        self.grant_once_in(DEFAULT_SCOPE_ID, path)
+    }
+
+    /// Grant one-shot access to a specific scope. Denylist still wins —
+    /// `grant_once_in` cannot unlock `~/.ssh` under any scope.
+    pub fn grant_once_in(&self, scope_id: &str, path: PathBuf) -> SandboxResult<PathBuf> {
+        // Enforce the scope exists BEFORE touching the grant map so we
+        // don't create phantom entries for typos.
+        self.with_scope(scope_id, |_| ())?;
         let canon = dunce::canonicalize(&path).map_err(|e| SandboxError::Canonicalize {
             path: path.display().to_string(),
             source: e,
         })?;
-        // Denylist still wins — grant_once cannot unlock ~/.ssh.
         if let Some(reason) = check_denylist(&canon) {
             return Err(SandboxError::Denied {
                 path: canon.display().to_string(),
@@ -397,12 +626,24 @@ impl PathAuthority {
         self.session_grants
             .write()
             .expect("poisoned")
+            .entry(scope_id.to_string())
+            .or_default()
             .insert(canon.clone());
         Ok(canon)
     }
 
+    /// Clear session grants for the **default scope** only.
     pub fn clear_session_grants(&self) {
-        self.session_grants.write().expect("poisoned").clear();
+        self.clear_session_grants_in(DEFAULT_SCOPE_ID);
+    }
+
+    /// Clear session grants for a specific scope. Other scopes' grants
+    /// are untouched.
+    pub fn clear_session_grants_in(&self, scope_id: &str) {
+        self.session_grants
+            .write()
+            .expect("poisoned")
+            .remove(scope_id);
     }
 
     /// Write the current state to `sandbox.json`. Called automatically on
@@ -412,9 +653,9 @@ impl PathAuthority {
             return;
         };
         let cfg = SandboxConfig {
-            version: 1,
+            version: 2,
             mode: *self.mode.read().expect("poisoned"),
-            roots: self.roots.read().expect("poisoned").clone(),
+            scopes: self.scopes.read().expect("poisoned").clone(),
         };
         if let Err(e) = persistence::save(&cfg_path, &cfg) {
             tracing::error!(
@@ -425,11 +666,34 @@ impl PathAuthority {
         }
     }
 
-    /// Core gate. Returns the canonicalized path if access is allowed,
-    /// `Err` otherwise. For Phase 0, "outside any root with no roots
-    /// configured" yields `Allow` (dev-mode default); once roots are
-    /// populated, outside paths require `ConsentRequired`.
+    /// Core gate — checks a path against the **default scope**. See
+    /// [`check_scoped`] for per-scope enforcement (T6.5).
     pub fn check(&self, path: &Path, op: AccessOp) -> SandboxResult<PathBuf> {
+        self.check_scoped(DEFAULT_SCOPE_ID, path, op)
+    }
+
+    /// Per-scope gate. Returns the canonicalized path if access is
+    /// allowed, `Err` otherwise. The scope id must be one of
+    /// [`scopes`]; `UnknownScope` is returned otherwise so callers can
+    /// distinguish "this path is denied" from "you passed a stale scope
+    /// id".
+    ///
+    /// Enforcement order (each short-circuits on match):
+    /// 1. Empty path → `Invalid`.
+    /// 2. Canonicalize (including parent-only canonicalisation for
+    ///    not-yet-existing write targets).
+    /// 3. Denylist match → `Denied`. **Global; never gated by scope**.
+    /// 4. Session grant recorded for THIS scope id → allow.
+    /// 5. Path under one of the scope's roots → allow (or
+    ///    `ReadOnlyRoot` for writes on a read-only root).
+    /// 6. DevAllow + scope has no roots → allow (first-launch only).
+    /// 7. Otherwise → `ConsentRequired`.
+    pub fn check_scoped(
+        &self,
+        scope_id: &str,
+        path: &Path,
+        op: AccessOp,
+    ) -> SandboxResult<PathBuf> {
         if path.as_os_str().is_empty() {
             return Err(SandboxError::Invalid {
                 path: path.display().to_string(),
@@ -443,7 +707,8 @@ impl PathAuthority {
             source: e,
         })?;
 
-        // Denylist wins over roots and session grants.
+        // Denylist wins over roots and session grants — and is scope-
+        // agnostic by design: no scope can grant access to ~/.ssh.
         if let Some(reason) = check_denylist(&canonical) {
             return Err(SandboxError::Denied {
                 path: canonical.display().to_string(),
@@ -451,28 +716,35 @@ impl PathAuthority {
             });
         }
 
-        // Session one-shot grant?
+        // Session one-shot grant in THIS scope? A grant in `worker` does
+        // NOT satisfy a check against `default` — that's the whole point
+        // of per-agent scoping.
         if self
             .session_grants
             .read()
             .expect("poisoned")
-            .contains(&canonical)
+            .get(scope_id)
+            .is_some_and(|set| set.contains(&canonical))
         {
             return Ok(canonical);
         }
 
-        // Inside any root?
-        let roots = self.roots.read().expect("poisoned");
-        let mut matched_root: Option<&WorkspaceRoot> = None;
-        for root in roots.iter() {
-            if canonical.starts_with(&root.path) {
-                matched_root = Some(root);
-                break;
-            }
-        }
+        // Load the scope. If missing, `UnknownScope`.
+        let scopes = self.scopes.read().expect("poisoned");
+        let scope = scopes
+            .iter()
+            .find(|s| s.id == scope_id)
+            .ok_or_else(|| SandboxError::UnknownScope {
+                id: scope_id.to_string(),
+            })?;
+
+        // Inside any root of this scope?
+        let matched_root = scope
+            .roots
+            .iter()
+            .find(|root| canonical.starts_with(&root.path));
 
         if let Some(root) = matched_root {
-            // Enforce read-only roots.
             if matches!(op, AccessOp::Write) && root.mode == AccessMode::Read {
                 return Err(SandboxError::ReadOnlyRoot {
                     path: canonical.display().to_string(),
@@ -481,13 +753,17 @@ impl PathAuthority {
             return Ok(canonical);
         }
 
-        // No roots configured AND mode is DevAllow (first-launch, no
-        // sandbox.json ever written). Everything outside denylist is fine.
-        if roots.is_empty() && *self.mode.read().expect("poisoned") == SandboxMode::DevAllow {
+        // No roots configured in this scope AND mode is DevAllow
+        // (first-launch, no sandbox.json ever written). Everything
+        // outside denylist is fine.
+        if scope.roots.is_empty()
+            && *self.mode.read().expect("poisoned") == SandboxMode::DevAllow
+        {
             tracing::debug!(
+                scope = scope_id,
                 path = %canonical.display(),
                 op = ?op,
-                "sandbox: dev-mode allow (no roots configured)",
+                "sandbox: dev-mode allow (scope has no roots)",
             );
             return Ok(canonical);
         }
@@ -496,6 +772,35 @@ impl PathAuthority {
             path: canonical.display().to_string(),
         })
     }
+}
+
+/// Canonicalize each root in the list; silently drop unreachable paths
+/// with a warning so a broken user config doesn't prevent startup.
+fn canonicalize_roots(roots: Vec<WorkspaceRoot>) -> Vec<WorkspaceRoot> {
+    let mut out = Vec::with_capacity(roots.len());
+    for mut r in roots {
+        match dunce::canonicalize(&r.path) {
+            Ok(c) => {
+                r.path = c;
+                out.push(r);
+            }
+            Err(e) => {
+                tracing::warn!(path = %r.path.display(), error = %e, "dropping invalid root");
+            }
+        }
+    }
+    out
+}
+
+/// Validate a scope id: URL-safe, 1..=32 chars of `[a-z0-9_-]`. Reject
+/// uppercase + dots + slashes so the id is safe as both a JSON key
+/// and a filename-ish identifier.
+pub fn is_valid_scope_id(id: &str) -> bool {
+    if id.is_empty() || id.len() > 32 {
+        return false;
+    }
+    id.bytes()
+        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
 }
 
 impl Default for PathAuthority {
@@ -528,6 +833,181 @@ fn canonicalize_or_parent(path: &Path) -> std::io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ───────────────────── T6.5 scope tests ─────────────────────
+
+    #[test]
+    fn new_authority_has_only_default_scope() {
+        let auth = PathAuthority::new();
+        let scopes = auth.scopes();
+        assert_eq!(scopes.len(), 1);
+        assert_eq!(scopes[0].id, DEFAULT_SCOPE_ID);
+        assert!(scopes[0].roots.is_empty());
+    }
+
+    #[test]
+    fn upsert_scope_rejects_invalid_ids() {
+        let auth = PathAuthority::new();
+        let bad_ids = ["", "With Spaces", "UPPER", "has.dot", "has/slash", &"x".repeat(33)];
+        for id in bad_ids {
+            let err = auth
+                .upsert_scope(SandboxScope {
+                    id: id.into(),
+                    label: "lbl".into(),
+                    roots: vec![],
+                })
+                .unwrap_err();
+            assert!(
+                matches!(err, SandboxError::InvalidScope { .. }),
+                "id {id:?} should reject as InvalidScope, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn delete_default_scope_is_rejected() {
+        let auth = PathAuthority::new();
+        let err = auth.delete_scope(DEFAULT_SCOPE_ID).unwrap_err();
+        assert!(matches!(err, SandboxError::InvalidScope { .. }));
+        // Still present.
+        assert!(auth.scopes().iter().any(|s| s.id == DEFAULT_SCOPE_ID));
+    }
+
+    #[test]
+    fn check_scoped_respects_per_scope_roots() {
+        // Build two scopes: `default` with /tmp, `worker` with no roots.
+        // Reading /tmp under `default` allows; under `worker` (enforced)
+        // denies.
+        let auth = PathAuthority::new();
+        let tmp = std::env::temp_dir();
+        auth.set_roots(vec![WorkspaceRoot {
+            path: tmp.clone(),
+            label: "tmp".into(),
+            mode: AccessMode::ReadWrite,
+        }]);
+        auth.upsert_scope(SandboxScope {
+            id: "worker".into(),
+            label: "Worker".into(),
+            roots: vec![],
+        })
+        .unwrap();
+        // Force enforced mode so `worker`'s empty-roots + enforced →
+        // consent-required rather than dev-allow.
+        auth.set_enforced();
+
+        // default scope: ok.
+        assert!(auth.check_scoped("default", &tmp, AccessOp::Read).is_ok());
+        // worker scope: consent required (same path, different policy).
+        let err = auth
+            .check_scoped("worker", &tmp, AccessOp::Read)
+            .unwrap_err();
+        assert!(matches!(err, SandboxError::ConsentRequired { .. }));
+    }
+
+    #[test]
+    fn grant_once_is_scope_local() {
+        // A grant in `worker` must not satisfy a check against `default`.
+        let auth = PathAuthority::new();
+        auth.upsert_scope(SandboxScope {
+            id: "worker".into(),
+            label: "Worker".into(),
+            roots: vec![],
+        })
+        .unwrap();
+        auth.set_enforced();
+
+        let tmp = std::env::temp_dir();
+        auth.grant_once_in("worker", tmp.clone()).unwrap();
+
+        // Worker can see it.
+        assert!(auth.check_scoped("worker", &tmp, AccessOp::Read).is_ok());
+        // Default scope cannot — grants don't cross scopes.
+        let err = auth
+            .check_scoped("default", &tmp, AccessOp::Read)
+            .unwrap_err();
+        assert!(matches!(err, SandboxError::ConsentRequired { .. }));
+    }
+
+    #[test]
+    fn check_unknown_scope_errors_out() {
+        let auth = PathAuthority::new();
+        let err = auth
+            .check_scoped("ghost", &std::env::temp_dir(), AccessOp::Read)
+            .unwrap_err();
+        assert!(matches!(err, SandboxError::UnknownScope { .. }));
+    }
+
+    #[test]
+    fn denylist_still_wins_per_scope() {
+        // Even a scope with ~ as a read-write root cannot punch
+        // through ~/.ssh.
+        let auth = PathAuthority::new();
+        if let Some(home) = dirs_home() {
+            auth.upsert_scope(SandboxScope {
+                id: "wide".into(),
+                label: "Wide".into(),
+                roots: vec![WorkspaceRoot {
+                    path: home.clone(),
+                    label: "home".into(),
+                    mode: AccessMode::ReadWrite,
+                }],
+            })
+            .unwrap();
+            let ssh = home.join(".ssh");
+            if ssh.exists() {
+                let err = auth
+                    .check_scoped("wide", &ssh, AccessOp::Read)
+                    .unwrap_err();
+                assert!(matches!(err, SandboxError::Denied { .. }));
+            }
+        }
+    }
+
+    #[test]
+    fn delete_scope_clears_its_session_grants() {
+        let auth = PathAuthority::new();
+        auth.upsert_scope(SandboxScope {
+            id: "temp".into(),
+            label: "Temp".into(),
+            roots: vec![],
+        })
+        .unwrap();
+        let tmp = std::env::temp_dir();
+        auth.grant_once_in("temp", tmp.clone()).unwrap();
+        assert_eq!(auth.session_grants_in("temp").len(), 1);
+
+        auth.delete_scope("temp").unwrap();
+        // Re-adding the scope gets a clean grant list.
+        auth.upsert_scope(SandboxScope {
+            id: "temp".into(),
+            label: "Temp".into(),
+            roots: vec![],
+        })
+        .unwrap();
+        assert!(
+            auth.session_grants_in("temp").is_empty(),
+            "session grants should not leak across scope recreation"
+        );
+    }
+
+    #[test]
+    fn is_valid_scope_id_allows_slugs_rejects_junk() {
+        assert!(is_valid_scope_id("default"));
+        assert!(is_valid_scope_id("worker-1"));
+        assert!(is_valid_scope_id("a_b_c"));
+        assert!(is_valid_scope_id("a"));
+        assert!(!is_valid_scope_id(""));
+        assert!(!is_valid_scope_id("With Spaces"));
+        assert!(!is_valid_scope_id("UPPER"));
+        assert!(!is_valid_scope_id("has.dot"));
+        assert!(!is_valid_scope_id(&"x".repeat(33)));
+    }
+
+    // ───────────────────── Pre-T6.5 behaviour preservation ─────────────────────
+    //
+    // These tests pre-date T6.5 and assert legacy default-scope
+    // behaviour — they MUST keep passing so callers that never touch
+    // the scope API see zero behaviour change.
 
     #[test]
     fn empty_roots_phase0_allows() {
