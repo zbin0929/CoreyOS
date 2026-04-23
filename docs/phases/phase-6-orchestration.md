@@ -111,6 +111,11 @@ Reclaimed: ~4 days.
 **Progress (2026-04-23 pm)**:
 - ✅ **T6.8 shipped** — deleted Rust worker (`src-tauri/src/scheduler.rs`) + SQLite `scheduler_jobs` table + related IPCs. Reimplemented as thin wrapper over `~/.hermes/cron/jobs.json` via new `hermes_cron.rs` module. Added Runs drawer to Scheduler page that surfaces `~/.hermes/cron/output/{job_id}/*.md` with previews. DB migration v7 exports legacy rows to JSON if `jobs.json` doesn't exist. 150 Rust tests pass, +4 new tests in `hermes_cron.rs`. Frontend: TSC clean, lint clean, Vitest 27/27.
 
+### T6.1 — Feedback loop (👍/👎 per assistant reply) · ~2 days
+
+**Progress (2026-04-23 pm)**:
+- ✅ **T6.1 shipped** — per-message rating: DB migration v8 adds `feedback TEXT` column to `messages` (nullable; legal values `'up' | 'down' | NULL`), `set_message_feedback` DB method + `db_message_set_feedback` IPC command, `upsert_message` COALESCEs to preserve ratings across content-only upserts. Frontend: `FeedbackButtons` under every completed assistant bubble (click to toggle, click same to clear), `setMessageFeedback` zustand action fire-and-forgets IPC. Analytics: new `FeedbackStrip` card showing 👍 count, 👎 count, Helpful-rate %, and coverage vs lifetime messages. 153 Rust tests pass, +3 new tests (`t61_*`). Frontend: TSC clean, lint clean, Vitest 27/27. Deferred: "why was this bad?" freetext, per-adapter ratio rollups, RLHF export.
+
 
 
 #### T6.7a — Channel schema hotfix · ~1.5 days

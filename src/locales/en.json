@@ -29,6 +29,8 @@
     "delete": "Delete",
     "copied": "Copied",
     "copy": "Copy",
+    "feedback_up": "Helpful",
+    "feedback_down": "Not helpful",
     "attach_file": "Attach file",
     "stop_generating": "Stop generating",
     "send_message": "Send message",
@@ -253,6 +255,15 @@
         "title": "Usage by adapter",
         "subtitle": "Sessions grouped by agent adapter.",
         "empty": "No adapter activity yet."
+      },
+      "feedback": {
+        "title": "Reply feedback",
+        "subtitle": "Lifetime 👍 / 👎 ratings left on assistant replies.",
+        "empty": "No ratings yet — hover an assistant reply on the Chat page to rate it.",
+        "up": "Helpful",
+        "down": "Not helpful",
+        "ratio": "Helpful rate",
+        "coverage": "{{rated}} rated / {{total}} messages ({{pct}}%)"
       }
     }
   },

@@ -6,6 +6,8 @@ import {
   Boxes,
   Coins,
   MessageSquare,
+  ThumbsDown,
+  ThumbsUp,
   Wrench,
   RefreshCcw,
   Calendar,
@@ -181,6 +183,21 @@ function Dashboard({ data }: { data: AnalyticsSummaryDto }) {
         ) : (
           <HBarList items={adapterUsageNamed} />
         )}
+      </Card>
+
+      {/* T6.1 — lifetime 👍/👎 rollup. Lives at the end so the core
+          activity/tokens/models/adapters charts stay in their
+          historical slots. */}
+      <Card
+        title={t('analytics.chart.feedback.title')}
+        subtitle={t('analytics.chart.feedback.subtitle')}
+        icon={ThumbsUp}
+      >
+        <FeedbackStrip
+          up={totals.feedback_up}
+          down={totals.feedback_down}
+          totalMessages={totals.messages}
+        />
       </Card>
 
       <footer className="pt-2 text-center text-[11px] text-fg-subtle">
@@ -392,6 +409,77 @@ function HBarList({ items }: { items: Array<{ name: string; count: number }> }) 
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * T6.1 — two-cell lifetime feedback strip. Shows the 👍/👎 counts and
+ * a coverage pct against lifetime messages so users can tell whether
+ * the ratio is meaningful (10% coverage ≠ 0.1% coverage).
+ */
+function FeedbackStrip({
+  up,
+  down,
+  totalMessages,
+}: {
+  up: number;
+  down: number;
+  totalMessages: number;
+}) {
+  const { t } = useTranslation();
+  const rated = up + down;
+  const coverage = totalMessages > 0 ? (rated / totalMessages) * 100 : 0;
+  const ratio = rated > 0 ? (up / rated) * 100 : null;
+
+  if (rated === 0) {
+    return (
+      <EmptyRow hint={t('analytics.chart.feedback.empty')} />
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-3 sm:flex-row sm:items-stretch"
+      data-testid="analytics-feedback-strip"
+    >
+      <div className="flex-1 rounded-md border border-border bg-bg-elev-2 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wider text-fg-subtle">
+            {t('analytics.chart.feedback.up')}
+          </span>
+          <Icon icon={ThumbsUp} size="sm" className="text-emerald-500" />
+        </div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">
+          {formatNumber(up)}
+        </div>
+      </div>
+      <div className="flex-1 rounded-md border border-border bg-bg-elev-2 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wider text-fg-subtle">
+            {t('analytics.chart.feedback.down')}
+          </span>
+          <Icon icon={ThumbsDown} size="sm" className="text-danger" />
+        </div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">
+          {formatNumber(down)}
+        </div>
+      </div>
+      <div className="flex-1 rounded-md border border-border bg-bg-elev-2 px-4 py-3">
+        <div className="text-xs uppercase tracking-wider text-fg-subtle">
+          {t('analytics.chart.feedback.ratio')}
+        </div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">
+          {ratio === null ? '—' : `${ratio.toFixed(0)}%`}
+        </div>
+        <div className="mt-0.5 text-[11px] text-fg-subtle">
+          {t('analytics.chart.feedback.coverage', {
+            pct: coverage.toFixed(1),
+            rated: formatNumber(rated),
+            total: formatNumber(totalMessages),
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -197,6 +197,8 @@ export const tauriMockInitScript = /* js */ `
         prompt_tokens: 82_345,
         completion_tokens: 61_210,
         total_tokens: 143_555,
+        feedback_up: 7,
+        feedback_down: 2,
       },
       messages_per_day: [
         { date: isoDaysAgo(5), count: 9 },

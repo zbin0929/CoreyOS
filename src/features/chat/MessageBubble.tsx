@@ -7,6 +7,8 @@ import {
   Loader2,
   Paperclip,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   User,
   Wrench,
 } from 'lucide-react';
@@ -16,11 +18,15 @@ import { highlightCode } from './highlight';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { attachmentPreview } from '@/lib/ipc';
-import type { UiAttachment, UiMessage, UiToolCall } from '@/stores/chat';
+import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from '@/stores/chat';
 
 export function MessageBubble({ msg }: { msg: UiMessage }) {
   const isUser = msg.role === 'user';
   const canCopy = !msg.pending && !msg.error && msg.content.length > 0;
+  // T6.1 — feedback buttons are offered only on completed, non-error
+  // assistant bubbles. User bubbles and in-flight turns have nothing
+  // meaningful to rate.
+  const canRate = !isUser && canCopy;
   return (
     <div
       className={cn(
@@ -78,9 +84,65 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
             <Markdown>{msg.content}</Markdown>
           ) : null}
         </div>
-        {canCopy && <CopyButton text={msg.content} />}
+        {(canCopy || canRate) && (
+          <div className="flex items-center gap-1">
+            {canCopy && <CopyButton text={msg.content} />}
+            {canRate && <FeedbackButtons msg={msg} />}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * T6.1 — 👍/👎 per assistant reply. Click once to stamp, click the
+ * same button again to clear. Persisted via `setMessageFeedback` in
+ * the chat store (fire-and-forget DB write). The rating survives
+ * reloads and rolls up into Analytics totals.
+ */
+function FeedbackButtons({ msg }: { msg: UiMessage }) {
+  const { t } = useTranslation();
+  const sessionId = useChatStore((s) => s.currentId);
+  const setFeedback = useChatStore((s) => s.setMessageFeedback);
+
+  function toggle(value: 'up' | 'down') {
+    if (!sessionId) return;
+    const next = msg.feedback === value ? null : value;
+    setFeedback(sessionId, msg.id, next);
+  }
+
+  const baseBtn =
+    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition focus-visible:visible';
+  const idleBtn = 'text-fg-subtle invisible group-hover:visible hover:bg-bg-elev-2 hover:text-fg';
+  const activeUp = 'visible text-emerald-500';
+  const activeDown = 'visible text-danger';
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => toggle('up')}
+        className={cn(baseBtn, msg.feedback === 'up' ? activeUp : idleBtn)}
+        aria-label={t('chat_page.feedback_up')}
+        aria-pressed={msg.feedback === 'up'}
+        title={t('chat_page.feedback_up')}
+        data-testid={`bubble-feedback-up-${msg.id}`}
+      >
+        <Icon icon={ThumbsUp} size="xs" />
+      </button>
+      <button
+        type="button"
+        onClick={() => toggle('down')}
+        className={cn(baseBtn, msg.feedback === 'down' ? activeDown : idleBtn)}
+        aria-label={t('chat_page.feedback_down')}
+        aria-pressed={msg.feedback === 'down'}
+        title={t('chat_page.feedback_down')}
+        data-testid={`bubble-feedback-down-${msg.id}`}
+      >
+        <Icon icon={ThumbsDown} size="xs" />
+      </button>
+    </>
   );
 }
 

@@ -6,6 +6,59 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.1 · Feedback loop (👍/👎 per assistant reply)
+
+Users can now rate individual assistant replies in the Chat page. Ratings persist in SQLite, survive reloads, and roll up into a new Analytics card. First visible "quality signal" surface inside Corey — sets up later phases (RLHF exports, per-adapter ranking) without committing to anything now.
+
+### Context
+
+Per the post-audit plan (`docs/10-product-audit-2026-04-23.md`), T6.1 is a small-but-high-signal addition: the UI has nothing to say about reply quality today, and every adapter comparison / analytics rollup benefits from even a sparse rating signal. MVP scope is intentionally narrow — per-message 👍/👎 only; no freetext, no "why was this bad?" modal, no per-session aggregates yet.
+
+### Shipped
+
+**DB migration v8** (`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/db.rs`):
+- `ALTER TABLE messages ADD COLUMN feedback TEXT` — nullable, legal values `'up' | 'down' | NULL`.
+- `MessageRow.feedback: Option<String>` with `#[serde(default, skip_serializing_if)]` so pre-T6.1 frontend payloads (and the streaming code's content-only upserts) deserialise without the field.
+- `upsert_message`: COALESCE on the ON CONFLICT branch so content-only upserts never wipe a real rating. Mirrors the existing `prompt_tokens` / `completion_tokens` preservation pattern.
+- `set_message_feedback(id, value)` — dedicated UPDATE path that rejects any value other than `'up' / 'down' / NULL` with an `InvalidParameterName` error, so the analytics rollup never has to filter garbage.
+- `analytics_summary` now includes `feedback_up` and `feedback_down` lifetime counts (two cheap COUNT scans; NULL rows contribute 0).
+- Tests: `t61_set_message_feedback_accepts_up_down_null_and_rejects_other`, `t61_upsert_message_preserves_feedback_across_content_updates`, `t61_analytics_summary_counts_feedback`.
+
+**IPC** (`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/ipc/db.rs` + `@/Users/zbin/AI项目/hermes_ui/src-tauri/src/lib.rs`):
+- New command `db_message_set_feedback(messageId, feedback)`; registered in the command handler.
+
+**Frontend plumbing**:
+- `@/Users/zbin/AI项目/hermes_ui/src/lib/ipc.ts` — add `feedback?: 'up' | 'down' | null` to `DbMessageRow`, `feedback_up / feedback_down` to `AnalyticsTotals`, and `dbMessageSetFeedback` binding.
+- `@/Users/zbin/AI项目/hermes_ui/src/stores/chat.ts` — add `feedback` field to `UiMessage`, hydrate from DB, add `setMessageFeedback(sessionId, msgId, value)` action that mirrors zustand state + fire-and-forget IPC write.
+
+**Chat page** (`@/Users/zbin/AI项目/hermes_ui/src/features/chat/MessageBubble.tsx`):
+- New `FeedbackButtons` component below each completed, non-error assistant bubble. Click 👍 or 👎 to stamp; click the same button again to clear. Hidden until hover (like the Copy button) unless already rated. Active state uses emerald for 👍 and `--danger` for 👎 so the rating is visible without requiring hover on a reload.
+
+**Analytics page** (`@/Users/zbin/AI项目/hermes_ui/src/features/analytics/index.tsx`):
+- New `FeedbackStrip` card at the bottom of the dashboard showing 👍 count, 👎 count, Helpful-rate %, and coverage (`X rated / Y messages (Z.Z%)`). Empty state when no messages have been rated yet.
+
+**i18n**: `chat_page.feedback_up / feedback_down` + `analytics.chart.feedback.{title, subtitle, empty, up, down, ratio, coverage}` added to both `en.json` and `zh.json`.
+
+**e2e mock** (`@/Users/zbin/AI项目/hermes_ui/e2e/fixtures/tauri-mock.ts`): seeded `feedback_up: 7, feedback_down: 2` so the Analytics card has something to render.
+
+### Test totals
+
+- Rust: **153 pass, 0 fail** (+3 new T6.1 tests).
+- Frontend: TSC clean; ESLint clean (5 pre-existing `react-refresh/only-export-components` warnings untouched); Vitest 27/27 pass.
+
+### Deferred
+
+- "Why was this bad?" freetext on 👎 (bigger DB shape, separate IPC; not worth blocking T6.1).
+- Per-session or per-adapter ratio rollups (the lifetime number is the signal; per-adapter can ride T5.6's adapter_usage later).
+- Exporting ratings for RLHF — wait until we have >100 real ratings to see what shape is useful.
+
+### Next
+
+- T6.2: multi-instance Hermes.
+- T6.3: surface Hermes native `delegate_task` subagent tree in the Trajectory pane.
+
+---
+
 ## 2026-04-23 — T6.8 · Scheduler refactor (wrap Hermes native cron, delete SQLite worker)
 
 Replaced Corey's own Rust cron worker + SQLite table with a thin wrapper over Hermes's native `~/.hermes/cron/jobs.json`. The old implementation duplicated functionality Hermes already provides; T6.8 aligns with the post-audit principle of SURFACE, not duplicate.

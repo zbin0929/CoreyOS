@@ -95,6 +95,28 @@ pub async fn db_message_set_usage(
     })
 }
 
+/// T6.1 — stamp or clear a 👍/👎 rating on an assistant message.
+/// Pass `feedback = None` to clear. Invalid values (anything other than
+/// "up"/"down"/null) surface as an IPC error so the UI can show a toast.
+#[tauri::command]
+pub async fn db_message_set_feedback(
+    state: State<'_, AppState>,
+    message_id: String,
+    feedback: Option<String>,
+) -> IpcResult<()> {
+    let db = db_of(&state)?;
+    tokio::task::spawn_blocking(move || {
+        db.set_message_feedback(&message_id, feedback.as_deref())
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("db task join: {e}"),
+    })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("db set_message_feedback: {e}"),
+    })
+}
+
 #[tauri::command]
 pub async fn db_tool_call_append(state: State<'_, AppState>, call: ToolCallRow) -> IpcResult<()> {
     let db = db_of(&state)?;

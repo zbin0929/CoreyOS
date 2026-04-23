@@ -3,6 +3,7 @@ import {
   attachmentGc,
   dbAttachmentInsert,
   dbLoadAll,
+  dbMessageSetFeedback,
   dbMessageUpsert,
   dbSessionDelete,
   dbSessionUpsert,
@@ -26,6 +27,10 @@ export interface UiMessage {
    *  messages today (the composer stages files and hands them over on
    *  send). Hydrated from `DbAttachmentRow`. */
   attachments?: UiAttachment[];
+  /** T6.1 — per-message 👍/👎 rating. Only set on assistant messages via
+   *  the feedback buttons below each bubble. `undefined`/`null` =
+   *  unrated. */
+  feedback?: 'up' | 'down' | null;
   createdAt: number;
 }
 
@@ -100,6 +105,13 @@ interface ChatState {
   ) => void;
   /** Append a tool-progress marker to a message (race-free vs content updates). */
   appendToolCall: (sessionId: string, msgId: string, call: UiToolCall) => void;
+  /** T6.1 — stamp (or clear with `null`) a 👍/👎 rating on a message.
+   *  Persists via `db_message_set_feedback` so reloads preserve it. */
+  setMessageFeedback: (
+    sessionId: string,
+    msgId: string,
+    value: 'up' | 'down' | null,
+  ) => void;
 
   /** True when at least one session exists. Used to gate rendering. */
   hasSessions: () => boolean;
@@ -128,6 +140,7 @@ function sessionFromDb(s: DbSessionWithMessages): ChatSession {
       role: (m.role === 'user' ? 'user' : 'assistant') as UiMessage['role'],
       content: m.content,
       error: m.error ?? undefined,
+      feedback: m.feedback ?? null,
       createdAt: m.created_at,
       toolCalls:
         m.tool_calls.length > 0
@@ -514,6 +527,32 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         'patchMessage',
       );
     }
+  },
+
+  setMessageFeedback: (sessionId, msgId, value) => {
+    set((s) => {
+      const sess = s.sessions[sessionId];
+      if (!sess) return s;
+      let touched = false;
+      const nextMessages = sess.messages.map((m) => {
+        if (m.id !== msgId) return m;
+        touched = true;
+        return { ...m, feedback: value };
+      });
+      if (!touched) return s;
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...sess, messages: nextMessages },
+        },
+      };
+    });
+    // Persist via the dedicated IPC so the row's UPDATE doesn't touch
+    // content/position (the streaming path owns those).
+    fireWrite(
+      dbMessageSetFeedback({ messageId: msgId, feedback: value }),
+      'setMessageFeedback',
+    );
   },
 
   hasSessions: () => get().orderedIds.length > 0,

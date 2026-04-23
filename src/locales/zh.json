@@ -29,6 +29,8 @@
     "delete": "删除",
     "copied": "已复制",
     "copy": "复制",
+    "feedback_up": "有帮助",
+    "feedback_down": "没帮助",
     "attach_file": "添加附件",
     "stop_generating": "停止生成",
     "send_message": "发送消息",
@@ -247,6 +249,15 @@
         "title": "按 Agent 统计",
         "subtitle": "按 Agent 适配器分组的会话数。",
         "empty": "暂无 Agent 活动。"
+      },
+      "feedback": {
+        "title": "回复反馈",
+        "subtitle": "对助理回复的累计 👍 / 👎 评分。",
+        "empty": "暂无评分——到 Chat 页面鼠标悬停在回复上即可打分。",
+        "up": "有帮助",
+        "down": "没帮助",
+        "ratio": "好评率",
+        "coverage": "已评 {{rated}} / 共 {{total}} 条（{{pct}}%）"
       }
     }
   },

@@ -92,6 +92,7 @@ pub fn run() {
             ipc::db::db_session_delete,
             ipc::db::db_message_upsert,
             ipc::db::db_message_set_usage,
+            ipc::db::db_message_set_feedback,
             ipc::db::db_tool_call_append,
             ipc::db::analytics_summary,
             ipc::paths::app_paths,

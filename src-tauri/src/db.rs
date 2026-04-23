@@ -87,8 +87,8 @@ impl Db {
         conn.execute(
             "INSERT INTO messages
                (id, session_id, role, content, error, position, created_at,
-                prompt_tokens, completion_tokens)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                prompt_tokens, completion_tokens, feedback)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(id) DO UPDATE SET
                  role = excluded.role,
                  content = excluded.content,
@@ -99,7 +99,12 @@ impl Db {
                  -- tokens=None; set_message_usage stamps them later, and
                  -- subsequent content upserts should not wipe that).
                  prompt_tokens = COALESCE(excluded.prompt_tokens, prompt_tokens),
-                 completion_tokens = COALESCE(excluded.completion_tokens, completion_tokens)",
+                 completion_tokens = COALESCE(excluded.completion_tokens, completion_tokens),
+                 -- T6.1 — feedback is set via `set_message_feedback` after
+                 -- the stream completes (or cleared to NULL on toggle-off).
+                 -- Subsequent content upserts (legacy code paths) pass
+                 -- feedback=None and MUST NOT wipe a real rating.
+                 feedback = COALESCE(excluded.feedback, feedback)",
             params![
                 m.id,
                 m.session_id,
@@ -110,7 +115,32 @@ impl Db {
                 m.created_at,
                 m.prompt_tokens,
                 m.completion_tokens,
+                m.feedback,
             ],
+        )?;
+        Ok(())
+    }
+
+    /// T6.1 — stamp or clear a 👍/👎 rating on an assistant message.
+    /// `value` must be `Some("up")`, `Some("down")`, or `None` (clear).
+    /// Any other string is rejected so we don't end up with garbage in
+    /// the column that the analytics rollup would silently ignore.
+    pub fn set_message_feedback(
+        &self,
+        message_id: &str,
+        value: Option<&str>,
+    ) -> rusqlite::Result<()> {
+        if let Some(v) = value {
+            if v != "up" && v != "down" {
+                return Err(rusqlite::Error::InvalidParameterName(format!(
+                    "feedback must be 'up', 'down', or null (got {v:?})"
+                )));
+            }
+        }
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE messages SET feedback = ?1 WHERE id = ?2",
+            params![value, message_id],
         )?;
         Ok(())
     }
@@ -216,7 +246,7 @@ impl Db {
         // 2) All messages, sorted by (session_id, position).
         let mut mstmt = conn.prepare(
             "SELECT id, session_id, role, content, error, position, created_at,
-                    prompt_tokens, completion_tokens
+                    prompt_tokens, completion_tokens, feedback
              FROM messages ORDER BY session_id, position",
         )?;
         let messages: Vec<MessageRow> = mstmt
@@ -231,6 +261,7 @@ impl Db {
                     created_at: row.get(6)?,
                     prompt_tokens: row.get(7)?,
                     completion_tokens: row.get(8)?,
+                    feedback: row.get(9)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -515,6 +546,21 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v8 (2026-04-23 pm · T6.1): per-message 👍/👎 feedback.
+    // Nullable TEXT column; legal values are 'up', 'down', or NULL
+    // (unrated). Only assistant messages are rated in the UI, but the
+    // column lives on every row so the analytics rollup doesn't need
+    // an extra JOIN. Pre-T6.1 rows stay NULL and contribute 0 to the
+    // counts.
+    if version < 8 {
+        conn.execute_batch(
+            r#"
+            ALTER TABLE messages ADD COLUMN feedback TEXT;
+            PRAGMA user_version = 8;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -649,6 +695,14 @@ pub struct MessageRow {
     pub prompt_tokens: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion_tokens: Option<i64>,
+    /// T6.1 — per-message rating. Legal values: `"up"`, `"down"`, or
+    /// `None` (unrated). `#[serde(default)]` lets pre-T6.1 frontend
+    /// payloads (and the content-only upserts the streaming code
+    /// still emits) deserialise without the field; the upsert path
+    /// COALESCEs NULL so missing-in-the-wire never clobbers a real
+    /// rating.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -720,6 +774,10 @@ pub struct AnalyticsTotals {
     pub prompt_tokens: i64,
     pub completion_tokens: i64,
     pub total_tokens: i64,
+    /// T6.1 — lifetime 👍 / 👎 counts across all messages. Pre-T6.1
+    /// rows (feedback=NULL) contribute 0 to both.
+    pub feedback_up: i64,
+    pub feedback_down: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -770,6 +828,21 @@ impl Db {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
         let total_tokens = prompt_tokens + completion_tokens;
+
+        // T6.1 — lifetime feedback counts. Two cheap scans over a column
+        // that's NULL for every pre-T6.1 row. Could be done in one query
+        // with SUM(CASE WHEN ...) but the two COUNTs are clearer and the
+        // cost is negligible even at 100k messages.
+        let feedback_up: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM messages WHERE feedback = 'up'",
+            [],
+            |r| r.get(0),
+        )?;
+        let feedback_down: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM messages WHERE feedback = 'down'",
+            [],
+            |r| r.get(0),
+        )?;
 
         // 30-day window. created_at is ms since epoch.
         let since = now_ms - 30 * 86_400_000;
@@ -873,6 +946,8 @@ impl Db {
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
+                feedback_up,
+                feedback_down,
             },
             messages_per_day,
             tokens_per_day,
@@ -1076,6 +1151,7 @@ mod tests {
             created_at: 110,
             prompt_tokens: None,
             completion_tokens: None,
+            feedback: None,
         })
         .unwrap();
         db.append_tool_call(&ToolCallRow {
@@ -1177,6 +1253,7 @@ mod tests {
             created_at: 110,
             prompt_tokens: None,
             completion_tokens: None,
+            feedback: None,
         })
         .unwrap();
         db.append_tool_call(&ToolCallRow {
@@ -1257,6 +1334,7 @@ mod tests {
             created_at: now - 5 * day_ms,
             prompt_tokens: Some(11),
             completion_tokens: None,
+            feedback: None,
         })
         .unwrap();
         db.upsert_message(&MessageRow {
@@ -1269,6 +1347,7 @@ mod tests {
             created_at: now - 5 * day_ms + 1_000, // same UTC day as m1
             prompt_tokens: Some(20),
             completion_tokens: Some(33),
+            feedback: None,
         })
         .unwrap();
         db.upsert_message(&MessageRow {
@@ -1281,6 +1360,7 @@ mod tests {
             created_at: now - 45 * day_ms, // outside 30-day window
             prompt_tokens: Some(999),
             completion_tokens: Some(999),
+            feedback: None,
         })
         .unwrap();
 
@@ -1357,6 +1437,7 @@ mod tests {
             created_at: 110,
             prompt_tokens: None,
             completion_tokens: None,
+            feedback: None,
         };
         db.upsert_message(&base).unwrap();
         db.upsert_message(&MessageRow {
@@ -1503,6 +1584,7 @@ mod tests {
             created_at: 110,
             prompt_tokens: None,
             completion_tokens: None,
+            feedback: None,
         })
         .unwrap();
 
@@ -1523,5 +1605,95 @@ mod tests {
         assert_eq!(s.totals.prompt_tokens, 42);
         assert_eq!(s.totals.completion_tokens, 7);
         assert_eq!(s.totals.total_tokens, 49);
+    }
+
+    // ──── T6.1 feedback ────
+
+    fn sample_msg(id: &str, ts: i64) -> MessageRow {
+        MessageRow {
+            id: id.into(),
+            session_id: "s1".into(),
+            role: "assistant".into(),
+            content: "hi".into(),
+            error: None,
+            position: 0,
+            created_at: ts,
+            prompt_tokens: None,
+            completion_tokens: None,
+            feedback: None,
+        }
+    }
+
+    /// `set_message_feedback` round-trips 'up'/'down'/NULL and rejects
+    /// garbage so the analytics rollup never has to filter bad rows.
+    #[test]
+    fn t61_set_message_feedback_accepts_up_down_null_and_rejects_other() {
+        let db = Db::open_in_memory().unwrap();
+        db.upsert_session(&sample_session("s1", 100)).unwrap();
+        db.upsert_message(&sample_msg("m1", 110)).unwrap();
+
+        // Stamp up.
+        db.set_message_feedback("m1", Some("up")).unwrap();
+        let tree = db.load_all().unwrap();
+        assert_eq!(tree[0].messages[0].msg.feedback.as_deref(), Some("up"));
+
+        // Switch to down.
+        db.set_message_feedback("m1", Some("down")).unwrap();
+        let tree = db.load_all().unwrap();
+        assert_eq!(tree[0].messages[0].msg.feedback.as_deref(), Some("down"));
+
+        // Clear.
+        db.set_message_feedback("m1", None).unwrap();
+        let tree = db.load_all().unwrap();
+        assert!(tree[0].messages[0].msg.feedback.is_none());
+
+        // Garbage value is rejected.
+        assert!(db.set_message_feedback("m1", Some("meh")).is_err());
+    }
+
+    /// Content-only upserts (the streaming code path) pass feedback=None.
+    /// The COALESCE in ON CONFLICT must preserve the rating set by a
+    /// prior `set_message_feedback` call.
+    #[test]
+    fn t61_upsert_message_preserves_feedback_across_content_updates() {
+        let db = Db::open_in_memory().unwrap();
+        db.upsert_session(&sample_session("s1", 100)).unwrap();
+        db.upsert_message(&sample_msg("m1", 110)).unwrap();
+        db.set_message_feedback("m1", Some("up")).unwrap();
+
+        // Simulate a subsequent content-only upsert (as if the user
+        // re-opened the session and zustand flushed a patch).
+        db.upsert_message(&MessageRow {
+            content: "revised content".into(),
+            ..sample_msg("m1", 110)
+        })
+        .unwrap();
+
+        let tree = db.load_all().unwrap();
+        let m = &tree[0].messages[0].msg;
+        assert_eq!(m.content, "revised content");
+        assert_eq!(
+            m.feedback.as_deref(),
+            Some("up"),
+            "content-only upsert must not wipe the rating"
+        );
+    }
+
+    /// Analytics rollup reports the 👍/👎 counts; NULL rows contribute 0.
+    #[test]
+    fn t61_analytics_summary_counts_feedback() {
+        let db = Db::open_in_memory().unwrap();
+        db.upsert_session(&sample_session("s1", 100)).unwrap();
+        for (i, fb) in ["up", "up", "down", ""].iter().enumerate() {
+            let mut m = sample_msg(&format!("m{i}"), 100 + i as i64);
+            m.position = i as i64;
+            db.upsert_message(&m).unwrap();
+            if !fb.is_empty() {
+                db.set_message_feedback(&m.id, Some(fb)).unwrap();
+            }
+        }
+        let s = db.analytics_summary(1_000).unwrap();
+        assert_eq!(s.totals.feedback_up, 2);
+        assert_eq!(s.totals.feedback_down, 1);
     }
 }

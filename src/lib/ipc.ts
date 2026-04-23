@@ -230,6 +230,10 @@ export interface DbMessageRow {
    *  absent on user messages and on pre-T2.4 legacy rows. */
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
+  /** T6.1 — user rating: `'up'`, `'down'`, or absent/`null` (unrated).
+   *  Only assistant messages get rated in the UI but the column lives
+   *  on every row. */
+  feedback?: 'up' | 'down' | null;
 }
 
 export interface DbToolCallRow {
@@ -299,6 +303,19 @@ export function dbMessageSetUsage(args: {
     messageId: args.messageId,
     promptTokens: args.promptTokens,
     completionTokens: args.completionTokens,
+  });
+}
+
+/** T6.1 — stamp or clear a 👍/👎 rating on an assistant message.
+ *  Pass `feedback = null` to clear. The backend rejects values other
+ *  than `'up'`, `'down'`, or `null` with an `IpcError`. */
+export function dbMessageSetFeedback(args: {
+  messageId: string;
+  feedback: 'up' | 'down' | null;
+}): Promise<void> {
+  return invoke<void>('db_message_set_feedback', {
+    messageId: args.messageId,
+    feedback: args.feedback,
   });
 }
 
@@ -415,6 +432,10 @@ export interface AnalyticsTotals {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  /** T6.1 — lifetime 👍 / 👎 counts across all messages. Pre-T6.1
+   *  rows (feedback=NULL) contribute 0 to both. */
+  feedback_up: number;
+  feedback_down: number;
 }
 
 export interface AnalyticsSummaryDto {
