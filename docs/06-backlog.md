@@ -11,11 +11,82 @@ here.
 
 Categories, newest-phase first:
 
+- [Will not do (2026-04-23 reaffirmation)](#will-not-do-2026-04-23-reaffirmation)
 - [P4 follow-ups](#p4-follow-ups)
 - [P3 follow-ups](#p3-follow-ups)
 - [P2 follow-ups](#p2-follow-ups)
 - [P1 follow-ups](#p1-follow-ups)
 - [Cross-cutting](#cross-cutting)
+
+---
+
+## Will not do (2026-04-23 reaffirmation)
+
+On 2026-04-23 a brainstorm surfaced 8 major expansion directions
+(multi-agent orchestration, smart routing, self-evolution, harness
+engineering, video, voice, digital human/avatar, openclaw). After
+weighing each against the `00-vision.md` Control-Plane positioning,
+the following items are **explicitly rejected**. Re-opening any of
+them requires a product-direction pivot, not an engineering decision.
+
+### Digital human / avatar (the entire "8️⃣ AI 人" brainstorm item)
+
+- **Why rejected**: conflicts with the "control plane for AI agents"
+  positioning. Digital-human UX (2D/3D rigs, lip-sync, emotion
+  expression, desktop floating window) is consumer-product surface
+  area; every serious competitor (HeyGen, D-ID, Character.ai, Live2D
+  ecosystems) is 100% consumer-facing and has 10× our team size.
+- **Architectural mismatch**: Tauri single-window model doesn't
+  accommodate a persistent desktop pet; embedding Unity / UE / even
+  three.js + VRM rigs would bloat the bundle by 5–10×.
+- **What we'd ship instead if this direction matters**: a separate
+  product, `Corey Companion`, consuming Hermes via the same adapter
+  surface. Not merged into this repo.
+- **Re-open trigger**: **none**. This is a positioning decision, not a
+  backlog item.
+
+### Self-rewriting prompts / meta-optimisation (4.3 from brainstorm)
+
+- **Why rejected**: research-frontier territory (DSPy, TextGrad,
+  PromptAgent). Not a stable engineering capability. Building a
+  half-working version ships worse UX than "user writes their own
+  system prompt".
+- **Re-open trigger**: a proven OSS implementation emerges that we
+  can wrap as a skill, not build from scratch.
+
+### Self-built task-DAG framework (5.1 from brainstorm)
+
+- **Why rejected**: LangGraph, CrewAI, AutoGen, MetaGPT all have
+  full-time teams and ≥ 2 years of momentum. Building our own
+  orchestrator is NIH that we can't win.
+- **What we ship instead**: T7.1 adapts LangGraph (or equivalent) as
+  an `AgentAdapter` so Corey's UI can drive it without owning the
+  graph runtime. See `docs/phases/phase-7-expansion.md`.
+- **Re-open trigger**: existing DAG frameworks all die / pivot, and
+  no alternative exists.
+
+### Desktop-side video processing (all of brainstorm item 6️⃣)
+
+- **Why rejected**: ffmpeg-class dependencies would grow the Tauri
+  bundle from ~30 MB to ~300 MB+. Local video analysis is also better
+  served by cloud multimodal APIs (Gemini 2, GPT-4o) that are strictly
+  out of Corey's data path (our job is to display results, not
+  compete on model quality).
+- **What we ship instead**: Phase 8 includes **surfacing Hermes video
+  capabilities in the UI** (upload → show Hermes' video-analysis
+  result). Corey itself never touches frames / codecs.
+- **Re-open trigger**: Hermes gains first-class video tools and we
+  need local pre-processing for bandwidth / privacy reasons.
+
+### Always-on voice wake word (7.1 from brainstorm)
+
+- **Why rejected**: a developer tool that listens to the microphone
+  continuously is a trust non-starter. Battery drain, OS permission
+  fatigue, and macOS privacy-indicator dot during coding sessions all
+  compound.
+- **What we ship instead** (conditional on Phase 8 running):
+  push-to-talk only, via cloud ASR (OpenAI Realtime / Gemini Live).
+- **Re-open trigger**: none. Push-to-talk stays the ceiling.
 
 ---
 

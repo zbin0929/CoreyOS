@@ -11,8 +11,38 @@
 | 3     | Platform channels     | 8 channels + gateway restart + WeChat QR               | ~1 week   | **Shipped** (2026-04-22) — T3.1–T3.5 all green. Real Tencent iLink client + explicit-clear-secret button + `/health/channels` probe deferred; see `docs/phases/phase-3-channels.md`. |
 | 4     | Differentiators       | Multi-model compare, skill editor, trajectory, budgets, terminal | 1–2 weeks | **Shipped** (2026-04-22) — T4.1–T4.6 all green; T4.4b chat-send budget gate (80% warn / 100% block, period windowing, adapter scope) fleshed out 2026-04-23; T4.2b CodeMirror 6 landed in Skills 2026-04-23. Compare / Runbooks / Budgets / Trajectory / Terminal / Skills all land with e2e + Rust tests. T4.5b multi-tab Terminal landed 2026-04-23; T4.6b runbook scope filter was already shipped (verified 2026-04-23 — `runbooks-scope-filter` e2e green, `runbookScopeApplies()` helper in `src/features/runbooks/index.tsx`). No Phase 4 items remain deferred. See `docs/phases/phase-4-differentiators.md`. |
 | 5     | Multi-agent console   | 2+ non-Hermes adapters running side-by-side            | ~1 week   | **Shipped** (2026-04-23) — T5.1–T5.6 all green. Trait polish + Claude Code/Aider mocks + conformance suite + AgentSwitcher (selection, capability-gated Sidebar, `adapter_id` chat routing) + unified inbox (DB v5, per-row adapter badges, Active/All-agents scope) + cross-adapter analytics + budget adapter-scope dropdown. Deferred: T5.2b/T5.3b real CLIs, T5.4 OpenHands. |
+| 6     | Orchestration core    | Multi-Hermes instances + supervisor pattern + routing + feedback loop | 2–3 weeks | **Planned** (2026-04-23). T6.1 feedback loop (👍/👎), T6.2 multi-instance Hermes, T6.3 supervisor/worker orchestration, T6.4 rules-based routing, T6.5 per-agent sandbox isolation. See `docs/phases/phase-6-orchestration.md`. |
+| 7     | Agent expansion       | Visual DAG editor (LangGraph adapter) + skill-from-chat + long-term memory + openclaw | 3–4 weeks | **Planned** (2026-04-23). T7.1 LangGraph adapter (reuse existing DAG frameworks, don't build our own), T7.2 skill-from-conversation distillation, T7.3 memory layer (vector DB + RAG), T7.4 openclaw integration (pending user clarification). See `docs/phases/phase-7-expansion.md`. |
+| 8     | Multimodal (optional) | Voice push-to-talk via cloud APIs + video-as-Hermes-backend-capability | 2–3 weeks | **Conditional** (2026-04-23). Gated on Phase 6/7 landing cleanly AND product staying on the Control Plane track. Voice = cloud ASR/TTS (OpenAI Realtime or Gemini Live), no local wake-word. Video = UI to Hermes backend capability only, no local ffmpeg. See `docs/phases/phase-8-optional.md`. |
 
-Total ~6 weeks solo, sequential. Phases 2/3 can parallelize if 2 devs.
+Total ~12–14 weeks solo from Phase 0 through Phase 8, sequential. Phases 2/3 can parallelize if 2 devs.
+
+## Strategic positioning (reaffirmed 2026-04-23)
+
+Corey stays on the **Control Plane** axis per `00-vision.md`. After a
+brainstorm that surfaced 8 expansion directions (multi-agent,
+routing, self-evolution, harness engineering, video, voice, digital
+human, openclaw), we explicitly **reject** the following as
+out-of-scope and not-to-be-revisited without a product-direction
+pivot:
+
+- **AI digital human / avatar** — conflicts with the developer-tool
+  positioning; every major competitor in this space (HeyGen, D-ID,
+  Character.ai) has 10× our team size and is purely consumer-facing.
+  Belongs to a separate product, not Corey.
+- **Self-rewriting prompts / meta-optimisation (4.3 from the original
+  brainstorm)** — research-frontier territory (DSPy, TextGrad). Not a
+  product feature yet.
+- **Self-built task DAG framework (5.1 from the original brainstorm)** —
+  LangGraph, CrewAI, AutoGen exist and are funded. We adapt one as an
+  adapter in Phase 7, not reinvent.
+- **Desktop-side video processing (6 from the original brainstorm)** —
+  Tauri bundle blow-up from ffmpeg. Any video feature surfaces Hermes
+  backend capability in the UI, never processes video locally.
+- **Always-on voice wake word (7.1)** — trust/battery cost too high for
+  a developer tool. Push-to-talk only in Phase 8 (if Phase 8 runs).
+
+See `docs/06-backlog.md` § Will not do for rationale per item.
 
 ## Milestones
 
@@ -50,5 +80,8 @@ See `docs/phases/`:
 - `phase-3-channels.md`
 - `phase-4-differentiators.md`
 - `phase-5-multi-agent.md`
+- `phase-6-orchestration.md`
+- `phase-7-expansion.md`
+- `phase-8-optional.md`
 
 Each phase file contains: goals, task breakdown (with owner/effort), file-level outputs, acceptance criteria, test plan, demo script.

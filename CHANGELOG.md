@@ -6,6 +6,59 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Roadmap extension: Phases 6–8 + explicit rejections
+
+Extends the roadmap beyond Phase 5 with three new phases and — importantly — a `Will not do` section that documents which brainstorm items are **permanently off the table**. Purely a docs update; no code.
+
+### Context
+
+A brainstorm session surfaced 8 expansion directions (multi-agent orchestration, smart routing, self-evolution, harness engineering, video, voice, digital human, openclaw). After weighing each against the `00-vision.md` Control-Plane positioning, we committed to a phased take-forward plan and documented it.
+
+### Shipped (docs only)
+
+**`docs/05-roadmap.md`**:
+- New rows for Phase 6 (Orchestration core, 2–3 weeks, **Planned**), Phase 7 (Agent expansion, 3–4 weeks, **Planned**), Phase 8 (Multimodal optional, 2–3 weeks, **Conditional**).
+- New "Strategic positioning (reaffirmed 2026-04-23)" section listing the five explicit rejections with one-line rationales.
+- Phase files list updated to include the three new phase docs.
+- Total estimate updated to ~12–14 weeks Phase 0 → 8 solo.
+
+**`docs/06-backlog.md`**:
+- New "Will not do (2026-04-23 reaffirmation)" section at the top with five rejected items: digital human/avatar (entire item 8️⃣), self-rewriting prompts (4.3), self-built task-DAG (5.1), desktop-side video processing (all of 6️⃣), always-on voice wake word (7.1). Each carries "why rejected", "what we ship instead if anything", and "re-open trigger" (usually: none or explicit product pivot).
+
+**`docs/phases/phase-6-orchestration.md`** (new):
+- T6.1 Feedback loop (👍/👎 + DB v7 + Analytics integration).
+- T6.2 Multi-instance Hermes (`Vec<HermesInstance>` config, migration, registry).
+- T6.3 Supervisor/worker orchestration via a meta-adapter with JSON-line delegation markers and a nested `OrchestrationBubble.tsx`.
+- T6.4 Rules-based routing (YAML, no ML, 5 predicates).
+- T6.5 Per-agent sandbox isolation (`SandboxScope` split of `PathAuthority`).
+- Target test totals, deltas vs brainstorm items, deferrals, end-of-phase demo script.
+
+**`docs/phases/phase-7-expansion.md`** (new):
+- T7.1 LangGraph adapter (sidecar Python process, reuse AiderAdapter pattern — **adapt, don't rebuild**).
+- T7.2 Skill-from-conversation distillation (JSON-extraction prompt + Skills editor pre-fill).
+- T7.3 Long-term memory (embedded qdrant, `AgentAdapter::recall()` capability, DB v8).
+- T7.4 openclaw integration (blocked on user clarification of what openclaw actually is).
+- Guiding principle: "Adapt rather than build" — wrap LangGraph / qdrant / existing Skills infra, don't reinvent.
+
+**`docs/phases/phase-8-optional.md`** (new):
+- Explicitly **conditional**: four preconditions must hold to start.
+- T8.1 Push-to-talk voice (cloud ASR, hotkey-gated, no wake word).
+- T8.2 TTS playback (cloud endpoint, opt-in).
+- T8.3 Video attachment surfacing (UI only — Hermes does frame work; adapter `capabilities().video` gates upload).
+- T8.4–5 Permission onboarding + modality audit log in `changelog.jsonl`.
+- Non-goals section lists what stays permanently out even if Phase 8 ships: always-on voice, on-device ASR/TTS, local video, avatar, meeting transcription.
+
+### Fixed / Deferred / Test totals
+
+N/A — docs only. No tests affected.
+
+### Next
+
+- Phase 6 is "Planned" and ready to start when the user greenlights it.
+- Phase 7's openclaw task (T7.4) needs user clarification on what openclaw is before the effort estimate can be sharpened.
+
+---
+
 ## 2026-04-23 — Scheduler MVP (cron-driven prompt runs)
 
 The Scheduler page was a `Phase 2` placeholder since the original product plan; today it ships as a working MVP. Users can define cron-scheduled prompts that fire automatically against the Hermes adapter — enabling daily summaries, periodic data pulls, recurring cleanup runs, etc.
