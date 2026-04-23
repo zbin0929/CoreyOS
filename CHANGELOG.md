@@ -6,6 +6,57 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T5.1 · Adapter trait polish (Phase 5 kickoff)
+
+Opens Phase 5 (Multi-agent console) with the lowest-risk task: evolve
+the `AgentAdapter` trait so forthcoming Claude Code / Aider adapters
+have the fields they need, without breaking anything Hermes already
+does.
+
+### Shipped
+
+- **`Health` extended** — added `last_error: Option<String>` +
+  `uptime_ms: Option<u64>`, both `#[serde(default)]` so existing
+  consumers keep deserialising. `HermesAdapter` tracks a
+  `started_at: Instant` for uptime and a `RwLock<Option<String>>`
+  for the sticky last-error: successful probes clear it, failed
+  probes record it. UI agent-switcher (T5.5) will surface both.
+- **`ChatTurn.cwd: Option<String>`** — optional working directory
+  for code-centric adapters. Wired end-to-end through
+  `chat_send` + `chat_stream_start` IPC (`ChatSendArgs.cwd` +
+  `ChatStreamArgs.cwd`, both `#[serde(default)]`). Hermes ignores
+  it; Claude Code / Aider will consume it starting T5.2.
+- **Hermes `list_sessions` honours query** — the trait already
+  declared `SessionQuery { search, source, limit }` but the
+  adapter silently dropped all three. Now:
+    - `search`: case-insensitive substring match on `title`
+    - `limit`: take-N cap
+    - `source`: still ignored (deferred — fixtures don't carry
+      enough signal to validate, Claude Code/Aider will force the
+      design)
+
+### Tests
+
+- **Rust**: 112 → **116** (+4 under `adapters::hermes::tests::t51_*`):
+  stub-health surfaces uptime/no-error, search filters by title,
+  limit caps the set, `ChatTurn.cwd` back-compat round-trip.
+- `cargo check` + full lib test: clean.
+
+### Deferred (tracked)
+
+- specta bindings regen — no TS consumer of `Health` /
+  `ChatTurn.cwd` yet; revisit when T5.2 lands a non-Hermes adapter.
+- `SessionQuery.source` filter — same rationale; the moment a
+  non-Hermes adapter exposes meaningful `Source` values we wire it.
+
+### Next
+
+- **T5.2 Claude Code adapter** (2 days) — mock-first (no real CLI),
+  then cli + sessions + stream modules + fixtures + conformance
+  suite.
+
+---
+
 ## 2026-04-23 — Brand · Corey logo + Icon wrapper + Dock/window polish
 
 First pass of brand identity: ship the Corey logo across every Tauri

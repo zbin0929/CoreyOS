@@ -123,6 +123,13 @@ pub struct ChatTurn {
     pub messages: Vec<ChatMessageDto>,
     #[serde(default)]
     pub model: Option<String>,
+    /// T5.1 — optional working directory for code-centric adapters
+    /// (Claude Code, Aider, OpenHands). Hermes ignores this because
+    /// its tools run server-side with their own filesystem view.
+    /// Callers that don't care can leave it `None`; adapters that
+    /// don't support it SHOULD silently ignore rather than error.
+    #[serde(default)]
+    pub cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,6 +140,17 @@ pub struct Health {
     pub gateway_url: Option<String>,
     pub latency_ms: Option<u32>,
     pub message: Option<String>,
+    /// T5.1 — human-readable last probe/invocation error. `None` means
+    /// "no errors since adapter boot". Adapters SHOULD surface the most
+    /// recent transport/parse failure here so the UI can show it even
+    /// when a subsequent health check succeeded.
+    #[serde(default)]
+    pub last_error: Option<String>,
+    /// T5.1 — milliseconds since this adapter instance was constructed.
+    /// `None` when the adapter doesn't track a start time (e.g. stub).
+    /// Mainly for the upcoming Agent Switcher to show "Running for 2h".
+    #[serde(default)]
+    pub uptime_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

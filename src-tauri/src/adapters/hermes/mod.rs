@@ -39,6 +39,13 @@ const FIXTURE_MODELS: &str = include_str!("fixtures/models.json");
 
 pub struct HermesAdapter {
     mode: Mode,
+    /// T5.1 — captured at construction; powers `Health::uptime_ms`.
+    started_at: std::time::Instant,
+    /// T5.1 — most recent probe/invocation failure, mutated from
+    /// `health()` on error paths. `RwLock<Option<String>>` so it
+    /// stays cheap to read from many await points and doesn't leak
+    /// async contention into the hot chat path.
+    last_error: std::sync::RwLock<Option<String>>,
 }
 
 enum Mode {
@@ -51,7 +58,11 @@ enum Mode {
 
 impl HermesAdapter {
     pub fn new_stub() -> Self {
-        Self { mode: Mode::Stub }
+        Self {
+            mode: Mode::Stub,
+            started_at: std::time::Instant::now(),
+            last_error: std::sync::RwLock::new(None),
+        }
     }
 
     /// Build a live adapter talking to a real Hermes gateway.
@@ -65,11 +76,33 @@ impl HermesAdapter {
                 gateway: HermesGateway::new(base_url, api_key)?,
                 default_model: default_model.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
             },
+            started_at: std::time::Instant::now(),
+            last_error: std::sync::RwLock::new(None),
         })
     }
 
     fn is_stub(&self) -> bool {
         matches!(self.mode, Mode::Stub)
+    }
+
+    fn uptime_ms(&self) -> u64 {
+        self.started_at.elapsed().as_millis() as u64
+    }
+
+    fn read_last_error(&self) -> Option<String> {
+        self.last_error.read().ok().and_then(|g| g.clone())
+    }
+
+    fn record_error(&self, msg: impl Into<String>) {
+        if let Ok(mut g) = self.last_error.write() {
+            *g = Some(msg.into());
+        }
+    }
+
+    fn clear_error(&self) {
+        if let Ok(mut g) = self.last_error.write() {
+            *g = None;
+        }
     }
 }
 
@@ -197,21 +230,37 @@ impl AgentAdapter for HermesAdapter {
                 gateway_url: None,
                 latency_ms: Some(0),
                 message: Some("stub — fixture data only".into()),
+                last_error: self.read_last_error(),
+                uptime_ms: Some(self.uptime_ms()),
             }),
             Mode::Live { gateway, .. } => {
-                let probe = gateway.health().await?;
-                Ok(Health {
-                    ok: true,
-                    adapter_id: ADAPTER_ID.into(),
-                    version: None,
-                    gateway_url: Some(gateway.base_url().to_string()),
-                    latency_ms: Some(probe.latency_ms),
-                    message: if probe.body.is_empty() {
-                        None
-                    } else {
-                        Some(probe.body)
-                    },
-                })
+                // T5.1 — successful probe clears the sticky last_error;
+                // a failed probe records the message so the next (possibly
+                // successful) read still surfaces what went wrong most
+                // recently. `?` would lose that opportunity, so split it.
+                match gateway.health().await {
+                    Ok(probe) => {
+                        self.clear_error();
+                        Ok(Health {
+                            ok: true,
+                            adapter_id: ADAPTER_ID.into(),
+                            version: None,
+                            gateway_url: Some(gateway.base_url().to_string()),
+                            latency_ms: Some(probe.latency_ms),
+                            message: if probe.body.is_empty() {
+                                None
+                            } else {
+                                Some(probe.body)
+                            },
+                            last_error: None,
+                            uptime_ms: Some(self.uptime_ms()),
+                        })
+                    }
+                    Err(e) => {
+                        self.record_error(e.to_string());
+                        Err(e)
+                    }
+                }
             }
         }
     }
@@ -251,10 +300,31 @@ impl AgentAdapter for HermesAdapter {
         }
     }
 
-    async fn list_sessions(&self, _query: SessionQuery) -> AdapterResult<Vec<Session>> {
-        serde_json::from_str::<Vec<Session>>(FIXTURE_SESSIONS).map_err(|e| AdapterError::Internal {
-            source: anyhow::anyhow!("failed to parse session fixtures: {e}"),
-        })
+    async fn list_sessions(&self, query: SessionQuery) -> AdapterResult<Vec<Session>> {
+        let all: Vec<Session> =
+            serde_json::from_str(FIXTURE_SESSIONS).map_err(|e| AdapterError::Internal {
+                source: anyhow::anyhow!("failed to parse session fixtures: {e}"),
+            })?;
+        // T5.1 — honour the new search field. Case-insensitive substring
+        // match against `title`. `source` + `limit` were already declared
+        // in the trait but silently ignored here; wiring them up is
+        // the same shape and tracked in the backlog.
+        let filtered: Vec<Session> = match query.search.as_deref().map(str::trim) {
+            Some(q) if !q.is_empty() => {
+                let needle = q.to_lowercase();
+                all.into_iter()
+                    .filter(|s| s.title.to_lowercase().contains(&needle))
+                    .collect()
+            }
+            _ => all,
+        };
+        let capped = match query.limit {
+            Some(n) if (n as usize) < filtered.len() => {
+                filtered.into_iter().take(n as usize).collect()
+            }
+            _ => filtered,
+        };
+        Ok(capped)
     }
 
     async fn get_session(&self, id: &SessionId) -> AdapterResult<Session> {
@@ -467,5 +537,84 @@ mod tests {
 
         let _ = std::fs::remove_file(&img);
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    // ───────────────────────── T5.1 tests ─────────────────────────
+
+    /// Stub health carries the new `uptime_ms` + `last_error` fields. Uptime is
+    /// "very small positive" (we just constructed it), last_error is `None`.
+    #[tokio::test]
+    async fn t51_stub_health_exposes_uptime_and_clean_last_error() {
+        let a = HermesAdapter::new_stub();
+        let h = a.health().await.unwrap();
+        assert!(h.ok);
+        assert_eq!(h.adapter_id, "hermes");
+        assert!(h.uptime_ms.is_some(), "stub must report uptime");
+        assert!(h.last_error.is_none(), "fresh stub has no errors");
+    }
+
+    /// `list_sessions` honours the new `search` field. We don't know the
+    /// exact contents of the fixture, but an obviously-absent needle must
+    /// filter down to zero, and an empty/None query must match the full set.
+    #[tokio::test]
+    async fn t51_list_sessions_search_filters_by_title() {
+        let a = HermesAdapter::new_stub();
+        let full = a.list_sessions(SessionQuery::default()).await.unwrap();
+        assert!(!full.is_empty(), "fixture must seed at least one session");
+
+        let none = a
+            .list_sessions(SessionQuery {
+                search: Some("definitely-not-a-title-xyz-zzz".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(none.is_empty(), "impossible needle must match nothing");
+
+        // First session's first word should always match itself (modulo case).
+        let pivot_title = full[0].title.clone();
+        let needle = pivot_title
+            .split_whitespace()
+            .next()
+            .unwrap_or(&pivot_title)
+            .to_string();
+        let some = a
+            .list_sessions(SessionQuery {
+                search: Some(needle.to_uppercase()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(
+            !some.is_empty(),
+            "case-insensitive match on a word from an existing title must hit"
+        );
+    }
+
+    /// `limit` caps the result set without interacting with `search`.
+    #[tokio::test]
+    async fn t51_list_sessions_limit_caps_result_set() {
+        let a = HermesAdapter::new_stub();
+        let capped = a
+            .list_sessions(SessionQuery {
+                limit: Some(1),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(capped.len(), 1, "limit=1 must yield one row");
+    }
+
+    /// `ChatTurn.cwd` survives a serde round-trip and defaults to `None`
+    /// when absent from the wire (back-compat with pre-T5.1 callers).
+    #[test]
+    fn t51_chat_turn_cwd_is_optional_on_the_wire() {
+        let legacy = r#"{"messages":[],"model":null}"#;
+        let turn: ChatTurn = serde_json::from_str(legacy).unwrap();
+        assert!(turn.cwd.is_none());
+
+        let with_cwd = r#"{"messages":[],"model":null,"cwd":"/tmp/repo"}"#;
+        let turn: ChatTurn = serde_json::from_str(with_cwd).unwrap();
+        assert_eq!(turn.cwd.as_deref(), Some("/tmp/repo"));
     }
 }

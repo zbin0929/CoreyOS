@@ -28,13 +28,27 @@ At minimum **Claude Code + Aider** must ship in Phase 5.
 
 ## Task breakdown
 
-### T5.1 — Adapter trait polish (half day)
+### T5.1 — Adapter trait polish · **Shipped** (2026-04-23)
 
-- Revisit `AgentAdapter` for things learned in Phases 1–4. Expected changes:
-  - `health()` returns richer data (latency, last error).
-  - `send_message` gains optional `cwd` + `attachments` for code-centric agents.
-  - `list_sessions` query accepts `search: String`.
-- Regenerate specta bindings; fix callers.
+- `Health` extended with `last_error: Option<String>` + `uptime_ms:
+  Option<u64>` (commit to land with the rest of T5.1). Both are
+  `#[serde(default)]` so old clients keep deserialising fine.
+  `HermesAdapter` now tracks `started_at: Instant` + a `RwLock<Option<String>>`
+  for the sticky last-error: successful probes clear it, failed probes
+  record the error message.
+- `ChatTurn` gains `cwd: Option<String>` (`#[serde(default)]`). Wired
+  through both IPC commands (`chat_send` + `chat_stream_start`).
+  Hermes ignores it; Claude Code / Aider will consume it in T5.2 / T5.3.
+- `SessionQuery.search` was already present — Hermes `list_sessions`
+  now honours both `search` (case-insensitive substring on title) and
+  `limit` (take-N cap). Source filter still deferred.
+- Did **not** regenerate specta bindings — no TS consumers of the
+  mutated types yet. Will revisit when T5.2 introduces a real
+  non-Hermes adapter.
+
+**Tests**: 4 new unit tests under `adapters::hermes::tests::t51_*`
+(stub health, search filter, limit cap, ChatTurn.cwd back-compat);
+total lib tests 112 → 116, all green.
 
 ### T5.2 — Claude Code adapter (2 days)
 

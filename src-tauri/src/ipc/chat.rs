@@ -16,6 +16,10 @@ pub struct ChatSendArgs {
     /// Optional model override; if `None`, the adapter's default model is used.
     #[serde(default)]
     pub model: Option<String>,
+    /// T5.1 — optional working directory for code-centric adapters
+    /// (Claude Code / Aider). Hermes ignores it.
+    #[serde(default)]
+    pub cwd: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -37,6 +41,7 @@ pub async fn chat_send(state: State<'_, AppState>, args: ChatSendArgs) -> IpcRes
     let turn = ChatTurn {
         messages: args.messages,
         model: args.model,
+        cwd: args.cwd,
     };
     let content = adapter.chat_once(turn).await?;
     Ok(ChatSendReply { content })
@@ -54,6 +59,9 @@ pub struct ChatStreamArgs {
     /// registered" race. If omitted, Rust generates one.
     #[serde(default)]
     pub handle: Option<String>,
+    /// T5.1 — working directory for code-centric adapters.
+    #[serde(default)]
+    pub cwd: Option<String>,
 }
 
 /// Kick off a streaming completion. Returns the handle used to scope events:
@@ -100,6 +108,7 @@ pub async fn chat_stream_start(
     let turn = ChatTurn {
         messages: args.messages,
         model: args.model,
+        cwd: args.cwd,
     };
     let done_event = format!("chat:done:{handle}");
     let err_event = format!("chat:error:{handle}");
