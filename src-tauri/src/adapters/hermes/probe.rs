@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AdapterError, AdapterResult};
 
-const USER_AGENT: &str = concat!("caduceus/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("corey/", env!("CARGO_PKG_VERSION"));
 /// Probe is user-initiated (button click) — fast fail is more useful than
 /// the default 120s chat timeout.
 const PROBE_TIMEOUT_S: u64 = 20;

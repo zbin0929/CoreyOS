@@ -142,7 +142,7 @@ pub fn run() {
             ipc::menu::menu_set_locale,
         ])
         .setup(|app| {
-            info!(version = env!("CARGO_PKG_VERSION"), "Caduceus booting");
+            info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");
 
             // Resolve the config directory AFTER Tauri has initialized —
             // `app.path().app_config_dir()` is only available here.

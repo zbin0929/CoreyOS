@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 
 use crate::error::{AdapterError, AdapterResult};
 
-const USER_AGENT: &str = concat!("caduceus/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("corey/", env!("CARGO_PKG_VERSION"));
 /// Default total-request timeout. Fine for health + list_models + chat_once
 /// (non-streaming). Streaming calls override this per-request (see
 /// `STREAM_TIMEOUT_S`) because reasoning models routinely exceed 2 min.

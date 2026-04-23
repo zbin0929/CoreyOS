@@ -1,8 +1,8 @@
 [package]
 name = "caduceus"
 version = "0.0.1"
-description = "Caduceus — control plane for AI agents"
-authors = ["Caduceus Contributors"]
+description = "Corey — control plane for AI agents"
+authors = ["Corey Contributors"]
 edition = "2021"
 rust-version = "1.77"
 
