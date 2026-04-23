@@ -18,6 +18,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   hermesConfigRead,
@@ -240,8 +241,10 @@ export function ModelsRoute() {
             disabled={state.kind === 'loading'}
             title="Re-read ~/.hermes/config.yaml"
           >
-            <RefreshCw
-              className={cn('h-3.5 w-3.5', state.kind === 'loading' && 'animate-spin')}
+            <Icon
+              icon={RefreshCw}
+              size="sm"
+              className={cn(state.kind === 'loading' && 'animate-spin')}
             />
             Reload
           </Button>
@@ -252,7 +255,7 @@ export function ModelsRoute() {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-6">
           {state.kind === 'loading' && (
             <div className="flex items-center gap-2 text-fg-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Icon icon={Loader2} size="md" className="animate-spin" />
               Reading Hermes config…
             </div>
           )}
@@ -261,7 +264,7 @@ export function ModelsRoute() {
 
           {loaded && !loaded.present && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-              <Info className="mt-0.5 h-4 w-4 flex-none text-amber-500" />
+              <Icon icon={Info} size="md" className="mt-0.5 flex-none text-amber-500" />
               <div className="flex-1">
                 <div className="font-medium text-amber-600">
                   Hermes config not found
@@ -342,9 +345,9 @@ export function ModelsRoute() {
                         title="GET /v1/models against this endpoint"
                       >
                         {probeState.kind === 'probing' ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Icon icon={Loader2} size="sm" className="animate-spin" />
                         ) : (
-                          <Search className="h-3.5 w-3.5" />
+                          <Icon icon={Search} size="sm" />
                         )}
                         Discover
                       </Button>
@@ -389,7 +392,7 @@ export function ModelsRoute() {
                         onClick={onReset}
                         disabled={save.kind === 'saving'}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" />
+                        <Icon icon={RotateCcw} size="sm" />
                         Reset
                       </Button>
                     )}
@@ -399,9 +402,9 @@ export function ModelsRoute() {
                       disabled={!dirty || save.kind === 'saving'}
                     >
                       {save.kind === 'saving' ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Icon icon={Loader2} size="md" className="animate-spin" />
                       ) : (
-                        <Save className="h-4 w-4" />
+                        <Icon icon={Save} size="md" />
                       )}
                       Save to config.yaml
                     </Button>
@@ -428,7 +431,7 @@ function CurrentCard({ view }: { view: HermesConfigView }) {
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
       <div className="flex items-center gap-2 text-xs text-fg-muted">
-        <FileText className="h-3.5 w-3.5" />
+        <Icon icon={FileText} size="sm" />
         <code className="font-mono">{view.config_path}</code>
       </div>
       <div className="grid grid-cols-[110px_1fr] gap-y-1.5 text-sm">
@@ -492,7 +495,7 @@ function RestartBanner({
 
   return (
     <div className="flex items-start gap-2 rounded-md border border-gold-500/40 bg-gold-500/5 p-3 text-sm">
-      <TerminalIcon className="mt-0.5 h-4 w-4 flex-none text-gold-500" />
+      <Icon icon={TerminalIcon} size="md" className="mt-0.5 flex-none text-gold-500" />
       <div className="flex-1">
         <div className="font-medium text-fg">Restart the gateway to apply</div>
         <div className="mt-1 text-xs text-fg-muted">
@@ -508,21 +511,21 @@ function RestartBanner({
             disabled={status.kind === 'running'}
           >
             {status.kind === 'running' ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Icon icon={Loader2} size="sm" className="animate-spin" />
             ) : (
-              <Zap className="h-3.5 w-3.5" />
+              <Icon icon={Zap} size="sm" />
             )}
             Restart now
           </Button>
           {status.kind === 'done' && (
             <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-              <CheckCircle2 className="h-3.5 w-3.5" />
+              <Icon icon={CheckCircle2} size="sm" />
               Gateway restarted.
             </span>
           )}
           {status.kind === 'err' && (
             <span className="inline-flex items-start gap-1 text-xs text-danger">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+              <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
               <span className="break-all">{status.message}</span>
             </span>
           )}
@@ -592,7 +595,7 @@ function ApiKeyPanel({
   if (!expanded) {
     return (
       <div className="flex items-start gap-2 rounded-md border border-border bg-bg-elev-2 px-3 py-2 text-xs">
-        <Key className="mt-0.5 h-3.5 w-3.5 flex-none text-emerald-500" />
+        <Icon icon={Key} size="sm" className="mt-0.5 flex-none text-emerald-500" />
         <div className="flex-1">
           <span className="text-emerald-600">
             <code className="font-mono">{envKey}</code> is set
@@ -620,9 +623,11 @@ function ApiKeyPanel({
       )}
     >
       <div className="flex items-start gap-2">
-        <Key
+        <Icon
+          icon={Key}
+          size="sm"
           className={cn(
-            'mt-0.5 h-3.5 w-3.5 flex-none',
+            'mt-0.5 flex-none',
             present ? 'text-emerald-500' : 'text-amber-500',
           )}
         />
@@ -683,7 +688,7 @@ function ApiKeyPanel({
           aria-label={show ? 'Hide' : 'Show'}
           tabIndex={-1}
         >
-          {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          <Icon icon={show ? EyeOff : Eye} size="sm" />
         </button>
       </div>
 
@@ -699,9 +704,9 @@ function ApiKeyPanel({
           disabled={!value.trim() || saving}
         >
           {saving ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Icon icon={Loader2} size="xs" className="animate-spin" />
           ) : (
-            <Save className="h-3 w-3" />
+            <Icon icon={Save} size="xs" />
           )}
           Save key
         </Button>
@@ -709,7 +714,7 @@ function ApiKeyPanel({
 
       {error && (
         <div className="flex items-start gap-1 text-xs text-danger">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+          <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
           <span className="break-all">{error}</span>
         </div>
       )}
@@ -731,7 +736,7 @@ function ProbeStatus({
   if (state.kind === 'probing') {
     return (
       <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-fg-muted">
-        <Loader2 className="h-3 w-3 animate-spin" />
+        <Icon icon={Loader2} size="xs" className="animate-spin" />
         Probing…
       </span>
     );
@@ -739,7 +744,7 @@ function ProbeStatus({
   if (state.kind === 'ok') {
     return (
       <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-emerald-500">
-        <CheckCircle2 className="h-3 w-3" />
+        <Icon icon={CheckCircle2} size="xs" />
         {state.count} model{state.count === 1 ? '' : 's'} from{' '}
         <code className="font-mono text-[11px]">{state.endpoint}</code> ({state.latencyMs} ms)
       </span>
@@ -747,7 +752,7 @@ function ProbeStatus({
   }
   return (
     <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-danger">
-      <AlertCircle className="h-3 w-3" />
+      <Icon icon={AlertCircle} size="xs" />
       {state.message}
     </span>
   );
@@ -756,12 +761,12 @@ function ProbeStatus({
 function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-      <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+      <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
       <div className="flex-1">
         <div className="font-medium">Unable to read Hermes config</div>
         <div className="mt-1 break-all text-xs opacity-80">{message}</div>
         <Button className="mt-3" size="sm" variant="secondary" onClick={onRetry}>
-          <RefreshCw className="h-3.5 w-3.5" />
+          <Icon icon={RefreshCw} size="sm" />
           Try again
         </Button>
       </div>
@@ -813,7 +818,7 @@ function StatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }) {
   if (status.kind === 'saved') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-        <CheckCircle2 className="h-3.5 w-3.5" />
+        <Icon icon={CheckCircle2} size="sm" />
         Saved to config.yaml.
       </span>
     );
@@ -821,7 +826,7 @@ function StatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }) {
   if (status.kind === 'err') {
     return (
       <span className="inline-flex items-start gap-1 text-xs text-danger">
-        <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+        <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
         <span className="break-all">{status.message}</span>
       </span>
     );

@@ -14,6 +14,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   ipcErrorMessage,
@@ -133,7 +134,7 @@ export function SkillsRoute() {
             onClick={() => setSel({ kind: 'new', name: '' })}
             data-testid="skills-new"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Icon icon={Plus} size="sm" />
             {t('skills.new')}
           </Button>
         }
@@ -148,13 +149,13 @@ export function SkillsRoute() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             {listError && (
               <div className="m-2 flex items-start gap-2 rounded border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
                 <span className="break-all">{listError}</span>
               </div>
             )}
             {list === null ? (
               <div className="flex items-center gap-2 p-3 text-xs text-fg-muted">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Icon icon={Loader2} size="sm" className="animate-spin" />
                 {t('common.loading')}
               </div>
             ) : list.length === 0 ? (
@@ -167,7 +168,7 @@ export function SkillsRoute() {
                   <li key={group ?? '__root__'}>
                     {group !== null && (
                       <div className="flex items-center gap-1 px-3 py-1 text-[10px] uppercase tracking-wider text-fg-subtle">
-                        <FolderClosed className="h-3 w-3" />
+                        <Icon icon={FolderClosed} size="xs" />
                         <span className="truncate">{group}</span>
                       </div>
                     )}
@@ -187,7 +188,7 @@ export function SkillsRoute() {
                             )}
                             data-testid={`skill-row-${s.path}`}
                           >
-                            <FileText className="h-3 w-3 flex-none text-fg-subtle" />
+                            <Icon icon={FileText} size="xs" className="flex-none text-fg-subtle" />
                             <span className="truncate">{s.name}</span>
                           </button>
                         </li>
@@ -221,12 +222,12 @@ export function SkillsRoute() {
           )}
           {sel.kind === 'loading' && (
             <div className="flex flex-1 items-center justify-center text-fg-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Icon icon={Loader2} size="md" className="animate-spin" />
             </div>
           )}
           {sel.kind === 'error' && (
             <div className="m-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+              <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <span className="break-all">{sel.message}</span>
             </div>
           )}
@@ -277,7 +278,7 @@ function Editor({
       <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <FileText className="h-3.5 w-3.5 text-fg-subtle" />
+            <Icon icon={FileText} size="sm" className="text-fg-subtle" />
             <code className="truncate font-mono text-xs text-fg">{sel.path}</code>
             {dirty && (
               <span
@@ -298,7 +299,7 @@ function Editor({
             data-testid="skills-delete"
             title={t('skills.delete')}
           >
-            <Trash2 className="h-3.5 w-3.5 text-danger" />
+            <Icon icon={Trash2} size="sm" className="text-danger" />
           </Button>
           <Button
             size="sm"
@@ -308,9 +309,9 @@ function Editor({
             data-testid="skills-save"
           >
             {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Icon icon={Loader2} size="sm" className="animate-spin" />
             ) : (
-              <Save className="h-3.5 w-3.5" />
+              <Icon icon={Save} size="sm" />
             )}
             {t('skills.save')}
           </Button>
@@ -376,7 +377,7 @@ function NewSkillPrompt({
           disabled={!name.trim()}
           data-testid="skills-new-create"
         >
-          <Check className="h-3.5 w-3.5" />
+          <Icon icon={Check} size="sm" />
           {t('skills.create')}
         </Button>
       </div>

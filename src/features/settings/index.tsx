@@ -18,6 +18,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
+import { Icon } from '@/components/ui/icon';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import { useUIStore, type Theme } from '@/stores/ui';
@@ -156,7 +157,7 @@ export function SettingsRoute() {
 
           {loaded === null ? (
             <div className="flex items-center gap-2 text-fg-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Icon icon={Loader2} size="md" className="animate-spin" />
               {t('settings.loading')}
             </div>
           ) : (
@@ -209,7 +210,7 @@ export function SettingsRoute() {
                       }
                       tabIndex={-1}
                     >
-                      {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      <Icon icon={showKey ? EyeOff : Eye} size="md" />
                     </button>
                   </div>
                 </Field>
@@ -241,7 +242,7 @@ export function SettingsRoute() {
                       onClick={onReset}
                       disabled={save.kind === 'saving'}
                     >
-                      <RotateCcw className="h-3.5 w-3.5" />
+                      <Icon icon={RotateCcw} size="sm" />
                       {t('settings.gateway.reset')}
                     </Button>
                   )}
@@ -251,9 +252,9 @@ export function SettingsRoute() {
                     disabled={!dirty || save.kind === 'saving' || !baseUrl.trim()}
                   >
                     {save.kind === 'saving' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Icon icon={Loader2} size="md" className="animate-spin" />
                     ) : (
-                      <Save className="h-4 w-4" />
+                      <Icon icon={Save} size="md" />
                     )}
                     {t('settings.gateway.save')}
                   </Button>
@@ -310,7 +311,7 @@ function AppearanceSection() {
           aria-label={t('settings.appearance.theme')}
           className="inline-flex rounded-md border border-border bg-bg-elev-1 p-0.5"
         >
-          {themes.map(({ value, label, icon: Icon }) => {
+          {themes.map(({ value, label, icon: IconCmp }) => {
             const active = theme === value;
             return (
               <button
@@ -327,7 +328,7 @@ function AppearanceSection() {
                     : 'text-fg-subtle hover:bg-bg-elev-2 hover:text-fg',
                 )}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon icon={IconCmp} size="sm" />
                 {label}
               </button>
             );
@@ -407,12 +408,12 @@ function PathRow({ label, value }: { label: string; value: string }) {
       >
         {copied ? (
           <>
-            <Check className="h-3.5 w-3.5 text-emerald-500" />
+            <Icon icon={Check} size="sm" className="text-emerald-500" />
             <span className="text-emerald-500">{t('settings.storage.copied')}</span>
           </>
         ) : (
           <>
-            <Copy className="h-3.5 w-3.5" />
+            <Icon icon={Copy} size="sm" />
             <span>{t('settings.storage.copy')}</span>
           </>
         )}
@@ -481,9 +482,9 @@ function TestRow({ status, onTest }: { status: TestStatus; onTest: () => void })
         disabled={status.kind === 'probing'}
       >
         {status.kind === 'probing' ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Icon icon={Loader2} size="sm" className="animate-spin" />
         ) : (
-          <Wifi className="h-3.5 w-3.5" />
+          <Icon icon={Wifi} size="sm" />
         )}
         {t('settings.gateway.test')}
       </Button>
@@ -496,13 +497,13 @@ function TestRow({ status, onTest }: { status: TestStatus; onTest: () => void })
         )}
         {status.kind === 'ok' && (
           <span className="inline-flex items-center gap-1 text-emerald-500">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <Icon icon={CheckCircle2} size="sm" />
             {t('settings.gateway.test_ok', { ms: status.latencyMs })}
           </span>
         )}
         {status.kind === 'err' && (
           <span className="inline-flex items-start gap-1 text-danger">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+            <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
             <span className="break-all">{status.message}</span>
           </span>
         )}
@@ -516,7 +517,7 @@ function SaveStatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }
   if (status.kind === 'saved') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-        <CheckCircle2 className="h-3.5 w-3.5" />
+        <Icon icon={CheckCircle2} size="sm" />
         {t('settings.gateway.saved')}
       </span>
     );
@@ -524,7 +525,7 @@ function SaveStatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }
   if (status.kind === 'err') {
     return (
       <span className="inline-flex items-start gap-1 text-xs text-danger">
-        <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+        <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
         <span className="break-all">{status.message}</span>
       </span>
     );

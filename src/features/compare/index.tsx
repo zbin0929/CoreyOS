@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   chatStream,
@@ -272,7 +273,7 @@ export function CompareRoute() {
                   data-testid="compare-export-md"
                   title={t('compare.export_md')}
                 >
-                  <Download className="h-3.5 w-3.5" />
+                  <Icon icon={Download} size="sm" />
                   {t('compare.export_md')}
                 </Button>
                 <Button
@@ -282,7 +283,7 @@ export function CompareRoute() {
                   data-testid="compare-export-json"
                   title={t('compare.export_json')}
                 >
-                  <Download className="h-3.5 w-3.5" />
+                  <Icon icon={Download} size="sm" />
                   JSON
                 </Button>
               </>
@@ -311,7 +312,7 @@ export function CompareRoute() {
             />
             {modelsError && (
               <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger">
-                <AlertCircle className="h-3.5 w-3.5 flex-none" />
+                <Icon icon={AlertCircle} size="sm" className="flex-none" />
                 {modelsError}
               </div>
             )}
@@ -401,7 +402,7 @@ function PromptBar({
           data-testid="compare-stop"
           title={t('compare.stop_all')}
         >
-          <Square className="h-4 w-4" fill="currentColor" />
+          <Icon icon={Square} size="md" fill="currentColor" />
           {t('compare.stop_all')}
         </Button>
       ) : (
@@ -413,7 +414,7 @@ function PromptBar({
           data-testid="compare-run"
           title={t('compare.run')}
         >
-          <Play className="h-4 w-4" />
+          <Icon icon={Play} size="md" />
           {t('compare.run')}
         </Button>
       )}
@@ -474,7 +475,7 @@ function ModelPicker({
               title={t('compare.remove_model')}
               aria-label={t('compare.remove_model')}
             >
-              <X className="h-3 w-3" />
+              <Icon icon={X} size="xs" />
             </button>
           </span>
         );
@@ -492,9 +493,9 @@ function ModelPicker({
               : t('compare.add_model')
           }
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Icon icon={Plus} size="sm" />
           {t('compare.add_model')}
-          <ChevronDown className="h-3 w-3" />
+          <Icon icon={ChevronDown} size="xs" />
         </Button>
         {open && (
           <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-md border border-border bg-bg-elev-2 shadow-2">
@@ -560,10 +561,7 @@ function LanePanel({ lane, onCancel }: { lane: Lane; onCancel: () => void }) {
         <div className="flex items-center gap-1">
           {streaming && (
             <>
-              <Loader2
-                className="h-3.5 w-3.5 animate-spin text-fg-muted"
-                aria-hidden
-              />
+              <Icon icon={Loader2} size="sm" className="animate-spin text-fg-muted" />
               <Button
                 size="sm"
                 variant="ghost"
@@ -571,7 +569,7 @@ function LanePanel({ lane, onCancel }: { lane: Lane; onCancel: () => void }) {
                 data-testid={`compare-lane-cancel-${lane.model.id}`}
                 title={t('compare.cancel_lane')}
               >
-                <Square className="h-3 w-3" fill="currentColor" />
+                <Icon icon={Square} size="xs" fill="currentColor" />
               </Button>
             </>
           )}
@@ -595,13 +593,13 @@ function LanePanel({ lane, onCancel }: { lane: Lane; onCancel: () => void }) {
         <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-fg-subtle">
           {elapsed !== null && (
             <span className="inline-flex items-center gap-1" data-testid={`compare-lane-latency-${lane.model.id}`}>
-              <Clock className="h-3 w-3" />
+              <Icon icon={Clock} size="xs" />
               {formatMs(elapsed)}
             </span>
           )}
           {tokens !== null && tokens > 0 && (
             <span className="inline-flex items-center gap-1" data-testid={`compare-lane-tokens-${lane.model.id}`}>
-              <Coins className="h-3 w-3" />
+              <Icon icon={Coins} size="xs" />
               {tokens} tok
             </span>
           )}
@@ -652,7 +650,7 @@ function DiffFooter({ lanes }: { lanes: Lane[] }) {
     >
       <span className="font-medium text-fg">{t('compare.winners')}</span>
       <span className="inline-flex items-center gap-1" data-testid="compare-winner-latency">
-        <Clock className="h-3 w-3" />
+        <Icon icon={Clock} size="xs" />
         {t('compare.fastest')}:{' '}
         <code className="text-fg">{fastest.model.display_name ?? fastest.model.id}</code>
         <span className="text-fg-subtle">
@@ -660,7 +658,7 @@ function DiffFooter({ lanes }: { lanes: Lane[] }) {
         </span>
       </span>
       <span className="inline-flex items-center gap-1">
-        <Coins className="h-3 w-3" />
+        <Icon icon={Coins} size="xs" />
         {t('compare.most_tokens')}:{' '}
         <code className="text-fg">{mostTokens.model.display_name ?? mostTokens.model.id}</code>
       </span>
@@ -674,7 +672,7 @@ function EmptyPrompt() {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-fg-muted">
-      <Columns3 className="h-8 w-8 text-fg-subtle" />
+      <Icon icon={Columns3} size={32} className="text-fg-subtle" />
       <div className="text-sm font-medium text-fg">{t('compare.empty_title')}</div>
       <div className="max-w-md text-xs">{t('compare.empty_desc')}</div>
     </div>

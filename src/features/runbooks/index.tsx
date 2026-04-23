@@ -15,6 +15,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   ipcErrorMessage,
@@ -91,7 +92,7 @@ export function RunbooksRoute() {
               onClick={() => setMode({ kind: 'new' })}
               data-testid="runbooks-new"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Icon icon={Plus} size="sm" />
               {t('runbooks.new')}
             </Button>
           )
@@ -102,7 +103,7 @@ export function RunbooksRoute() {
         <div className="mx-auto w-full max-w-3xl px-6 py-6">
           {error && (
             <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+              <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <span>{error}</span>
             </div>
           )}
@@ -140,7 +141,7 @@ export function RunbooksRoute() {
           {mode.kind === 'list' &&
             (rows === null ? (
               <div className="flex items-center gap-2 text-fg-muted">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Icon icon={Loader2} size="md" className="animate-spin" />
                 {t('common.loading')}
               </div>
             ) : rows.length === 0 ? (
@@ -200,7 +201,7 @@ export function RunbooksRoute() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <BookMarked className="h-4 w-4 flex-none text-fg-muted" />
+                          <Icon icon={BookMarked} size="md" className="flex-none text-fg-muted" />
                           <span className="truncate text-sm font-medium text-fg">
                             {rb.name}
                           </span>
@@ -239,7 +240,7 @@ export function RunbooksRoute() {
                           data-testid={`runbook-use-${rb.id}`}
                           title={t('runbooks.use')}
                         >
-                          <Play className="h-3 w-3" />
+                          <Icon icon={Play} size="xs" />
                           {t('runbooks.use')}
                         </Button>
                         <Button
@@ -249,7 +250,7 @@ export function RunbooksRoute() {
                           data-testid={`runbook-edit-${rb.id}`}
                           title={t('runbooks.edit')}
                         >
-                          <Pencil className="h-3 w-3" />
+                          <Icon icon={Pencil} size="xs" />
                         </Button>
                         <Button
                           size="sm"
@@ -265,7 +266,7 @@ export function RunbooksRoute() {
                           data-testid={`runbook-delete-${rb.id}`}
                           title={t('runbooks.delete')}
                         >
-                          <Trash2 className="h-3 w-3 text-danger" />
+                          <Icon icon={Trash2} size="xs" className="text-danger" />
                         </Button>
                       </div>
                     </div>
@@ -429,14 +430,14 @@ function RunbookEditor({
 
       {err && (
         <div className="flex items-center gap-2 rounded border border-danger/40 bg-danger/5 px-2 py-1 text-xs text-danger">
-          <AlertCircle className="h-3.5 w-3.5" />
+          <Icon icon={AlertCircle} size="sm" />
           <span>{err}</span>
         </div>
       )}
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
         <Button size="sm" variant="ghost" type="button" onClick={onCancel}>
-          <X className="h-3.5 w-3.5" />
+          <Icon icon={X} size="sm" />
           {t('runbooks.cancel')}
         </Button>
         <Button
@@ -446,7 +447,7 @@ function RunbookEditor({
           disabled={saving || !name.trim() || !template.trim()}
           data-testid="runbook-save"
         >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {saving ? <Icon icon={Loader2} size="sm" className="animate-spin" /> : <Icon icon={Check} size="sm" />}
           {t('runbooks.save')}
         </Button>
       </div>
@@ -508,7 +509,7 @@ function RunDialog({
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>
-          <X className="h-3.5 w-3.5" />
+          <Icon icon={X} size="sm" />
           {t('runbooks.cancel')}
         </Button>
         <Button
@@ -518,7 +519,7 @@ function RunDialog({
           onClick={() => onLaunch(renderRunbook(runbook.template, values))}
           data-testid="runbook-launch"
         >
-          <Play className="h-3.5 w-3.5" />
+          <Icon icon={Play} size="sm" />
           {t('runbooks.launch')}
         </Button>
       </div>

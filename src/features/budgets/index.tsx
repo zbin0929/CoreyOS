@@ -13,6 +13,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
@@ -117,7 +118,7 @@ export function BudgetsRoute() {
               onClick={() => setMode({ kind: 'new' })}
               data-testid="budgets-new"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Icon icon={Plus} size="sm" />
               {t('budgets.new')}
             </Button>
           )
@@ -128,7 +129,7 @@ export function BudgetsRoute() {
         <div className="mx-auto w-full max-w-3xl px-6 py-6">
           {error && (
             <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+              <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <span>{error}</span>
             </div>
           )}
@@ -147,7 +148,7 @@ export function BudgetsRoute() {
           {mode.kind === 'list' &&
             (rows === null ? (
               <div className="flex items-center gap-2 text-fg-muted">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Icon icon={Loader2} size="md" className="animate-spin" />
                 {t('common.loading')}
               </div>
             ) : rows.length === 0 ? (
@@ -232,7 +233,7 @@ function BudgetCard({
             {t('budgets.edit')}
           </Button>
           <Button size="sm" variant="ghost" onClick={onDelete} data-testid={`budget-delete-${budget.id}`}>
-            <Trash2 className="h-3 w-3 text-danger" />
+            <Icon icon={Trash2} size="xs" className="text-danger" />
           </Button>
         </div>
       </div>
@@ -246,13 +247,13 @@ function BudgetCard({
       </div>
       {breached && (
         <div className="flex items-center gap-1 text-[11px] text-danger" data-testid={`budget-breached-${budget.id}`}>
-          <AlertTriangle className="h-3 w-3" />
+          <Icon icon={AlertTriangle} size="xs" />
           {t('budgets.breached')}
         </div>
       )}
       {warn && !breached && (
         <div className="flex items-center gap-1 text-[11px] text-amber-500" data-testid={`budget-warning-${budget.id}`}>
-          <AlertTriangle className="h-3 w-3" />
+          <Icon icon={AlertTriangle} size="xs" />
           {t('budgets.warning_80')}
         </div>
       )}
@@ -403,14 +404,14 @@ function BudgetEditor({
 
       {err && (
         <div className="flex items-center gap-2 rounded border border-danger/40 bg-danger/5 px-2 py-1 text-xs text-danger">
-          <AlertCircle className="h-3.5 w-3.5" />
+          <Icon icon={AlertCircle} size="sm" />
           <span>{err}</span>
         </div>
       )}
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
         <Button size="sm" variant="ghost" type="button" onClick={onCancel}>
-          <X className="h-3.5 w-3.5" />
+          <Icon icon={X} size="sm" />
           {t('budgets.cancel')}
         </Button>
         <Button
@@ -420,7 +421,7 @@ function BudgetEditor({
           disabled={saving}
           data-testid="budget-save"
         >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {saving ? <Icon icon={Loader2} size="sm" className="animate-spin" /> : <Icon icon={Check} size="sm" />}
           {t('budgets.save')}
         </Button>
       </div>

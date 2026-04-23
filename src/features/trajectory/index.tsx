@@ -16,6 +16,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   dbLoadAll,
@@ -100,13 +101,13 @@ export function TrajectoryRoute() {
           <div className="mx-auto w-full max-w-4xl px-6 py-6">
             {state.kind === 'loading' && (
               <div className="flex items-center gap-2 text-fg-muted">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Icon icon={Loader2} size="md" className="animate-spin" />
                 {t('common.loading')}
               </div>
             )}
             {state.kind === 'error' && (
               <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-                <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+                <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
                 <span>{state.message}</span>
               </div>
             )}
@@ -163,7 +164,7 @@ function SessionPicker({
         <span className="max-w-[220px] truncate">
           {selected ? selected.title : t('trajectory.pick_session')}
         </span>
-        <ChevronDown className="h-3 w-3" />
+        <Icon icon={ChevronDown} size="xs" />
       </Button>
       {open && (
         <div className="absolute right-0 top-full z-20 mt-1 max-h-[60vh] w-72 overflow-y-auto rounded-md border border-border bg-bg-elev-2 shadow-2">
@@ -220,19 +221,19 @@ function Timeline({
       {/* Session header — totals strip */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-[11px] text-fg-muted">
         <span className="inline-flex items-center gap-1">
-          <MessageSquare className="h-3 w-3" />
+          <Icon icon={MessageSquare} size="xs" />
           {t('trajectory.totals.messages', { n: totals.messages })}
         </span>
         <span className="inline-flex items-center gap-1">
-          <Wrench className="h-3 w-3" />
+          <Icon icon={Wrench} size="xs" />
           {t('trajectory.totals.tool_calls', { n: totals.toolCalls })}
         </span>
         <span className="inline-flex items-center gap-1">
-          <Coins className="h-3 w-3" />
+          <Icon icon={Coins} size="xs" />
           {totals.tokens} tok
         </span>
         <span className="inline-flex items-center gap-1">
-          <Clock className="h-3 w-3" />
+          <Icon icon={Clock} size="xs" />
           {formatMs(totals.durationMs)}
         </span>
       </div>
@@ -303,7 +304,7 @@ function Timeline({
                     className="flex items-center gap-2 rounded border border-border bg-bg-elev-2/60 px-2 py-1 text-[11px] text-fg-muted"
                     data-testid={`trajectory-tool-${tc.id}`}
                   >
-                    <Hammer className="h-3 w-3 text-fg-subtle" />
+                    <Icon icon={Hammer} size="xs" className="text-fg-subtle" />
                     <code className="font-mono text-fg">{tc.tool}</code>
                     {tc.label && <span className="truncate">{tc.label}</span>}
                     <span className="ml-auto text-[10px] text-fg-subtle">
@@ -459,10 +460,10 @@ function formatDate(ms: number): string {
 
 function RoleIcon({ role }: { role: string }) {
   if (role === 'user') {
-    return <User className="mt-0.5 h-4 w-4 flex-none text-fg-subtle" />;
+    return <Icon icon={User} size="md" className="mt-0.5 flex-none text-fg-subtle" />;
   }
   if (role === 'assistant') {
-    return <Sparkles className="mt-0.5 h-4 w-4 flex-none text-gold-500" />;
+    return <Icon icon={Sparkles} size="md" className="mt-0.5 flex-none text-gold-500" />;
   }
-  return <MessageSquare className="mt-0.5 h-4 w-4 flex-none text-fg-subtle" />;
+  return <Icon icon={MessageSquare} size="md" className="mt-0.5 flex-none text-fg-subtle" />;
 }
