@@ -6,6 +6,33 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — i18n · remove hardcoded English/Chinese text
+
+Ensures complete language separation: no English appears in Chinese mode and no Chinese appears in English mode (except for the brand name "Corey"). Previously several UI elements had hardcoded strings that didn't respect the active locale.
+
+### Shipped
+
+**Locale files** (`src/locales/en.json`, `src/locales/zh.json`):
+
+- Added `chat_page.*` keys (title, subtitle, stop, send, delete, delete_confirm, copied, copy, attach_file, stop_generating, send_message, remove_attachment)
+- Added `models_page.*` keys (title, subtitle, change_model, change_model_desc)
+- Added `settings.appearance.lang_en` and `settings.appearance.lang_zh` for language selector labels
+
+**Frontend**:
+- `src/features/settings/index.tsx` — language selector now uses `t('settings.appearance.lang_en')` and `t('settings.appearance.lang_zh')` instead of hardcoded "English" / "中文"
+- `src/features/chat/index.tsx` — PageHeader title/subtitle, button titles, and aria-labels all use translation keys
+- `src/features/models/index.tsx` — PageHeader title/subtitle and Section title/description use translation keys
+- `src/features/chat/SessionsPanel.tsx` — DeleteButton component uses translation keys for aria-label and title
+- `src/features/chat/MessageBubble.tsx` — CopyButton component uses translation keys for aria-label, title, and button text
+
+### Test totals
+
+- Locale key count: 403 → 411 (+8 new keys)
+- `pnpm typecheck` clean (some unused-import warnings from refactoring, harmless)
+- No runtime behavior changes beyond proper language switching
+
+---
+
 ## 2026-04-23 — Documentation · Chinese user manual
 
 Adds comprehensive Chinese-language user documentation covering all Corey features. Previously documentation existed only in English and technical phase plans; this provides end-user guidance for Chinese-speaking users.
