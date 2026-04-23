@@ -6,6 +6,66 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.5 · Per-agent sandbox isolation (named scopes + runtime enforcement)
+
+Each Hermes instance can now be pinned to a named sandbox scope with its own root list. IPC-originated file ops (currently just `attachment_stage_path`; more to follow) gate through that scope, so a "worker" instance configured with zero roots can't read arbitrary paths on disk even when the default scope has broad access. Ships as four focused commits (C1–C4) so each step is green and reviewable.
+
+### Context
+
+The audit entry for T6.5 called out that Hermes gateway owns its own per-instance `config.yaml` sandbox — but Corey still ran a single process-wide `PathAuthority`, which meant every adapter + every IPC shared one allow-list. That's fine when there's only one Hermes instance. Once T6.2 shipped multi-instance Hermes, the shared authority became the missing half of per-agent isolation: a "manager" instance given broad workspace access leaked that same access to every "worker" instance alongside it.
+
+**Honest boundary** — runtime enforcement here only covers IPC-originated file ops. Adapter tool calls (Hermes `terminal`/`file_read`/etc.) run inside the gateway process we don't control; their sandboxing is whatever the gateway's own `config.yaml` says. T6.5's scope is the surface Corey owns: attachments, skills writes, and any future IPC that reads user-picked paths on behalf of a specific agent. Documented this explicitly in the phase doc so nobody pretends it's a defense against a rogue agent process.
+
+### Shipped
+
+**C1 — sandbox internal refactor** (commit `244d96f`):
+- `SandboxScope { id, label, roots }` type with the `default` scope always present + an `is_valid_scope_id` slug validator (`[a-z0-9_-]{1,32}`).
+- `PathAuthority` gains `scopes` / `upsert_scope` / `delete_scope` / `roots_for` / `check_scoped` / `grant_once_in` / `session_grants_in` / `clear_session_grants_in`. Legacy `check` / `set_roots` / `add_root` / `grant_once` stay as thin wrappers targeting `DEFAULT_SCOPE_ID` — every pre-T6.5 caller keeps working without a line of downstream change.
+- Session grants moved to `HashMap<scope_id, HashSet<PathBuf>>`. A grant in `worker` does NOT satisfy a check against `default`, which is the core security property.
+- `sandbox.json` v2 schema: `scopes: Vec<SandboxScope>` replaces flat `roots`. v1 files auto-migrate on load (legacy roots become the `default` scope's roots). Next save writes v2; the legacy shape is never seen again.
+- `SandboxError::{UnknownScope, InvalidScope}` variants + i18n-free `IpcError::Internal` mapping.
+- 11 new Rust tests: v1→v2 migration, missing-default-scope reinsertion, new-authority-has-only-default, invalid ids rejected, default undeletable, check_scoped per-scope routing, grant_once scope-local, denylist still wins per scope, deleted scopes clear their grants, id validator accepts slugs / rejects junk.
+
+**C2 — scope CRUD + Settings UI** (commit `d1edc40`):
+- `sandbox_scope_list` / `sandbox_scope_upsert` / `sandbox_scope_delete` IPC commands registered in `lib.rs` invoke_handler.
+- `HermesInstance.sandbox_scope_id: Option<String>` persisted; empty-string and `"default"` both normalise to `None` on upsert (the default-scope fallback).
+- `SandboxScope` + helpers exported from `lib/ipc.ts`.
+- `HermesInstancesSection` loads scopes alongside instances and threads them to each row. "Add instance" refetches the scope list on click so a scope created just now in the sibling section shows up immediately.
+- `HermesInstanceRow` grows a `<select>` scope picker next to default-model. Empty value maps to `null` on the wire (default scope at runtime).
+- New `SandboxScopesSection` between Workspace and Storage: lists all scopes with root counts, inline create form (id + label), delete button on non-default rows. Default shows a "Locked" badge rather than a trash icon.
+- i18n keys (en + zh) for every new string.
+- Mock fixture extended: `sandboxScopes` mutable state seeded with default, three new handlers mirror the Rust invariants.
+
+**C3 — runtime enforcement on attachment_stage_path** (commit `a06f680`):
+- IPC signature grows a `sandbox_scope_id` arg (optional; None / "" / "default" → default scope).
+- Sandbox check runs BEFORE the blocking `stage_path()` copy, so a path outside the scope's roots fails with `SandboxConsentRequired` without ever reading the bytes.
+- Frontend `attachmentStagePath` accepts `sandboxScopeId`. Callers thread the active Hermes instance's `sandbox_scope_id` at send-time.
+- Mock mirrors the gate: non-default scope + path not under any root → `sandbox_consent_required`; non-default scope with zero roots → same (matches Rust enforced-mode semantics).
+
+**C4 — e2e + docs** (this commit):
+- New `e2e/sandbox-scopes.spec.ts` walks the full loop: verify default scope locked → create worker scope → assign to new Hermes instance → seed worker root → path INSIDE worker root accepted → path OUTSIDE rejected with `sandbox_consent_required` → same path through default scope accepted → delete worker scope.
+- CHANGELOG (this entry), `docs/05-roadmap.md` (Phase 6 status), and `docs/phases/phase-6-orchestration.md` (T6.5 section updated).
+
+### Test totals
+
+- Rust: **179 pass** (+11 from C1, unchanged in C2–C4).
+- Vitest: 46 pass (unchanged).
+- Playwright: **56 pass** (+1 `sandbox-scopes.spec.ts`).
+- TSC clean, ESLint clean.
+
+### Deferred
+
+- **Per-scope root editing inline** — `SandboxScopesSection` currently only creates scopes with an empty root list. Adding roots to a non-default scope still goes through... nothing, actually; the UI has no affordance. Punted because the enforcement story already works (a scope with 0 roots means "nothing allowed", which is sometimes exactly what a least-privilege worker wants). Follow-up can either reuse the Workspace add-root form with a scope dropdown, or expand each scope row into an editable card.
+- **Skills write path** — `hermes_skill_write` and similar skill-editor IPCs also touch disk on behalf of an agent but currently aren't scope-aware. Low priority because skills are a user-driven surface today (user writes, then agents read), not agent-driven. Add scope plumbing if we ever ship skill-from-chat (T7.2).
+- **Hermes adapter `build_content` direct read** — `src-tauri/src/adapters/hermes/mod.rs:155` still does `std::fs::read(&a.path)` with a `sandbox-allow` comment, because at that point the path is ALREADY attachments-dir-confined by the preceding stage IPC. Upgrading this to `check_scoped` would be pure safety-belts; tracked but not shipped in T6.5.
+
+### Next
+
+- **T6.7c** — five more channel smoke specs (Discord / Slack / Feishu / WeiXin / WeCom).
+- **Phase 6 close** — after T6.7c all deferred-from-Phase-6 items are explicitly out-of-scope; next sprint is Phase 7.
+
+---
+
 ## 2026-04-23 — T6.7b · Telegram e2e smoke test + channel verified badge + e2e mock hotfix
 
 Telegram now has a dedicated end-to-end smoke test walking the full configure-and-save loop; the Channels page surfaces a "Verified" badge on channels with shipping coverage. Along the way discovered and fixed a silent mock regression from T6.2 + T6.4 that was breaking **48/55** Playwright specs.

@@ -81,6 +81,11 @@ The smallest, highest-leverage item on the phase. Ships alone as the first PR.
 
 ### T6.5 — Per-agent sandbox isolation · ~3 days
 
+**Progress (2026-04-23 pm)**:
+- ✅ **T6.5 shipped** — full scope. Four commits (C1–C4) covering: `SandboxScope` data model with `DEFAULT_SCOPE_ID` invariant; `sandbox.json` v2 schema with in-memory v1→v2 migration; `PathAuthority` scoped APIs (`check_scoped`, `grant_once_in`, `session_grants_in`, etc.) alongside preserved legacy wrappers; scope CRUD IPCs (`sandbox_scope_list`/`upsert`/`delete`); `HermesInstance.sandbox_scope_id` field persisted; Settings UI gets a `SandboxScopesSection` (list/create/delete) + a per-row scope `<select>` in `HermesInstancesSection`; runtime enforcement lands on `attachment_stage_path` IPC — path checks run through `check_scoped(scope_id, path, Read)` BEFORE the blocking copy, so out-of-scope paths fail with `SandboxConsentRequired` without ever reading bytes. 179 Rust tests pass (+11 for scopes/migration/persistence); 56 Playwright pass (+1 new `sandbox-scopes.spec.ts`).
+- **Honest boundary**: enforcement covers IPC-originated file ops only (attachments today; skills + future user-picked-file surfaces as they land). Hermes gateway tool calls run inside the gateway process we don't control — their sandbox is whatever `config.yaml` says. Documented in the CHANGELOG so we don't pretend this is protection against a rogue agent process.
+- **Deferred**: per-scope root editing inside `SandboxScopesSection` (new scopes currently start empty-roots, which is sometimes exactly what a least-privilege worker wants); skill-write IPC scope-awareness (low priority — user-driven surface today); upgrading `adapters/hermes/mod.rs` `build_content`'s `std::fs::read` to `check_scoped` (belt-and-suspenders, the path has already been attachments-dir-confined by the preceding stage IPC).
+
 Currently `PathAuthority` is a singleton on `AppState`. Split it:
 
 - **Scopes**: `SandboxScope { id, roots: Vec<WorkspaceRoot>, denylist_extras: Vec<String> }`. Each `HermesInstance` points to a `sandbox_scope_id`. A default scope is shared by legacy paths.

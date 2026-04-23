@@ -728,7 +728,18 @@ function HermesInstancesSection() {
             type="button"
             size="sm"
             variant="secondary"
-            onClick={() => setAdding(true)}
+            // Refetch the scope list on each "Add instance" click so
+            // a scope created just now in `SandboxScopesSection` is
+            // visible in the new row's dropdown without needing a
+            // full page reload.
+            onClick={() => {
+              void sandboxScopeList()
+                .then((next) => setScopes(next))
+                .catch(() => {
+                  /* leave the cached snapshot in place */
+                });
+              setAdding(true);
+            }}
             data-testid="hermes-instances-add"
           >
             <Icon icon={Plus} size="sm" />
