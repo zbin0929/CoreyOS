@@ -6,6 +6,51 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Sandbox fs migration + brand rename + i18n audit
+
+Three focused cleanups that advance the "no loose ends" posture going into Phase 6.
+
+### Shipped
+
+**Sandbox fs migration** (partial):
+
+- `sandbox/fs.rs` gains blocking variants `read_to_string_blocking` and `write_blocking` for IPC handlers that run inside `tokio::task::spawn_blocking`. Returns `io::Result` so existing `NotFound → Ok(empty)` pipelines don't need rewriting; sandbox denials surface as `PermissionDenied`.
+- `ipc/channels.rs` migrated: `build_channel_states`, `read_nonempty_env_keys`, `read_config_yaml_value` now thread `Arc<PathAuthority>` and call `sandbox::fs::read_to_string_blocking`. Two of three `sandbox-allow` exemptions removed from the codebase.
+
+**Brand: Caduceus → Corey in runtime strings**:
+
+- `lib.rs` boot tracing log: `"Caduceus booting"` → `"Corey booting"`.
+- `adapters/hermes/probe.rs` + `gateway.rs` HTTP User-Agent: `caduceus/x.y.z` → `corey/x.y.z`.
+- `src-tauri/Cargo.toml` description and authors renamed to Corey.
+- Kept unchanged (migration complexity): crate name `caduceus`, lib name `caduceus_lib`, bundle id `com.caduceus.app`, DB filename `caduceus.db`, atomic-write temp suffix `.caduceus.tmp-`. Changing these would orphan existing users' data directories.
+
+**i18n audit** — complete localization coverage except the brand name "Corey":
+
+- New `chat_page.*` keys (12 additions): sessions, new, new_chat, session_scope, scope_active, scope_all, empty_sessions, empty_adapter_sessions, message_placeholder, current_llm, hero_title/subtitle_prefix/suffix, hero_suggestion_1..3.
+- New `models_page.*` keys (3): reload_config, probe_title, dismiss.
+- New `widgets.*` group (6): close, toggle_options, registered_agents, agents_fallback, llm_loading, llm_not_configured.
+- New `settings.appearance.lang_en` / `lang_zh` for language selector labels.
+- Frontend updates:
+  - `chat/index.tsx`: ChatPane and EmptyHero use translation keys; hero suggestions, placeholder, all button titles/aria-labels
+  - `chat/SessionsPanel.tsx`: Sessions header, New button, scope tabs, empty-state copy all localized
+  - `chat/MessageBubble.tsx` + `chat/ActiveLLMBadge.tsx`: Copy button and LLM badge labels localized
+  - `models/index.tsx`: Reload config + probe titles, dismiss button
+  - `trajectory/index.tsx`: Inspector Close button
+  - `settings/index.tsx`: Language selector options now use `t()` instead of hardcoded "English" / "中文"
+  - Shared widgets localized: `components/ui/drawer.tsx` (Close), `components/ui/combobox.tsx` (Toggle options), `app/shell/AgentSwitcher.tsx` (Registered agents)
+
+### Test totals
+
+- Rust: `cargo check` clean; `cargo test --lib` — 146/147 passing (1 pre-existing flake in `attachments::tests::gc_empty_dir_is_noop`, passes when run in isolation; unrelated to sandbox changes).
+- TypeScript: `pnpm typecheck` clean; `pnpm lint` clean (pre-existing react-refresh warnings unchanged).
+- `pnpm check:sandbox-fs`: OK.
+
+### Deferred
+
+- `adapters/hermes/mod.rs` — still has one `sandbox-allow` exemption for attachment reads. Needs adapter trait to accept `PathAuthority` (threading it through `Arc<dyn Adapter>` methods). Tracked as a larger follow-up PR because it touches every adapter implementation.
+
+---
+
 ## 2026-04-23 — i18n · remove hardcoded English/Chinese text
 
 Ensures complete language separation: no English appears in Chinese mode and no Chinese appears in English mode (except for the brand name "Corey"). Previously several UI elements had hardcoded strings that didn't respect the active locale.
