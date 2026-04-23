@@ -110,23 +110,38 @@ The base Scheduler (shipped 2026-04-23) makes users hand-write cron expressions.
 
 - **Stage 3 explicitly deferred**: native `tool_calls` in the Hermes SSE stream. Reopens when Hermes exposes OpenAI-compatible tool calling on its gateway streams. Until then Stage 2's separate LLM call is the production path.
 
-### T6.7 — Channel e2e verification (proof the channels we ship actually work) · ~3 days
+### T6.7 — Channel schema audit + e2e verification · ~5 days (was ~3)
 
-Phase 3 shipped configuration UIs for 8 platform channels (`@/Users/zbin/AI项目/hermes_ui/docs/phases/phase-3-channels.md`) but **we have never verified that a user can send a message on Telegram and get an AI reply**. We only verified that our `.env` / `config.yaml` writes are correct — whether Hermes can actually turn those creds into a working bot is unknown.
+**Scope expanded on 2026-04-23 pm** after reading the Hermes Agent upstream docs (`docs/hermes-reality-check-2026-04-23.md`). T6.7 now covers both fixing silently-broken channels and proving at least one end-to-end.
 
-This task closes that gap for at least one channel, produces a reusable smoke-test protocol for the rest, and records which channels are known-good.
+#### T6.7a — Channel schema hotfix · ~1.5 days
 
-- **Pick one channel first**: Telegram. BotFather registration is 5 minutes, the API is documented, and Hermes' Telegram integration is the most likely to be production-ready.
-- **Write `docs/channels-smoke-test.md`** with a per-channel checklist:
-  1. Where to get the credential (BotFather link / Discord Dev Portal URL / ...)
-  2. Exact Corey UI steps (filled the right env key, toggled `mention_required`, etc.)
-  3. Exact Hermes restart steps + which log lines prove the channel came up.
-  4. The test message to send from the phone and the expected reply.
-  5. Fail modes + known Hermes upstream gaps.
-- **Ship `channels_verified.json`** in the Corey repo: a per-channel record of `{ channel_id, last_verified_at, hermes_commit_sha, verifier, notes }`. The Channels page renders a "✅ Verified YYYY-MM-DD against Hermes @abcd1234" or "⚠️ Not yet verified" badge from this file. No backend changes — pure static JSON + React render.
-- **Run the smoke test on Telegram first**, then Discord, then Slack. Matrix/Feishu/WeCom are nice-to-have if time permits. WhatsApp env-name uncertainty gets resolved during this task (look at what Hermes actually reads).
-- **Update `@/Users/zbin/AI项目/hermes_ui/docs/06-backlog.md`** with any upstream Hermes bugs we hit so they're on record.
-- **Explicit non-goal**: maintaining live test credentials in CI. One-time manual verification + documented recipe + dated badge is the bar. Re-verify on demand (e.g. after a Hermes upgrade).
+Three of our 8 channel configurations never reach Hermes because the env names don't match upstream:
+
+- **WhatsApp**: replace `WHATSAPP_TOKEN` with `WHATSAPP_ENABLED` (bool), `WHATSAPP_MODE` (`bot`/`self-chat`), `WHATSAPP_ALLOWED_USERS`, `WHATSAPP_ALLOW_ALL_USERS`.
+- **WeCom**: rename `WECOM_BOT_SECRET` → `WECOM_SECRET`. Add `WECOM_WEBSOCKET_URL`, `WECOM_ALLOWED_USERS`.
+- **WeChat (→ WeiXin)**: **delete** `WECHAT_SESSION` + the entire QR provider stack (`src-tauri/src/wechat.rs`, `src-tauri/src/ipc/wechat.rs`, `src/features/channels/WeChatQr.tsx`). Replace with a plain text-input card using `WEIXIN_ACCOUNT_ID`, `WEIXIN_TOKEN`, `WEIXIN_BASE_URL` (default `https://ilinkai.weixin.qq.com`), `WEIXIN_DM_POLICY`, `WEIXIN_GROUP_POLICY`. Update i18n keys.
+- **Slack**: add optional `SLACK_APP_TOKEN` (Socket Mode) alongside the existing `SLACK_BOT_TOKEN`. Show both as required with a hint "Socket Mode requires both".
+- Update `src-tauri/src/channel_status.rs` to recognise the new slug `weixin` as a synonym for the old `wechat` (or migrate the slug cleanly).
+- **Migration**: any user who filled `WECHAT_SESSION` or `WECOM_BOT_SECRET` or `WHATSAPP_TOKEN` in their `.env` gets a one-time migration notice on startup — "Your Hermes channel config has schema drift. See Settings → Channels." No silent rewrite of credentials.
+
+#### T6.7b — Smoke-test protocol + Telegram first · ~1.5 days
+
+- Write `@/Users/zbin/AI项目/hermes_ui/docs/channels-smoke-test.md` with per-channel recipes (credential source, Corey UI steps, Hermes restart, expected log lines, test message, fail modes).
+- Run Telegram end-to-end first: BotFather → fill env → restart gateway → phone sends "hello" → AI reply shows up in Corey's inbox.
+- Ship `channels_verified.json` in the Corey repo: `{ channel_id, last_verified_at, hermes_commit_sha, verifier, notes }`. Channels page renders ✅/⚠️ badges from this file.
+
+#### T6.7c — Extend to Discord, Slack, and one CN channel · ~2 days
+
+- Discord + Slack (with the new App Token field): validate with real bot tokens.
+- Pick one CN channel (Feishu or DingTalk — DingTalk is a new card, see below) and verify.
+- For each verified channel, append an entry to `channels_verified.json`.
+
+#### Optional — surface missing Hermes channels
+
+If T6.7a-c finishes ahead of schedule, add cards for any of these Hermes-native channels we don't currently expose: **Signal, Email, DingTalk, QQ, Mattermost, BlueBubbles (iMessage), Home Assistant, Webhooks**. Each is a ~1h addition to `channels.rs` + i18n. Deferred if time is tight — log in backlog instead.
+
+**Explicit non-goal**: maintaining live test credentials in CI. One-time manual verification per channel, documented recipe, dated badge. Re-verify on demand (e.g. after a Hermes upgrade).
 
 ## Test totals target
 

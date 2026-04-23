@@ -54,53 +54,38 @@
 - **Migrations**: schema v8 adds `memory_entries` table as a mirror of the qdrant metadata (for fast Analytics without hitting qdrant).
 - **Tests**: Rust — round-trip embed → search → retrieve with a mocked embed endpoint. Playwright — 👍 a turn, visit Memory, see the entry; orchestrator run with recall on vs off, different outputs.
 
-### T7.4 — OpenClaw integration · ~7 days
+### T7.4 — Skills ecosystem integration (was: OpenClaw) · ~3 days
 
-**Project**: <https://github.com/openclaw/openclaw> — steipete's "Personal AI Assistant, any OS / any platform. The lobster way 🦞". TypeScript-based, active (102 releases, 1744 contributors as of 2026-04-23).
+**Major re-scope on 2026-04-23 pm** after reading `docs/hermes-reality-check-2026-04-23.md`. Summary: OpenClaw is being **merged into Hermes Agent** (`hermes claw migrate` in the upstream CLI), not a peer competitor. The previous "OpenClawAdapter" + "ClawHub importer" split is obsolete.
 
-**Honest positioning note**: OpenClaw is **not** a subordinate tool we wrap. It is a **functionally overlapping competitor** to the Corey + Hermes stack. It ships its own gateway, its own macOS menu-bar app, its own iOS/Android nodes, 24 channel integrations (we have 8), its own cron tool, Voice Wake + Talk Mode, a Live Canvas UI (A2UI), and the ClawHub skills marketplace.
+#### T7.4a — `OpenClawAdapter` — **DROPPED**
 
-Given the overlap, "integration" means one of three stances:
+No parallel control plane to bridge to. The migration path lives inside the Hermes CLI itself. Corey has nothing to add.
 
-1. **Adapter route (T7.4a)** — Treat OpenClaw's Gateway as another `AgentAdapter`, same shape as `HermesAdapter`. Users can drive OpenClaw agents from Corey's chat surface. This is the most honest use of our adapter abstraction — if Corey can't front another control plane, its "agent-agnostic" claim isn't real.
-2. **Skills route (T7.4b)** — Pull ClawHub skills into Corey's Skills page via a simple import flow. Doesn't require a live OpenClaw gateway. Piggybacks on their ecosystem without taking on integration complexity.
-3. **No integration (rejected)** — Would leave the "we're a universal console" claim undermined by the most visible OSS project in the same niche.
+#### T7.4b — Skills importer (re-scoped) · ~3 days
 
-**Plan: ship both T7.4a (adapter) and T7.4b (skills)**. Reject option 3.
+Hermes uses <https://agentskills.io> as its open skill standard and migrates OpenClaw skills into `~/.hermes/skills/openclaw-imports/`. The importer targets these **instead of ClawHub**:
 
-#### T7.4a — `OpenClawAdapter` · ~5 days
+- **Local import**: Skills page "Import" button scans `~/.hermes/skills/**/SKILL.md` (including the `openclaw-imports/` subtree) and surfaces discovered skills with a preview + select-to-import flow. Translates the SKILL.md frontmatter to our `SkillRow` shape.
+- **Remote import (agentskills.io)**: a second tab on the importer dialog hits the `agentskills.io` registry for community skills. Search → preview → import.
+- **Deduplication**: same skill name already in Corey's DB → show a merge/replace/skip prompt.
+- **Licensing**: preserved and displayed; no automatic batch-import.
+- **Tests**: Rust parser round-trip on sample SKILL.md files. Playwright — scan local skills, import one, verify it appears.
 
-- **Surface**: OpenClaw's gateway exposes an HTTP API (config lives in `~/.openclaw/openclaw.json`, gateway URL reachable on a known port). Adapter maps OpenClaw's session/turn model onto our `AgentAdapter` trait.
-- **Config**: new `openclaw: { base_url, api_key }` section in `GatewayConfig`, parallel to the existing Hermes block. `config_test` hits OpenClaw's `/status` endpoint for the "Test" button.
-- **Capabilities**: the adapter advertises `channels: [...OpenClaw's 24 channels]`, `scheduler: true`, `skills: true`, `memory: false` (until we wire their memory surface separately).
-- **Chat**: delegate to OpenClaw's session API for both `chat_once` and `chat_stream`. Stream events map to our `ChatStreamEvent` variants; unknown events pass through as `Annotation` for forward-compat.
-- **Sessions**: OpenClaw's sessions appear in Corey's unified inbox with `adapter_id = "openclaw"` and their channel badge intact.
-- **Discovery**: on Corey first-run, if `~/.openclaw/openclaw.json` exists we auto-suggest enabling the adapter. Prompt, not silent.
-- **Tests**: conformance suite must pass (same bar as Hermes / Claude Code / Aider). Mock bridge for CI; real OpenClaw gateway for manual verification.
+#### Why this re-scope
 
-#### T7.4b — ClawHub skill importer · ~2 days
-
-- **Flow**: Skills page grows an "Import from ClawHub" button next to "New skill". Opens a dialog with a search bar backed by ClawHub's registry API (<https://clawhub.ai>).
-- **Schema translation**: ClawHub skills are `SKILL.md` files with frontmatter; we parse that into Corey's `SkillRow` shape. Fields that don't map (OpenClaw-specific tool bindings) get dropped with a warning.
-- **Licensing**: import respects the skill's declared license; we show it in the preview. No automatic batch-import.
-- **Tests**: Rust — parser round-trip on a handful of real ClawHub skills. Playwright — search, pick, import, verify the skill lands in the list.
-
-#### Why this matters
-
-The existence of OpenClaw is the strongest real-world validation of the Corey + Hermes bet (there's demand for a personal agent control plane) **and** the strongest pressure to sharpen differentiation. Phase 7's OpenClaw integration is primarily a **positioning statement** — Corey is the console where agents from multiple ecosystems converge, not a walled garden around Hermes.
-
-If, during Phase 7, we find that Corey users are just using the OpenClaw adapter and ignoring Hermes, that's a signal to rethink upstream strategy — not an engineering failure of this task.
+The original T7.4 was premised on Corey being the console for multiple **agent ecosystems**. Reality is more modest: Corey is the console for **Hermes**, and Hermes itself absorbs adjacent projects. The skills importer still delivers value — it lets users pull in OpenClaw/community skills — but the adapter-level integration fantasy is gone.
 
 ## Test totals target
 
-- Rust unit: **+14** (4 LangGraph bridge, 3 memory ingest/retrieve, 5 OpenClaw adapter conformance, 2 ClawHub parser)
-- Playwright: **+6** (LangGraph run, skill-from-chat, memory recall, memory page, OpenClaw-adapter chat round-trip, ClawHub skill import)
+- Rust unit: **+10** (4 LangGraph bridge, 3 memory ingest/retrieve, 3 SKILL.md parser + agentskills.io client). Down from +14 after OpenClawAdapter dropped.
+- Playwright: **+5** (LangGraph run, skill-from-chat, memory recall, memory page, skills importer). Down from +6.
 
 ## Deltas vs the original brainstorm
 
 | Brainstorm item | Landed in Phase 7 as |
 |-----------------|----------------------|
-| 1️⃣ openclaw 集成 | T7.4 (adapter + skills importer; positioning statement — not a subordinate integration) |
+| 1️⃣ openclaw 集成 | T7.4 re-scoped to **SKILL.md + agentskills.io importer** after learning OpenClaw merged into Hermes. OpenClawAdapter dropped. |
 | 4.1 技能学习 | T7.2 (conversation distillation; builds on Phase 4 Skills page) |
 | 4.4 知识沉淀 | T7.3 (memory layer, feeds recall) |
 | 5.1 任务 DAG | T7.1 (**LangGraph adapter, not self-built**) |

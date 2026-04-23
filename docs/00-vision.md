@@ -20,7 +20,7 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Sin
 | Hermes built-in TUI           | Terminal interface for Hermes            | Rich UI, non-devs can use, cross-platform gateway visibility |
 | LangSmith / Langfuse          | Observability for LLM apps               | End-user agent operations (channels, skills, cost), not just traces |
 | OpenWebUI / LibreChat         | Chat UI for LLMs                         | Agent-native (skills, tools, schedulers, trajectories), not just chat |
-| **OpenClaw** (steipete/openclaw) | Personal AI assistant with its own gateway + macOS/iOS/Android apps + 24 channels + Voice Wake + Live Canvas | Corey is **multi-ecosystem** (Phase 7 will run OpenClaw as an adapter alongside Hermes). OpenClaw optimises for a single-user single-gateway experience on Apple platforms; Corey targets the power user / small team running multiple agent stacks side-by-side. They overlap heavily — the positioning fight isn't "best assistant", it's "best console for N assistants". |
+| ~~OpenClaw~~ | ~~Peer competitor~~ → **superseded 2026-04-23 pm**. Per `hermes-agent`'s README (`hermes claw migrate`), OpenClaw is being **merged/migrated into Hermes Agent**, not a competitor. The previous "peer competitor" framing was based on reading OpenClaw's README without cross-checking Hermes'. See `docs/hermes-reality-check-2026-04-23.md` for the correction. |
 
 ## Differentiation axes (all four, staged)
 

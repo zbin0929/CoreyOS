@@ -90,6 +90,32 @@ them requires a product-direction pivot, not an engineering decision.
 
 ---
 
+## Upstream-alignment audits (2026-04-23 pm)
+
+### Hermes native feature overlap audit
+- **Priority**: high — affects Phase 6/7 scope.
+- **Context**: `docs/hermes-reality-check-2026-04-23.md` surfaced that
+  Hermes Agent already ships cron scheduling, Skills Hub, subagent
+  delegation, FTS5 session search + memory, and MCP integration.
+  Corey currently builds (or plans to build) parallel features for
+  most of these.
+- **What to do**: before starting each of T6.3 (orchestrator), T7.3
+  (memory), and before touching Scheduler further, decide per-feature:
+  **surface Hermes' native capability** vs **build parallel
+  client-side**. Default should be "surface" unless the native
+  capability is absent or UX-unsuitable.
+- **Re-open when**: kicking off Phase 6 or revisiting the Scheduler.
+
+### Missing Hermes channels to expose
+- **Priority**: low-medium.
+- **Context**: Hermes supports Signal, SMS (Twilio), Email, DingTalk,
+  QQ, Mattermost, BlueBubbles (iMessage), Home Assistant, and
+  Webhooks — none exposed in Corey's Channels page.
+- **Re-open when**: T6.7 finishes ahead of schedule, or a user asks
+  for any specific one.
+
+---
+
 ## P4 follow-ups
 
 ### T4.2b · Skill editor — CodeMirror 6 + test-runner + version history
@@ -133,12 +159,14 @@ them requires a product-direction pivot, not an engineering decision.
 ## P3 follow-ups
 
 ### Tencent iLink — real QR client
-- **Priority**: **blocked**
-- **Why parked**: `ILinkQrProvider` would live next to `StubQrProvider`
-  and wire through the existing registry, but we have neither live
-  credentials nor a documented endpoint. The stub provider covers
-  every code path that the real client would hit.
-- **Re-open when**: we acquire credentials and a reachable endpoint.
+- **Status**: **CLOSED AS OBSOLETE on 2026-04-23 pm**.
+- **Reason**: per `docs/hermes-reality-check-2026-04-23.md`, Hermes
+  Agent's personal WeChat integration (WeiXin) hits
+  `https://ilinkai.weixin.qq.com` directly with a plain token, no QR
+  flow. Our entire `StubQrProvider` + future iLink client plan was
+  based on a fictional flow. T6.7a deletes the QR stack and replaces
+  it with a plain text-input card bound to `WEIXIN_ACCOUNT_ID` /
+  `WEIXIN_TOKEN` / `WEIXIN_BASE_URL`.
 
 ### Explicit "Clear secret" button for env keys
 - **Priority**: low
@@ -157,9 +185,11 @@ them requires a product-direction pivot, not an engineering decision.
   shortcircuit is a ~30-line addition.
 
 ### WhatsApp env name (`WHATSAPP_TOKEN` placeholder)
-- **Priority**: low
-- **Why parked**: we don't know the official Hermes convention yet.
-- **Re-open when**: Hermes docs land on the canonical name.
+- **Status**: **ANSWERED on 2026-04-23 pm — folded into T6.7a**.
+- **Reality**: Hermes has NO `WHATSAPP_TOKEN`. Real keys are
+  `WHATSAPP_ENABLED` / `WHATSAPP_MODE` (`bot`/`self-chat`) /
+  `WHATSAPP_ALLOWED_USERS` / `WHATSAPP_ALLOW_ALL_USERS`. Our save
+  currently writes to a variable Hermes doesn't read.
 
 ---
 

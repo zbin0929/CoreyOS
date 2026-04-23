@@ -6,6 +6,56 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Reality check against Hermes Agent upstream (CRITICAL CORRECTIONS)
+
+User provided the canonical upstream URL <https://github.com/NousResearch/hermes-agent>. Cross-referencing against our code surfaced three silently-broken channels, an obsolete backlog item, and a completely wrong Phase 7 T7.4 design.
+
+### Findings (`docs/hermes-reality-check-2026-04-23.md`)
+
+**Chat integration: ALIGNED ✓** — our `HermesGateway` hits `:8642/v1/*` which matches Hermes' `API_SERVER_*`.
+
+**Channel schema: 3 of 8 silently broken**:
+- **WhatsApp** — we write `WHATSAPP_TOKEN` which DOESN'T EXIST upstream. Real keys: `WHATSAPP_ENABLED` + `WHATSAPP_MODE` + `WHATSAPP_ALLOWED_USERS`.
+- **WeCom** — we write `WECOM_BOT_SECRET`, upstream reads `WECOM_SECRET`. Off-by-prefix typo.
+- **WeChat** — we ship a fake QR flow + `WECHAT_SESSION`. Upstream has NO QR flow; it uses `WEIXIN_ACCOUNT_ID` + `WEIXIN_TOKEN` + `WEIXIN_BASE_URL` and hits iLink directly with a plain token.
+- Slack also missing `SLACK_APP_TOKEN` (Socket Mode requires both).
+
+**OpenClaw positioning: WRONG** — OpenClaw is being **merged into Hermes Agent**, not a peer competitor. `hermes claw migrate` is the canonical migration path. Our entire Phase 7 T7.4 "OpenClawAdapter" design is moot.
+
+**Hermes feature overlap surfaced** — Hermes already ships cron, skills hub, subagent delegation, FTS5 memory, MCP. Phase 6 T6.3 / 7.3 and the Scheduler we just built need a surface-vs-build audit before continuing.
+
+**Channels Hermes supports but we don't surface**: Signal, SMS, Email, DingTalk, QQ, Mattermost, BlueBubbles, Home Assistant, Webhooks.
+
+### Shipped (docs only)
+
+**`docs/hermes-reality-check-2026-04-23.md`** (NEW) — full findings, env-name reconciliation table, lessons learned.
+
+**`docs/00-vision.md`** — OpenClaw row in positioning table struck through with correction pointer.
+
+**`docs/phases/phase-6-orchestration.md`** — T6.7 expanded from ~3 days to ~5 days and split into T6.7a (schema hotfix: delete QR stack, fix WhatsApp/WeCom/WeChat envs, add Slack App Token, migration notice for pre-fix users), T6.7b (Telegram smoke test + `channels_verified.json` + badges), T6.7c (extend to Discord + Slack + one CN channel). Optional extension to add missing Hermes channels.
+
+**`docs/phases/phase-7-expansion.md`** — T7.4a `OpenClawAdapter` **dropped**. T7.4b re-scoped from "ClawHub importer" to "Local SKILL.md + agentskills.io importer" (~3 days). Test totals adjusted (Rust +10 was +14, Playwright +5 was +6).
+
+**`docs/05-roadmap.md`** — Phase 6 and 7 rows updated with new scope. Phase 7 estimate trimmed 3–4 → 2–3 weeks after T7.4a drop.
+
+**`docs/06-backlog.md`**:
+- Tencent iLink QR — closed as obsolete.
+- WhatsApp env name — answered, folded into T6.7a.
+- NEW top-level section "Upstream-alignment audits" with the Hermes native-feature overlap audit (high priority) and missing channels list (low-medium).
+
+### Lessons
+
+- We built Phase 3 against **inferred** upstream behaviour. Three silently-broken channels is the cost.
+- The OpenClaw "peer competitor" framing came from reading OpenClaw's README without cross-checking Hermes'. Twenty minutes of reading the right docs would have saved an entire phase's worth of integration design.
+- **New rule**: any claim about upstream behaviour must cite a docs URL or source file path.
+
+### Next
+
+- Phase 6 still paused awaiting user greenlight.
+- When work resumes, T6.7a (channel schema hotfix, ~1.5 days) is now the highest-leverage opener instead of T6.1 — it fixes live user-facing bugs while T6.1 is additive.
+
+---
+
 ## 2026-04-23 — Phase 6 scope expansion: conversational scheduler + channel e2e proof
 
 Two items the user called out after asking "哪些渠道真的能对话" got promoted from backlog into Phase 6. Both change Phase 6's scope; estimate bumps from 2-3 weeks to 3-4 weeks.
