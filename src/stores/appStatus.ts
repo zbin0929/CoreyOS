@@ -52,7 +52,7 @@ interface AppStatusState {
    */
   refreshGateway: () => Promise<void>;
 
-  /** Kick off one-off refresh plus a slow interval (30 s). Idempotent. */
+  /** Kick off one-off refresh plus a 10 s polling interval. Idempotent. */
   startBackgroundRefresh: () => void;
   stopBackgroundRefresh: () => void;
 }
@@ -117,9 +117,12 @@ export const useAppStatusStore = create<AppStatusState>()((set, get) => ({
     void get().refreshGateway();
     void get().refreshActiveProfile();
     if (gatewayInterval !== null) return;
+    // T5.5a — was 30s; 30s was too long to feel "live" in the topbar
+    // pill. 10s matches the agents registry poll and is still cheap
+    // (one /health round-trip on localhost).
     gatewayInterval = setInterval(() => {
       void get().refreshGateway();
-    }, 30_000);
+    }, 10_000);
   },
 
   stopBackgroundRefresh: () => {

@@ -22,6 +22,7 @@ import type { AdapterListEntry } from '@/lib/ipc';
 export function AgentSwitcher() {
   const adapters = useAgentsStore((s) => s.adapters);
   const loading = useAgentsStore((s) => s.loading);
+  const refresh = useAgentsStore((s) => s.refresh);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -34,6 +35,13 @@ export function AgentSwitcher() {
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
+
+  // Instant refresh when the dropdown opens — the 10s background poll
+  // would otherwise leave the uptime/latency up to 10s stale at the
+  // moment the user is actually looking at it.
+  useEffect(() => {
+    if (open) void refresh();
+  }, [open, refresh]);
 
   const active = adapters?.find((a) => a.is_default) ?? adapters?.[0] ?? null;
   const activeOk = active?.health?.ok === true;

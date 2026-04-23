@@ -55,9 +55,13 @@ export const useAgentsStore = create<AgentsState>()((set, get) => ({
   startBackgroundRefresh: () => {
     void get().refresh();
     if (pollHandle !== null) return;
+    // 10s — matches `useAppStatusStore`. With the AgentSwitcher dropdown
+    // showing uptime in seconds, a 30s cadence makes the counter look
+    // frozen; 10s is cheap (fan-out health probes across ~3 adapters)
+    // and gives the user a visible "still alive" signal.
     pollHandle = setInterval(() => {
       void get().refresh();
-    }, 30_000);
+    }, 10_000);
   },
 
   stopBackgroundRefresh: () => {
