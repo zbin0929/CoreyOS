@@ -6,6 +6,45 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Cleanup · Bundle-size gate + deferred-items audit
+
+Closing pass on the low-value backlog. Two outcomes:
+
+### Shipped
+
+- **Bundle-size CI gate** (`scripts/check-bundle-size.mjs` +
+  `pnpm check:bundle-size` + CI step in `.github/workflows/ci.yml`).
+  Gzips every `dist/assets/*.js` in-memory and fails if any single
+  chunk exceeds **260 KB gzip** (~14% headroom above the current
+  224 KB main chunk). Override via `MAX_CHUNK_GZIP_KB=…` env var
+  when a planned bump is genuinely warranted. Motivation: the
+  rehype-highlight common-preset bloat we just untangled would
+  have been a five-minute fix if caught at PR time instead of a
+  session-long profiling job.
+- **Runbook scope filter** (T4.6b) reclassified from *deferred* to
+  *shipped* after audit: the `runbookScopeApplies()` helper,
+  `runbooks-scope-filter` toggle, hidden-count badge, and e2e
+  coverage are all in the tree and green. `docs/05-roadmap.md`
+  updated to reflect reality; **no Phase 4 items remain deferred**.
+
+### Not in scope (explicitly)
+
+- **Profile tar.gz import/export** — needs archive lib + manifest
+  + file-picker plumbing; too large for a cleanup pass.
+- **Tencent iLink real client** — requires cookies + captcha +
+  device-fingerprint machinery against an undocumented endpoint;
+  `StubQrProvider` + its trait boundary keep this a self-contained
+  ticket whenever it happens.
+- **`/health/channels` probe** — that's a gateway-side endpoint,
+  not a UI change; tracked in the Hermes repo.
+
+### Tests
+
+- `pnpm check:bundle-size` passes locally at 224.4 KB gzip max.
+- No code changes affected runtime; no test suite touched.
+
+---
+
 ## 2026-04-23 — T4.5b · Multi-tab Terminal
 
 The T4.5 MVP was single-session; closing the tab killed scrollback

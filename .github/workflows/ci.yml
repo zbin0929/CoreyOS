@@ -48,6 +48,13 @@ jobs:
       - name: Build (web bundle)
         run: pnpm build
 
+      # Fails if any single chunk blows past the gzip budget (see
+      # scripts/check-bundle-size.mjs for the rationale + knob to
+      # override). Catches regressions like rehype-highlight's
+      # all-languages preset sneaking back in after a refactor.
+      - name: Bundle-size gate
+        run: pnpm check:bundle-size
+
   # ────────────────────────── E2E (Playwright) ──────────────────────────
   # Runs the full browser suite against the Vite dev server with IPC mocked
   # (see e2e/fixtures/tauri-mock.ts). No Rust build needed — this is the
