@@ -93,22 +93,39 @@ Split into **T5.2a — mock-first** (shipped 2026-04-23) and
 - Sidebar nav auto-hides Channels/Skills/Scheduler when this
   adapter is the active context.
 
-### T5.3 — Aider adapter (1.5 days)
+### T5.3 — Aider adapter
 
-**Scope**
+Split into **T5.3a — mock-first** (shipped 2026-04-23) and
+**T5.3b — real CLI** (pending).
 
-- Run `aider` with the JSON-lines protocol. One session ≈ one running `aider` process with an attached repo.
-- Session creation requires a repo path; the adapter keeps the process alive in the background and multiplexes messages.
+#### T5.3a · **Shipped** (2026-04-23)
 
-**Tasks**
+- `src-tauri/src/adapters/aider/mod.rs` with `AiderAdapter::new_mock()`.
+  Fixtures at `fixtures/{sessions,models}.json` (2 sessions each
+  with `metadata.repo` / `.branch` / `.files_in_ctx`, 3 models).
+- Capabilities: streaming=true, tool_calls=true, **attachments=false**
+  (Aider reads repo files, not pasted images), terminal=false,
+  trajectory_export=false, channels=[], skills=false. Distinct
+  from Claude Code's vector — exercises the Sidebar capability
+  filter with a third combination.
+- Contract: `chat_once` / `chat_stream` **refuse without `ChatTurn.cwd`**
+  via `AdapterError::NotConfigured` — matches Aider's "one process
+  per repo" identity and gives the future Composer repo-picker a
+  clean error to catch.
+- Mock stream emits `read → edit → deltas` so the UI's tool
+  ribbon is exercised with an Aider-shaped sequence.
+- Conformance suite gains `aider_mock_is_conformant`.
 
-- `src-tauri/src/adapters/aider/{mod,process,protocol,repo}.rs`.
+#### T5.3b — pending
+
+- `process.rs` (spawn + JSON-lines bidirectional transport) +
+  `protocol.rs` (event parser: Edit / Apply / Done) + `repo.rs`
+  (repo detection from cwd).
 - Per-session process pool with backpressure + health check.
 - Fixtures: 3 captured aider sessions in different repos.
 
-**UX adjustments**
+**UX adjustments (T5.5c)**
 
-- Capabilities: `streaming=true`, `tool_calls=true` (aider's file-edit actions surface as tool calls), `attachments=false`, `channels=[]`.
 - Chat Composer adds a "Repo" picker when the active adapter is Aider.
 
 ### T5.4 — OpenHands adapter (optional, 1 day)

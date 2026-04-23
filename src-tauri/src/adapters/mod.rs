@@ -3,6 +3,7 @@
 //! See `docs/03-agent-adapter.md` for the full spec. Phase 0 ships the trait
 //! and types only; real implementations land in Phase 1+.
 
+pub mod aider;
 pub mod claude_code;
 pub mod hermes;
 

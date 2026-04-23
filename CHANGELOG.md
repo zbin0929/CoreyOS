@@ -6,6 +6,59 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T5.3a · Aider mock adapter (third citizen)
+
+Registers the third first-class `AgentAdapter`. With Hermes + Claude
+Code + Aider all online in mock mode, the T5.5b capability-gated
+Sidebar now has three distinct capability vectors to filter against
+and the AgentSwitcher finally looks like a real multi-agent console.
+
+### Shipped
+
+- **`AiderAdapter::new_mock()`** (`src-tauri/src/adapters/aider/`):
+    - Capabilities distinguish Aider from Claude Code where it
+      matters: `attachments=false` (Aider reads repo files, not
+      pasted images), `terminal=false`, `trajectory_export=false`,
+      `channels=[]`, `skills=false`. `streaming=true` +
+      `tool_calls=true` + `cost_accounting=true` match both.
+    - Mock `chat_once` **refuses without `ChatTurn.cwd`** — Aider's
+      identity is "one process per repo"; surfacing the contract
+      as `AdapterError::NotConfigured { hint: "... repo path ..." }`
+      gives the UI a clean place to prompt for a repo picker
+      (T5.3b) instead of silent fallback.
+    - Mock `chat_stream` emits a realistic Aider tool sequence —
+      `ToolProgress { tool: "read" }` → `ToolProgress { tool: "edit" }`
+      → word-chunked deltas. Real Aider's `Edit`/`Apply`/`Done`
+      event set collapses to the same shape, so the UI's tool
+      ribbon already renders correctly for both live and mock.
+    - Fixtures: `fixtures/sessions.json` (2 sessions with
+      `metadata.repo` + `.branch` + `.files_in_ctx` — the fields
+      the unified inbox will use to disambiguate rows in T5.5c)
+      + `fixtures/models.json` (Claude Sonnet 4.5, GPT-4o, DeepSeek
+      Coder v3 — Aider model slugs in typical user configs).
+- **Registered** in `lib.rs`. Boot log now prints
+  `adapters=["hermes", "claude_code", "aider"]`.
+- **Conformance suite** gains `aider_mock_is_conformant` (one-line
+  add to `adapters::conformance::tests`). All three adapters pass
+  the same shape invariants.
+
+### Tests
+
+- **Rust**: 125 → **132** (+6 Aider unit tests + 1 conformance
+  parameterisation). Notable coverage: `NotConfigured` on missing
+  cwd, `repo` echo in reply, read→edit tool sequence ordering.
+- typecheck + lint + `cargo clippy --tests -- -D warnings`: clean.
+
+### Deferred
+
+- **T5.3b real Aider CLI** — `process.rs` + `protocol.rs` + `repo.rs`.
+  Spawn `aider` as a JSON-lines child, one per repo; multiplex
+  messages through a channel keyed by session id. Blocked only on
+  time; follows once T5.5c (unified inbox) lands so the repo-picker
+  UX has a home.
+
+---
+
 ## 2026-04-23 — T5.5b · Active adapter + capability-gated nav + chat routing
 
 Makes the AgentSwitcher actually useful. Selecting an adapter in the

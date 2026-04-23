@@ -101,6 +101,7 @@ pub async fn run(adapter: Arc<dyn AgentAdapter>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::aider::AiderAdapter;
     use crate::adapters::claude_code::ClaudeCodeAdapter;
     use crate::adapters::hermes::HermesAdapter;
 
@@ -112,5 +113,10 @@ mod tests {
     #[tokio::test]
     async fn claude_code_mock_is_conformant() {
         run(Arc::new(ClaudeCodeAdapter::new_mock())).await;
+    }
+
+    #[tokio::test]
+    async fn aider_mock_is_conformant() {
+        run(Arc::new(AiderAdapter::new_mock())).await;
     }
 }

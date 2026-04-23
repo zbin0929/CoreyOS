@@ -1,0 +1,26 @@
+[
+  {
+    "id": "anthropic/claude-sonnet-4-5",
+    "provider": "anthropic",
+    "display_name": "Claude Sonnet 4.5 (via Aider)",
+    "context_window": 200000,
+    "is_default": true,
+    "capabilities": { "vision": false, "tool_use": true, "reasoning": false }
+  },
+  {
+    "id": "openai/gpt-4o",
+    "provider": "openai",
+    "display_name": "GPT-4o (via Aider)",
+    "context_window": 128000,
+    "is_default": false,
+    "capabilities": { "vision": false, "tool_use": true, "reasoning": false }
+  },
+  {
+    "id": "deepseek/deepseek-coder-v3",
+    "provider": "deepseek",
+    "display_name": "DeepSeek Coder v3",
+    "context_window": 128000,
+    "is_default": false,
+    "capabilities": { "vision": false, "tool_use": true, "reasoning": false }
+  }
+]

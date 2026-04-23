@@ -34,7 +34,9 @@ use tauri::Manager;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::adapters::{claude_code::ClaudeCodeAdapter, hermes::HermesAdapter, AdapterRegistry};
+use crate::adapters::{
+    aider::AiderAdapter, claude_code::ClaudeCodeAdapter, hermes::HermesAdapter, AdapterRegistry,
+};
 use crate::config::GatewayConfig;
 use crate::state::AppState;
 
@@ -150,6 +152,10 @@ pub fn run() {
             // Non-default: Hermes stays the primary chat target until the
             // UI offers a way to switch.
             registry.register(Arc::new(ClaudeCodeAdapter::new_mock()));
+            // T5.3a — third citizen: Aider (mock). Repo-aware code
+            // pair-programmer; needs `ChatTurn.cwd` set to a repo path
+            // at send time (the Composer will wire this in a later task).
+            registry.register(Arc::new(AiderAdapter::new_mock()));
             registry
                 .set_default("hermes")
                 .expect("hermes is registered");
