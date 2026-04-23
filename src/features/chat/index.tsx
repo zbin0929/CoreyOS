@@ -282,8 +282,14 @@ function ChatPane({
     // store so a blocked send leaves the composer exactly as the user
     // typed it. `evaluateBudgetGate` fails-safe on IPC errors (returns
     // empty verdict), so a transient db/analytics hiccup never locks
-    // the user out of chatting.
-    const verdict = await evaluateBudgetGate({ effectiveModel });
+    // the user out of chatting. `activeAdapterId` is read imperatively
+    // (same pattern as the chatStream call below) because the gate's
+    // verdict is tied to THIS send, not a subsequent switcher change.
+    const activeAdapterIdForGate = useAgentsStore.getState().activeId;
+    const verdict = await evaluateBudgetGate({
+      effectiveModel,
+      activeAdapterId: activeAdapterIdForGate,
+    });
     if (verdict.blocks.length > 0) {
       const lines = verdict.blocks.map((b) => '  · ' + describeBreach(b)).join('\n');
       const ok = window.confirm(

@@ -6,6 +6,48 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T4.4b · Budget gate round 2
+
+The `send()` gate already existed (shipped with T4.4) but only fired
+at ≥100%, ignored `period`, and silently dropped every scope except
+`global` + `model`. This round closes those three gaps so the gate
+behaves the way the UI has been promising.
+
+### Shipped (`src/features/chat/budgetGate.ts`)
+
+- **80% warn threshold**. `notify` / `notify_block` budgets fire
+  warns at 80%+; strict `block` budgets stay silent below 100%
+  (deliberate — a hard-block shouldn't leak pre-breach noise).
+- **Period windowing**. `day` / `week` / `month` now sum the
+  relevant tail of `analytics.tokens_per_day`
+  (UTC-anchored to match the SQLite bucketing). `month` sums the
+  full trailing-30-day series, `week` the trailing 7 days, `day`
+  today. Uses a blended per-token rate (200¢/M) since the DTO
+  doesn't split prompt vs. completion per-day; lifetime still uses
+  the split rate. Degrades to lifetime when the per-day series is
+  empty (fresh DBs).
+- **Adapter scope matching**. Ties T5.6's adapter-scope dropdown
+  to runtime: `activeAdapterId` (read from `useAgentsStore` at
+  send-time) is compared against `budget.scope_value`.
+- **Pure classifier extracted** (`classifyBudgets()`) — IPC-free,
+  lets us unit-test every branch without mocking `invoke()`.
+
+### Tests
+
+- **Vitest**: 11 → **27** (+16 in
+  `src/features/chat/budgetGate.test.ts`) — covers threshold
+  semantics per action kind, scope matching for global/model/adapter,
+  deliberate ignores for profile/channel, day/week/month
+  windowing math, `amount_cents <= 0` safety, and the
+  `describeBreach` formatter.
+
+### Consumer
+
+- `src/features/chat/index.tsx#send()` now passes
+  `activeAdapterId` into `evaluateBudgetGate`.
+
+---
+
 ## 2026-04-23 — T5.6 · Cross-adapter analytics + budgets
 
 Phase 5's final task. Analytics now surfaces a "Usage by adapter"
