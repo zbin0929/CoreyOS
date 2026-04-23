@@ -54,4 +54,44 @@ test.describe('terminal', () => {
     });
     expect(ids.length).toBe(0);
   });
+
+  /**
+   * T4.5b — the tab strip keeps multiple ptys alive at once and can
+   * close a non-active tab without disturbing its neighbour.
+   */
+  test('multi-tab: new tab spawns a second pty; closing one leaves the other alive', async ({
+    page,
+  }) => {
+    await page.goto('/terminal');
+    const ptyCount = () =>
+      page.evaluate(() => {
+        const mock = (
+          window as unknown as {
+            __CADUCEUS_MOCK__: { state: { ptyIds: string[] } };
+          }
+        ).__CADUCEUS_MOCK__;
+        return mock.state.ptyIds.length;
+      });
+
+    // Tab 1 via the big CTA.
+    await page.getByTestId('terminal-open').click();
+    await expect(page.getByTestId('terminal-new-tab')).toBeVisible();
+    expect(await ptyCount()).toBe(1);
+
+    // Tab 2 via the + button. Now we should see two tab pills.
+    await page.getByTestId('terminal-new-tab').click();
+    await expect(page.getByTestId('terminal-tabs').locator('[role="tab"]')).toHaveCount(2);
+    expect(await ptyCount()).toBe(2);
+
+    // Tab 2 is active (most recent). Close it via the active-tab
+    // header button; tab 1 should remain and become active.
+    await page.getByTestId('terminal-close').click();
+    await expect(page.getByTestId('terminal-tabs').locator('[role="tab"]')).toHaveCount(1);
+    expect(await ptyCount()).toBe(1);
+
+    // Close tab 1 → back to the empty state with the big CTA.
+    await page.getByTestId('terminal-close').click();
+    await expect(page.getByTestId('terminal-open')).toBeVisible();
+    expect(await ptyCount()).toBe(0);
+  });
 });

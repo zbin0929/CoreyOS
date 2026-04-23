@@ -99,8 +99,10 @@
   },
   "terminal": {
     "title": "终端",
-    "subtitle": "基于原生 PTY 的浏览器终端。单 tab、UTF-8、自动 resize。",
+    "subtitle": "基于原生 PTY 的浏览器终端。多标签、UTF-8、自动 resize。",
     "open": "打开终端",
+    "new_tab": "新建标签",
+    "open_hint": "点击「打开终端」开始。",
     "close": "关闭",
     "starting": "启动中…"
   },

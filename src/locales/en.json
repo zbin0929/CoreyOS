@@ -99,10 +99,12 @@
   },
   "terminal": {
     "title": "Terminal",
-    "subtitle": "A native PTY-backed shell in your browser. One tab, full UTF-8, resize-aware.",
+    "subtitle": "A native PTY-backed shell in your browser. Multi-tab, full UTF-8, resize-aware.",
     "open": "Open terminal",
-    "close": "Close",
-    "starting": "Starting…"
+    "new_tab": "New tab",
+    "close": "Close tab",
+    "starting": "Starting…",
+    "open_hint": "Open a terminal to get started."
   },
   "trajectory": {
     "title": "Trajectory",

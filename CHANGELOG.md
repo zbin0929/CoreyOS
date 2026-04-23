@@ -6,6 +6,97 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T4.5b · Multi-tab Terminal
+
+The T4.5 MVP was single-session; closing the tab killed scrollback
+and the user had to respawn from scratch just to have two shells
+running side-by-side. This lands a tab strip with per-tab pty +
+per-tab xterm instance.
+
+### Shipped (`src/features/terminal/index.tsx`)
+
+- **Tab strip** with `+ New tab`, click-to-switch, inline `×` per
+  pill. First tab still spawns via the big centered CTA so the
+  zero-state UX is unchanged — the e2e contract (`terminal-open`
+  visible when no tabs, `terminal-close` when there's an active
+  one) is preserved.
+- **Parallel state** — React `tabs[]` for the tab-strip UI,
+  imperative `bundlesRef: Map<key, {term, fit, unlisten, ro, ptyId}>`
+  for the xterm handles. Keyed by a stable per-tab key (not index)
+  so closing the middle tab can't mis-attribute a bundle.
+- **All tabs stay mounted** once opened — inactive hosts flip to
+  `display: none` rather than respawn. Switching preserves
+  scrollback without a shell round-trip, which is the whole point
+  of the feature.
+- **Focus + fit() on switch** — rAF-deferred so the display:none →
+  block transition paints first; otherwise the incoming xterm
+  reads 0×0 dimensions from its hidden host and the shell gets a
+  malformed SIGWINCH.
+- **Neighbour-preserving close** — closing the active tab moves to
+  its right-neighbour, then left, then the empty state. Feels like
+  every tabbed editor / browser on the planet.
+
+### Tests
+
+- **Playwright**: 52 → **53**. New
+  `multi-tab: new tab spawns a second pty…` spec opens two tabs,
+  verifies the mock's `ptyIds` length hits 2, closes the active
+  one, confirms the neighbour stays alive, then closes the last
+  one and asserts we're back at the big-CTA empty state.
+- Pre-existing single-tab spec unchanged (still 4.0s).
+
+### i18n
+
+- Added `terminal.new_tab` and `terminal.open_hint` keys in `en`
+  and `zh`; reworded `terminal.subtitle` from "One tab" → "Multi-tab".
+
+---
+
+## 2026-04-23 — Infra · highlight.js diet
+
+Following T4.2b (CM6) and the route code-split, one chunk still
+dwarfed the rest at ~260 KB gzipped. Profile showed the main chat
+chunk was dragging in `rehype-highlight`'s `common` preset — 35
+grammars, always. The library imports `common` unconditionally at
+module top, so even passing `languages: {…}` (which DOES replace
+the runtime registry) can't tree-shake the dead imports.
+
+### Shipped
+
+- **Dropped `rehype-highlight`** entirely. Replaced with a tiny
+  `src/features/chat/highlight.ts` wrapper that drives
+  `highlight.js/lib/core` directly, registering only the 13
+  canonical grammars (plus aliases: `ts`, `tsx`, `sh`, `yml`, `md`,
+  `rs`, `html`, `svg`, `patch`, …) in
+  `src/features/chat/highlightLanguages.ts`.
+- **Fence renderer** in `MessageBubble.tsx` now calls
+  `highlightCode(source, lang)` inline and inserts the result via
+  `dangerouslySetInnerHTML`. Unknown languages degrade to escaped
+  plaintext so a model emitting ```haskell still renders legibly,
+  just without colour.
+- Kept the `hljs` class + `github-dark.css` stylesheet so existing
+  styling works unchanged.
+
+### Bundle
+
+| | Before | After |
+|---|---|---|
+| Main chunk (gzip) | **260 KB** | **230 KB** |
+| Main chunk (raw)  | 830 KB | 726 KB |
+
+−30 KB gzip / −104 KB raw on the main chunk. Verified dropped
+grammars (`ruby`, `scala`, `swift`, `csharp`, `lua`, `coffeescript`,
+etc.) — the remaining string hits for those names are HTML tag
+enumerations inside mdast, not the grammars themselves.
+
+### Tests
+
+- **Playwright chat suite**: 13/13 green (fence rendering through
+  the new pipeline verified end-to-end).
+- `rehype-highlight` removed from `dependencies`.
+
+---
+
 ## 2026-04-23 — Infra · Route code-splitting
 
 Direct follow-up to T4.2b: CodeMirror 6 added ~180kb to the monolith

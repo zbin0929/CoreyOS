@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { highlightCode } from './highlight';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { attachmentPreview } from '@/lib/ipc';
@@ -267,7 +267,10 @@ export function Markdown({ children }: { children: string }) {
     <div className="prose-chat">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+        // No `rehypePlugins` — we run highlight.js directly inside the
+        // `code` renderer below. See `./highlight.ts` for why we
+        // dropped rehype-highlight (it pulls in all ~35 common
+        // grammars regardless of the `languages` option).
         components={{
           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
           h1: ({ children }) => (
@@ -304,21 +307,33 @@ export function Markdown({ children }: { children: string }) {
             </blockquote>
           ),
           code: ({ className, children, ...rest }) => {
-            // Block code: rehype-highlight emits `hljs language-*` on the <code>.
-            const isBlock = /(?:^|\s)(?:hljs|language-)/.test(className ?? '');
-            if (isBlock) {
+            // Detect a fenced block by the `language-*` class remark
+            // emits on block code. Inline code has no class prefix.
+            const match = /language-([\w+-]+)/.exec(className ?? '');
+            if (match || /\n/.test(String(children))) {
+              // `children` is a single string for a fenced block (remark
+              // collapses the leaf text node). Normalise and run the
+              // highlighter; fall back to escaped raw text for unknown
+              // languages (see `highlight.ts`).
+              const raw = Array.isArray(children)
+                ? children.join('')
+                : String(children ?? '');
+              const { html, language } = highlightCode(
+                raw.replace(/\n$/, ''),
+                match?.[1],
+              );
               return (
                 <code
+                  // Keep the `hljs` class so the github-dark stylesheet
+                  // targets it; append the resolved language so any
+                  // future per-language theming has a hook.
                   className={cn(
-                    // Fixed dark backdrop — keeps github-dark tokens readable
-                    // in both light and dark app themes.
-                    'block overflow-x-auto rounded-md bg-[#0d1117] px-3 py-2 font-mono text-xs text-[#e6edf3]',
-                    className,
+                    'hljs block overflow-x-auto rounded-md bg-[#0d1117] px-3 py-2 font-mono text-xs text-[#e6edf3]',
+                    language && `language-${language}`,
                   )}
+                  dangerouslySetInnerHTML={{ __html: html }}
                   {...rest}
-                >
-                  {children}
-                </code>
+                />
               );
             }
             return (
