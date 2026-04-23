@@ -144,8 +144,8 @@ This is ~3 weeks reclaimed that should NOT go into shipping more features. Inste
 
 Once you approve this audit, I'll:
 
-1. Update `@/Users/zbin/AI项目/hermes_ui/docs/05-roadmap.md` with the new estimates.
-2. Update `@/Users/zbin/AI项目/hermes_ui/docs/phases/phase-6-orchestration.md` with the refactored T6.3, DROP'd T6.6, new T6.8.
-3. Update `@/Users/zbin/AI项目/hermes_ui/docs/phases/phase-7-expansion.md` with SURFACE-ified T7.1 / T7.3.
-4. Ship a one-line `@/Users/zbin/AI项目/hermes_ui/docs/06-backlog.md` note flagging the Scheduler MVP as "pending refactor to T6.8".
+1. Update `@/Users/zbin/AI项目/CoreyOS/docs/05-roadmap.md` with the new estimates.
+2. Update `@/Users/zbin/AI项目/CoreyOS/docs/phases/phase-6-orchestration.md` with the refactored T6.3, DROP'd T6.6, new T6.8.
+3. Update `@/Users/zbin/AI项目/CoreyOS/docs/phases/phase-7-expansion.md` with SURFACE-ified T7.1 / T7.3.
+4. Ship a one-line `@/Users/zbin/AI项目/CoreyOS/docs/06-backlog.md` note flagging the Scheduler MVP as "pending refactor to T6.8".
 5. Then stop writing docs and wait for your greenlight to start T6.7a code.

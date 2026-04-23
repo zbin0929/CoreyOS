@@ -278,8 +278,8 @@ Per the post-audit plan (`docs/10-product-audit-2026-04-23.md`), T6.2 was flagge
 **Boot-time registration** (`lib.rs`): after registering the built-in `hermes` / `claude_code` / `aider` adapters, walk `hermes_instances.load(&config_dir)` and register each with `register_with_id_and_label`. Per-instance failures are logged and swallowed so one bad URL doesn't brick the whole app.
 
 **Frontend**:
-- `@/Users/zbin/AI项目/hermes_ui/src/lib/ipc.ts` — `HermesInstance`, `HermesInstancesFile`, `HermesInstanceProbeResult` types + 4 bindings.
-- `@/Users/zbin/AI项目/hermes_ui/src/features/settings/index.tsx` — new `HermesInstancesSection` + `HermesInstanceRow` components. Inline-edit rows with per-row Test / Save / Delete buttons; "Add instance" button reveals a new-row editor with cancel. Id is frozen after save so renames don't silently migrate sessions across adapters.
+- `@/Users/zbin/AI项目/CoreyOS/src/lib/ipc.ts` — `HermesInstance`, `HermesInstancesFile`, `HermesInstanceProbeResult` types + 4 bindings.
+- `@/Users/zbin/AI项目/CoreyOS/src/features/settings/index.tsx` — new `HermesInstancesSection` + `HermesInstanceRow` components. Inline-edit rows with per-row Test / Save / Delete buttons; "Add instance" button reveals a new-row editor with cancel. Id is frozen after save so renames don't silently migrate sessions across adapters.
 - i18n (`en.json` + `zh.json`): `settings.hermes_instances.*` block with title, desc, field labels, empty/new row copy, test/save/create actions, and delete confirmation.
 
 **e2e mock** (`e2e/fixtures/tauri-mock.ts`): in-memory `hermesInstances` array + handlers for all 4 IPCs so Playwright's Settings-page tests can exercise the flow without a real config file.
@@ -312,7 +312,7 @@ Per the post-audit plan (`docs/10-product-audit-2026-04-23.md`), T6.1 is a small
 
 ### Shipped
 
-**DB migration v8** (`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/db.rs`):
+**DB migration v8** (`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/db.rs`):
 - `ALTER TABLE messages ADD COLUMN feedback TEXT` — nullable, legal values `'up' | 'down' | NULL`.
 - `MessageRow.feedback: Option<String>` with `#[serde(default, skip_serializing_if)]` so pre-T6.1 frontend payloads (and the streaming code's content-only upserts) deserialise without the field.
 - `upsert_message`: COALESCE on the ON CONFLICT branch so content-only upserts never wipe a real rating. Mirrors the existing `prompt_tokens` / `completion_tokens` preservation pattern.
@@ -320,22 +320,22 @@ Per the post-audit plan (`docs/10-product-audit-2026-04-23.md`), T6.1 is a small
 - `analytics_summary` now includes `feedback_up` and `feedback_down` lifetime counts (two cheap COUNT scans; NULL rows contribute 0).
 - Tests: `t61_set_message_feedback_accepts_up_down_null_and_rejects_other`, `t61_upsert_message_preserves_feedback_across_content_updates`, `t61_analytics_summary_counts_feedback`.
 
-**IPC** (`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/ipc/db.rs` + `@/Users/zbin/AI项目/hermes_ui/src-tauri/src/lib.rs`):
+**IPC** (`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/db.rs` + `@/Users/zbin/AI项目/CoreyOS/src-tauri/src/lib.rs`):
 - New command `db_message_set_feedback(messageId, feedback)`; registered in the command handler.
 
 **Frontend plumbing**:
-- `@/Users/zbin/AI项目/hermes_ui/src/lib/ipc.ts` — add `feedback?: 'up' | 'down' | null` to `DbMessageRow`, `feedback_up / feedback_down` to `AnalyticsTotals`, and `dbMessageSetFeedback` binding.
-- `@/Users/zbin/AI项目/hermes_ui/src/stores/chat.ts` — add `feedback` field to `UiMessage`, hydrate from DB, add `setMessageFeedback(sessionId, msgId, value)` action that mirrors zustand state + fire-and-forget IPC write.
+- `@/Users/zbin/AI项目/CoreyOS/src/lib/ipc.ts` — add `feedback?: 'up' | 'down' | null` to `DbMessageRow`, `feedback_up / feedback_down` to `AnalyticsTotals`, and `dbMessageSetFeedback` binding.
+- `@/Users/zbin/AI项目/CoreyOS/src/stores/chat.ts` — add `feedback` field to `UiMessage`, hydrate from DB, add `setMessageFeedback(sessionId, msgId, value)` action that mirrors zustand state + fire-and-forget IPC write.
 
-**Chat page** (`@/Users/zbin/AI项目/hermes_ui/src/features/chat/MessageBubble.tsx`):
+**Chat page** (`@/Users/zbin/AI项目/CoreyOS/src/features/chat/MessageBubble.tsx`):
 - New `FeedbackButtons` component below each completed, non-error assistant bubble. Click 👍 or 👎 to stamp; click the same button again to clear. Hidden until hover (like the Copy button) unless already rated. Active state uses emerald for 👍 and `--danger` for 👎 so the rating is visible without requiring hover on a reload.
 
-**Analytics page** (`@/Users/zbin/AI项目/hermes_ui/src/features/analytics/index.tsx`):
+**Analytics page** (`@/Users/zbin/AI项目/CoreyOS/src/features/analytics/index.tsx`):
 - New `FeedbackStrip` card at the bottom of the dashboard showing 👍 count, 👎 count, Helpful-rate %, and coverage (`X rated / Y messages (Z.Z%)`). Empty state when no messages have been rated yet.
 
 **i18n**: `chat_page.feedback_up / feedback_down` + `analytics.chart.feedback.{title, subtitle, empty, up, down, ratio, coverage}` added to both `en.json` and `zh.json`.
 
-**e2e mock** (`@/Users/zbin/AI项目/hermes_ui/e2e/fixtures/tauri-mock.ts`): seeded `feedback_up: 7, feedback_down: 2` so the Analytics card has something to render.
+**e2e mock** (`@/Users/zbin/AI项目/CoreyOS/e2e/fixtures/tauri-mock.ts`): seeded `feedback_up: 7, feedback_down: 2` so the Analytics card has something to render.
 
 ### Test totals
 
@@ -365,7 +365,7 @@ Per `docs/10-product-audit-2026-04-23.md`, the pre-T6.8 scheduler was a DROP can
 
 ### Shipped
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/hermes_cron.rs`** — new module:
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/hermes_cron.rs`** — new module:
 - `load_jobs()` / `save_jobs()` — round-trip `~/.hermes/cron/jobs.json`. Accepts both top-level array and `{ "jobs": [...] }` formats for forward-compat.
 - `upsert_job()` / `delete_job()` — atomic writes on top of the above.
 - `list_runs()` — scan `~/.hermes/cron/output/{job_id}/*.md` for the Runs drawer (new T6.8 UI feature).
@@ -373,33 +373,33 @@ Per `docs/10-product-audit-2026-04-23.md`, the pre-T6.8 scheduler was a DROP can
 - Preserves unknown JSON fields via `flatten` catch-all so we don't lose data Hermes adds between versions.
 - Tests: `parse_accepts_top_level_array`, `parse_accepts_object_with_jobs_key`, `roundtrip_preserves_unknown_fields`, `inspect_schedule_classifies_cron_vs_other`, `truncate_preview_stops_at_char_boundary`, `display_name_falls_back_to_prompt_head`.
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/ipc/scheduler.rs`** — rewritten:
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/scheduler.rs`** — rewritten:
 - All commands now delegate to `hermes_cron` instead of the DB.
 - `scheduler_list_jobs` / `scheduler_upsert_job` / `scheduler_delete_job` — wire shape preserved for frontend compatibility. `SchedulerJobView` maps `HermesJob` fields to the old `SchedulerJob` shape (e.g. `schedule` → `cron_expression`, `paused` → `enabled`).
 - `scheduler_validate_cron` — now returns `is_cron` flag so the UI can show "Hermes evaluates this at runtime" for non-cron forms.
 - `scheduler_list_runs` — NEW command, surfaces `RunInfo` (filename, mtime, size, preview) for the Runs drawer.
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/lib.rs`** — replace `mod scheduler` with `mod hermes_cron`; register `scheduler_list_runs` IPC command.
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/lib.rs`** — replace `mod scheduler` with `mod hermes_cron`; register `scheduler_list_runs` IPC command.
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/state.rs`** — remove `scheduler: Option<Arc<Scheduler>>` field and its initialization in `AppState::new`.
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/state.rs`** — remove `scheduler: Option<Arc<Scheduler>>` field and its initialization in `AppState::new`.
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/db.rs`** — migration v7:
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/db.rs`** — migration v7:
 - `migrate_v7_scheduler_to_hermes_json()` — one-shot export: if `scheduler_jobs` table has rows AND `~/.hermes/cron/jobs.json` does NOT exist, migrate rows to JSON so users don't lose schedules. Skips export if jobs.json already exists (never clobber upstream state).
 - Drop `scheduler_jobs` table and index.
 - Delete `SchedulerJobRow` struct and all scheduler CRUD methods (`list_scheduler_jobs`, `upsert_scheduler_job`, `delete_scheduler_job`, `update_scheduler_job_last_run`).
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/scheduler.rs`** — DELETED (304 lines). The background worker that parsed cron, slept, and executed `adapter.chat_once` is gone — Hermes now owns that loop.
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/scheduler.rs`** — DELETED (304 lines). The background worker that parsed cron, slept, and executed `adapter.chat_once` is gone — Hermes now owns that loop.
 
-**`@/Users/zbin/AI项目/hermes_ui/src/lib/ipc.ts`** — add `SchedulerRunInfo` interface and `schedulerListRuns` binding; update `SchedulerValidateResult` with `is_cron` field.
+**`@/Users/zbin/AI项目/CoreyOS/src/lib/ipc.ts`** — add `SchedulerRunInfo` interface and `schedulerListRuns` binding; update `SchedulerValidateResult` with `is_cron` field.
 
-**`@/Users/zbin/AI项目/hermes_ui/src/features/scheduler/index.tsx`** — Runs drawer + `is_cron` UI:
+**`@/Users/zbin/AI项目/CoreyOS/src/features/scheduler/index.tsx`** — Runs drawer + `is_cron` UI:
 - Add `runs` mode to `Mode` union type.
 - Add `onShowRuns` callback to `JobCard` that calls `schedulerListRuns` and opens the drawer.
 - Add clock button to card actions to trigger the drawer.
 - Add `RunsDrawer` component: lists run files with filename, mtime, size, and markdown preview (first ~400 chars). Shows loading/error/empty states.
 - Update cron validation UI: when `is_cron` is false, append "(Hermes evaluates this at runtime)" to the success message so users know non-cron forms are valid but not previewable locally.
 
-**`@/Users/zbin/AI项目/hermes_ui/src/locales/en.json` + `zh.json`** — add keys:
+**`@/Users/zbin/AI项目/CoreyOS/src/locales/en.json` + `zh.json`** — add keys:
 - `scheduler_page.cron_hint` — updated to mention Hermes-extended forms (`"every 2h"`, `"30m"`, ISO).
 - `scheduler_page.cron_valid` / `invalid_cron` — generalized to "schedule" (not just cron).
 - `scheduler_page.hermes_extended` — "Hermes evaluates this at runtime" / "Hermes 在运行时计算".
@@ -436,7 +436,7 @@ Per `docs/hermes-reality-check-2026-04-23.md`, three of our 8 channel integratio
 
 ### Shipped
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/channels.rs`** — catalog reconciled:
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/channels.rs`** — catalog reconciled:
 - **WhatsApp**: `WHATSAPP_TOKEN` → `WHATSAPP_ENABLED` + `WHATSAPP_MODE` + `WHATSAPP_ALLOWED_USERS` + `WHATSAPP_ALLOW_ALL_USERS`.
 - **WeCom**: `WECOM_BOT_SECRET` → `WECOM_SECRET`; added `WECOM_WEBSOCKET_URL` + `WECOM_ALLOWED_USERS`.
 - **WeChat → WeiXin**: slug changes `wechat` → `weixin`; env schema replaced with `WEIXIN_ACCOUNT_ID` + `WEIXIN_TOKEN` + `WEIXIN_BASE_URL` + `WEIXIN_DM_POLICY` + `WEIXIN_GROUP_POLICY` + `WEIXIN_ALLOWED_USERS`. No more QR.
@@ -452,17 +452,17 @@ Per `docs/hermes-reality-check-2026-04-23.md`, three of our 8 channel integratio
 - `WechatQrStart` / `WechatQrPoll` / `WechatQrStatus` / `isWechatQrTerminal` / the three `wechatQr*` invokers removed from `src/lib/ipc.ts`.
 - `onWechatScanned` prop + `QrCode` icon + "channel-status-qr" pill rendering removed from `ChannelForm.tsx` + `index.tsx`.
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/adapters/mod.rs`** — `Source::WeChat` → `Source::Weixin` (wire value `"we_chat"` → `"weixin"`).
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/adapters/mod.rs`** — `Source::WeChat` → `Source::Weixin` (wire value `"we_chat"` → `"weixin"`).
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/adapters/hermes/mod.rs`** — capabilities `channels` list `"wechat"` → `"weixin"`.
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/adapters/hermes/mod.rs`** — capabilities `channels` list `"wechat"` → `"weixin"`.
 
-**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/channel_status.rs`** — test renamed `classify_wechat_*` → `classify_weixin_*`.
+**`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/channel_status.rs`** — test renamed `classify_wechat_*` → `classify_weixin_*`.
 
-**`@/Users/zbin/AI项目/hermes_ui/src/locales/en.json` + `zh.json`** — removed `channels.wechat.*` + `channels.qr_hint` + `channels.qr_pending` + `channels.qr_cta`; added `channels.weixin.hint_*` (6 keys), `channels.whatsapp.hint_*` (4 keys, replacing the single `hint_token`), `channels.slack.hint_app_token`, `channels.wecom.hint_secret` + `hint_websocket_url` + `hint_allowed_users`.
+**`@/Users/zbin/AI项目/CoreyOS/src/locales/en.json` + `zh.json`** — removed `channels.wechat.*` + `channels.qr_hint` + `channels.qr_pending` + `channels.qr_cta`; added `channels.weixin.hint_*` (6 keys), `channels.whatsapp.hint_*` (4 keys, replacing the single `hint_token`), `channels.slack.hint_app_token`, `channels.wecom.hint_secret` + `hint_websocket_url` + `hint_allowed_users`.
 
-**`@/Users/zbin/AI项目/hermes_ui/e2e/fixtures/tauri-mock.ts`** — fixture channel swapped `wechat` → `weixin`; `wechatSessions` state field + three `wechat_qr_*` IPC cases removed.
+**`@/Users/zbin/AI项目/CoreyOS/e2e/fixtures/tauri-mock.ts`** — fixture channel swapped `wechat` → `weixin`; `wechatSessions` state field + three `wechat_qr_*` IPC cases removed.
 
-**`@/Users/zbin/AI项目/hermes_ui/e2e/channels.spec.ts`** — card visibility assertion updated to `channel-card-weixin` (now bucketed `unconfigured`); T3.3 WeChat QR flow test deleted.
+**`@/Users/zbin/AI项目/CoreyOS/e2e/channels.spec.ts`** — card visibility assertion updated to `channel-card-weixin` (now bucketed `unconfigured`); T3.3 WeChat QR flow test deleted.
 
 ### Fixed
 

@@ -1,6 +1,6 @@
 # Caduceus
 
-[![CI](https://github.com/zbin0929/hermes_ui/actions/workflows/ci.yml/badge.svg)](https://github.com/zbin0929/hermes_ui/actions/workflows/ci.yml)
+[![CI](https://github.com/zbin0929/CoreyOS/actions/workflows/ci.yml/badge.svg)](https://github.com/zbin0929/CoreyOS/actions/workflows/ci.yml)
 
 > A premium, cross-platform control plane for AI agents.
 > Starts with [Hermes Agent](https://github.com/NousResearch/hermes-agent), grows into a universal agent console.

@@ -8,7 +8,7 @@ After the user shared the canonical upstream URL — <https://github.com/NousRes
 - **Language**: Python, `uv`-managed, MIT license.
 - **CLI entry points**: `hermes`, `hermes gateway`, `hermes model`, `hermes tools`, `hermes setup`, `hermes claw migrate`.
 - **Config home**: `~/.hermes/` (matches our assumption ✓).
-- **API server port**: `API_SERVER_PORT=8642`, `/v1/*` OpenAI-compatible (matches our `HermesGateway` client — see `@/Users/zbin/AI项目/hermes_ui/src-tauri/src/adapters/hermes/gateway.rs:46-48` ✓).
+- **API server port**: `API_SERVER_PORT=8642`, `/v1/*` OpenAI-compatible (matches our `HermesGateway` client — see `@/Users/zbin/AI项目/CoreyOS/src-tauri/src/adapters/hermes/gateway.rs:46-48` ✓).
 - **Relationship to OpenClaw**: OpenClaw has been **merged/migrated into Hermes Agent**, not a peer competitor. `hermes claw migrate` auto-imports `~/.openclaw/` settings, memories, skills, API keys. This invalidates our previous Phase 7 T7.4 OpenClaw positioning.
 
 ## Chat / LLM integration — ALIGNED ✓

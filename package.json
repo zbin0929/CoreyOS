@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:dev:clean": "pkill -9 -f 'cargo.*caduceus|cargo.*hermes_ui|rustc.*caduceus' 2>/dev/null; lsof -ti:5173 | xargs kill -9 2>/dev/null; tauri dev",
+    "tauri:dev:clean": "pkill -9 -f 'cargo.*caduceus|cargo.*CoreyOS|rustc.*caduceus' 2>/dev/null; lsof -ti:5173 | xargs kill -9 2>/dev/null; tauri dev",
     "tauri:build": "tauri build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

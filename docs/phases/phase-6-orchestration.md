@@ -149,7 +149,7 @@ Three of our 8 channel configurations never reach Hermes because the env names d
 
 #### T6.7b — Smoke-test protocol + Telegram first · ~1.5 days
 
-- Write `@/Users/zbin/AI项目/hermes_ui/docs/channels-smoke-test.md` with per-channel recipes (credential source, Corey UI steps, Hermes restart, expected log lines, test message, fail modes).
+- Write `@/Users/zbin/AI项目/CoreyOS/docs/channels-smoke-test.md` with per-channel recipes (credential source, Corey UI steps, Hermes restart, expected log lines, test message, fail modes).
 - Run Telegram end-to-end first: BotFather → fill env → restart gateway → phone sends "hello" → AI reply shows up in Corey's inbox.
 - Ship `channels_verified.json` in the Corey repo: `{ channel_id, last_verified_at, hermes_commit_sha, verifier, notes }`. Channels page renders ✅/⚠️ badges from this file.
 
