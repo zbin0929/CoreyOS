@@ -51,6 +51,7 @@ test.describe('analytics', () => {
           tokens_per_day: [],
           model_usage: [],
           tool_usage: [],
+          adapter_usage: [],
           generated_at: Date.now(),
         };
     });

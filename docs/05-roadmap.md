@@ -5,7 +5,7 @@
 | Phase | Title                 | Exit criteria                                          | Est.      | Status |
 |------:|-----------------------|--------------------------------------------------------|-----------|--------|
 | 0     | Foundation            | App shell + palette + Hermes stub adapter + CI green   | 1–2 days  | **Core shipped** (2026-04-21), 7/10 exit criteria |
-| 0.5   | Hardening             | CI matrix + lint/format/test gates + Windows sandbox fix + nav shortcuts | 1–2 days | **Shipped** (2026-04-21) — Playwright + Storybook deferred; see CHANGELOG |
+| 0.5   | Hardening             | CI matrix + lint/format/test gates + Windows sandbox fix + nav shortcuts | 1–2 days | **Shipped** (2026-04-21); Playwright e2e (52 specs) + Storybook 8 scaffolding added 2026-04-23. See CHANGELOG. |
 | 1     | Chat core             | Real SSE chat, sessions, tool calls, attachments       | 3–4 days  | **Shipped** (2026-04-22) — T1.1–T1.7 all green; T1.5 attachments + T1.5b multimodal wire format land; T1.8 initial-connect retry landed 2026-04-23; T1.9 virtualisation deferred. See `docs/phases/phase-1-chat.md`. |
 | 2     | Config & Ops          | Models, Analytics, Logs, Settings, Profiles            | ~1 week   | **Shipped** (2026-04-22) — T2.1–T2.8 all green; tar.gz import/export + per-profile gateway control deferred to Phase 3 (see `docs/phases/phase-2-config.md`) |
 | 3     | Platform channels     | 8 channels + gateway restart + WeChat QR               | ~1 week   | **Shipped** (2026-04-22) — T3.1–T3.5 all green. Real Tencent iLink client + explicit-clear-secret button + `/health/channels` probe deferred; see `docs/phases/phase-3-channels.md`. |

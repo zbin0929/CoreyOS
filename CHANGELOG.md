@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Phase 0.5 follow-up · Storybook + analytics mock fix
+
+Two deferred Phase 0.5 items clear today:
+
+### Shipped
+
+- **Storybook 8 scaffolding** (`.storybook/main.ts`, `preview.ts`).
+  `pnpm storybook` / `pnpm build-storybook` scripts; scope limited
+  to `src/**/*.stories.@(ts|tsx|mdx)` with the UI primitives folder
+  seeded by three stories (`button.stories.tsx`,
+  `empty-state.stories.tsx`, `kbd.stories.tsx`). Feature modules
+  stay out until we wire a Tauri-IPC decorator. Theme toolbar flips
+  `html[data-theme]` so tokens resolve the same way the app does.
+  `build-storybook` completes in ~7s and produces a clean static
+  bundle (`storybook-static/`, git-ignored).
+- **Playwright analytics mock** (`e2e/fixtures/tauri-mock.ts`):
+  adds `adapter_usage: [...]` so the Analytics route's
+  post-T5.6 destructure doesn't throw. `analytics.spec.ts` empty-
+  state test also patched to include the key.
+- **Roadmap note**: the "Playwright deferred" line was stale —
+  the suite has been live since Phase 1 and covers 52 specs
+  across 17 files. Updated `docs/05-roadmap.md` accordingly.
+
+### Tests
+
+- **Playwright**: 50 → **52 green** (analytics suite unblocked).
+- `pnpm build-storybook` succeeds end-to-end.
+- typecheck + lint clean.
+
+---
+
 ## 2026-04-23 — T1.8 · SSE initial-connect retry
 
 When the Hermes gateway restarts (or the user reopens the laptop

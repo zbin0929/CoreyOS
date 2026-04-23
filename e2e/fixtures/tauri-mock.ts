@@ -212,6 +212,13 @@ export const tauriMockInitScript = /* js */ `
         { name: 'file_read', count: 18 },
         { name: 'web_search', count: 9 },
       ],
+      // T5.6 — the Analytics route destructures adapter_usage; mocks
+      // without this key crash the render (undefined.map).
+      adapter_usage: [
+        { name: 'hermes', count: 36 },
+        { name: 'claude_code', count: 5 },
+        { name: 'aider', count: 1 },
+      ],
       generated_at: Date.now(),
     },
     /** Mutable journal backing changelog_list / changelog_revert. The mock
