@@ -61,12 +61,23 @@ name, ghost title, square icon).
   matrix plus `public/favicon.png` + `public/favicon-32.png` +
   `public/corey.png` (the one `CoreyMark` renders in-app).
 
-### Deferred
+### Batch-refactored (follow-up commits `639ba5c` + `1465e65`)
 
-- **Batch refactor** of the ~80 existing lucide-react call sites
-  to use `<Icon>`. Non-blocking; current code still renders
-  correctly. New code SHOULD go through `<Icon>` from now on;
-  mechanical sweep parked in `docs/06-backlog.md` as low-priority.
+- **All ~80 lucide-react call sites migrated to `<Icon>`** — split
+  across two commits to keep diffs reviewable:
+    - `639ba5c` (batch 1): UI components (drawer, combobox, select,
+      empty-state), shell (Sidebar, Topbar, Palette), chat (index,
+      MessageBubble, SessionsPanel, ActiveLLMBadge), plus simple
+      features (home, terminal, analytics, logs/{index,Hermes,Changelog}),
+      channels (index, ChannelForm, WeChatQr), profiles.
+    - `1465e65` (batch 2): compare, budgets, skills, models,
+      runbooks, trajectory, settings.
+  Size tokens applied throughout: `size="xs"` (12px) for decorative
+  inline chips, `size="sm"` (14px) default for text-flow & button
+  icons, `size="md"` (16px) for nav/topbar & emphasised button
+  icons, `size="lg"` (20px) for empty-state. Spin / color overrides
+  go through `className=`. Any stroke-width drift is now impossible
+  to introduce without editing `src/components/ui/icon.tsx` itself.
 
 ### Test totals
 

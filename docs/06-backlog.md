@@ -197,13 +197,5 @@ Categories, newest-phase first:
 - **Re-open when**: users start using runbooks cross-profile in
   the palette.
 
-### Icon system batch-refactor (migrate ~80 lucide call sites → `<Icon>`)
-- **Priority**: low
-- **Why parked**: the unified wrapper landed 2026-04-23
-  (`src/components/ui/icon.tsx`) and new code will adopt it. The
-  existing ~80 call sites still render correctly with raw
-  `<LucideX size={…} strokeWidth={…}/>` — migration is a mechanical
-  sweep, not blocking. Keep `docs/icon-audit.md` as the worklist.
-- **Re-open when**: a stroke-width / size-token inconsistency shows
-  up in review, or we do a second-pass design polish across
-  routes.
+(Icon batch-refactor shipped 2026-04-23; see CHANGELOG entry
+"Brand · Corey logo + Icon wrapper + Dock/window polish".)
