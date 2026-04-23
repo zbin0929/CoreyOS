@@ -18,6 +18,7 @@ pub mod paths;
 pub mod pty;
 pub mod runbooks;
 pub mod sandbox;
+pub mod scheduler;
 pub mod session;
 pub mod skills;
 pub mod wechat;

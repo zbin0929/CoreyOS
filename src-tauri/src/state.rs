@@ -11,6 +11,7 @@ use crate::config::GatewayConfig;
 use crate::db::Db;
 use crate::pty::Pty;
 use crate::sandbox::PathAuthority;
+use crate::scheduler::Scheduler;
 use crate::wechat::WechatRegistry;
 
 /// Shared application state managed by Tauri.
@@ -57,6 +58,11 @@ pub struct AppState {
     /// Each open terminal tab corresponds to one entry; kill/close
     /// drops it from the map so the OS resources free immediately.
     pub ptys: Arc<Mutex<HashMap<String, Arc<Pty>>>>,
+    /// Scheduler (2026-04-23) — cron-driven prompt runs. Spawned at
+    /// startup iff the DB is available (no DB → no persistence → no
+    /// scheduler). IPC commands call `scheduler.reload()` after any
+    /// CRUD to make the worker re-read jobs.
+    pub scheduler: Option<Arc<Scheduler>>,
 }
 
 impl AppState {
@@ -72,8 +78,12 @@ impl AppState {
         wechat: Arc<WechatRegistry>,
         channel_status: Arc<ChannelStatusCache>,
     ) -> Self {
+        let adapters = Arc::new(registry);
+        let scheduler = db
+            .clone()
+            .map(|db| Arc::new(Scheduler::spawn(db, adapters.clone())));
         Self {
-            adapters: Arc::new(registry),
+            adapters,
             authority: Arc::new(PathAuthority::new()),
             config: Arc::new(RwLock::new(config)),
             config_dir,
@@ -84,6 +94,7 @@ impl AppState {
             wechat,
             channel_status,
             ptys: Arc::new(Mutex::new(HashMap::new())),
+            scheduler,
         }
     }
 }

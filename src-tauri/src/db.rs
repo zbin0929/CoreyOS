@@ -460,6 +460,37 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v6 (2026-04-23): Scheduler — cron-driven prompt runs.
+    //
+    // Each row is one user-defined schedule. `cron_expression` uses the
+    // 6-field form (second minute hour dom month dow) as the `cron`
+    // crate expects. `prompt` is the exact text that will be fed to the
+    // active adapter when the schedule fires. `last_run_*` fields are
+    // updated in-place after every fire; `enabled` lets users pause a
+    // job without losing its definition.
+    if version < 6 {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS scheduler_jobs (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                cron_expression TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                adapter_id TEXT NOT NULL DEFAULT 'hermes',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                last_run_at INTEGER,
+                last_run_ok INTEGER,
+                last_run_error TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_scheduler_jobs_enabled
+                ON scheduler_jobs(enabled, updated_at DESC);
+            PRAGMA user_version = 6;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -894,6 +925,105 @@ impl Db {
         conn.execute("DELETE FROM budgets WHERE id = ?1", params![id])?;
         Ok(())
     }
+
+    // ───────────────────────── Scheduler jobs ─────────────────────────
+
+    pub fn list_scheduler_jobs(&self) -> rusqlite::Result<Vec<SchedulerJobRow>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, cron_expression, prompt, adapter_id, enabled,
+                    last_run_at, last_run_ok, last_run_error, created_at, updated_at
+             FROM scheduler_jobs
+             ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(SchedulerJobRow {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    cron_expression: r.get(2)?,
+                    prompt: r.get(3)?,
+                    adapter_id: r.get(4)?,
+                    enabled: r.get::<_, i64>(5)? != 0,
+                    last_run_at: r.get(6)?,
+                    last_run_ok: r.get::<_, Option<i64>>(7)?.map(|v| v != 0),
+                    last_run_error: r.get(8)?,
+                    created_at: r.get(9)?,
+                    updated_at: r.get(10)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    pub fn upsert_scheduler_job(&self, j: &SchedulerJobRow) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO scheduler_jobs
+               (id, name, cron_expression, prompt, adapter_id, enabled,
+                last_run_at, last_run_ok, last_run_error, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 cron_expression = excluded.cron_expression,
+                 prompt = excluded.prompt,
+                 adapter_id = excluded.adapter_id,
+                 enabled = excluded.enabled,
+                 updated_at = excluded.updated_at",
+            params![
+                j.id,
+                j.name,
+                j.cron_expression,
+                j.prompt,
+                j.adapter_id,
+                j.enabled as i64,
+                j.last_run_at,
+                j.last_run_ok.map(|b| b as i64),
+                j.last_run_error,
+                j.created_at,
+                j.updated_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_scheduler_job(&self, id: &str) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute("DELETE FROM scheduler_jobs WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn update_scheduler_job_last_run(
+        &self,
+        id: &str,
+        at: i64,
+        ok: bool,
+        error: Option<&str>,
+    ) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE scheduler_jobs
+             SET last_run_at = ?2, last_run_ok = ?3, last_run_error = ?4, updated_at = ?2
+             WHERE id = ?1",
+            params![id, at, ok as i64, error],
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchedulerJobRow {
+    pub id: String,
+    pub name: String,
+    pub cron_expression: String,
+    pub prompt: String,
+    pub adapter_id: String,
+    pub enabled: bool,
+    pub last_run_at: Option<i64>,
+    pub last_run_ok: Option<bool>,
+    pub last_run_error: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
 
 #[cfg(test)]

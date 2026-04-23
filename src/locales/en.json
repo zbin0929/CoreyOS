@@ -580,7 +580,32 @@
     "coming_soon": "Coming soon",
     "loading": "Loading…",
     "phase": "Phase {{n}}",
-    "close": "Close"
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit"
+  },
+  "scheduler_page": {
+    "title": "Scheduled jobs",
+    "subtitle": "Run a prompt on a cron schedule. Each fire hits the Hermes adapter with your prompt as a single turn; the reply is stored only in the run history (no new chat session).",
+    "new": "New job",
+    "empty_title": "No scheduled jobs yet",
+    "empty_desc": "Create one to run a prompt on a schedule. Use any 6-field cron expression — see the hint below the cron field.",
+    "field_name": "Name",
+    "field_name_placeholder": "Daily standup summary",
+    "field_cron": "Cron expression (sec min hour day month weekday)",
+    "field_prompt": "Prompt",
+    "field_prompt_placeholder": "Summarize yesterday's standup notes and list today's blockers.",
+    "field_enabled": "Enabled",
+    "cron_hint": "Example: '0 0 9 * * *' = every day at 09:00. Use '0 */5 * * * *' for every 5 minutes.",
+    "cron_valid": "Valid cron expression.",
+    "invalid_cron": "Invalid cron expression.",
+    "next_fire": "Next fire",
+    "last_run": "Last run",
+    "never_run": "Never run",
+    "disabled": "Paused",
+    "pause": "Pause",
+    "resume": "Resume"
   },
   "sandbox": {
     "consent": {

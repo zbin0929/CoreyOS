@@ -26,6 +26,7 @@ mod ipc;
 mod menu;
 mod pty;
 mod sandbox;
+mod scheduler;
 mod skills;
 mod state;
 mod wechat;
@@ -140,6 +141,10 @@ pub fn run() {
             ipc::sandbox::sandbox_set_enforced,
             ipc::sandbox::sandbox_clear_session_grants,
             ipc::menu::menu_set_locale,
+            ipc::scheduler::scheduler_list_jobs,
+            ipc::scheduler::scheduler_upsert_job,
+            ipc::scheduler::scheduler_delete_job,
+            ipc::scheduler::scheduler_validate_cron,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");

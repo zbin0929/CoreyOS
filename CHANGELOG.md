@@ -6,6 +6,45 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Scheduler MVP (cron-driven prompt runs)
+
+The Scheduler page was a `Phase 2` placeholder since the original product plan; today it ships as a working MVP. Users can define cron-scheduled prompts that fire automatically against the Hermes adapter — enabling daily summaries, periodic data pulls, recurring cleanup runs, etc.
+
+### Shipped
+
+**Rust backend**:
+
+- New `cron = "0.12"` dependency (pure-Rust, zero system deps, unlike the heavier `tokio-cron-scheduler`).
+- `src-tauri/src/scheduler.rs` — single-worker task that owns the authoritative "next fire per job" set. Sleeps until the nearest fire time; reacts to CRUD reload signals via mpsc channel. Caps concurrent fires at 4 so a misconfigured job can't flood the adapter.
+- `src-tauri/src/db.rs` — v6 migration adds `scheduler_jobs` table (`id`, `name`, `cron_expression`, `prompt`, `adapter_id`, `enabled`, `last_run_*`, timestamps) with `idx_scheduler_jobs_enabled` for the worker's boot-load query. New DTO `SchedulerJobRow` and CRUD methods (`list_scheduler_jobs`, `upsert_scheduler_job`, `delete_scheduler_job`, `update_scheduler_job_last_run`).
+- `src-tauri/src/ipc/scheduler.rs` — four commands: `scheduler_list_jobs`, `scheduler_upsert_job` (validates cron + required fields, returns the persisted row), `scheduler_delete_job`, `scheduler_validate_cron` (pure preview for live UI feedback with next-fire timestamp).
+- `AppState.scheduler: Option<Arc<Scheduler>>` spawned at startup iff the DB is available. All IPC writes call `scheduler.reload()` to notify the worker.
+- Hermes adapter's `scheduler: true` capability flag is now backed by real functionality (previously aspirational).
+
+**Frontend**:
+
+- `src/features/scheduler/index.tsx` — list + editor in the same pattern as Budgets/Runbooks. Features live cron validation with debounced preview ("Next fire: 2026-04-24 09:00"), pause/resume toggle, inline last-run status (✓/✗ with error tooltip), and keyboard-submit.
+- `src/app/routes.tsx` — replaces `<Placeholder>` with the real lazy-loaded `SchedulerRoute`; removes now-dead `Clock` + `Placeholder` imports.
+- `src/lib/ipc.ts` — typed wrappers: `schedulerListJobs`, `schedulerUpsertJob`, `schedulerDeleteJob`, `schedulerValidateCron` with matching DTOs.
+- `src/locales/en.json` + `zh.json` — new `scheduler_page.*` group (21 keys) + shared `common.save`/`cancel`/`edit`.
+
+**Docs**:
+
+- `docs/user/用户手册.md` — scheduler section rewritten from aspirational placeholder to accurate usage guide with cron examples, behaviour semantics (no backfill on missed fires, Hermes-only, single-turn execution model), and explicit list of deferred features.
+
+### Test totals
+
+- Rust: 3 new `scheduler::tests::*` pass; full `cargo test --lib` is now **150/150 green** (was 146/147 with one pre-existing flake — the flake was unrelated and still passes in isolation, but the full suite also passes cleanly this run).
+- TypeScript: `pnpm typecheck` clean; `pnpm lint` clean (pre-existing react-refresh warnings unchanged).
+
+### Deferred (unchanged scope decision)
+
+- Natural-language → cron translation. Requires an LLM round-trip per form submission; better as a follow-up once we have a dedicated prompt-templating story.
+- Per-job run history table. Today we store only `last_run_*`. Keeping history would require a `scheduler_runs` table + pruning policy; not needed for the MVP.
+- Per-job adapter picker. Hard-coded to Hermes because no other adapter exposes `scheduler: true` yet. When Claude Code / Aider grow a real IPC surface for non-streaming prompts we can wire their capability flag.
+
+---
+
 ## 2026-04-23 — Sandbox fs migration + brand rename + i18n audit
 
 Three focused cleanups that advance the "no loose ends" posture going into Phase 6.

@@ -79,6 +79,13 @@ base64 = "0.22"
 tar = "0.4"
 flate2 = "1"
 
+# Scheduler (2026-04-23) — cron expression parsing and next-fire
+# computation for the Scheduler page. `cron` is pure-Rust and tiny;
+# we run our own tokio timer loop rather than pulling the full
+# tokio-cron-scheduler crate (which adds persistence / signal infra
+# we don't need since we persist to SQLite ourselves).
+cron = "0.12"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

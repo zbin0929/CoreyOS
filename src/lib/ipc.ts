@@ -1118,6 +1118,53 @@ export function menuSetLocale(lang: string): Promise<void> {
   return invoke<void>('menu_set_locale', { lang });
 }
 
+// ───────────────────────── Scheduler ─────────────────────────
+
+export interface SchedulerJob {
+  id: string;
+  name: string;
+  cron_expression: string;
+  prompt: string;
+  adapter_id: string;
+  enabled: boolean;
+  last_run_at: number | null;
+  last_run_ok: boolean | null;
+  last_run_error: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface SchedulerJobUpsert {
+  id?: string;
+  name: string;
+  cron_expression: string;
+  prompt: string;
+  adapter_id?: string;
+  enabled?: boolean;
+}
+
+export interface SchedulerValidateResult {
+  ok: boolean;
+  error?: string;
+  next_fire_at?: number;
+}
+
+export function schedulerListJobs(): Promise<SchedulerJob[]> {
+  return invoke<SchedulerJob[]>('scheduler_list_jobs');
+}
+
+export function schedulerUpsertJob(args: SchedulerJobUpsert): Promise<SchedulerJob> {
+  return invoke<SchedulerJob>('scheduler_upsert_job', { args });
+}
+
+export function schedulerDeleteJob(id: string): Promise<void> {
+  return invoke<void>('scheduler_delete_job', { id });
+}
+
+export function schedulerValidateCron(expression: string): Promise<SchedulerValidateResult> {
+  return invoke<SchedulerValidateResult>('scheduler_validate_cron', { expression });
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

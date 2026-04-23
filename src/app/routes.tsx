@@ -5,11 +5,10 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
-import { Clock, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
-import { Placeholder } from '@/features/_lib/Placeholder';
 
 // T4.2b follow-up — code-split the leaf feature routes. `Home` and
 // `Chat` stay eager because they're the primary entry points (Home on
@@ -43,6 +42,7 @@ const BudgetsRoute = lazyFeature(() => import('@/features/budgets'), 'BudgetsRou
 const TrajectoryRoute = lazyFeature(() => import('@/features/trajectory'), 'TrajectoryRoute');
 const TerminalRoute = lazyFeature(() => import('@/features/terminal'), 'TerminalRoute');
 const SkillsRoute = lazyFeature(() => import('@/features/skills'), 'SkillsRoute');
+const SchedulerRoute = lazyFeature(() => import('@/features/scheduler'), 'SchedulerRoute');
 
 /**
  * Shared fallback for lazy routes. Kept minimal — a full skeleton per
@@ -119,13 +119,9 @@ const schedulerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/scheduler',
   component: () => (
-    <Placeholder
-      titleKey="nav.scheduler"
-      emptyTitleKey="empty.scheduler.title"
-      emptyDescKey="empty.scheduler.desc"
-      icon={Clock}
-      phase={2}
-    />
+    <Suspense fallback={<RouteFallback />}>
+      <SchedulerRoute />
+    </Suspense>
   ),
 });
 
