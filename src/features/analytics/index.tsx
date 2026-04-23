@@ -254,7 +254,11 @@ function Card({ title, subtitle, icon: IconCmp, children }: CardProps) {
 
 const ACTIVITY_W = 720;
 const ACTIVITY_H = 140;
-const ACTIVITY_PAD = { t: 12, r: 8, b: 22, l: 28 };
+// Left padding must fit the widest Y-tick label rendered at text-[10px].
+// We now compact labels via `formatNumber` ("13220" → "13k", "1230000" → "1.2M"),
+// so the widest realistic label is ~5 chars (e.g. "1.5M"). 40px leaves a
+// safe margin before the chart area starts at `ACTIVITY_PAD.l`.
+const ACTIVITY_PAD = { t: 12, r: 8, b: 22, l: 40 };
 
 function ActivityChart({
   data,
@@ -315,7 +319,7 @@ function ActivityChart({
               dominantBaseline="middle"
               className="fill-[var(--color-fg-subtle)] text-[10px] tabular-nums"
             >
-              {tick}
+              {formatNumber(tick)}
             </text>
           </g>
         );
