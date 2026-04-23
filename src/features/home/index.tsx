@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { BookOpen, Plug, Sparkles, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoreyMark } from '@/components/ui/corey-mark';
+import { Icon } from '@/components/ui/icon';
 import { homeStats, type HomeStats } from '@/lib/ipc';
 
 export function HomeRoute() {
@@ -38,17 +39,17 @@ export function HomeRoute() {
 
         <div className="mt-2 flex items-center gap-2">
           <Button variant="primary" size="md">
-            <Plug size={14} />
+            <Icon icon={Plug} size="sm" />
             {t('home.cta_connect')}
           </Button>
           <Button variant="secondary" size="md">
-            <BookOpen size={14} />
+            <Icon icon={BookOpen} size="sm" />
             {t('home.cta_docs')}
           </Button>
         </div>
 
         <div className="mt-8 flex items-center gap-2 text-xs text-fg-subtle">
-          <Sparkles size={12} />
+          <Icon icon={Sparkles} size="xs" />
           <span>Phase 0 dev build · fixtures only · no live gateway</span>
         </div>
 
@@ -57,7 +58,7 @@ export function HomeRoute() {
           className="mt-4 flex items-center gap-2 rounded-md border border-border bg-bg-elev-1/60 px-3 py-1.5 text-xs font-mono text-fg-muted"
           data-tabular
         >
-          <HardDrive size={12} className="text-gold-500" />
+          <Icon icon={HardDrive} size="xs" className="text-gold-500" />
           {error ? (
             <span className="text-danger">IPC error: {error}</span>
           ) : stats ? (

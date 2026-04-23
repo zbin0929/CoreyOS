@@ -15,6 +15,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   hermesProfileClone,
@@ -137,11 +138,10 @@ export function ProfilesRoute() {
               onClick={load}
               disabled={state.kind === 'loading'}
             >
-              <RefreshCw
-                className={cn(
-                  'h-3.5 w-3.5',
-                  state.kind === 'loading' && 'animate-spin',
-                )}
+              <Icon
+                icon={RefreshCw}
+                size="sm"
+                className={cn(state.kind === 'loading' && 'animate-spin')}
               />
               {t('profiles.refresh')}
             </Button>
@@ -152,7 +152,7 @@ export function ProfilesRoute() {
               disabled={creating !== null || state.kind === 'loading'}
               data-testid="profiles-new"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Icon icon={Plus} size="sm" />
               {t('profiles.new')}
             </Button>
           </div>
@@ -163,14 +163,14 @@ export function ProfilesRoute() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-6">
           {state.kind === 'loading' && (
             <div className="flex items-center gap-2 text-fg-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Icon icon={Loader2} size="md" className="animate-spin" />
               {t('profiles.refresh')}…
             </div>
           )}
 
           {state.kind === 'error' && (
             <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+              <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <div className="flex-1">
                 <div className="font-medium">{t('profiles.error_title')}</div>
                 <div className="mt-1 break-all text-xs opacity-80">
@@ -182,7 +182,7 @@ export function ProfilesRoute() {
                   variant="secondary"
                   onClick={load}
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <Icon icon={RefreshCw} size="sm" />
                   {t('profiles.retry')}
                 </Button>
               </div>
@@ -195,7 +195,7 @@ export function ProfilesRoute() {
               className="flex flex-col gap-2 rounded-md border border-gold-500/40 bg-gold-500/5 p-3"
             >
               <div className="flex items-center gap-2">
-                <Plus className="h-4 w-4 text-gold-500" />
+                <Icon icon={Plus} size="md" className="text-gold-500" />
                 <span className="text-sm font-medium text-fg">
                   {t('profiles.new')}
                 </span>
@@ -227,16 +227,16 @@ export function ProfilesRoute() {
                   disabled={creating.busy || !creating.value.trim()}
                 >
                   {creating.busy ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Icon icon={Loader2} size="sm" className="animate-spin" />
                   ) : (
-                    <Check className="h-3.5 w-3.5" />
+                    <Icon icon={Check} size="sm" />
                   )}
                   {t('profiles.create')}
                 </Button>
               </div>
               {rowStatus.__create__?.kind === 'err' && (
                 <div className="flex items-start gap-1 text-xs text-danger">
-                  <AlertCircle className="mt-0.5 h-3 w-3 flex-none" />
+                  <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
                   <span className="break-all">
                     {rowStatus.__create__.message}
                   </span>
@@ -363,7 +363,7 @@ function ProfileCard({
               title={t('profiles.rename')}
               data-testid={`profile-action-rename-${profile.name}`}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Icon icon={Pencil} size="sm" />
             </Button>
             <Button
               size="sm"
@@ -375,7 +375,7 @@ function ProfileCard({
               title={t('profiles.clone')}
               data-testid={`profile-action-clone-${profile.name}`}
             >
-              <Copy className="h-3.5 w-3.5" />
+              <Icon icon={Copy} size="sm" />
             </Button>
             <Button
               size="sm"
@@ -391,7 +391,7 @@ function ProfileCard({
               }
               data-testid={`profile-action-delete-${profile.name}`}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Icon icon={Trash2} size="sm" />
             </Button>
           </div>
         )}
@@ -429,7 +429,7 @@ function ProfileCard({
               onClick={() => onModeChange({ kind: 'view' })}
               disabled={busy}
             >
-              <X className="h-3.5 w-3.5" />
+              <Icon icon={X} size="sm" />
               {t('profiles.cancel')}
             </Button>
             <Button
@@ -441,9 +441,9 @@ function ProfileCard({
               className="!text-danger"
             >
               {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Icon icon={Loader2} size="sm" className="animate-spin" />
               ) : (
-                <Trash2 className="h-3.5 w-3.5" />
+                <Icon icon={Trash2} size="sm" />
               )}
               {t('profiles.delete')}
             </Button>
@@ -453,7 +453,7 @@ function ProfileCard({
 
       {status.kind === 'err' && (
         <div className="flex items-start gap-1 text-[11px] text-danger">
-          <AlertCircle className="mt-0.5 h-3 w-3 flex-none" />
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span className="break-all">{status.message}</span>
         </div>
       )}
@@ -464,7 +464,7 @@ function ProfileCard({
 // ───────────────────────── Inline name form ─────────────────────────
 
 function InlineNameForm({
-  icon: Icon,
+  icon: IconCmp,
   label,
   value,
   busy,
@@ -492,7 +492,7 @@ function InlineNameForm({
       className="flex flex-col gap-2 rounded border border-border bg-bg-elev-2/50 p-2"
     >
       <div className="flex items-center gap-1.5 text-xs text-fg-muted">
-        <Icon className="h-3.5 w-3.5" />
+        <Icon icon={IconCmp} size="sm" />
         {label}
       </div>
       <input
@@ -519,9 +519,9 @@ function InlineNameForm({
           disabled={busy || !value.trim()}
         >
           {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Icon icon={Loader2} size="sm" className="animate-spin" />
           ) : (
-            <Check className="h-3.5 w-3.5" />
+            <Icon icon={Check} size="sm" />
           )}
           {t('profiles.confirm')}
         </Button>

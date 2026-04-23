@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 
 /**
  * Minimal bottom-sheet drawer used by the Channels page on narrow
@@ -109,7 +110,7 @@ export function Drawer({
             aria-label="Close"
             data-testid={testId ? `${testId}-close` : undefined}
           >
-            <X className="h-4 w-4" />
+            <Icon icon={X} size="md" />
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">

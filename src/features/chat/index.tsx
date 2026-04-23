@@ -11,6 +11,7 @@ import {
 import { AlertTriangle, Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   attachmentDelete,
@@ -555,7 +556,7 @@ function ChatPane({
               data-testid="chat-budget-warning"
             >
               <div className="inline-flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5" />
+                <Icon icon={AlertTriangle} size="sm" />
                 <span className="font-medium">Budget over cap</span>
               </div>
               {budgetWarnings.map((line, i) => (
@@ -577,7 +578,7 @@ function ChatPane({
               className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
               data-testid="chat-vision-warning"
             >
-              <AlertTriangle className="h-3.5 w-3.5" />
+              <Icon icon={AlertTriangle} size="sm" />
               <span>
                 The current model{' '}
                 <code className="rounded bg-amber-500/10 px-1">{effectiveModel}</code>{' '}
@@ -599,7 +600,7 @@ function ChatPane({
                   data-testid={`chat-attachment-chip-${a.id}`}
                   title={`${a.mime} · ${formatBytes(a.size)}`}
                 >
-                  <Paperclip className="h-3 w-3 text-fg-subtle" />
+                  <Icon icon={Paperclip} size="xs" className="text-fg-subtle" />
                   <span className="max-w-[180px] truncate">{a.name}</span>
                   <button
                     type="button"
@@ -607,7 +608,7 @@ function ChatPane({
                     aria-label={`Remove ${a.name}`}
                     className="rounded p-0.5 text-fg-subtle transition-colors hover:bg-bg-elev-2 hover:text-fg"
                   >
-                    <X className="h-3 w-3" />
+                    <Icon icon={X} size="xs" />
                   </button>
                 </li>
               ))}
@@ -643,7 +644,7 @@ function ChatPane({
               data-testid="chat-attach-button"
               data-vision-support={visionCap}
             >
-              <Paperclip className="h-4 w-4" />
+              <Icon icon={Paperclip} size="md" />
             </Button>
 
             <textarea
@@ -673,7 +674,7 @@ function ChatPane({
                 aria-label="Stop generating"
                 title="Stop"
               >
-                <Square className="h-4 w-4" fill="currentColor" />
+                <Icon icon={Square} size="md" fill="currentColor" />
               </Button>
             ) : (
               <Button
@@ -685,7 +686,7 @@ function ChatPane({
                 title="Send"
                 data-testid="chat-send"
               >
-                <Send className="h-4 w-4" />
+                <Icon icon={Send} size="md" />
               </Button>
             )}
           </div>
@@ -716,7 +717,7 @@ function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
       <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-500/10 text-gold-500">
-        <Sparkles className="h-6 w-6" />
+        <Icon icon={Sparkles} size={24} />
       </div>
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold tracking-tight">Talk to Hermes</h2>

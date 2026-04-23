@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { Icon } from '@/components/ui/icon';
 
 export interface EmptyStateProps {
   icon?: LucideIcon;
@@ -10,7 +11,7 @@ export interface EmptyStateProps {
   className?: string;
 }
 
-export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({ icon: IconCmp, title, description, action, className }: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -19,9 +20,9 @@ export function EmptyState({ icon: Icon, title, description, action, className }
         className,
       )}
     >
-      {Icon ? (
+      {IconCmp ? (
         <div className="flex h-11 w-11 items-center justify-center rounded-full bg-bg-elev-2 text-fg-muted">
-          <Icon size={20} strokeWidth={1.5} />
+          <Icon icon={IconCmp} size="lg" />
         </div>
       ) : null}
       <div className="flex flex-col gap-1">

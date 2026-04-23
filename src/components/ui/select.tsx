@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { Icon } from '@/components/ui/icon';
 
 /**
  * Themed replacement for the native `<select>`. macOS styles native pickers
@@ -180,9 +181,11 @@ export function Select<V extends string = string>({
         <span className={cn('truncate', !selected && 'text-fg-subtle')}>
           {selected?.label ?? placeholder ?? ''}
         </span>
-        <ChevronDown
+        <Icon
+          icon={ChevronDown}
+          size="md"
           className={cn(
-            'pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2',
+            'pointer-events-none absolute right-2 top-1/2 -translate-y-1/2',
             'text-fg-subtle transition-transform duration-fast',
             open && 'rotate-180',
           )}
@@ -225,9 +228,11 @@ export function Select<V extends string = string>({
                     selectedNow && !active && 'text-fg',
                   )}
                 >
-                  <Check
+                  <Icon
+                    icon={Check}
+                    size="sm"
                     className={cn(
-                      'h-3.5 w-3.5 flex-none',
+                      'flex-none',
                       selectedNow ? 'opacity-100 text-gold-500' : 'opacity-0',
                     )}
                   />

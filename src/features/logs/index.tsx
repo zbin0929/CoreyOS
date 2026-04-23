@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, Cpu, ScrollText } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import type { HermesLogKind } from '@/lib/ipc';
 import { ChangelogPanel } from './ChangelogPanel';
@@ -49,7 +50,7 @@ export function LogsRoute() {
         aria-label={t('logs.title')}
         className="flex items-center gap-1 border-b border-border bg-bg-elev-1 px-6"
       >
-        {tabs.map(({ key, label, icon: Icon }) => {
+        {tabs.map(({ key, label, icon: IconCmp }) => {
           const isActive = active === key;
           return (
             <button
@@ -66,7 +67,7 @@ export function LogsRoute() {
                   : 'border-transparent text-fg-subtle hover:text-fg',
               )}
             >
-              <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
+              <Icon icon={IconCmp} size="sm" />
               {label}
             </button>
           );

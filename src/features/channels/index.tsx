@@ -16,6 +16,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Drawer } from '@/components/ui/drawer';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { useIsMobile } from '@/lib/useIsMobile';
 import {
@@ -139,8 +140,10 @@ export function ChannelsRoute() {
               disabled={probing}
               data-testid="channels-probe-button"
             >
-              <RefreshCw
-                className={cn('h-3.5 w-3.5', probing && 'animate-spin')}
+              <Icon
+                icon={RefreshCw}
+                size="sm"
+                className={cn(probing && 'animate-spin')}
               />
               {t('channels.probe')}
             </Button>
@@ -154,11 +157,10 @@ export function ChannelsRoute() {
               disabled={state.kind === 'loading'}
               data-testid="channels-refresh-button"
             >
-              <RotateCw
-                className={cn(
-                  'h-3.5 w-3.5',
-                  state.kind === 'loading' && 'animate-spin',
-                )}
+              <Icon
+                icon={RotateCw}
+                size="sm"
+                className={cn(state.kind === 'loading' && 'animate-spin')}
               />
               {t('channels.refresh')}
             </Button>
@@ -170,14 +172,14 @@ export function ChannelsRoute() {
         <div className="mx-auto w-full max-w-5xl px-6 py-6">
           {state.kind === 'loading' && (
             <div className="flex items-center gap-2 text-fg-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Icon icon={Loader2} size="md" className="animate-spin" />
               {t('channels.refresh')}…
             </div>
           )}
 
           {state.kind === 'error' && (
             <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+              <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <div className="flex-1">
                 <div className="font-medium">{t('channels.error_title')}</div>
                 <div className="mt-1 break-all text-xs opacity-80">
@@ -189,7 +191,7 @@ export function ChannelsRoute() {
                   variant="secondary"
                   onClick={load}
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <Icon icon={RefreshCw} size="sm" />
                   {t('channels.retry')}
                 </Button>
               </div>
@@ -318,7 +320,7 @@ function ChannelCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <MessageSquareMore className="h-4 w-4 flex-none text-fg-muted" />
+            <Icon icon={MessageSquareMore} size="md" className="flex-none text-fg-muted" />
             <h3 className="truncate text-sm font-medium text-fg">
               {channel.display_name}
             </h3>
@@ -350,7 +352,7 @@ function ChannelCard({
               data-testid={`channel-edit-${channel.id}`}
               title={t('channels.edit')}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Icon icon={Pencil} size="sm" />
             </Button>
           )}
         </div>
@@ -370,11 +372,13 @@ function ChannelCard({
                   className="flex items-center gap-2 text-[11px] text-fg-muted"
                 >
                   {channel.env_present[k.name] ? (
-                    <Check className="h-3 w-3 flex-none text-emerald-500" />
+                    <Icon icon={Check} size="xs" className="flex-none text-emerald-500" />
                   ) : (
-                    <CircleOff
+                    <Icon
+                      icon={CircleOff}
+                      size="xs"
                       className={cn(
-                        'h-3 w-3 flex-none',
+                        'flex-none',
                         k.required ? 'text-fg-subtle' : 'text-fg-subtle/60',
                       )}
                     />
@@ -392,7 +396,7 @@ function ChannelCard({
 
           {channel.has_qr_login && (
             <div className="flex items-center gap-1.5 rounded border border-gold-500/40 bg-gold-500/5 px-2 py-1 text-[11px] text-gold-500">
-              <QrCode className="h-3 w-3" />
+              <Icon icon={QrCode} size="xs" />
               {t('channels.qr_hint')}
             </div>
           )}
@@ -414,7 +418,7 @@ function ChannelCard({
                       className="truncate font-mono text-fg-subtle"
                       title={f.path}
                     >
-                      <Hash className="mr-0.5 inline h-2.5 w-2.5" />
+                      <Icon icon={Hash} size={10} className="mr-0.5 inline" />
                       {f.path}
                     </code>
                     <span className="truncate font-mono text-fg-muted">
@@ -516,7 +520,7 @@ function ChannelCard({
           data-testid={`channel-restart-prompt-${channel.id}`}
         >
           <div className="flex items-start gap-1.5">
-            <RotateCw className="mt-0.5 h-3 w-3 flex-none text-amber-500" />
+            <Icon icon={RotateCw} size="xs" className="mt-0.5 flex-none text-amber-500" />
             <span>{t('channels.restart_prompt')}</span>
           </div>
           <div className="flex items-center justify-end gap-2">
@@ -525,7 +529,7 @@ function ChannelCard({
               variant="ghost"
               onClick={() => setMode({ kind: 'view' })}
             >
-              <X className="h-3 w-3" />
+              <Icon icon={X} size="xs" />
               {t('channels.restart_later')}
             </Button>
             <Button
@@ -534,7 +538,7 @@ function ChannelCard({
               onClick={doRestart}
               data-testid={`channel-restart-confirm-${channel.id}`}
             >
-              <RotateCw className="h-3 w-3" />
+              <Icon icon={RotateCw} size="xs" />
               {t('channels.restart_now')}
             </Button>
           </div>
@@ -543,14 +547,14 @@ function ChannelCard({
 
       {mode.kind === 'error' && (
         <div className="flex items-start gap-1 rounded border border-danger/40 bg-danger/5 p-2 text-[11px] text-danger">
-          <AlertCircle className="mt-0.5 h-3 w-3 flex-none" />
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span className="flex-1 break-all">{mode.message}</span>
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setMode({ kind: 'view' })}
           >
-            <X className="h-3 w-3" />
+            <Icon icon={X} size="xs" />
           </Button>
         </div>
       )}
@@ -615,7 +619,7 @@ function ConfirmDiff({
       </ul>
       {!hotReloadable && (
         <div className="rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-amber-500">
-          <AlertCircle className="mr-1 inline h-3 w-3" />
+          <Icon icon={AlertCircle} size="xs" className="mr-1 inline" />
           {t('channels.not_hot_reloadable')}
         </div>
       )}
@@ -626,7 +630,7 @@ function ConfirmDiff({
           onClick={onCancel}
           disabled={busy}
         >
-          <X className="h-3 w-3" />
+          <Icon icon={X} size="xs" />
           {t('channels.cancel')}
         </Button>
         <Button
@@ -637,9 +641,9 @@ function ConfirmDiff({
           data-testid="channel-confirm-save"
         >
           {busy ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Icon icon={Loader2} size="xs" className="animate-spin" />
           ) : (
-            <Check className="h-3 w-3" />
+            <Icon icon={Check} size="xs" />
           )}
           {t('channels.confirm_save')}
         </Button>

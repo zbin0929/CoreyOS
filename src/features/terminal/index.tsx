@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Loader2, Terminal as TerminalIcon } from 'lucide-react';
+import { Icon } from '@/components/ui/icon';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -207,13 +208,13 @@ export function TerminalRoute() {
                 onClick={() => void open()}
                 data-testid="terminal-open"
               >
-                <TerminalIcon className="h-3.5 w-3.5" />
+                <Icon icon={TerminalIcon} size="sm" />
                 {t('terminal.open')}
               </Button>
             )}
             {state.kind === 'starting' && (
               <Button size="sm" variant="ghost" disabled>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Icon icon={Loader2} size="sm" className="animate-spin" />
                 {t('terminal.starting')}
               </Button>
             )}
@@ -224,7 +225,7 @@ export function TerminalRoute() {
       <div className="min-h-0 flex-1 overflow-hidden p-4">
         {state.kind === 'error' && (
           <div className="mb-3 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+            <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
             <span data-testid="terminal-error">{state.message}</span>
           </div>
         )}

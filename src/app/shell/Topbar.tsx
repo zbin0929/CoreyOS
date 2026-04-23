@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { Sun, Moon, Search, CircleDot } from 'lucide-react';
+import { Icon } from '@/components/ui/icon';
 import { Kbd } from '@/components/ui/kbd';
 import { usePaletteStore } from '@/stores/palette';
 import { useUIStore } from '@/stores/ui';
@@ -61,7 +62,7 @@ export function Topbar() {
           gateway === 'unknown' && 'border-border text-fg-subtle hover:bg-bg-elev-2',
         )}
       >
-        <CircleDot size={12} className={gateway === 'online' ? 'animate-pulse' : undefined} />
+        <Icon icon={CircleDot} size="xs" className={gateway === 'online' ? 'animate-pulse' : undefined} />
         <span>{gatewayLabel(gateway, gatewayLatencyMs, t)}</span>
       </button>
 
@@ -78,7 +79,7 @@ export function Topbar() {
         )}
         aria-label={t('topbar.open_palette')}
       >
-        <Search size={13} />
+        <Icon icon={Search} size="sm" />
         <span className="hidden sm:inline">{t('palette.placeholder')}</span>
         <Kbd keys={['mod', 'k']} className="ml-2" />
       </button>
@@ -91,7 +92,7 @@ export function Topbar() {
         aria-label={t('topbar.toggle_theme')}
         title={t('topbar.toggle_theme')}
       >
-        {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        <Icon icon={theme === 'dark' ? Sun : Moon} size="sm" />
       </button>
     </header>
   );

@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import {
   ipcErrorMessage,
   isWechatQrTerminal,
@@ -139,12 +140,12 @@ export function WeChatQr({ onScanned }: { onScanned: () => void }) {
         data-testid="wechat-qr-idle"
       >
         <div className="flex items-start gap-2">
-          <QrCode className="mt-0.5 h-4 w-4 flex-none text-gold-500" />
+          <Icon icon={QrCode} size="md" className="mt-0.5 flex-none text-gold-500" />
           <span className="text-fg-muted">{t('channels.wechat.qr_intro')}</span>
         </div>
         {error && (
           <div className="flex items-start gap-1 text-danger">
-            <AlertCircle className="mt-0.5 h-3 w-3 flex-none" />
+            <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
             <span className="flex-1">{error}</span>
           </div>
         )}
@@ -154,7 +155,7 @@ export function WeChatQr({ onScanned }: { onScanned: () => void }) {
           onClick={start}
           data-testid="wechat-qr-start"
         >
-          <QrCode className="h-3.5 w-3.5" />
+          <Icon icon={QrCode} size="sm" />
           {t('channels.wechat.start')}
         </Button>
       </div>
@@ -189,7 +190,7 @@ export function WeChatQr({ onScanned }: { onScanned: () => void }) {
             onClick={start}
             data-testid="wechat-qr-restart"
           >
-            <RefreshCw className="h-3 w-3" />
+            <Icon icon={RefreshCw} size="xs" />
             {t('channels.wechat.restart')}
           </Button>
         ) : (
@@ -199,7 +200,7 @@ export function WeChatQr({ onScanned }: { onScanned: () => void }) {
             onClick={handleCancel}
             data-testid="wechat-qr-cancel"
           >
-            <X className="h-3 w-3" />
+            <Icon icon={X} size="xs" />
             {t('channels.wechat.cancel')}
           </Button>
         )}
@@ -207,7 +208,7 @@ export function WeChatQr({ onScanned }: { onScanned: () => void }) {
 
       {error && (
         <div className="flex items-start gap-1 text-danger">
-          <AlertCircle className="mt-0.5 h-3 w-3 flex-none" />
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span className="flex-1">{error}</span>
         </div>
       )}
@@ -232,7 +233,7 @@ function StatusLine({
     case 'pending':
       return (
         <div className="flex items-center gap-1.5 text-fg-muted" data-testid="wechat-qr-status-pending">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Icon icon={Loader2} size="xs" className="animate-spin" />
           <span>{t('channels.wechat.status.pending')}</span>
           <span className="ml-auto text-fg-subtle">
             {t('channels.wechat.expires_in_s', { s: remaining })}
@@ -242,35 +243,35 @@ function StatusLine({
     case 'scanning':
       return (
         <div className="flex items-center gap-1.5 text-accent" data-testid="wechat-qr-status-scanning">
-          <Smartphone className="h-3 w-3" />
+          <Icon icon={Smartphone} size="xs" />
           <span>{t('channels.wechat.status.scanning')}</span>
         </div>
       );
     case 'scanned':
       return (
         <div className="flex items-center gap-1.5 text-emerald-500" data-testid="wechat-qr-status-scanned">
-          <CheckCircle2 className="h-3 w-3" />
+          <Icon icon={CheckCircle2} size="xs" />
           <span>{t('channels.wechat.status.scanned')}</span>
         </div>
       );
     case 'expired':
       return (
         <div className="flex items-center gap-1.5 text-amber-500" data-testid="wechat-qr-status-expired">
-          <AlertCircle className="h-3 w-3" />
+          <Icon icon={AlertCircle} size="xs" />
           <span>{t('channels.wechat.status.expired')}</span>
         </div>
       );
     case 'cancelled':
       return (
         <div className="flex items-center gap-1.5 text-fg-subtle" data-testid="wechat-qr-status-cancelled">
-          <X className="h-3 w-3" />
+          <Icon icon={X} size="xs" />
           <span>{t('channels.wechat.status.cancelled')}</span>
         </div>
       );
     case 'failed':
       return (
         <div className="flex items-start gap-1.5 text-danger" data-testid="wechat-qr-status-failed">
-          <AlertCircle className="mt-0.5 h-3 w-3 flex-none" />
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span>{t('channels.wechat.status.failed', { detail: status.detail })}</span>
         </div>
       );

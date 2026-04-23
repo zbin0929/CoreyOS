@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Eye, EyeOff, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import type { ChannelFieldKind, ChannelState } from '@/lib/ipc';
 import { WeChatQr } from './WeChatQr';
 
@@ -179,11 +180,7 @@ export function ChannelForm({
                 }
                 title={revealed[k.name] ? t('channels.hide') : t('channels.show')}
               >
-                {revealed[k.name] ? (
-                  <EyeOff className="h-3 w-3" />
-                ) : (
-                  <Eye className="h-3 w-3" />
-                )}
+                <Icon icon={revealed[k.name] ? EyeOff : Eye} size="xs" />
               </Button>
             </div>
           )}
@@ -223,7 +220,7 @@ export function ChannelForm({
           onClick={onCancel}
           disabled={busy}
         >
-          <X className="h-3.5 w-3.5" />
+          <Icon icon={X} size="sm" />
           {t('channels.cancel')}
         </Button>
         <Button
@@ -234,9 +231,9 @@ export function ChannelForm({
           data-testid={`channel-form-save-${channel.id}`}
         >
           {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Icon icon={Loader2} size="sm" className="animate-spin" />
           ) : (
-            <Check className="h-3.5 w-3.5" />
+            <Icon icon={Check} size="sm" />
           )}
           {t('channels.save')}
         </Button>

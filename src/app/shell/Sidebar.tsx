@@ -5,6 +5,7 @@ import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { NAV } from '@/app/nav-config';
 import { CoreyMark } from '@/components/ui/corey-mark';
+import { Icon } from '@/components/ui/icon';
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -89,7 +90,7 @@ interface NavItemProps {
   children: ReactNode;
 }
 
-function NavItem({ to, icon: Icon, active, children }: NavItemProps) {
+function NavItem({ to, icon: IconCmp, active, children }: NavItemProps) {
   return (
     <Link
       to={to}
@@ -101,7 +102,7 @@ function NavItem({ to, icon: Icon, active, children }: NavItemProps) {
           : 'text-fg-muted hover:bg-bg-elev-2/60 hover:text-fg',
       )}
     >
-      <Icon size={16} strokeWidth={1.5} />
+      <Icon icon={IconCmp} size="md" />
       <span className="flex-1 truncate">{children}</span>
       {active ? <span className="h-4 w-0.5 rounded-sm bg-gold-500" /> : null}
     </Link>

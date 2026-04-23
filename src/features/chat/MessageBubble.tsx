@@ -12,6 +12,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { attachmentPreview } from '@/lib/ipc';
 import type { UiAttachment, UiMessage, UiToolCall } from '@/stores/chat';
@@ -33,7 +34,7 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
         )}
         aria-hidden
       >
-        {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+        <Icon icon={isUser ? User : Sparkles} size="md" />
       </div>
       <div className={cn('flex min-w-0 flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
         <div
@@ -54,12 +55,12 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
           )}
           {msg.pending && !msg.content ? (
             <span className="inline-flex items-center gap-2 text-fg-muted">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Icon icon={Loader2} size="sm" className="animate-spin" />
               thinking…
             </span>
           ) : msg.error ? (
             <span className="inline-flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+              <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <span>{msg.error}</span>
             </span>
           ) : isUser ? (
@@ -108,12 +109,12 @@ function CopyButton({ text }: { text: string }) {
     >
       {copied ? (
         <>
-          <Check className="h-3 w-3" />
+          <Icon icon={Check} size="xs" />
           Copied
         </>
       ) : (
         <>
-          <Copy className="h-3 w-3" />
+          <Icon icon={Copy} size="xs" />
           Copy
         </>
       )}
@@ -142,7 +143,7 @@ function ToolCallsStrip({ calls }: { calls: UiToolCall[] }) {
           {c.emoji ? (
             <span className="text-sm leading-none">{c.emoji}</span>
           ) : (
-            <Wrench className="h-3 w-3 text-fg-subtle" />
+            <Icon icon={Wrench} size="xs" className="text-fg-subtle" />
           )}
           <span className="font-semibold text-fg">{c.tool}</span>
           {c.label && (
@@ -180,7 +181,7 @@ function AttachmentsStrip({ attachments }: { attachments: UiAttachment[] }) {
             title={a.mime}
             data-testid={`bubble-attachment-${a.id}`}
           >
-            <Paperclip className="h-3 w-3 opacity-70" />
+            <Icon icon={Paperclip} size="xs" className="opacity-70" />
             <span className="max-w-[220px] truncate">{a.name}</span>
           </li>
         ),
@@ -228,7 +229,7 @@ function AttachmentImageTile({ attachment }: { attachment: UiAttachment }) {
         title={`${attachment.mime} · preview unavailable`}
         data-testid={`bubble-attachment-${attachment.id}`}
       >
-        <Paperclip className="h-3 w-3 opacity-70" />
+        <Icon icon={Paperclip} size="xs" className="opacity-70" />
         <span className="max-w-[220px] truncate">{attachment.name}</span>
       </li>
     );
@@ -250,7 +251,7 @@ function AttachmentImageTile({ attachment }: { attachment: UiAttachment }) {
       ) : (
         // Placeholder keeps the layout stable while the preview loads.
         <div className="flex h-24 w-24 items-center justify-center text-[11px] opacity-70">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Icon icon={Loader2} size="md" className="animate-spin" />
         </div>
       )}
     </li>

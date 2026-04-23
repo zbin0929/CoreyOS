@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Cpu, Settings2 } from 'lucide-react';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { hermesConfigRead, type HermesModelSection } from '@/lib/ipc';
 
@@ -51,9 +52,9 @@ export function ActiveLLMBadge() {
       )}
       title="Current LLM (click to configure)"
     >
-      <Cpu className="h-3 w-3 opacity-60" />
+      <Icon icon={Cpu} size="xs" className="opacity-60" />
       <code className="font-mono">{label}</code>
-      <Settings2 className="h-3 w-3 opacity-60" />
+      <Icon icon={Settings2} size="xs" className="opacity-60" />
     </button>
   );
 }

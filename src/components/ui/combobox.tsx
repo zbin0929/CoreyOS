@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { Icon } from '@/components/ui/icon';
 
 export interface ComboboxOption {
   value: string;
@@ -145,8 +146,10 @@ export function Combobox({
         tabIndex={-1}
         aria-label="Toggle options"
       >
-        <ChevronDown
-          className={cn('h-4 w-4 transition-transform', open && 'rotate-180')}
+        <Icon
+          icon={ChevronDown}
+          size="md"
+          className={cn('transition-transform', open && 'rotate-180')}
         />
       </button>
 
@@ -177,9 +180,11 @@ export function Combobox({
                     selected && !active && 'text-fg',
                   )}
                 >
-                  <Check
+                  <Icon
+                    icon={Check}
+                    size="sm"
                     className={cn(
-                      'h-3.5 w-3.5 flex-none',
+                      'flex-none',
                       selected ? 'opacity-100 text-gold-500' : 'opacity-0',
                     )}
                   />

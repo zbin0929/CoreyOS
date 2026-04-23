@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   changelogList,
@@ -103,8 +104,10 @@ export function ChangelogPanel() {
           disabled={state.kind === 'loading'}
           title={t('logs.refresh')}
         >
-          <RefreshCw
-            className={cn('h-3.5 w-3.5', state.kind === 'loading' && 'animate-spin')}
+          <Icon
+            icon={RefreshCw}
+            size="sm"
+            className={cn(state.kind === 'loading' && 'animate-spin')}
           />
           {t('logs.refresh')}
         </Button>
@@ -114,19 +117,19 @@ export function ChangelogPanel() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-6">
           {state.kind === 'loading' && (
             <div className="flex items-center gap-2 text-fg-muted">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Icon icon={Loader2} size="md" className="animate-spin" />
               {t('logs.refresh')}…
             </div>
           )}
 
           {state.kind === 'error' && (
             <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+              <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <div className="flex-1">
                 <div className="font-medium">{t('logs.error_title')}</div>
                 <div className="mt-1 break-all text-xs opacity-80">{state.message}</div>
                 <Button className="mt-3" size="sm" variant="secondary" onClick={load}>
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <Icon icon={RefreshCw} size="sm" />
                   {t('logs.retry')}
                 </Button>
               </div>
@@ -198,11 +201,11 @@ function EntryRow({
               title={t('logs.revert')}
             >
               {status.kind === 'reverting' ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Icon icon={Loader2} size="sm" className="animate-spin" />
               ) : status.kind === 'ok' ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                <Icon icon={CheckCircle2} size="sm" className="text-emerald-500" />
               ) : (
-                <RotateCcw className="h-3.5 w-3.5" />
+                <Icon icon={RotateCcw} size="sm" />
               )}
               {status.kind === 'reverting'
                 ? t('logs.reverting')
@@ -220,7 +223,7 @@ function EntryRow({
           )}
           {status.kind === 'err' && (
             <span className="inline-flex items-center gap-1 text-[11px] text-danger">
-              <AlertCircle className="h-3 w-3" />
+              <Icon icon={AlertCircle} size="xs" />
               {status.message}
             </span>
           )}

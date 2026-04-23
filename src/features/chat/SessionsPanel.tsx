@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Check, MessageSquarePlus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { Icon } from '@/components/ui/icon';
 import { useChatStore } from '@/stores/chat';
 
 /**
@@ -26,7 +27,7 @@ export function SessionsPanel() {
           className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-fg transition hover:border-gold-500/40 hover:text-gold-500"
           aria-label="New chat"
         >
-          <MessageSquarePlus className="h-3.5 w-3.5" />
+          <Icon icon={MessageSquarePlus} size="sm" />
           New
         </button>
       </div>
@@ -110,7 +111,7 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
       aria-label={armed ? 'Confirm delete' : 'Delete session'}
       title={armed ? 'Click again to confirm' : 'Delete'}
     >
-      {armed ? <Check className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+      <Icon icon={armed ? Check : Trash2} size="sm" />
     </button>
   );
 }

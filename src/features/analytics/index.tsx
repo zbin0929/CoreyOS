@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { analyticsSummary, type AnalyticsSummaryDto, ipcErrorMessage } from '@/lib/ipc';
 import { cn } from '@/lib/cn';
 
@@ -52,7 +53,7 @@ export function AnalyticsRoute() {
         subtitle={t('analytics.subtitle')}
         actions={
           <Button variant="ghost" size="sm" onClick={load} disabled={state.kind === 'loading'}>
-            <RefreshCcw size={14} className={cn(state.kind === 'loading' && 'animate-spin')} />
+            <Icon icon={RefreshCcw} size="sm" className={cn(state.kind === 'loading' && 'animate-spin')} />
             <span className="ml-1.5">{t('analytics.refresh')}</span>
           </Button>
         }
@@ -166,7 +167,7 @@ function KpiStrip({ totals }: { totals: AnalyticsSummaryDto['totals'] }) {
   ];
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-      {cards.map(({ key, label, value, icon: Icon }) => (
+      {cards.map(({ key, label, value, icon: IconCmp }) => (
         <div
           key={key}
           data-testid={`analytics-kpi-${key}`}
@@ -174,7 +175,7 @@ function KpiStrip({ totals }: { totals: AnalyticsSummaryDto['totals'] }) {
         >
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-wider text-fg-subtle">{label}</span>
-            <Icon size={14} className="text-fg-subtle" strokeWidth={1.5} />
+            <Icon icon={IconCmp} size="sm" className="text-fg-subtle" />
           </div>
           <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">
             {formatNumber(value)}
@@ -194,13 +195,13 @@ interface CardProps {
   children: React.ReactNode;
 }
 
-function Card({ title, subtitle, icon: Icon, children }: CardProps) {
+function Card({ title, subtitle, icon: IconCmp, children }: CardProps) {
   return (
     <section className="rounded-md border border-border bg-bg-elev-1">
       <header className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5 text-sm font-medium text-fg">
-            {Icon && <Icon size={13} strokeWidth={1.5} className="text-fg-subtle" />}
+            {IconCmp && <Icon icon={IconCmp} size="sm" className="text-fg-subtle" />}
             {title}
           </div>
           {subtitle && <span className="text-xs text-fg-subtle">{subtitle}</span>}

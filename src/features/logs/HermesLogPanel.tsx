@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, FileSearch, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   hermesLogTail,
@@ -116,19 +117,19 @@ export function HermesLogPanel({ kind }: { kind: HermesLogKind }) {
       >
         {state.kind === 'loading' && (
           <div className="flex items-center gap-2 px-6 py-4 text-fg-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Icon icon={Loader2} size="md" className="animate-spin" />
             {t('logs.refresh')}…
           </div>
         )}
 
         {state.kind === 'error' && (
           <div className="mx-6 my-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+            <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
             <div className="flex-1">
               <div className="font-medium">{t('hermes_logs.error_title')}</div>
               <div className="mt-1 break-all text-xs opacity-80">{state.message}</div>
               <Button className="mt-3" size="sm" variant="secondary" onClick={load}>
-                <RefreshCw className="h-3.5 w-3.5" />
+                <Icon icon={RefreshCw} size="sm" />
                 {t('logs.retry')}
               </Button>
             </div>

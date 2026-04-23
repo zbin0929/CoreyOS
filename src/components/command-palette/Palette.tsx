@@ -3,6 +3,7 @@ import { Command } from 'cmdk';
 import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { BookMarked, Sun, Moon, ArrowRight, type LucideIcon } from 'lucide-react';
+import { Icon } from '@/components/ui/icon';
 import { usePaletteStore } from '@/stores/palette';
 import { useUIStore } from '@/stores/ui';
 import { useComposerStore } from '@/stores/composer';
@@ -155,16 +156,16 @@ interface PaletteItemProps {
   hint?: string[] | undefined;
 }
 
-function PaletteItem({ value, onSelect, icon: Icon, label, hint }: PaletteItemProps) {
+function PaletteItem({ value, onSelect, icon: IconCmp, label, hint }: PaletteItemProps) {
   return (
     <Command.Item
       value={value}
       onSelect={onSelect}
       className="flex h-9 cursor-pointer items-center gap-2.5 rounded px-2 text-sm text-fg-muted data-[selected=true]:bg-bg-elev-3 data-[selected=true]:text-fg"
     >
-      <Icon size={15} strokeWidth={1.5} />
+      <Icon icon={IconCmp} size="md" />
       <span className="flex-1 truncate">{label}</span>
-      {hint ? <Kbd keys={hint} /> : <ArrowRight size={12} className="opacity-0 group-data-[selected=true]:opacity-100" />}
+      {hint ? <Kbd keys={hint} /> : <Icon icon={ArrowRight} size="xs" className="opacity-0 group-data-[selected=true]:opacity-100" />}
     </Command.Item>
   );
 }
