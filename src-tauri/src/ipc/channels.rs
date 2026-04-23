@@ -13,6 +13,7 @@
 //! upserts + YAML field patches under the channel's `yaml_root`.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value as YamlValue;
@@ -21,6 +22,7 @@ use tauri::State;
 use crate::channels::{self as cat, CHANNEL_SPECS};
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config;
+use crate::sandbox::{self, PathAuthority};
 use crate::state::AppState;
 
 /// One row returned by `hermes_channel_list`. Frontend renders one card
@@ -45,8 +47,8 @@ pub struct ChannelState {
 
 #[tauri::command]
 pub async fn hermes_channel_list(state: State<'_, AppState>) -> IpcResult<Vec<ChannelState>> {
-    let _ = state; // reserved — we might thread AppState.data_dir in later
-    tokio::task::spawn_blocking(build_channel_states)
+    let authority = state.authority.clone();
+    tokio::task::spawn_blocking(move || build_channel_states(&authority))
         .await
         .map_err(|e| IpcError::Internal {
             message: format!("channel_list task join: {e}"),
@@ -130,6 +132,7 @@ pub async fn hermes_channel_save(
     let journal = state.changelog_path.clone();
     let id = args.id.clone();
     let yaml_root = spec.yaml_root.to_string();
+    let authority = state.authority.clone();
 
     tokio::task::spawn_blocking(move || -> std::io::Result<ChannelState> {
         // 1) .env upserts — one journal entry per key so revert
@@ -146,7 +149,7 @@ pub async fn hermes_channel_save(
             )?;
         }
         // Re-read disk state for the freshened card.
-        let all = build_channel_states()?;
+        let all = build_channel_states(&authority)?;
         all.into_iter()
             .find(|c| c.spec.id == id)
             .ok_or_else(|| std::io::Error::other(format!("channel disappeared: {id}")))
@@ -162,14 +165,14 @@ pub async fn hermes_channel_save(
 
 /// Walk the catalog, cross-reference on-disk state. Returns one
 /// `ChannelState` per spec, in catalog order (stable across reloads).
-fn build_channel_states() -> std::io::Result<Vec<ChannelState>> {
+fn build_channel_states(authority: &Arc<PathAuthority>) -> std::io::Result<Vec<ChannelState>> {
     // Read the full `.env` keyset once — cheaper than re-reading per
     // channel. We only need a set of known-set names; values are never
     // surfaced.
-    let env_keyset = read_nonempty_env_keys().unwrap_or_default();
+    let env_keyset = read_nonempty_env_keys(authority).unwrap_or_default();
 
     // Read the yaml doc once so nested lookups are cheap.
-    let yaml_doc = read_config_yaml_value().unwrap_or(YamlValue::Null);
+    let yaml_doc = read_config_yaml_value(authority).unwrap_or(YamlValue::Null);
 
     let mut out = Vec::with_capacity(CHANNEL_SPECS.len());
     for spec in CHANNEL_SPECS.iter() {
@@ -204,14 +207,11 @@ fn build_channel_states() -> std::io::Result<Vec<ChannelState>> {
 /// are non-empty. Symmetric with `read_env_key_names` in
 /// `hermes_config.rs` but without the `*_API_KEY` filter — channels use
 /// token-style names (`TELEGRAM_BOT_TOKEN`, `MATRIX_ACCESS_TOKEN`, …).
-fn read_nonempty_env_keys() -> std::io::Result<std::collections::HashSet<String>> {
+fn read_nonempty_env_keys(
+    authority: &PathAuthority,
+) -> std::io::Result<std::collections::HashSet<String>> {
     let path = env_path()?;
-    // sandbox-allow: `~/.hermes/.env` is the seeded default root. This
-    // helper is sync and called from both IPC and test code; rewiring
-    // through the async sandbox::fs API would cascade into the whole
-    // channels module. Tracked for follow-up alongside hermes_config /
-    // hermes_profiles migration.
-    let raw = match std::fs::read_to_string(&path) {
+    let raw = match sandbox::fs::read_to_string_blocking(authority, &path) {
         Ok(s) => s,
         // Missing .env is a valid "none configured yet" state; surface
         // as an empty set rather than bubbling the error up to the UI.
@@ -252,7 +252,7 @@ fn env_path() -> std::io::Result<std::path::PathBuf> {
     Ok(Path::new(&home).join(".hermes/.env"))
 }
 
-fn read_config_yaml_value() -> std::io::Result<YamlValue> {
+fn read_config_yaml_value(authority: &PathAuthority) -> std::io::Result<YamlValue> {
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .ok_or_else(|| {
@@ -262,8 +262,7 @@ fn read_config_yaml_value() -> std::io::Result<YamlValue> {
             )
         })?;
     let path = Path::new(&home).join(".hermes/config.yaml");
-    // sandbox-allow: same rationale as `read_nonempty_env_keys` above.
-    let raw = match std::fs::read_to_string(&path) {
+    let raw = match sandbox::fs::read_to_string_blocking(authority, &path) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(YamlValue::Null),
         Err(e) => return Err(e),

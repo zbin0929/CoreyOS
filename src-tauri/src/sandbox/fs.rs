@@ -1,9 +1,15 @@
 //! Sandbox-gated filesystem helpers.
 //!
 //! **All IPC commands touching disk must import from this module instead of
-//! `std::fs` / `tokio::fs`.** A CI grep check will enforce this once the
-//! lint story lands; for now it is enforced by code review.
+//! `std::fs` / `tokio::fs`.** A CI grep check enforces this (see
+//! `scripts/check-sandbox-fs.mjs`).
+//!
+//! Both async (tokio) and blocking (std) variants are provided. Blocking
+//! variants exist for IPC handlers that already run inside
+//! `tokio::task::spawn_blocking` and would otherwise need to be rewritten
+//! to be fully async (eg. YAML/ENV parsing pipelines).
 
+use std::io;
 use std::path::Path;
 
 use super::{AccessOp, PathAuthority, SandboxResult};
@@ -53,4 +59,31 @@ pub async fn write(authority: &PathAuthority, path: &Path, bytes: &[u8]) -> Sand
             path: canonical.display().to_string(),
             source: e,
         })
+}
+
+// ─────────────────── Blocking (std::fs) variants ───────────────────
+//
+// For callers running inside `tokio::task::spawn_blocking`. Returns
+// `io::Result` instead of `SandboxResult` so existing error-handling
+// pipelines (e.g. "NotFound → Ok(empty)") don't need rewriting. A
+// sandbox denial surfaces as `io::ErrorKind::PermissionDenied`.
+
+fn sandbox_err_to_io(e: super::SandboxError) -> io::Error {
+    io::Error::new(io::ErrorKind::PermissionDenied, e.to_string())
+}
+
+/// Blocking read of a file as a String, gated by the sandbox.
+///
+/// Missing files surface as `io::ErrorKind::NotFound` (unchanged from
+/// `std::fs::read_to_string`). Sandbox denials surface as
+/// `io::ErrorKind::PermissionDenied`.
+pub fn read_to_string_blocking(authority: &PathAuthority, path: &Path) -> io::Result<String> {
+    let canonical = authority.check(path, AccessOp::Read).map_err(sandbox_err_to_io)?;
+    std::fs::read_to_string(&canonical)
+}
+
+/// Blocking write, gated by the sandbox.
+pub fn write_blocking(authority: &PathAuthority, path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let canonical = authority.check(path, AccessOp::Write).map_err(sandbox_err_to_io)?;
+    std::fs::write(&canonical, bytes)
 }
