@@ -124,22 +124,17 @@ export const tauriMockInitScript = /* js */ `
     // T6.2 — extra Hermes instances. Empty by default so the list shows
     // the empty-state copy; tests that need a populated list push into
     // this array before navigating.
-    hermesInstances: [] as Array<{
-      id: string;
-      label: string;
-      base_url: string;
-      api_key: string | null;
-      default_model: string | null;
-    }>,
+    // The outer template is JS-tagged and injected raw into the
+    // browser, so TS-only "as" casts here blow up the IIFE and
+    // silently break every single e2e spec (symptom: "Cannot read
+    // properties of undefined (reading invoke)" from
+    // @tauri-apps/api/core). Use JSDoc type hints to keep
+    // IntelliSense in the source without leaking type syntax into
+    // the injected string.
+    hermesInstances: /** @type {Array<{id: string, label: string, base_url: string, api_key: string | null, default_model: string | null}>} */ ([]),
     // T6.4 — routing rules. Empty by default; tests that need a
     // populated list push before navigating.
-    routingRules: [] as Array<{
-      id: string;
-      name: string;
-      enabled: boolean;
-      match: { kind: string; value: string; case_sensitive?: boolean };
-      target_adapter_id: string;
-    }>,
+    routingRules: /** @type {Array<{id: string, name: string, enabled: boolean, match: {kind: string, value: string, case_sensitive?: boolean}, target_adapter_id: string}>} */ ([]),
     // Fixture lines for hermes_log_tail, keyed by kind. Tests can override
     // lines or missing at runtime via window.__CADUCEUS_MOCK__.state.
     hermesLogs: {
@@ -308,7 +303,7 @@ export const tauriMockInitScript = /* js */ `
 
       case 'sandbox_add_root': {
         const { path, label, mode } = args.args;
-        const existing = state.sandbox.roots.findIndex((r: any) => r.path === path);
+        const existing = state.sandbox.roots.findIndex((r) => r.path === path);
         const entry = { path, label, mode };
         if (existing >= 0) state.sandbox.roots[existing] = entry;
         else state.sandbox.roots.push(entry);
@@ -318,7 +313,7 @@ export const tauriMockInitScript = /* js */ `
 
       case 'sandbox_remove_root': {
         const { path } = args.args;
-        state.sandbox.roots = state.sandbox.roots.filter((r: any) => r.path !== path);
+        state.sandbox.roots = state.sandbox.roots.filter((r) => r.path !== path);
         return null;
       }
 
@@ -391,18 +386,18 @@ export const tauriMockInitScript = /* js */ `
       // routing_rules.json so Composer + Settings tests can drive the
       // full loop without a real config file.
       case 'routing_rule_list': {
-        return { rules: state.routingRules.map((r: any) => ({ ...r })) };
+        return { rules: state.routingRules.map((r) => ({ ...r })) };
       }
       case 'routing_rule_upsert': {
         const inc = args.rule;
-        const idx = state.routingRules.findIndex((r: any) => r.id === inc.id);
+        const idx = state.routingRules.findIndex((r) => r.id === inc.id);
         if (idx >= 0) state.routingRules[idx] = { ...inc };
         else state.routingRules.push({ ...inc });
         return { ...inc };
       }
       case 'routing_rule_delete': {
         state.routingRules = state.routingRules.filter(
-          (r: any) => r.id !== args.id,
+          (r) => r.id !== args.id,
         );
         return null;
       }
@@ -410,18 +405,18 @@ export const tauriMockInitScript = /* js */ `
       // T6.2 — extra Hermes instances. Kept in-memory so Settings-page
       // tests can exercise list/upsert/delete without a real config file.
       case 'hermes_instance_list': {
-        return { instances: state.hermesInstances.map((i: any) => ({ ...i })) };
+        return { instances: state.hermesInstances.map((i) => ({ ...i })) };
       }
       case 'hermes_instance_upsert': {
         const inc = args.instance;
-        const idx = state.hermesInstances.findIndex((i: any) => i.id === inc.id);
+        const idx = state.hermesInstances.findIndex((i) => i.id === inc.id);
         if (idx >= 0) state.hermesInstances[idx] = { ...inc };
         else state.hermesInstances.push({ ...inc });
         return { ...inc };
       }
       case 'hermes_instance_delete': {
         state.hermesInstances = state.hermesInstances.filter(
-          (i: any) => i.id !== args.id,
+          (i) => i.id !== args.id,
         );
         return null;
       }

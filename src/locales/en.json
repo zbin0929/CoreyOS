@@ -440,6 +440,8 @@
     "refresh": "Refresh",
     "retry": "Retry",
     "error_title": "Couldn't list channels",
+    "verified": "Verified",
+    "verified_title": "Shipping end-to-end smoke test covers this channel.",
     "optional": "optional",
     "required": "required",
     "edit": "Edit",

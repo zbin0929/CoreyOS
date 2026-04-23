@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
+  BadgeCheck,
   Check,
   CircleOff,
   Hash,
@@ -12,6 +13,7 @@ import {
   RotateCw,
   X,
 } from 'lucide-react';
+import { isVerifiedChannel } from './verified';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Drawer } from '@/components/ui/drawer';
@@ -325,6 +327,19 @@ function ChannelCard({
           </code>
         </div>
         <div className="flex items-center gap-2">
+          {/* T6.7b — "Verified" badge for channels with a shipping
+              e2e smoke test. Purely informational; doesn't gate any
+              functionality. See `./verified.ts` for the catalog. */}
+          {isVerifiedChannel(channel.id) && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500"
+              title={t('channels.verified_title')}
+              data-testid={`channel-verified-${channel.id}`}
+            >
+              <Icon icon={BadgeCheck} size={10} />
+              {t('channels.verified')}
+            </span>
+          )}
           <StatusPill
             status={status}
             setCount={setCount}

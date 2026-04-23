@@ -6,6 +6,48 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.7b · Telegram e2e smoke test + channel verified badge + e2e mock hotfix
+
+Telegram now has a dedicated end-to-end smoke test walking the full configure-and-save loop; the Channels page surfaces a "Verified" badge on channels with shipping coverage. Along the way discovered and fixed a silent mock regression from T6.2 + T6.4 that was breaking **48/55** Playwright specs.
+
+### Context
+
+Per the 2026-04-23 product audit, T6.7b was called out as "1.5 days — Telegram e2e smoke". While wiring the new spec, every existing Playwright test also failed with "Cannot read properties of undefined (reading 'invoke')" — meaning the Tauri IPC mock never installed. Root-causing that was the real priority: the T6.2 and T6.4 merges had pasted TS-only `as Array<...>` casts and `(r: any) =>` arrow-param annotations into the `/* js */` tagged template literal in `e2e/fixtures/tauri-mock.ts`. That string is injected RAW into the browser via `addInitScript`, so a single TS-only token anywhere inside the IIFE throws at script-parse time, the whole init fails, and every downstream IPC call crashes with the above message. No compile step catches it because TypeScript is happy with `as` inside a `.ts` file. Fix was mechanical but the blast radius was huge.
+
+### Shipped
+
+**Mock hotfix** (`e2e/fixtures/tauri-mock.ts`):
+- Replaced `hermesInstances: [] as Array<{...}>` and `routingRules: [] as Array<{...}>` with JSDoc `/** @type {...} */` annotations — type info survives for editor hints, but the runtime emit is pure JS.
+- Stripped eight `(r: any) =>` / `(i: any) =>` TS-only param annotations in the `sandbox_*`, `routing_rule_*`, and `hermes_instance_*` command handlers (lines 306, 316, 389, 393, 400, 408, 412, 419).
+- Added a prominent multi-line comment at the top of the affected block documenting why TS syntax is forbidden inside the tagged template and which error symptom it produces, so the next refactor doesn't step on the same rake.
+
+**Verified-channel badge** (`src/features/channels/verified.ts`, `src/features/channels/index.tsx`):
+- New pure-data `VERIFIED_CHANNELS: ReadonlySet<string>` + `isVerifiedChannel(id)` predicate. Currently lists `telegram`; T6.7c will add the rest once their smoke specs ship.
+- ChannelCard header now renders an emerald-tinted `BadgeCheck` pill + i18n-ed "Verified" label next to the status pill for listed channels. Purely informational — doesn't gate any functionality.
+- i18n: `channels.verified` + `channels.verified_title` (en + zh).
+
+**Telegram smoke spec** (`e2e/telegram-smoke.spec.ts`):
+- Full-loop test that resets the Telegram fixture to unconfigured, navigates, triggers a catalog refresh, opens the editor, fills a plausible bot token, confirms the diff never leaks the token into the DOM, saves, asserts the captured `channelSaves` payload, confirms the restart prompt, flips the live-status fixture to online, confirms the gateway restart, and finally asserts the status pill is `configured` + the live pill is `online`.
+- Uses `page.waitForFunction` to bridge the race between `addInitScript` execution and the first `page.evaluate`, so the spec is reliable on slower machines (not just fast local dev).
+- Triggers state refresh via the existing `channels-refresh-button` instead of `page.reload()` because reload re-runs the init script and wipes mutated mock state — lesson learned and comment left in the spec for the next author.
+
+### Test totals
+
+- Rust: unchanged (168 pass).
+- Frontend: TSC clean, Vitest 46/46 (unchanged from T6.3).
+- Playwright: **55/55 pass** — was 7/55 before the mock hotfix. +1 new spec (`telegram-smoke.spec.ts`).
+
+### Deferred
+
+- **T6.7c**: five more smoke specs (Discord, Slack, Feishu, WeiXin, WeCom). The `VERIFIED_CHANNELS` set adds one entry per shipped spec. WhatsApp intentionally excluded for now — the schema is in flux (see T6.7a changelog entry).
+
+### Next
+
+- T6.5 per-agent sandbox (highest-risk Phase 6 item).
+- T6.7c Discord/Slack/CN smoke specs.
+
+---
+
 ## 2026-04-23 — T6.3 · Subagent tree in Trajectory (delegate_task grouping)
 
 The Trajectory page now visualises Hermes's native `delegate_task` calls as a collapsible tree: the parent shows the delegation kickoff, and every subsequent tool call in the same assistant turn nests under it until the next `delegate_task`. Pure UI change — no new protocol, no backend schema change, no DB migration.
