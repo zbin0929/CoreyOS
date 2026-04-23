@@ -460,14 +460,15 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
-    // v6 (2026-04-23): Scheduler — cron-driven prompt runs.
+    // v6 (2026-04-23 am): Scheduler — cron-driven prompt runs.
     //
-    // Each row is one user-defined schedule. `cron_expression` uses the
-    // 6-field form (second minute hour dom month dow) as the `cron`
-    // crate expects. `prompt` is the exact text that will be fed to the
-    // active adapter when the schedule fires. `last_run_*` fields are
-    // updated in-place after every fire; `enabled` lets users pause a
-    // job without losing its definition.
+    // Intentionally left empty at v6 post-T6.8 (2026-04-23 pm): the
+    // Scheduler MVP created a `scheduler_jobs` table here. T6.8 drops
+    // that table at v7 and migrates any pre-T6.8 rows into Hermes's
+    // native `~/.hermes/cron/jobs.json` during the v7 bump. We keep
+    // the CREATE TABLE for the duration of v6 so users who boot an
+    // old Corey build against a v5 DB still get a working schema
+    // before T6.8's v7 migration runs.
     if version < 6 {
         conn.execute_batch(
             r#"
@@ -489,6 +490,120 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             PRAGMA user_version = 6;
             "#,
         )?;
+    }
+
+    // v7 (2026-04-23 pm · T6.8): Scheduler refactor — wrap Hermes's
+    // native cron. The old `scheduler_jobs` table duplicated what
+    // Hermes stores in `~/.hermes/cron/jobs.json`. See
+    // `docs/10-product-audit-2026-04-23.md` and `hermes_cron.rs`.
+    //
+    // Migration: if the table has rows AND Hermes's jobs.json does NOT
+    // already exist, export the rows to it so users don't lose their
+    // schedules. Then drop the table.
+    //
+    // We deliberately skip the export if jobs.json exists — Hermes
+    // may have been managing its own jobs alongside Corey's, and
+    // overwriting would delete them.
+    if version < 7 {
+        migrate_v7_scheduler_to_hermes_json(conn)?;
+        conn.execute_batch(
+            r#"
+            DROP INDEX IF EXISTS idx_scheduler_jobs_enabled;
+            DROP TABLE IF EXISTS scheduler_jobs;
+            PRAGMA user_version = 7;
+            "#,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// One-shot: read legacy `scheduler_jobs` rows and, if Hermes's
+/// `jobs.json` doesn't exist yet, seed it so the user's schedules
+/// survive T6.8. Errors during export are LOGGED and swallowed — a
+/// missing `~/.hermes/` dir (user hasn't run Hermes yet) is common and
+/// shouldn't block Corey's startup.
+fn migrate_v7_scheduler_to_hermes_json(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    // Is there anything to migrate?
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='scheduler_jobs'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if !table_exists {
+        return Ok(());
+    }
+
+    // Only export if Hermes's file doesn't exist — never clobber
+    // upstream state.
+    let jobs_path = match crate::hermes_cron::jobs_path() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error = %e, "T6.8: could not resolve hermes jobs.json path; skipping migration");
+            return Ok(());
+        }
+    };
+    if jobs_path.exists() {
+        tracing::info!(
+            "T6.8: ~/.hermes/cron/jobs.json already exists; leaving legacy scheduler_jobs untouched"
+        );
+        return Ok(());
+    }
+
+    // Read legacy rows.
+    let mut stmt = conn.prepare(
+        "SELECT id, name, cron_expression, prompt, enabled, created_at, updated_at
+         FROM scheduler_jobs",
+    )?;
+    let mut rows: Vec<crate::hermes_cron::HermesJob> = Vec::new();
+    let iter = stmt.query_map([], |r| {
+        let id: String = r.get(0)?;
+        let name: String = r.get(1)?;
+        let cron_expression: String = r.get(2)?;
+        let prompt: String = r.get(3)?;
+        let enabled: bool = r.get(4)?;
+        let created_at: i64 = r.get(5)?;
+        let updated_at: i64 = r.get(6)?;
+        Ok(crate::hermes_cron::HermesJob {
+            id,
+            name: Some(name),
+            schedule: cron_expression,
+            prompt,
+            paused: !enabled,
+            corey_created_at: Some(created_at),
+            corey_updated_at: Some(updated_at),
+            ..crate::hermes_cron::HermesJob::default()
+        })
+    })?;
+    for row in iter {
+        match row {
+            Ok(j) => rows.push(j),
+            Err(e) => {
+                tracing::warn!(error = %e, "T6.8: skipping unreadable legacy scheduler row");
+            }
+        }
+    }
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    match crate::hermes_cron::save_jobs(&rows) {
+        Ok(()) => {
+            tracing::info!(
+                count = rows.len(),
+                path = %jobs_path.display(),
+                "T6.8: migrated legacy scheduler rows to Hermes jobs.json"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                path = %jobs_path.display(),
+                "T6.8: failed to write Hermes jobs.json; legacy rows remain in SQLite until next boot"
+            );
+        }
     }
 
     Ok(())
@@ -926,104 +1041,10 @@ impl Db {
         Ok(())
     }
 
-    // ───────────────────────── Scheduler jobs ─────────────────────────
-
-    pub fn list_scheduler_jobs(&self) -> rusqlite::Result<Vec<SchedulerJobRow>> {
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare(
-            "SELECT id, name, cron_expression, prompt, adapter_id, enabled,
-                    last_run_at, last_run_ok, last_run_error, created_at, updated_at
-             FROM scheduler_jobs
-             ORDER BY updated_at DESC",
-        )?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok(SchedulerJobRow {
-                    id: r.get(0)?,
-                    name: r.get(1)?,
-                    cron_expression: r.get(2)?,
-                    prompt: r.get(3)?,
-                    adapter_id: r.get(4)?,
-                    enabled: r.get::<_, i64>(5)? != 0,
-                    last_run_at: r.get(6)?,
-                    last_run_ok: r.get::<_, Option<i64>>(7)?.map(|v| v != 0),
-                    last_run_error: r.get(8)?,
-                    created_at: r.get(9)?,
-                    updated_at: r.get(10)?,
-                })
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(rows)
-    }
-
-    pub fn upsert_scheduler_job(&self, j: &SchedulerJobRow) -> rusqlite::Result<()> {
-        let conn = self.conn.lock();
-        conn.execute(
-            "INSERT INTO scheduler_jobs
-               (id, name, cron_expression, prompt, adapter_id, enabled,
-                last_run_at, last_run_ok, last_run_error, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-             ON CONFLICT(id) DO UPDATE SET
-                 name = excluded.name,
-                 cron_expression = excluded.cron_expression,
-                 prompt = excluded.prompt,
-                 adapter_id = excluded.adapter_id,
-                 enabled = excluded.enabled,
-                 updated_at = excluded.updated_at",
-            params![
-                j.id,
-                j.name,
-                j.cron_expression,
-                j.prompt,
-                j.adapter_id,
-                j.enabled as i64,
-                j.last_run_at,
-                j.last_run_ok.map(|b| b as i64),
-                j.last_run_error,
-                j.created_at,
-                j.updated_at,
-            ],
-        )?;
-        Ok(())
-    }
-
-    pub fn delete_scheduler_job(&self, id: &str) -> rusqlite::Result<()> {
-        let conn = self.conn.lock();
-        conn.execute("DELETE FROM scheduler_jobs WHERE id = ?1", params![id])?;
-        Ok(())
-    }
-
-    pub fn update_scheduler_job_last_run(
-        &self,
-        id: &str,
-        at: i64,
-        ok: bool,
-        error: Option<&str>,
-    ) -> rusqlite::Result<()> {
-        let conn = self.conn.lock();
-        conn.execute(
-            "UPDATE scheduler_jobs
-             SET last_run_at = ?2, last_run_ok = ?3, last_run_error = ?4, updated_at = ?2
-             WHERE id = ?1",
-            params![id, at, ok as i64, error],
-        )?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SchedulerJobRow {
-    pub id: String,
-    pub name: String,
-    pub cron_expression: String,
-    pub prompt: String,
-    pub adapter_id: String,
-    pub enabled: bool,
-    pub last_run_at: Option<i64>,
-    pub last_run_ok: Option<bool>,
-    pub last_run_error: Option<String>,
-    pub created_at: i64,
-    pub updated_at: i64,
+    // Scheduler jobs (2026-04-23 am) — DELETED 2026-04-23 pm (T6.8).
+    // Cron is now owned by Hermes; see `src-tauri/src/hermes_cron.rs`
+    // for the JSON-backed replacement, and the v7 migration above for
+    // the one-time export of legacy rows into `~/.hermes/cron/jobs.json`.
 }
 
 #[cfg(test)]

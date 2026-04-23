@@ -58,7 +58,7 @@ pub struct HermesConfigView {
 /// Reads `$HOME` first (covers macOS, Linux, and WSL), then falls back
 /// to `%USERPROFILE%` so Windows CI and native Windows hosts — where
 /// `$HOME` isn't populated by default — also resolve.
-fn hermes_dir() -> io::Result<PathBuf> {
+pub(crate) fn hermes_dir() -> io::Result<PathBuf> {
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .ok_or_else(|| {

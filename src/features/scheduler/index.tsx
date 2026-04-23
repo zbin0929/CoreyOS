@@ -20,9 +20,11 @@ import {
   ipcErrorMessage,
   schedulerDeleteJob,
   schedulerListJobs,
+  schedulerListRuns,
   schedulerUpsertJob,
   schedulerValidateCron,
   type SchedulerJob,
+  type SchedulerRunInfo,
   type SchedulerValidateResult,
 } from '@/lib/ipc';
 
@@ -44,13 +46,16 @@ import {
 type Mode =
   | { kind: 'list' }
   | { kind: 'new' }
-  | { kind: 'edit'; job: SchedulerJob };
+  | { kind: 'edit'; job: SchedulerJob }
+  | { kind: 'runs'; job: SchedulerJob };
 
 export function SchedulerRoute() {
   const { t } = useTranslation();
   const [rows, setRows] = useState<SchedulerJob[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: 'list' });
+  const [runs, setRuns] = useState<SchedulerRunInfo[] | null>(null);
+  const [runsError, setRunsError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -105,6 +110,15 @@ export function SchedulerRoute() {
             />
           )}
 
+          {mode.kind === 'runs' && (
+            <RunsDrawer
+              job={mode.job}
+              runs={runs}
+              error={runsError}
+              onClose={() => setMode({ kind: 'list' })}
+            />
+          )}
+
           {mode.kind === 'list' &&
             (rows === null ? (
               <div className="flex items-center gap-2 text-fg-muted">
@@ -124,6 +138,17 @@ export function SchedulerRoute() {
                     key={j.id}
                     job={j}
                     onEdit={() => setMode({ kind: 'edit', job: j })}
+                    onShowRuns={async () => {
+                      setMode({ kind: 'runs', job: j });
+                      setRuns(null);
+                      setRunsError(null);
+                      try {
+                        const r = await schedulerListRuns(j.id);
+                        setRuns(r);
+                      } catch (e) {
+                        setRunsError(ipcErrorMessage(e));
+                      }
+                    }}
                     onToggle={async () => {
                       try {
                         await schedulerUpsertJob({
@@ -162,11 +187,13 @@ export function SchedulerRoute() {
 function JobCard({
   job,
   onEdit,
+  onShowRuns,
   onToggle,
   onDelete,
 }: {
   job: SchedulerJob;
   onEdit: () => void;
+  onShowRuns: () => void;
   onToggle: () => void;
   onDelete: () => void;
 }) {
@@ -208,6 +235,15 @@ function JobCard({
           <div className="mt-1 line-clamp-2 text-xs text-fg-subtle">{job.prompt}</div>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onShowRuns}
+            title={t('scheduler_page.show_runs')}
+            data-testid={`scheduler-runs-${job.id}`}
+          >
+            <Icon icon={Clock} size="xs" />
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -370,11 +406,29 @@ function JobEditor({
             )}
             data-testid="scheduler-cron-validation"
           >
-            {validation.ok
-              ? nextFireLabel
-                ? `${t('scheduler_page.next_fire')}: ${nextFireLabel}`
-                : t('scheduler_page.cron_valid')
-              : validation.error}
+            {validation.ok ? (
+              nextFireLabel ? (
+                <>
+                  {t('scheduler_page.next_fire')}: {nextFireLabel}
+                  {!validation.is_cron && (
+                    <span className="ml-2 text-fg-subtle">
+                      ({t('scheduler_page.hermes_extended')})
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {t('scheduler_page.cron_valid')}
+                  {!validation.is_cron && (
+                    <span className="ml-2 text-fg-subtle">
+                      ({t('scheduler_page.hermes_extended')})
+                    </span>
+                  )}
+                </>
+              )
+            ) : (
+              validation.error
+            )}
           </div>
         )}
       </div>
@@ -428,4 +482,91 @@ function JobEditor({
       </div>
     </form>
   );
+}
+
+// ───────────────────────── Runs Drawer ─────────────────────────
+
+function RunsDrawer({
+  job,
+  runs,
+  error,
+  onClose,
+}: {
+  job: SchedulerJob;
+  runs: SchedulerRunInfo[] | null;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className="mb-4 flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4"
+      data-testid="scheduler-runs-drawer"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Icon icon={Clock} size="md" className="text-fg-muted" />
+          <span className="text-sm font-medium text-fg">
+            {t('scheduler_page.runs_title', { name: job.name })}
+          </span>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onClose}
+          data-testid="scheduler-runs-close"
+        >
+          <Icon icon={XCircle} size="xs" />
+        </Button>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {runs === null ? (
+        <div className="flex items-center gap-2 text-fg-muted">
+          <Icon icon={Loader2} size="md" className="animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : runs.length === 0 ? (
+        <div className="text-xs text-fg-subtle">
+          {t('scheduler_page.runs_empty')}
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {runs.map((r) => (
+            <li
+              key={r.name}
+              className="rounded-md border border-border/50 bg-bg-elev-2 p-2 text-xs"
+              data-testid={`scheduler-run-${r.name}`}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-mono text-fg-muted">{r.name}</span>
+                <span className="text-fg-subtle">
+                  {new Date(r.modified_at * 1000).toLocaleString()}
+                </span>
+              </div>
+              <div className="mt-1 text-fg-subtle">
+                {t('scheduler_page.run_size', { size: formatBytes(r.size_bytes) })}
+              </div>
+              <div className="mt-1 max-h-24 overflow-y-auto rounded border border-border/30 bg-bg-elev-3 p-1.5 text-[11px] text-fg-subtle">
+                <pre className="whitespace-pre-wrap break-words">{r.preview}</pre>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

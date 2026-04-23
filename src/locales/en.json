@@ -591,15 +591,20 @@
     "field_prompt": "Prompt",
     "field_prompt_placeholder": "Summarize yesterday's standup notes and list today's blockers.",
     "field_enabled": "Enabled",
-    "cron_hint": "Example: '0 0 9 * * *' = every day at 09:00. Use '0 */5 * * * *' for every 5 minutes.",
-    "cron_valid": "Valid cron expression.",
-    "invalid_cron": "Invalid cron expression.",
+    "cron_hint": "Example: '0 0 9 * * *' = every day at 09:00. Use '0 */5 * * * *' for every 5 minutes. Hermes also accepts 'every 2h', '30m', or ISO timestamps.",
+    "cron_valid": "Valid schedule.",
+    "invalid_cron": "Invalid schedule.",
     "next_fire": "Next fire",
+    "hermes_extended": "Hermes evaluates this at runtime",
     "last_run": "Last run",
     "never_run": "Never run",
     "disabled": "Paused",
     "pause": "Pause",
-    "resume": "Resume"
+    "resume": "Resume",
+    "show_runs": "Show runs",
+    "runs_title": "Runs for {{name}}",
+    "runs_empty": "No runs yet. Hermes will create them when the job fires.",
+    "run_size": "{{size}}"
   },
   "sandbox": {
     "consent": {

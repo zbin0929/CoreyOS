@@ -19,6 +19,7 @@ mod db;
 mod error;
 mod fs_atomic;
 mod hermes_config;
+mod hermes_cron;
 mod hermes_logs;
 mod hermes_profiles;
 mod hermes_profiles_archive;
@@ -26,7 +27,6 @@ mod ipc;
 mod menu;
 mod pty;
 mod sandbox;
-mod scheduler;
 mod skills;
 mod state;
 
@@ -141,6 +141,7 @@ pub fn run() {
             ipc::scheduler::scheduler_upsert_job,
             ipc::scheduler::scheduler_delete_job,
             ipc::scheduler::scheduler_validate_cron,
+            ipc::scheduler::scheduler_list_runs,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");

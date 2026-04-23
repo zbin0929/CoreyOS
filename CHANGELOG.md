@@ -6,6 +6,77 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.8 · Scheduler refactor (wrap Hermes native cron, delete SQLite worker)
+
+Replaced Corey's own Rust cron worker + SQLite table with a thin wrapper over Hermes's native `~/.hermes/cron/jobs.json`. The old implementation duplicated functionality Hermes already provides; T6.8 aligns with the post-audit principle of SURFACE, not duplicate.
+
+### Context
+
+Per `docs/10-product-audit-2026-04-23.md`, the pre-T6.8 scheduler was a DROP candidate because Hermes Agent natively supports cron via the `cronjob` tool. Users can ask "Every morning at 9am, check HN and send me a summary on Telegram" and Hermes handles scheduling internally. Corey's role is now purely to GUI-edit the JSON file and surface run outputs.
+
+### Shipped
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/hermes_cron.rs`** — new module:
+- `load_jobs()` / `save_jobs()` — round-trip `~/.hermes/cron/jobs.json`. Accepts both top-level array and `{ "jobs": [...] }` formats for forward-compat.
+- `upsert_job()` / `delete_job()` — atomic writes on top of the above.
+- `list_runs()` — scan `~/.hermes/cron/output/{job_id}/*.md` for the Runs drawer (new T6.8 UI feature).
+- `inspect_schedule()` — best-effort cron validation; returns `(is_cron, next_fire)`. Non-cron forms (`"every 2h"`, `"30m"`, ISO) pass through as `is_cron: false` so Hermes can evaluate them at runtime.
+- Preserves unknown JSON fields via `flatten` catch-all so we don't lose data Hermes adds between versions.
+- Tests: `parse_accepts_top_level_array`, `parse_accepts_object_with_jobs_key`, `roundtrip_preserves_unknown_fields`, `inspect_schedule_classifies_cron_vs_other`, `truncate_preview_stops_at_char_boundary`, `display_name_falls_back_to_prompt_head`.
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/ipc/scheduler.rs`** — rewritten:
+- All commands now delegate to `hermes_cron` instead of the DB.
+- `scheduler_list_jobs` / `scheduler_upsert_job` / `scheduler_delete_job` — wire shape preserved for frontend compatibility. `SchedulerJobView` maps `HermesJob` fields to the old `SchedulerJob` shape (e.g. `schedule` → `cron_expression`, `paused` → `enabled`).
+- `scheduler_validate_cron` — now returns `is_cron` flag so the UI can show "Hermes evaluates this at runtime" for non-cron forms.
+- `scheduler_list_runs` — NEW command, surfaces `RunInfo` (filename, mtime, size, preview) for the Runs drawer.
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/lib.rs`** — replace `mod scheduler` with `mod hermes_cron`; register `scheduler_list_runs` IPC command.
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/state.rs`** — remove `scheduler: Option<Arc<Scheduler>>` field and its initialization in `AppState::new`.
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/db.rs`** — migration v7:
+- `migrate_v7_scheduler_to_hermes_json()` — one-shot export: if `scheduler_jobs` table has rows AND `~/.hermes/cron/jobs.json` does NOT exist, migrate rows to JSON so users don't lose schedules. Skips export if jobs.json already exists (never clobber upstream state).
+- Drop `scheduler_jobs` table and index.
+- Delete `SchedulerJobRow` struct and all scheduler CRUD methods (`list_scheduler_jobs`, `upsert_scheduler_job`, `delete_scheduler_job`, `update_scheduler_job_last_run`).
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/scheduler.rs`** — DELETED (304 lines). The background worker that parsed cron, slept, and executed `adapter.chat_once` is gone — Hermes now owns that loop.
+
+**`@/Users/zbin/AI项目/hermes_ui/src/lib/ipc.ts`** — add `SchedulerRunInfo` interface and `schedulerListRuns` binding; update `SchedulerValidateResult` with `is_cron` field.
+
+**`@/Users/zbin/AI项目/hermes_ui/src/features/scheduler/index.tsx`** — Runs drawer + `is_cron` UI:
+- Add `runs` mode to `Mode` union type.
+- Add `onShowRuns` callback to `JobCard` that calls `schedulerListRuns` and opens the drawer.
+- Add clock button to card actions to trigger the drawer.
+- Add `RunsDrawer` component: lists run files with filename, mtime, size, and markdown preview (first ~400 chars). Shows loading/error/empty states.
+- Update cron validation UI: when `is_cron` is false, append "(Hermes evaluates this at runtime)" to the success message so users know non-cron forms are valid but not previewable locally.
+
+**`@/Users/zbin/AI项目/hermes_ui/src/locales/en.json` + `zh.json`** — add keys:
+- `scheduler_page.cron_hint` — updated to mention Hermes-extended forms (`"every 2h"`, `"30m"`, ISO).
+- `scheduler_page.cron_valid` / `invalid_cron` — generalized to "schedule" (not just cron).
+- `scheduler_page.hermes_extended` — "Hermes evaluates this at runtime" / "Hermes 在运行时计算".
+- `scheduler_page.show_runs` / `runs_title` / `runs_empty` / `run_size` — Runs drawer copy.
+
+### Fixed
+
+- Users with pre-T6.8 `scheduler_jobs` rows will have them migrated to `~/.hermes/cron/jobs.json` on first boot (v7 migration). No data loss.
+- Non-cron schedule forms (`"every 2h"`, `"30m"`, ISO timestamps) are now accepted and passed through to Hermes for runtime evaluation; previously they would have been rejected by the strict cron parser.
+
+### Test totals
+
+- Rust: **150 pass, 0 fail** (+4 new tests in `hermes_cron.rs`; scheduler worker tests removed because the module is gone).
+- Frontend: TSC clean, ESLint clean (only pre-existing fast-refresh warnings), Vitest 27/27 pass.
+
+### Deferred
+
+- Parsing run file frontmatter to extract success/failure status (Hermes writes YAML headers; we could surface `last_run_ok` more accurately than the current `None`). This is a polish pass, not T6.8.
+
+### Next
+
+- T6.1: feedback回路 👍/👎（DB v7 + 3 IPC + 按钮 + Analytics）
+- T6.2: multi-instance Hermes
+
+---
+
 ## 2026-04-23 — T6.7a · Channel schema hotfix (3 silently-broken channels fixed, QR stack deleted)
 
 First code of the post-audit plan. Fixes three live user-facing bugs introduced by Phase 3 against an inferred Hermes schema, and deletes the fictional WeChat QR flow.

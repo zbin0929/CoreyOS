@@ -591,15 +591,20 @@
     "field_prompt": "提示词",
     "field_prompt_placeholder": "总结昨天的站会记录，列出今天的阻塞点。",
     "field_enabled": "启用",
-    "cron_hint": "示例：'0 0 9 * * *' = 每天 09:00。'0 */5 * * * *' = 每 5 分钟一次。",
-    "cron_valid": "表达式有效。",
-    "invalid_cron": "无效的 cron 表达式。",
+    "cron_hint": "示例：'0 0 9 * * *' = 每天 09:00。'0 */5 * * * *' = 每 5 分钟一次。Hermes 也支持 'every 2h'、'30m' 或 ISO 时间戳。",
+    "cron_valid": "计划有效。",
+    "invalid_cron": "无效的计划。",
     "next_fire": "下次触发",
+    "hermes_extended": "Hermes 在运行时计算",
     "last_run": "上次运行",
     "never_run": "尚未运行",
     "disabled": "已暂停",
     "pause": "暂停",
-    "resume": "恢复"
+    "resume": "恢复",
+    "show_runs": "查看运行记录",
+    "runs_title": "{{name}} 的运行记录",
+    "runs_empty": "暂无运行记录。Hermes 会在任务触发时创建。",
+    "run_size": "{{size}}"
   },
   "sandbox": {
     "consent": {

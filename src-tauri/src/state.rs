@@ -11,7 +11,6 @@ use crate::config::GatewayConfig;
 use crate::db::Db;
 use crate::pty::Pty;
 use crate::sandbox::PathAuthority;
-use crate::scheduler::Scheduler;
 
 /// Shared application state managed by Tauri.
 pub struct AppState {
@@ -51,11 +50,9 @@ pub struct AppState {
     /// Each open terminal tab corresponds to one entry; kill/close
     /// drops it from the map so the OS resources free immediately.
     pub ptys: Arc<Mutex<HashMap<String, Arc<Pty>>>>,
-    /// Scheduler (2026-04-23) — cron-driven prompt runs. Spawned at
-    /// startup iff the DB is available (no DB → no persistence → no
-    /// scheduler). IPC commands call `scheduler.reload()` after any
-    /// CRUD to make the worker re-read jobs.
-    pub scheduler: Option<Arc<Scheduler>>,
+    // 2026-04-23 pm (T6.8): removed the `scheduler: Option<Arc<Scheduler>>`
+    // field. Hermes' gateway owns cron scheduling now; Corey only
+    // reads/writes `~/.hermes/cron/jobs.json`. See `hermes_cron.rs`.
 }
 
 impl AppState {
@@ -71,9 +68,6 @@ impl AppState {
         channel_status: Arc<ChannelStatusCache>,
     ) -> Self {
         let adapters = Arc::new(registry);
-        let scheduler = db
-            .clone()
-            .map(|db| Arc::new(Scheduler::spawn(db, adapters.clone())));
         Self {
             adapters,
             authority: Arc::new(PathAuthority::new()),
@@ -85,7 +79,6 @@ impl AppState {
             db_path,
             channel_status,
             ptys: Arc::new(Mutex::new(HashMap::new())),
-            scheduler,
         }
     }
 }

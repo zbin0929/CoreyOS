@@ -106,6 +106,13 @@ Reclaimed: ~4 days.
 
 **Scope expanded on 2026-04-23 pm** after reading the Hermes Agent upstream docs (`docs/hermes-reality-check-2026-04-23.md`). T6.7 now covers both fixing silently-broken channels and proving at least one end-to-end.
 
+### T6.8 — Scheduler refactor (wrap Hermes native cron) · ~2 days (NEW, replaces T6.6)
+
+**Progress (2026-04-23 pm)**:
+- ✅ **T6.8 shipped** — deleted Rust worker (`src-tauri/src/scheduler.rs`) + SQLite `scheduler_jobs` table + related IPCs. Reimplemented as thin wrapper over `~/.hermes/cron/jobs.json` via new `hermes_cron.rs` module. Added Runs drawer to Scheduler page that surfaces `~/.hermes/cron/output/{job_id}/*.md` with previews. DB migration v7 exports legacy rows to JSON if `jobs.json` doesn't exist. 150 Rust tests pass, +4 new tests in `hermes_cron.rs`. Frontend: TSC clean, lint clean, Vitest 27/27.
+
+
+
 #### T6.7a — Channel schema hotfix · ~1.5 days
 
 Three of our 8 channel configurations never reach Hermes because the env names don't match upstream:

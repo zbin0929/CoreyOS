@@ -1096,6 +1096,23 @@ export interface SchedulerValidateResult {
   ok: boolean;
   error?: string;
   next_fire_at?: number;
+  /** T6.8: `true` when the expression parsed as classic cron;
+   *  `false` means Hermes-extended syntax (`"every 2h"`, `"30m"`,
+   *  ISO timestamp) and `next_fire_at` will be absent — Hermes
+   *  evaluates those at runtime. */
+  is_cron?: boolean;
+}
+
+/** T6.8: one run output surfaced by `scheduler_list_runs`. Mirrors the
+ *  Rust `RunInfo` in `src-tauri/src/hermes_cron.rs`. Runs live under
+ *  `~/.hermes/cron/output/{job_id}/` — Hermes writes them; we only
+ *  read. `preview` is the first ~400 chars of the markdown body. */
+export interface SchedulerRunInfo {
+  job_id: string;
+  name: string;
+  modified_at: number;
+  size_bytes: number;
+  preview: string;
 }
 
 export function schedulerListJobs(): Promise<SchedulerJob[]> {
@@ -1112,6 +1129,14 @@ export function schedulerDeleteJob(id: string): Promise<void> {
 
 export function schedulerValidateCron(expression: string): Promise<SchedulerValidateResult> {
   return invoke<SchedulerValidateResult>('scheduler_validate_cron', { expression });
+}
+
+/** T6.8: fetch the most-recent run outputs for a job. Returns up to
+ *  `MAX_RUNS_PER_JOB` (Rust-side constant, currently 20) entries
+ *  newest-first. Cheap read; the UI calls it lazily when the Runs
+ *  drawer opens on a given card. */
+export function schedulerListRuns(jobId: string): Promise<SchedulerRunInfo[]> {
+  return invoke<SchedulerRunInfo[]>('scheduler_list_runs', { jobId });
 }
 
 // ───────────────────────── Sandbox ─────────────────────────
