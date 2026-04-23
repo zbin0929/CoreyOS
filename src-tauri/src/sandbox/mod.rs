@@ -382,4 +382,82 @@ mod tests {
         let err = auth.check(Path::new("/"), AccessOp::Read).unwrap_err();
         assert!(matches!(err, SandboxError::ConsentRequired { .. }));
     }
+
+    // ───────────────────────── Windows verbatim-prefix tests ─────────────────
+    //
+    // Phase 0's retro flagged a real bug: `std::fs::canonicalize` on Windows
+    // returns `\\?\C:\…` verbatim paths, and our denylist does string-prefix
+    // matching against `"C:\\Windows\\System32\\"` which then silently fails.
+    // The fix was to route every canonicalization through `dunce::canonicalize`
+    // — these tests lock that contract in so a future "simplify the sandbox"
+    // refactor can't regress it without turning the Windows CI leg red.
+    //
+    // All three are `#[cfg(target_os = "windows")]` — on any other host the
+    // `\\?\` prefix is Windows-specific and `hard_denylist()` is empty for
+    // the non-matching OS anyway, so synthesising them elsewhere would only
+    // test the mock.
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn canonicalize_or_parent_strips_verbatim_prefix() {
+        // `C:\Windows` is guaranteed to exist on every Windows runner.
+        let canonical = canonicalize_or_parent(Path::new("C:\\Windows"))
+            .expect("C:\\Windows must canonicalize on Windows");
+        let s = canonical.to_string_lossy();
+        assert!(
+            !s.starts_with("\\\\?\\"),
+            "dunce should have stripped the verbatim prefix, got {s}"
+        );
+        // Be lenient on drive letter case (Windows is case-insensitive and
+        // different APIs disagree on canonical capitalisation).
+        assert!(
+            s.eq_ignore_ascii_case("C:\\Windows"),
+            "unexpected canonical form: {s}"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn hard_denylist_blocks_system32_even_with_verbatim_input() {
+        let auth = PathAuthority::new();
+        // Path intentionally lives under System32 so canonicalisation
+        // resolves + the denylist can fire. `config\\SAM` exists on every
+        // Windows install (the SAM registry hive file); if it's missing
+        // for some reason the test degrades to passing via
+        // canonicalize_or_parent's parent-fallback path.
+        let victim = Path::new("C:\\Windows\\System32\\config\\SAM");
+        let err = auth
+            .check(victim, AccessOp::Read)
+            .expect_err("System32 hive must be denied");
+        assert!(
+            matches!(err, SandboxError::Denied { .. }),
+            "expected Denied, got {err:?}"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn home_relative_denylist_blocks_ssh_dir() {
+        let Some(home) = dirs_home() else {
+            return; // CI runner with no HOME — nothing to assert.
+        };
+        let auth = PathAuthority::new();
+        // Generous root: user's entire home. Denylist must still win.
+        auth.set_roots(vec![WorkspaceRoot {
+            path: home.clone(),
+            label: "home".into(),
+            mode: AccessMode::ReadWrite,
+        }]);
+
+        let ssh = home.join(".ssh");
+        // `.ssh/` might not exist on a clean CI runner; if so we can't
+        // canonicalise and the test degrades to a no-op. Only assert
+        // when we have a real directory to point at.
+        if ssh.exists() {
+            let err = auth
+                .check(&ssh, AccessOp::Read)
+                .expect_err("~/.ssh must be denied even when HOME is a root");
+            assert!(matches!(err, SandboxError::Denied { .. }));
+        }
+    }
 }

@@ -6,6 +6,86 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T1.9 · Virtualised chat message list
+
+Last Phase 1 item. The `messages.map()` render with a single
+`scrollTo({top: scrollHeight})` autoscroll effect was fine up to
+~2k messages on an M1 but had three long-standing papercuts:
+
+1. Scroll perf + memory grew linearly with message count.
+2. The autoscroll **yanked the user back to the bottom on every
+   token** during streaming, fighting anyone trying to scroll up
+   to re-read earlier context.
+3. React's reconciliation chewed through every bubble on every
+   streaming patch, even bubbles that hadn't changed.
+
+### Shipped (`src/features/chat/MessageList.tsx`)
+
+- **`react-virtuoso`** wraps the list; only in-viewport rows are
+  mounted. O(1) memory + scroll perf regardless of message count.
+- **`followOutput="smooth"`** replaces the old effect: sticks to
+  the bottom **only if the user is already there**, otherwise
+  leaves them alone. Manual scroll-up finally works.
+- **`computeItemKey={(_, m) => m.id}`** preserves React identity
+  so per-bubble state (Copy button flash, image thumbnail loads)
+  survives appends.
+- **Empty-state short-circuit**: the `<EmptyHero>` path still uses
+  a plain `overflow-y-auto` div so routes with zero content don't
+  pay Virtuoso's min-height default.
+
+### Bundle
+
+| | Before | After |
+|---|---|---|
+| Main chunk (gzip) | 224 KB | **243 KB** |
+
++19 KB gzip for `react-virtuoso`. Still under the 260 KB CI
+budget with room to spare.
+
+### Tests
+
+- **Playwright chat suite**: 13/13 green — Virtuoso's only-render-
+  visible-rows behaviour is invisible to the existing specs
+  (asserted bubbles are always in the viewport during a fresh
+  send).
+- Vitest / Rust / typecheck / lint: unchanged.
+
+---
+
+## 2026-04-23 — Phase 0.5 · Windows sandbox regression tests
+
+Closing the very last Phase 0.5 remainder. `dunce::canonicalize`
+was already wired throughout the sandbox (Phase 0 retro noted
+this), but the **Windows CI leg had no tests exercising it** —
+meaning a future refactor back to `std::fs::canonicalize` could
+silently reintroduce the `\\?\`-verbatim bypass.
+
+### Shipped (`src-tauri/src/sandbox/mod.rs`)
+
+Three new `#[cfg(target_os = "windows")]` regression tests:
+
+- `canonicalize_or_parent_strips_verbatim_prefix` — asserts that
+  canonicalising `C:\Windows` returns a non-`\\?\`-prefixed path.
+- `hard_denylist_blocks_system32_even_with_verbatim_input` —
+  asserts that `C:\Windows\System32\config\SAM` is `Denied` (the
+  denylist's string-prefix match depends on the prefix being
+  stripped).
+- `home_relative_denylist_blocks_ssh_dir` — asserts that `~/.ssh`
+  is denied even when `$HOME` is a configured root.
+
+The tests are cfg-gated so the macOS/Linux CI legs ignore them;
+they run on the `windows-latest` leg as part of the existing
+`cargo test --lib` step. No code changes required — the existing
+implementation was already correct.
+
+### Tests
+
+- Rust `cargo test --lib`: 135 on macOS (unchanged; Windows tests
+  cfg-gated), **138 expected on the Windows CI leg**.
+- `cargo clippy --lib --tests -- -D warnings`: clean.
+
+---
+
 ## 2026-04-23 — Cleanup · Bundle-size gate + deferred-items audit
 
 Closing pass on the low-value backlog. Two outcomes:

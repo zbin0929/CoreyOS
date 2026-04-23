@@ -51,11 +51,14 @@ over Phases 1–5 and a final cleanup pass on 2026-04-23:
 - ✅ **Bundle-size gate** — `scripts/check-bundle-size.mjs` fails
   CI if any single chunk breaches **260 KB gzip**. Main chunk sits
   at 224 KB after the highlight.js diet (2026-04-23).
-- ⚠️ **Windows sandbox normalisation** — `dunce::simplified` is
-  still not wired; the `#[cfg(windows)]` sandbox tests are still
-  missing. Low priority: the dev team runs macOS and the CI
-  ubuntu leg catches the common path bugs. Tracked as the only
-  Phase 0.5 remainder.
+- ✅ **Windows sandbox normalisation** — `dunce::canonicalize` was
+  wired from day one; audited 2026-04-23 and found already
+  correct (every canonicalisation path — roots, grants, and
+  `canonicalize_or_parent` for not-yet-existing paths — strips
+  `\\?\` verbatim prefixes before the denylist check). Three
+  `#[cfg(target_os = "windows")]` regression tests added so the
+  Windows CI leg will fail loudly if a refactor ever reverts to
+  `std::fs::canonicalize`.
 
 Other items from the original backlog that are now obsolete or
 covered:

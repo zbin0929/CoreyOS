@@ -37,7 +37,7 @@ import {
 import { useAgentsStore } from '@/stores/agents';
 import { useComposerStore } from '@/stores/composer';
 import { ActiveLLMBadge } from './ActiveLLMBadge';
-import { MessageBubble } from './MessageBubble';
+import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
 
 /**
@@ -120,7 +120,6 @@ function ChatPane({
     () => useComposerStore.getState().pendingDraft ?? '',
   );
   const [sending, setSending] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
   // Live handle for the current stream, so Stop can cancel it.
   const streamRef = useRef<ChatStreamHandle | null>(null);
   // Also track the pending id to null-out the spinner on stop.
@@ -176,12 +175,11 @@ function ChatPane({
     }
   }
 
-  // Auto-scroll on new messages / growing content.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  // T1.9 — autoscroll is now owned by `MessageList` (Virtuoso's
+  // `followOutput="smooth"`). It sticks to the bottom when the user
+  // is already there and leaves them alone once they scroll up to
+  // read back context — a genuine UX improvement over the old
+  // yanks-you-to-bottom-on-every-token behaviour.
 
   /**
    * Read a File through FileReader and base64-encode it so the Rust
@@ -512,15 +510,18 @@ function ChatPane({
     <div className="flex min-w-0 flex-1 flex-col">
       <PageHeader title="Chat" subtitle="Hermes · streaming · Sprint 2" />
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-6">
-          {messages.length === 0 ? (
+      {/* T1.9 — virtualised list when we have messages; the empty-
+       *  state hero gets its own layout so we don't pay Virtuoso's
+       *  min-height default for a route with zero content. */}
+      {messages.length === 0 ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-6">
             <EmptyHero onPick={(prompt) => void send(prompt)} />
-          ) : (
-            messages.map((m) => <MessageBubble key={m.id} msg={m} />)
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <MessageList messages={messages} />
+      )}
 
       <div className="border-t border-border bg-bg/80 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center px-6 pt-3">

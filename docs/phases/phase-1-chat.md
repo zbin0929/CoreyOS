@@ -19,7 +19,7 @@
 | T1.6 Per-session model override     | ✅ | Zustand-persisted; composer dropdown.                                 |
 | T1.7 Cancel mid-stream              | ✅ | Stop button swaps in during a stream; partial text preserved.         |
 | T1.8 Reconnect                      | ✅ | Initial-connect retry with exponential backoff (500/1000/2000 ms, 3 attempts) — covers the "gateway just restarted" window transparently. Mid-stream drops still degrade gracefully via the existing `received_any_delta` path (`finish_reason="interrupted"`). Landed 2026-04-23 with a unit test driving a flaky TCP listener; see `src-tauri/src/adapters/hermes/gateway.rs::connect_chat_stream` + `t18_chat_stream_retries_connect_on_transport_error`. |
-| T1.9 10k-message virtualisation     | ⚠️ | No virtualisation implemented; scroll perf is fine up to ~2k messages on M1. Re-open when a user hits the wall. |
+| T1.9 10k-message virtualisation     | ✅ | `react-virtuoso` wraps the message list in `src/features/chat/MessageList.tsx`. O(1) memory / scroll perf regardless of message count; `followOutput="smooth"` replaces the old `scrollTo({top: scrollHeight})` effect and **respects manual scroll-up** instead of yanking the user back down every token. +19 KB gzip to the main chunk; still under the 260 KB CI budget. Shipped 2026-04-23. |
 
 ### Deferred to later phases
 
@@ -29,9 +29,7 @@
   - Attachment thumbnails in chat bubbles (`attachment_preview` IPC
     returning a data URL).
   - Orphan-file GC for `~/.hermes/attachments/`.
-- **T1.9 virtualisation** — revisit only if real usage hits a perf
-  ceiling. Current `overflow-y-auto` with smooth scroll is fine for the
-  typical few-hundred-message sessions.
+- ~~**T1.9 virtualisation**~~ — shipped 2026-04-23 (see task row).
 
 ### Deltas vs original plan
 

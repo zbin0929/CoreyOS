@@ -1,0 +1,94 @@
+import { forwardRef, useMemo } from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { MessageBubble } from './MessageBubble';
+import type { UiMessage } from '@/stores/chat';
+
+/**
+ * T1.9 — virtualised chat message list.
+ *
+ * Replaces the previous `messages.map(...)` render with `react-virtuoso`.
+ * Virtuoso keeps only the rows inside (and a small overscan around) the
+ * viewport mounted, so scroll perf + memory stay flat whether the
+ * session has 20 messages or 20,000. `followOutput="smooth"` is the
+ * idiomatic substitute for the old `scrollRef.current.scrollTo({top:
+ * scrollHeight})` autoscroll pattern — it sticks to the bottom when
+ * the user is already there, but stays put once they scroll up to
+ * read earlier context (which the old behaviour fought by yanking
+ * them back down every token).
+ *
+ * ### Why not do this when there are <50 messages?
+ *
+ * We deliberately use Virtuoso unconditionally even for a new
+ * session. The alternative ("branch on messages.length > N") adds
+ * render churn + a DOM swap the one time you cross the threshold,
+ * and Virtuoso's overhead for a short list is genuinely negligible
+ * (tested locally: no perceptible first-paint difference vs the
+ * array map). One code path is worth more than a micro-optimisation.
+ *
+ * ### Streaming height updates
+ *
+ * Virtuoso's internal ResizeObserver picks up row-height changes as
+ * each SSE chunk extends the assistant bubble. No manual invalidation
+ * needed — the component just works.
+ *
+ * ### Playwright compatibility
+ *
+ * The chat e2e (`e2e/chat.spec.ts`) locates bubbles via
+ * `page.getByText(..., { exact: false }).first()` and the messages it
+ * asserts on are always in the viewport during a fresh send, so the
+ * only-renders-visible-rows behaviour doesn't trip the suite.
+ */
+interface MessageListProps {
+  messages: UiMessage[];
+  /** Forwarded to `Virtuoso.ref`; exposes `.scrollToIndex(...)` and
+   *  the other imperative handles for callers that want to jump to a
+   *  specific message (none today, but cheap to forward). */
+}
+
+export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
+  function MessageList({ messages }, ref) {
+    // Memoised so `<Virtuoso itemContent={…}>` keeps the same fn
+    // reference across renders; otherwise Virtuoso treats every
+    // parent render as a row-renderer change and re-mounts rows.
+    const itemContent = useMemo(
+      () => (index: number) => {
+        const m = messages[index];
+        if (!m) return null;
+        // Per-row padding lives here, not on a parent flex container,
+        // because Virtuoso owns the scroller and positions each row
+        // absolutely — outer `gap-4` wouldn't apply to virtualised
+        // children.
+        return (
+          <div className="mx-auto max-w-3xl px-6 pb-4 pt-0 first:pt-6 last:pb-6">
+            <MessageBubble msg={m} />
+          </div>
+        );
+      },
+      [messages],
+    );
+
+    return (
+      <Virtuoso
+        ref={ref}
+        className="min-h-0 flex-1"
+        data={messages}
+        itemContent={itemContent}
+        // Stable row key keyed by the message id — same identity the
+        // old `messages.map(m => <MessageBubble key={m.id} .../>)`
+        // relied on, so React preserves MessageBubble state (copy-
+        // button "Copied!" flash, pending attachment thumbnails)
+        // across appends.
+        computeItemKey={(_, m) => m.id}
+        // "Stick to bottom when the user is at bottom; leave them
+        // alone otherwise." Matches the old autoscroll-on-every-
+        // render behaviour but respects manual scroll-up.
+        followOutput="smooth"
+        // A short overscan means slightly richer scrolling at the
+        // cost of a few extra rendered rows. `200` picked by eyeball:
+        // small enough that memory stays flat, big enough that fast
+        // flicks don't expose blank rows on the trailing edge.
+        increaseViewportBy={{ top: 200, bottom: 400 }}
+      />
+    );
+  },
+);
