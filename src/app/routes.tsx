@@ -1,31 +1,68 @@
+import { lazy, Suspense, type ComponentType } from 'react';
 import {
   createRootRoute,
   createRoute,
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
-import { Clock } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
-import { CompareRoute } from '@/features/compare';
-import { ModelsRoute } from '@/features/models';
-import { SettingsRoute } from '@/features/settings';
-import { AnalyticsRoute } from '@/features/analytics';
-import { LogsRoute } from '@/features/logs';
-import { ProfilesRoute } from '@/features/profiles';
-import { ChannelsRoute } from '@/features/channels';
-import { RunbooksRoute } from '@/features/runbooks';
-import { BudgetsRoute } from '@/features/budgets';
-import { TrajectoryRoute } from '@/features/trajectory';
-import { TerminalRoute } from '@/features/terminal';
-import { SkillsRoute } from '@/features/skills';
 import { Placeholder } from '@/features/_lib/Placeholder';
+
+// T4.2b follow-up — code-split the leaf feature routes. `Home` and
+// `Chat` stay eager because they're the primary entry points (Home on
+// cold boot, Chat right after). Everything else loads only when the
+// user navigates to it, shaving ~1MB off the initial bundle and
+// preventing heavy deps (CodeMirror 6 in Skills, xterm.js in Terminal,
+// the analytics chart code) from blocking first paint.
+//
+// Each feature module exports a named component (e.g. `SkillsRoute`);
+// `lazyFeature` adapts that to the default-export shape React.lazy
+// expects so we don't have to touch every feature module.
+function lazyFeature<T extends string>(
+  loader: () => Promise<Record<T, ComponentType<unknown>>>,
+  exportName: T,
+) {
+  return lazy(async () => {
+    const mod = await loader();
+    return { default: mod[exportName] };
+  });
+}
+
+const CompareRoute = lazyFeature(() => import('@/features/compare'), 'CompareRoute');
+const ModelsRoute = lazyFeature(() => import('@/features/models'), 'ModelsRoute');
+const SettingsRoute = lazyFeature(() => import('@/features/settings'), 'SettingsRoute');
+const AnalyticsRoute = lazyFeature(() => import('@/features/analytics'), 'AnalyticsRoute');
+const LogsRoute = lazyFeature(() => import('@/features/logs'), 'LogsRoute');
+const ProfilesRoute = lazyFeature(() => import('@/features/profiles'), 'ProfilesRoute');
+const ChannelsRoute = lazyFeature(() => import('@/features/channels'), 'ChannelsRoute');
+const RunbooksRoute = lazyFeature(() => import('@/features/runbooks'), 'RunbooksRoute');
+const BudgetsRoute = lazyFeature(() => import('@/features/budgets'), 'BudgetsRoute');
+const TrajectoryRoute = lazyFeature(() => import('@/features/trajectory'), 'TrajectoryRoute');
+const TerminalRoute = lazyFeature(() => import('@/features/terminal'), 'TerminalRoute');
+const SkillsRoute = lazyFeature(() => import('@/features/skills'), 'SkillsRoute');
+
+/**
+ * Shared fallback for lazy routes. Kept minimal — a full skeleton per
+ * page is more motion than the 100-300ms chunk-fetch warrants, and
+ * every feature renders its own skeleton/empty-state once mounted.
+ */
+function RouteFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center text-fg-subtle">
+      <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+    </div>
+  );
+}
 
 const rootRoute = createRootRoute({
   component: () => (
     <AppShell>
-      <Outlet />
+      <Suspense fallback={<RouteFallback />}>
+        <Outlet />
+      </Suspense>
     </AppShell>
   ),
 });

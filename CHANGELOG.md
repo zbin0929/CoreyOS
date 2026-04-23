@@ -6,6 +6,51 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Infra · Route code-splitting
+
+Direct follow-up to T4.2b: CodeMirror 6 added ~180kb to the monolith
+and the Skills route is the smallest of the heavy feature modules
+(xterm.js, highlight.js, the chart layer all lived in the same
+chunk). Rather than wait for a "bundle CI" ticket to surface this,
+split the router and cash in immediately.
+
+### Shipped (`src/app/routes.tsx`)
+
+- **13 leaf routes lazy-loaded** via `React.lazy` with a
+  `lazyFeature()` helper that adapts each feature module's named
+  export (`SkillsRoute`, `TerminalRoute`, …) to the default-export
+  shape `React.lazy` expects — zero changes to feature modules.
+- **`HomeRoute` + `ChatRoute` stay eager** because they're the two
+  primary entry points (Home on cold boot, Chat right after); a
+  Suspense flash on the most-used route would be worse than the
+  bundle win.
+- **Root `<Outlet/>` wrapped in `<Suspense>`** with a minimal
+  spinner fallback (`RouteFallback`). Per-page skeletons would be
+  more motion than the 100-300ms chunk fetch warrants — each
+  feature already owns its own empty/error state once mounted.
+
+### Bundle
+
+| | Before | After |
+|---|---|---|
+| Largest chunk (gzip) | **589 KB** | **260 KB** |
+| Largest chunk (raw)  | 1,934 KB | 830 KB |
+| Chunks > 500 KB      | 1        | 2 (main + highlight.js group) |
+| Total gzip           | ~620 KB  | ~720 KB (more, but parallelised) |
+
+56 % reduction on the initial download. The two remaining >500 KB
+chunks are main + the highlight.js bundle (all languages); further
+splitting those is a separate optimisation.
+
+### Tests
+
+- **Playwright**: 52/52 green — Suspense boundary is transparent
+  to the existing suite (every route navigation still resolves
+  before the first assertion thanks to Playwright's auto-wait).
+- **Vitest / Rust**: unaffected (27 + 135 green).
+
+---
+
 ## 2026-04-23 — T4.2b · CodeMirror 6 in Skills editor
 
 The T4.2 MVP shipped with a plain `<textarea>` (the `index.tsx`
