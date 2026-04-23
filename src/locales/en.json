@@ -421,7 +421,18 @@
     "empty_title": "No profiles here",
     "empty_desc": "Create one to keep separate configs for prod, dev, or a demo account.",
     "confirm_delete": "Delete profile \"{{name}}\"? This removes its directory on disk.",
-    "cant_delete_active": "Switch to a different profile first."
+    "cant_delete_active": "Switch to a different profile first.",
+    "export": "Export as .tar.gz",
+    "import": "Import",
+    "import_reading": "Reading archive…",
+    "import_manifest_name": "Profile name",
+    "import_manifest_files": "Contents",
+    "import_manifest_exporter": "Exported by",
+    "import_manifest_created": "Exported at",
+    "import_target_name": "Install as",
+    "import_confirm": "Import",
+    "import_confirm_overwrite": "Replace existing",
+    "import_overwrite_warn": "A profile named \"{{name}}\" already exists. Continuing will replace it on disk."
   },
   "hermes_logs": {
     "page_subtitle": "Agent · gateway · errors · config history",

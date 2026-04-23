@@ -69,6 +69,13 @@ portable-pty = "0.9"
 # bytes out, not bytes in — and we leave it alone.)
 base64 = "0.22"
 
+# Phase 2 · tar.gz profile import/export (2026-04-23). `tar` writes
+# POSIX archives and `flate2` adds the gzip layer. Both are pure-Rust,
+# no C deps — matches the "no system libraries" stance of rusqlite
+# (bundled) + rustls (no openssl).
+tar = "0.4"
+flate2 = "1"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

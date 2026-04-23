@@ -766,6 +766,75 @@ export function hermesProfileClone(args: {
   return invoke<HermesProfileInfo>('hermes_profile_clone', args);
 }
 
+// ─────────────────── tar.gz import / export ───────────────────
+
+/** Manifest written at the root of a Caduceus profile archive. */
+export interface ProfileManifest {
+  version: number;
+  name: string;
+  /** Unix-ms timestamp of the export. */
+  created_at: number;
+  /** Caduceus version that produced the archive (empty string for
+   *  older archives that didn't carry this field). */
+  exporter_version: string;
+}
+
+export interface ProfileExportResponse {
+  name: string;
+  /** Base64-encoded `.tar.gz` body. Decode with `atob` before wrapping
+   *  in a `Blob` for download. */
+  bytes_base64: string;
+  raw_size: number;
+}
+
+export interface ProfileImportPreview {
+  manifest: ProfileManifest;
+  file_count: number;
+  total_bytes: number;
+}
+
+export interface ProfileImportResult {
+  profile: HermesProfileInfo;
+  /** `true` if a pre-existing profile of the same name was replaced. */
+  overwrote: boolean;
+  file_count: number;
+}
+
+/** Pack `~/.hermes/profiles/<name>/` into a tar.gz in memory. The
+ *  frontend unwraps `bytes_base64` into a `Blob` and triggers a
+ *  standard `<a download>` — no Tauri file-dialog plugin needed. */
+export function hermesProfileExport(name: string): Promise<ProfileExportResponse> {
+  return invoke<ProfileExportResponse>('hermes_profile_export', { args: { name } });
+}
+
+/** Parse an archive's manifest + tally its file count without touching
+ *  disk. Used to render a confirm dialog before committing to
+ *  `hermesProfileImport`. */
+export function hermesProfileImportPreview(
+  bytesBase64: string,
+): Promise<ProfileImportPreview> {
+  return invoke<ProfileImportPreview>('hermes_profile_import_preview', {
+    args: { bytes_base64: bytesBase64 },
+  });
+}
+
+/** Extract an archive under `~/.hermes/profiles/<target>/`. Fails with
+ *  `AlreadyExists` unless `overwrite` is explicitly `true`. `target_name`
+ *  defaults to the archive's manifest name. */
+export function hermesProfileImport(args: {
+  bytesBase64: string;
+  targetName?: string | null;
+  overwrite?: boolean;
+}): Promise<ProfileImportResult> {
+  return invoke<ProfileImportResult>('hermes_profile_import', {
+    args: {
+      bytes_base64: args.bytesBase64,
+      target_name: args.targetName ?? null,
+      overwrite: args.overwrite ?? false,
+    },
+  });
+}
+
 // ───────────────────────── Hermes logs ─────────────────────────
 
 export type HermesLogKind = 'agent' | 'gateway' | 'error';

@@ -21,6 +21,7 @@ mod fs_atomic;
 mod hermes_config;
 mod hermes_logs;
 mod hermes_profiles;
+mod hermes_profiles_archive;
 mod ipc;
 mod pty;
 mod sandbox;
@@ -104,6 +105,9 @@ pub fn run() {
             ipc::hermes_profiles::hermes_profile_rename,
             ipc::hermes_profiles::hermes_profile_delete,
             ipc::hermes_profiles::hermes_profile_clone,
+            ipc::hermes_profiles::hermes_profile_export,
+            ipc::hermes_profiles::hermes_profile_import,
+            ipc::hermes_profiles::hermes_profile_import_preview,
             ipc::runbooks::runbook_list,
             ipc::runbooks::runbook_upsert,
             ipc::runbooks::runbook_delete,

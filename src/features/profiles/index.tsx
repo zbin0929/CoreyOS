@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   Check,
   Copy,
+  Download,
   FolderOpen,
   Loader2,
   Pencil,
   Plus,
   RefreshCw,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
@@ -21,11 +23,15 @@ import {
   hermesProfileClone,
   hermesProfileCreate,
   hermesProfileDelete,
+  hermesProfileExport,
+  hermesProfileImport,
+  hermesProfileImportPreview,
   hermesProfileList,
   hermesProfileRename,
   ipcErrorMessage,
   type HermesProfileInfo,
   type HermesProfilesView,
+  type ProfileImportPreview,
 } from '@/lib/ipc';
 
 /**
@@ -35,10 +41,10 @@ import {
  * delete/clone actions. All writes funnel through the changelog journal
  * so /logs → Changelog tab picks them up next to model/env edits.
  *
- * Deliberately NOT in this sprint (noted in phase-2-config.md):
- *   - tar.gz export / import (needs a file picker + manifest preview)
- *   - per-profile gateway start/stop (lands with Phase 3 channels)
- *   - switching active profile (we only *read* `active_profile` today)
+ * T2.7 + 2026-04-23 follow-ups:
+ *   - ✅ tar.gz export / import with manifest preview.
+ *   - Per-profile gateway start/stop still deferred.
+ *   - Switching active profile still deferred.
  *
  * The design is "one card per profile"; each card can be in `view`,
  * `rename`, `clone`, or `confirm-delete` mode. State lives per-row so
@@ -61,6 +67,23 @@ type RowStatus =
   | { kind: 'busy' }
   | { kind: 'err'; message: string };
 
+/** Inflight import flow. Lives at the page level (not per-card)
+ *  because the user starts it from a global button before choosing
+ *  which profile it'll become. */
+type ImportMode =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | {
+      kind: 'preview';
+      preview: ProfileImportPreview;
+      bytesBase64: string;
+      /** Optional rename — the user can type a different target name
+       *  before committing. Defaults to the manifest's own name. */
+      targetName: string;
+    }
+  | { kind: 'overwrite-prompt'; preview: ProfileImportPreview; bytesBase64: string; targetName: string }
+  | { kind: 'error'; message: string };
+
 export function ProfilesRoute() {
   const { t } = useTranslation();
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -69,6 +92,9 @@ export function ProfilesRoute() {
   const [creating, setCreating] = useState<null | { value: string; busy: boolean }>(
     null,
   );
+  const [importMode, setImportMode] = useState<ImportMode>({ kind: 'idle' });
+  const [importBusy, setImportBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -125,6 +151,109 @@ export function ProfilesRoute() {
     }
   }
 
+  /**
+   * Export flow: ask the backend for the tar.gz bytes, decode base64
+   * to a Blob, and trigger a standard `<a download>` — no Tauri
+   * file-dialog plugin, no filesystem writes on our side. The browser
+   * drops the file into the user's Downloads folder.
+   */
+  async function onExport(name: string) {
+    setRowStatus((m) => ({ ...m, [name]: { kind: 'busy' } }));
+    try {
+      const resp = await hermesProfileExport(name);
+      // atob → Uint8Array → Blob. We don't stream because profiles are
+      // kB-MB range and the simplicity win is worth it.
+      const bin = atob(resp.bytes_base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/gzip' });
+      const url = URL.createObjectURL(blob);
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${resp.name}.tar.gz`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        // Give the browser a tick to start the download before we
+        // revoke the URL — revoking too eagerly cancels it in some
+        // WebView2/WebKit builds.
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+      setRowStatus((m) => ({ ...m, [name]: { kind: 'idle' } }));
+    } catch (e) {
+      setRowStatus((m) => ({
+        ...m,
+        [name]: { kind: 'err', message: ipcErrorMessage(e) },
+      }));
+    }
+  }
+
+  /**
+   * Kick off the import flow by triggering the hidden file input. Once
+   * the user picks a file, `onImportFilePicked` parses the manifest
+   * and drops us into the preview state so the user can confirm (and
+   * optionally rename) before anything touches disk.
+   */
+  function onImportClick() {
+    if (importBusy) return;
+    setImportMode({ kind: 'idle' });
+    fileInputRef.current?.click();
+  }
+
+  async function onImportFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset the input so picking the same file twice still fires change.
+    e.target.value = '';
+    if (!file) return;
+    setImportMode({ kind: 'loading' });
+    try {
+      const buf = await file.arrayBuffer();
+      // base64-encode chunkwise to avoid the huge-apply-string stack
+      // overflow on big profiles.
+      const bytesBase64 = base64FromArrayBuffer(buf);
+      const preview = await hermesProfileImportPreview(bytesBase64);
+      setImportMode({
+        kind: 'preview',
+        preview,
+        bytesBase64,
+        targetName: preview.manifest.name,
+      });
+    } catch (err) {
+      setImportMode({ kind: 'error', message: ipcErrorMessage(err) });
+    }
+  }
+
+  async function commitImport(overwrite: boolean) {
+    if (importMode.kind !== 'preview' && importMode.kind !== 'overwrite-prompt') return;
+    const { bytesBase64, targetName, preview } = importMode;
+    const name = targetName.trim() || preview.manifest.name;
+    setImportBusy(true);
+    try {
+      await hermesProfileImport({ bytesBase64, targetName: name, overwrite });
+      setImportMode({ kind: 'idle' });
+      await load();
+    } catch (err) {
+      const message = ipcErrorMessage(err);
+      // The backend's `AlreadyExists` is the only expected failure we
+      // want to upgrade into an extra confirm step; everything else
+      // is a hard error.
+      if (!overwrite && /already exists/i.test(message)) {
+        setImportMode({
+          kind: 'overwrite-prompt',
+          preview,
+          bytesBase64,
+          targetName: name,
+        });
+      } else {
+        setImportMode({ kind: 'error', message });
+      }
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
@@ -146,6 +275,16 @@ export function ProfilesRoute() {
               {t('profiles.refresh')}
             </Button>
             <Button
+              variant="ghost"
+              size="sm"
+              onClick={onImportClick}
+              disabled={importBusy || state.kind === 'loading'}
+              data-testid="profiles-import"
+            >
+              <Icon icon={Upload} size="sm" />
+              {t('profiles.import')}
+            </Button>
+            <Button
               variant="primary"
               size="sm"
               onClick={() => setCreating({ value: '', busy: false })}
@@ -158,6 +297,33 @@ export function ProfilesRoute() {
           </div>
         }
       />
+
+      {/* Hidden file input driving the Import button above. `.tar.gz`
+       *  + `.tgz` accept hint keeps the picker focused. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
+        className="hidden"
+        onChange={(e) => void onImportFilePicked(e)}
+        data-testid="profiles-import-input"
+      />
+
+      {importMode.kind !== 'idle' && (
+        <ImportModal
+          mode={importMode}
+          busy={importBusy}
+          onCancel={() => setImportMode({ kind: 'idle' })}
+          onTargetNameChange={(name) =>
+            setImportMode((m) =>
+              m.kind === 'preview' || m.kind === 'overwrite-prompt'
+                ? { ...m, targetName: name }
+                : m,
+            )
+          }
+          onConfirm={(overwrite) => void commitImport(overwrite)}
+        />
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-6">
@@ -284,6 +450,7 @@ export function ProfilesRoute() {
                   )
                 }
                 onDelete={() => runWrite(p.name, () => hermesProfileDelete(p.name))}
+                onExport={() => void onExport(p.name)}
               />
             ))}
         </div>
@@ -302,6 +469,7 @@ interface CardProps {
   onRename: (to: string) => void;
   onClone: (dst: string) => void;
   onDelete: () => void;
+  onExport: () => void;
 }
 
 function ProfileCard({
@@ -312,6 +480,7 @@ function ProfileCard({
   onRename,
   onClone,
   onDelete,
+  onExport,
 }: CardProps) {
   const { t } = useTranslation();
   const busy = status.kind === 'busy';
@@ -376,6 +545,16 @@ function ProfileCard({
               data-testid={`profile-action-clone-${profile.name}`}
             >
               <Icon icon={Copy} size="sm" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onExport}
+              disabled={busy}
+              title={t('profiles.export')}
+              data-testid={`profile-action-export-${profile.name}`}
+            >
+              <Icon icon={Download} size="sm" />
             </Button>
             <Button
               size="sm"
@@ -535,3 +714,184 @@ const inputCls = cn(
   'placeholder:text-fg-subtle',
   'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
 );
+
+// ───────────────────────── Import modal ─────────────────────────
+
+/**
+ * One modal covers every non-idle import state. Keeping the branches
+ * together (loading / preview / overwrite-prompt / error) lets the
+ * backdrop + focus trap live in one place — React's modal story is
+ * allergic to fragmentation. We keep this lightweight (no portal,
+ * no animation lib) because it only surfaces during an explicit user
+ * action.
+ */
+function ImportModal({
+  mode,
+  busy,
+  onCancel,
+  onTargetNameChange,
+  onConfirm,
+}: {
+  mode: ImportMode;
+  busy: boolean;
+  onCancel: () => void;
+  onTargetNameChange: (name: string) => void;
+  onConfirm: (overwrite: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  if (mode.kind === 'idle') return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+      data-testid="profiles-import-modal"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-md rounded-lg border border-border bg-bg-elev-1 p-4 shadow-xl">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <Icon icon={Upload} size="sm" className="text-gold-500" />
+            {t('profiles.import')}
+          </div>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={busy}
+            aria-label={t('profiles.cancel')}
+          >
+            <Icon icon={X} size="xs" />
+          </Button>
+        </div>
+
+        {mode.kind === 'loading' && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-fg-muted">
+            <Icon icon={Loader2} size="sm" className="animate-spin" />
+            {t('profiles.import_reading')}
+          </div>
+        )}
+
+        {mode.kind === 'error' && (
+          <div className="mt-4 flex items-start gap-2 rounded border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+            <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
+            <span className="break-all">{mode.message}</span>
+          </div>
+        )}
+
+        {(mode.kind === 'preview' || mode.kind === 'overwrite-prompt') && (
+          <div className="mt-4 flex flex-col gap-3 text-sm">
+            <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-xs">
+              <dt className="text-fg-subtle">{t('profiles.import_manifest_name')}</dt>
+              <dd className="text-fg">{mode.preview.manifest.name}</dd>
+
+              <dt className="text-fg-subtle">{t('profiles.import_manifest_files')}</dt>
+              <dd className="text-fg tabular-nums">
+                {mode.preview.file_count} · {formatBytes(mode.preview.total_bytes)}
+              </dd>
+
+              {mode.preview.manifest.exporter_version && (
+                <>
+                  <dt className="text-fg-subtle">{t('profiles.import_manifest_exporter')}</dt>
+                  <dd className="font-mono text-[11px] text-fg-muted">
+                    v{mode.preview.manifest.exporter_version}
+                  </dd>
+                </>
+              )}
+
+              <dt className="text-fg-subtle">{t('profiles.import_manifest_created')}</dt>
+              <dd className="text-fg">
+                {mode.preview.manifest.created_at > 0
+                  ? new Date(mode.preview.manifest.created_at).toLocaleString()
+                  : '—'}
+              </dd>
+            </dl>
+
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-fg-subtle">
+                {t('profiles.import_target_name')}
+              </span>
+              <input
+                autoFocus
+                className={inputCls}
+                value={mode.targetName}
+                onChange={(e) => onTargetNameChange(e.target.value)}
+                disabled={busy}
+                data-testid="profiles-import-target-name"
+              />
+            </label>
+
+            {mode.kind === 'overwrite-prompt' && (
+              <div className="flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs text-amber-600">
+                <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
+                <span>
+                  {t('profiles.import_overwrite_warn', {
+                    name: mode.targetName,
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={busy}
+            data-testid="profiles-import-cancel"
+          >
+            {t('profiles.cancel')}
+          </Button>
+          {(mode.kind === 'preview' || mode.kind === 'overwrite-prompt') && (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => onConfirm(mode.kind === 'overwrite-prompt')}
+              disabled={busy || !mode.targetName.trim()}
+              data-testid={
+                mode.kind === 'overwrite-prompt'
+                  ? 'profiles-import-confirm-overwrite'
+                  : 'profiles-import-confirm'
+              }
+            >
+              {busy ? (
+                <Icon icon={Loader2} size="sm" className="animate-spin" />
+              ) : (
+                <Icon icon={Check} size="sm" />
+              )}
+              {mode.kind === 'overwrite-prompt'
+                ? t('profiles.import_confirm_overwrite')
+                : t('profiles.import_confirm')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────── helpers ─────────────────────────
+
+/** Encode an ArrayBuffer into base64 without blowing the call stack on
+ *  big buffers. `btoa(String.fromCharCode(...chunk))` blows up past
+ *  ~65 kB on most engines; chunking at 32 kB keeps us on the safe
+ *  side across WebKit/WebView2. */
+function base64FromArrayBuffer(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  const chunkSize = 0x8000; // 32 KB
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+  }
+  return btoa(binary);
+}
+
+function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}

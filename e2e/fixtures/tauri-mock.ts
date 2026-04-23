@@ -438,6 +438,76 @@ export const tauriMockInitScript = /* js */ `
         };
       }
 
+      // Tar.gz import/export (2026-04-23). We don't actually run tar
+      // encoding in the mock — tests only care about the control flow
+      // (button wired, preview renders, import + overwrite round-trip).
+      // The exported base64 is a stable sentinel string the import-
+      // preview handler recognises + mirrors back into the preview
+      // DTO. Good enough for the UI contract; the real pack/unpack is
+      // exercised in the Rust unit tests.
+      case 'hermes_profile_export': {
+        const name = args.args.name;
+        if (!state.profiles.some((p) => p.name === name)) {
+          throw new Error('not found: ' + name);
+        }
+        // btoa of a short ASCII blob — the browser will still produce
+        // a Blob + download link without tripping on invalid bytes.
+        const sentinel = 'PROFILE_ARCHIVE_FIXTURE:' + name;
+        return {
+          name,
+          bytes_base64: btoa(sentinel),
+          raw_size: sentinel.length,
+        };
+      }
+      case 'hermes_profile_import_preview': {
+        const raw = atob(args.args.bytes_base64);
+        const sentinel = raw.startsWith('PROFILE_ARCHIVE_FIXTURE:')
+          ? raw.slice('PROFILE_ARCHIVE_FIXTURE:'.length)
+          : 'from-archive';
+        return {
+          manifest: {
+            version: 1,
+            name: sentinel,
+            created_at: Date.now(),
+            exporter_version: '0.0.1-mock',
+          },
+          file_count: 3,
+          total_bytes: 12_345,
+        };
+      }
+      case 'hermes_profile_import': {
+        const raw = atob(args.args.bytes_base64);
+        const sourceName = raw.startsWith('PROFILE_ARCHIVE_FIXTURE:')
+          ? raw.slice('PROFILE_ARCHIVE_FIXTURE:'.length)
+          : 'imported';
+        const targetName = args.args.target_name || sourceName;
+        const existingIdx = state.profiles.findIndex((p) => p.name === targetName);
+        if (existingIdx >= 0 && !args.args.overwrite) {
+          throw new Error('already exists: ' + targetName);
+        }
+        let overwrote = false;
+        if (existingIdx >= 0) {
+          state.profiles.splice(existingIdx, 1);
+          overwrote = true;
+        }
+        const row = {
+          name: targetName,
+          is_active: false,
+          updated_at: Date.now(),
+        };
+        state.profiles.push(row);
+        return {
+          profile: {
+            name: row.name,
+            path: state.profilesRoot + '/' + row.name,
+            is_active: false,
+            updated_at: row.updated_at,
+          },
+          overwrote,
+          file_count: 3,
+        };
+      }
+
       case 'hermes_log_tail': {
         const bucket = state.hermesLogs[args.kind];
         if (!bucket) {

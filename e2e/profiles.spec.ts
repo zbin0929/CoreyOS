@@ -60,6 +60,46 @@ test.describe('profiles', () => {
     await expect(page.getByTestId('profile-card-staging-clone2')).toHaveCount(0);
   });
 
+  test('import a .tar.gz: preview shows manifest; confirm adds the card; overwrite path prompts', async ({
+    page,
+  }) => {
+    await page.goto('/profiles');
+
+    // Stage the file the Import button is about to receive. The mock's
+    // import-preview handler recognises the `PROFILE_ARCHIVE_FIXTURE:`
+    // sentinel + echoes the name back through the manifest — so
+    // picking a file named `work.tar.gz` whose body encodes
+    // "PROFILE_ARCHIVE_FIXTURE:work" drops us into a preview dialog
+    // for a profile called `work`.
+    const sentinel = 'PROFILE_ARCHIVE_FIXTURE:work';
+    await page.getByTestId('profiles-import').click();
+    await page
+      .getByTestId('profiles-import-input')
+      .setInputFiles({ name: 'work.tar.gz', mimeType: 'application/gzip', buffer: Buffer.from(sentinel) });
+
+    // Preview modal renders the manifest + file tally.
+    await expect(page.getByTestId('profiles-import-modal')).toBeVisible();
+    await expect(page.getByTestId('profiles-import-target-name')).toHaveValue('work');
+    await expect(page.getByTestId('profiles-import-modal')).toContainText(/3/); // file_count
+
+    // Confirm → new card appears.
+    await page.getByTestId('profiles-import-confirm').click();
+    await expect(page.getByTestId('profile-card-work')).toBeVisible();
+
+    // Re-importing the same archive with an unchanged target should
+    // trip the overwrite prompt — the backend refuses by default.
+    await page.getByTestId('profiles-import').click();
+    await page
+      .getByTestId('profiles-import-input')
+      .setInputFiles({ name: 'work.tar.gz', mimeType: 'application/gzip', buffer: Buffer.from(sentinel) });
+    await page.getByTestId('profiles-import-confirm').click();
+    await expect(page.getByTestId('profiles-import-confirm-overwrite')).toBeVisible();
+
+    // Accept the overwrite → one card still named `work`.
+    await page.getByTestId('profiles-import-confirm-overwrite').click();
+    await expect(page.getByTestId('profile-card-work')).toHaveCount(1);
+  });
+
   test('duplicate name surfaces the backend error inline', async ({ page }) => {
     await page.goto('/profiles');
 

@@ -6,6 +6,73 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Phase 2 · Profile tar.gz import / export
+
+Closes the first of two Phase-2 deferrals. Users can now export a
+Hermes profile as a self-contained `.tar.gz` (for sharing, backup,
+or moving between machines) and import one back in with a confirm
+dialog that previews the manifest before touching disk.
+
+### Shipped
+
+**Rust** (`src-tauri/src/hermes_profiles_archive.rs`, +deps `tar` +
+`flate2`):
+
+- **Archive layout**: `caduceus-profile.json` manifest at the root
+  + the profile dir verbatim under `profile/`. Manifest versioning
+  (`version: 1`) so a future reorg can reject unknown shapes.
+- **Zip-slip defence**: every entry goes through `safe_relative()`
+  (typed-`Path` component walk, rejects `..` / absolute /
+  Windows-prefix) before extraction. Six-case unit test locks the
+  predicate in.
+- **Symlink + hardlink rejection** on import — Hermes profile dirs
+  don't legitimately contain links; accepting them invites the
+  archive to point at `/etc/passwd`.
+- **No-clobber by default**: import returns `AlreadyExists` unless
+  the caller passes `overwrite=true` (the UI prompts for it
+  explicitly).
+- **Atomic commit**: extract to `<name>.importing/`, then `rename`
+  into place. Cross-device rename falls back to copy-then-delete.
+- **Journaling**: successful imports append a `hermes.profile.import`
+  entry to the changelog (consistent with every other profile op).
+
+**TypeScript** (`src/features/profiles/index.tsx`,
+`src/lib/ipc.ts`):
+
+- Export → base64 → `Blob` → `<a download>`. No Tauri file-dialog
+  plugin; the browser drops the file into the user's Downloads.
+- Import → native `<input type="file">` → `FileReader` → chunked
+  base64 (32 KB chunks to avoid `String.fromCharCode.apply` stack
+  blowouts on big profiles).
+- **Preview-first workflow**: after file selection, a modal shows
+  the manifest name, exporter version, exported-at timestamp, and
+  `file_count · total_bytes`. User can optionally rename the
+  target before committing.
+- **Overwrite prompt**: when the target exists, the first import
+  fails with `AlreadyExists`; the UI upgrades that into an inline
+  "Replace existing?" step so destructive actions are never
+  one-click.
+
+### Tests
+
+- **Rust** `cargo test --lib`: 135 → **141** (+6 in
+  `hermes_profiles_archive::tests`: roundtrip, existing-without-
+  overwrite, overwrite-replaces, missing-manifest, zip-slip
+  predicate, future-version rejection).
+- **Playwright** `profiles.spec.ts`: 4 → **5** (new
+  `import a .tar.gz: preview → confirm → overwrite`).
+- **Bundle**: unchanged (feature lives on the lazy `/profiles`
+  route — no main-chunk impact).
+- `cargo clippy --lib --tests -- -D warnings`: clean.
+- typecheck + lint: clean.
+
+### i18n
+
+- 11 new `profiles.import*` / `profiles.export` keys in both `en`
+  and `zh`.
+
+---
+
 ## 2026-04-23 — T1.9 · Virtualised chat message list
 
 Last Phase 1 item. The `messages.map()` render with a single
