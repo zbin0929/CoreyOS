@@ -427,6 +427,11 @@ export interface AnalyticsSummaryDto {
   tokens_per_day: DayCount[];
   model_usage: NamedCount[];
   tool_usage: NamedCount[];
+  /** T5.6 — session count per adapter, in descending count order.
+   *  Includes every adapter that has at least one session in the DB;
+   *  no `LIMIT`. Pre-T5.5c rows surface under `'hermes'` (db v5
+   *  backfill). Drives the Analytics "Usage by adapter" card. */
+  adapter_usage: NamedCount[];
   /** ms since epoch — the clock snapshot that produced this summary. */
   generated_at: number;
 }

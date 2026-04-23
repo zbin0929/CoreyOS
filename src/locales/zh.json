@@ -192,6 +192,11 @@
         "title": "Top 工具",
         "subtitle": "按调用次数排序。",
         "empty": "暂无工具调用。"
+      },
+      "adapters": {
+        "title": "按 Agent 统计",
+        "subtitle": "按 Agent 适配器分组的会话数。",
+        "empty": "暂无 Agent 活动。"
       }
     }
   },

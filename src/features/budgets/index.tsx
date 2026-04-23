@@ -28,6 +28,7 @@ import {
   type BudgetRow,
   type BudgetScopeKind,
 } from '@/lib/ipc';
+import { useAgentsStore } from '@/stores/agents';
 
 /**
  * Phase 4 · T4.4 — Budgets.
@@ -348,12 +349,10 @@ function BudgetEditor({
         {needsScopeValue && (
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
             <span className="text-fg-subtle">{t('budgets.field.scope_value')}</span>
-            <input
+            <ScopeValueInput
+              scopeKind={scopeKind}
               value={scopeValue}
-              onChange={(e) => setScopeValue(e.target.value)}
-              placeholder="e.g. gpt-4o"
-              className="rounded border border-border bg-bg-elev-2 px-2 py-1.5 text-sm text-fg focus:border-gold-500/40 focus:outline-none"
-              data-testid="budget-scope-value"
+              onChange={setScopeValue}
             />
           </label>
         )}
@@ -426,6 +425,50 @@ function BudgetEditor({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Input for `scope_value`. For `scope_kind === 'adapter'`, T5.6 replaces
+ * the free-form text box with a `<Select>` populated from the live agent
+ * registry — the persisted value is the adapter `id` (stable across
+ * display-name changes), the dropdown shows the human-readable `name`.
+ * Other scopes still need free-form text (model ids / profile names /
+ * channel slugs are user-typed or copy-pasted).
+ *
+ * Graceful degradation: if the registry snapshot hasn't loaded yet OR is
+ * empty (unusual — Hermes always registers), we fall back to the text
+ * input so the form never wedges.
+ */
+function ScopeValueInput({
+  scopeKind,
+  value,
+  onChange,
+}: {
+  scopeKind: BudgetScopeKind;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const adapters = useAgentsStore((s) => s.adapters);
+  if (scopeKind === 'adapter' && adapters && adapters.length > 0) {
+    return (
+      <Select<string>
+        value={value || adapters[0]?.id || ''}
+        onChange={onChange}
+        data-testid="budget-scope-value"
+        ariaLabel="Adapter"
+        options={adapters.map((a) => ({ value: a.id, label: a.name }))}
+      />
+    );
+  }
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="e.g. gpt-4o"
+      className="rounded border border-border bg-bg-elev-2 px-2 py-1.5 text-sm text-fg focus:border-gold-500/40 focus:outline-none"
+      data-testid="budget-scope-value"
+    />
   );
 }
 

@@ -6,6 +6,58 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T5.6 · Cross-adapter analytics + budgets
+
+Phase 5's final task. Analytics now surfaces a "Usage by adapter"
+card; Budgets' existing `adapter` scope kind finally gets a proper
+dropdown populated from the live registry instead of a free-form
+text input. Together these make multi-adapter cost/usage signals
+first-class.
+
+### Shipped
+
+- **`AnalyticsSummary.adapter_usage: Vec<NamedCount>`**
+  (`src-tauri/src/db.rs`): groups `sessions` by `adapter_id` (with
+  `COALESCE(NULLIF(...), 'hermes')` defending against NULL rows).
+  No `LIMIT` — adapter space is ≤6. Ordered by count DESC so the
+  busiest adapter leads.
+- **`AnalyticsSummaryDto.adapter_usage`** mirrored in TS
+  (`src/lib/ipc.ts`).
+- **Analytics "Usage by adapter" card** (`src/features/analytics/index.tsx`):
+  uses the existing `HBarList` primitive (same as Top models /
+  tools), placed in its own row below the models+tools grid so
+  the new signal is visible without displacing the historical
+  layout. Remaps raw ids → display names via
+  `useAgentsStore.adapters` (e.g. `hermes` → "Hermes"); falls
+  back to raw id when the registry hasn't loaded yet.
+- **Budgets adapter-scope dropdown** (`src/features/budgets/index.tsx`):
+  new local `<ScopeValueInput />` switches between a text input
+  and a `<Select>` of registered adapters based on `scope_kind`.
+  Persisted value is the adapter `id` (stable); the option label
+  is the display name. Gracefully falls back to text input when
+  the registry is empty.
+- **i18n**: `analytics.chart.adapters.{title,subtitle,empty}` in
+  `en.json` + `zh.json`.
+
+### Tests
+
+- **Rust**: 133 → **134** (+1
+  `t56_analytics_adapter_usage_groups_by_adapter_id` — three
+  sessions across two adapters, asserts count + DESC ordering).
+- typecheck + lint + `cargo clippy --tests -- -D warnings`: clean.
+
+### Phase 5 status
+
+All in-scope T5.* subtasks shipped:
+T5.1 trait polish · T5.2a Claude Code mock · T5.3a Aider mock ·
+T5.5a read-only switcher · T5.5b active + capability-gated nav +
+chat routing · T5.5c unified inbox · T5.6 analytics + budgets.
+
+Deferred (explicitly out-of-scope until a user asks):
+T5.2b/T5.3b real CLIs, T5.4 OpenHands.
+
+---
+
 ## 2026-04-23 — T5.5c · Unified session inbox
 
 Sessions are now adapter-aware end-to-end. The chat SessionsPanel

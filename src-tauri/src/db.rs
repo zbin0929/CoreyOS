@@ -589,6 +589,11 @@ pub struct AnalyticsSummary {
     pub model_usage: Vec<NamedCount>,
     /// Top 10 tools by invocation count.
     pub tool_usage: Vec<NamedCount>,
+    /// T5.6 — session count per adapter. Backfilled rows predating
+    /// T5.5c land under `'hermes'` (the v5 migration fills NULL with
+    /// 'hermes'). No `LIMIT` here since the adapter space is tiny
+    /// (3 today, likely ≤ 6 ever); the UI renders the full list.
+    pub adapter_usage: Vec<NamedCount>,
     pub generated_at: i64,
 }
 
@@ -693,6 +698,26 @@ impl Db {
             })?
             .collect::<Result<_, _>>()?;
 
+        // T5.6 — sessions grouped by adapter. The COALESCE mirrors
+        // `load_all`: any NULL row (shouldn't happen post-v5 backfill
+        // but defensive code is cheap) lands under `'hermes'`. No
+        // LIMIT: the adapter registry is small and the UI wants the
+        // full set.
+        let mut astmt = conn.prepare(
+            "SELECT COALESCE(NULLIF(adapter_id, ''), 'hermes') AS a, COUNT(*)
+             FROM sessions
+             GROUP BY a
+             ORDER BY COUNT(*) DESC",
+        )?;
+        let adapter_usage: Vec<NamedCount> = astmt
+            .query_map([], |row| {
+                Ok(NamedCount {
+                    name: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
         Ok(AnalyticsSummary {
             totals: AnalyticsTotals {
                 sessions,
@@ -707,6 +732,7 @@ impl Db {
             tokens_per_day,
             model_usage,
             tool_usage,
+            adapter_usage,
             generated_at: now_ms,
         })
     }
@@ -1015,6 +1041,32 @@ mod tests {
 
         let tree = db.load_all().unwrap();
         assert_eq!(tree.len(), 0);
+    }
+
+    /// T5.6 — adapter_usage aggregation. Three sessions split across
+    /// two adapters; the summary must reflect the counts with the
+    /// larger bucket first (matches ORDER BY COUNT DESC).
+    #[test]
+    fn t56_analytics_adapter_usage_groups_by_adapter_id() {
+        let db = Db::open_in_memory().unwrap();
+        for (i, adapter) in ["hermes", "hermes", "claude_code"].iter().enumerate() {
+            db.upsert_session(&SessionRow {
+                id: format!("s{i}"),
+                title: "t".into(),
+                model: None,
+                created_at: (i as i64) * 1_000,
+                updated_at: (i as i64) * 1_000,
+                adapter_id: (*adapter).into(),
+            })
+            .unwrap();
+        }
+        let summary = db.analytics_summary(10_000).unwrap();
+        let by_name: Vec<(&str, i64)> = summary
+            .adapter_usage
+            .iter()
+            .map(|c| (c.name.as_str(), c.count))
+            .collect();
+        assert_eq!(by_name, vec![("hermes", 2), ("claude_code", 1)]);
     }
 
     #[test]

@@ -187,11 +187,22 @@ Split into **T5.5a — read-only switcher** (shipped 2026-04-23) and
 - Empty-state copy adapts per-scope (prompts to switch to "All
   agents" when the active adapter's bucket is empty).
 
-### T5.6 — Cross-adapter analytics & budgets (half day)
+### T5.6 · **Shipped** (2026-04-23)
 
-- Analytics: `Usage mix by adapter` donut + stacked daily bar (per-adapter segments).
-- Budgets: scope selector now includes `Adapter: <id>`.
-- Rust queries add `adapter_id` filter.
+- `AnalyticsSummary.adapter_usage: Vec<NamedCount>` — groups
+  `sessions` by `adapter_id` (with defensive `COALESCE` →
+  `'hermes'`), no `LIMIT`, DESC-ordered. Mirrored in TS.
+- Analytics route gains a "Usage by adapter" card (reuses the
+  existing `HBarList` primitive); raw ids remap to display names
+  via `useAgentsStore.adapters`.
+- Budgets route gets a new local `<ScopeValueInput />` component
+  that surfaces a `<Select>` of registered adapters when
+  `scope_kind === 'adapter'`. Persisted value is the stable
+  adapter `id`; dropdown labels show the human-readable name.
+  Falls back to text input when the registry is empty.
+- Not shipped (scope creep vs. the half-day budget): donut +
+  stacked daily bar. The horizontal bar list carries the same
+  information with zero extra chart primitives.
 
 ## File map
 

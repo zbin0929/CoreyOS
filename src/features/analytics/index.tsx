@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Activity,
   BarChart3,
+  Boxes,
   Coins,
   MessageSquare,
   Wrench,
@@ -12,7 +13,8 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { analyticsSummary, type AnalyticsSummaryDto, ipcErrorMessage } from '@/lib/ipc';
+import { analyticsSummary, type AnalyticsSummaryDto, type NamedCount, ipcErrorMessage } from '@/lib/ipc';
+import { useAgentsStore } from '@/stores/agents';
 import { cn } from '@/lib/cn';
 
 /**
@@ -73,8 +75,27 @@ export function AnalyticsRoute() {
 // ───────────────────────── Dashboard ─────────────────────────
 
 function Dashboard({ data }: { data: AnalyticsSummaryDto }) {
-  const { totals, messages_per_day, tokens_per_day, model_usage, tool_usage } = data;
+  const { totals, messages_per_day, tokens_per_day, model_usage, tool_usage, adapter_usage } =
+    data;
   const { t } = useTranslation();
+  // T5.6 — remap raw adapter ids (`hermes` / `claude_code` / `aider`)
+  // to their display names using the live registry snapshot. Falls
+  // back to the raw id when the registry hasn't loaded yet so first
+  // paint still renders something sensible.
+  const adapters = useAgentsStore((s) => s.adapters);
+  const adapterNameById = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const a of adapters ?? []) out[a.id] = a.name;
+    return out;
+  }, [adapters]);
+  const adapterUsageNamed = useMemo<NamedCount[]>(
+    () =>
+      adapter_usage.map((row) => ({
+        name: adapterNameById[row.name] ?? row.name,
+        count: row.count,
+      })),
+    [adapter_usage, adapterNameById],
+  );
 
   const daily = useMemo(() => padLast30Days(messages_per_day), [messages_per_day]);
   const dailyTokens = useMemo(() => padLast30Days(tokens_per_day), [tokens_per_day]);
@@ -144,6 +165,23 @@ function Dashboard({ data }: { data: AnalyticsSummaryDto }) {
           )}
         </Card>
       </div>
+
+      {/* T5.6 — adapter usage. Standalone row (not in the 2-col grid)
+          because it's a different axis of the same sessions: while
+          Top Models slices by `session.model`, this slices by
+          `session.adapter_id`. Placed last so the new signal is
+          obvious without displacing the historical layout. */}
+      <Card
+        title={t('analytics.chart.adapters.title')}
+        subtitle={t('analytics.chart.adapters.subtitle')}
+        icon={Boxes}
+      >
+        {adapterUsageNamed.length === 0 ? (
+          <EmptyRow hint={t('analytics.chart.adapters.empty')} />
+        ) : (
+          <HBarList items={adapterUsageNamed} />
+        )}
+      </Card>
 
       <footer className="pt-2 text-center text-[11px] text-fg-subtle">
         {t('analytics.generated_at', {

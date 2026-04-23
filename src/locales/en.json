@@ -198,6 +198,11 @@
         "title": "Top tools",
         "subtitle": "By invocations.",
         "empty": "No tool calls yet."
+      },
+      "adapters": {
+        "title": "Usage by adapter",
+        "subtitle": "Sessions grouped by agent adapter.",
+        "empty": "No adapter activity yet."
       }
     }
   },
