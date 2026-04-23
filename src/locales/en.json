@@ -20,6 +20,26 @@
     "budgets": "Budgets",
     "settings": "Settings"
   },
+  "chat_page": {
+    "title": "Chat",
+    "subtitle": "Hermes · streaming · Sprint 2",
+    "stop": "Stop",
+    "send": "Send",
+    "delete_confirm": "Click again to confirm",
+    "delete": "Delete",
+    "copied": "Copied",
+    "copy": "Copy",
+    "attach_file": "Attach file",
+    "stop_generating": "Stop generating",
+    "send_message": "Send message",
+    "remove_attachment": "Remove"
+  },
+  "models_page": {
+    "title": "Language models",
+    "subtitle": "The LLM backing the Hermes agent — configured in ~/.hermes/config.yaml",
+    "change_model": "Change model",
+    "change_model_desc": "Pick a provider, set the model id, and save. The gateway must be restarted for changes to take effect."
+  },
   "topbar": {
     "profile": "Profile",
     "model_unknown": "no model",
@@ -219,7 +239,9 @@
       "theme_dark": "Dark",
       "theme_light": "Light",
       "theme_system": "System",
-      "language": "Language"
+      "language": "Language",
+      "lang_en": "English",
+      "lang_zh": "中文"
     },
     "gateway": {
       "title": "Gateway",

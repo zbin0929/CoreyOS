@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ import { SessionsPanel } from './SessionsPanel';
 const EMPTY_MESSAGES: UiMessage[] = [];
 
 export function ChatRoute() {
+  const { t } = useTranslation();
   const currentId = useChatStore((s) => s.currentId);
   const hydrated = useChatStore((s) => s.hydrated);
   const newSession = useChatStore((s) => s.newSession);
@@ -522,7 +524,7 @@ function ChatPane({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <PageHeader title="Chat" subtitle="Hermes · streaming · Sprint 2" />
+      <PageHeader title={t('chat_page.title')} subtitle={t('chat_page.subtitle')} />
 
       {/* T1.9 — virtualised list when we have messages; the empty-
        *  state hero gets its own layout so we don't pay Virtuoso's
@@ -633,7 +635,7 @@ function ChatPane({
                   <button
                     type="button"
                     onClick={() => void removePendingAttachment(a.id)}
-                    aria-label={`Remove ${a.name}`}
+                    aria-label={`${t('chat_page.remove_attachment')} ${a.name}`}
                     className="rounded p-0.5 text-fg-subtle transition-colors hover:bg-bg-elev-2 hover:text-fg"
                   >
                     <Icon icon={X} size="xs" />
@@ -661,13 +663,13 @@ function ChatPane({
               className="h-11 px-3"
               onClick={() => fileInputRef.current?.click()}
               disabled={sending}
-              aria-label="Attach file"
+              aria-label={t('chat_page.attach_file')}
               title={
                 visionCap === 'no'
-                  ? `Attach file (images will be ignored — ${effectiveModel ?? 'current model'} is text-only)`
+                  ? `${t('chat_page.attach_file')} (images will be ignored — ${effectiveModel ?? 'current model'} is text-only)`
                   : visionCap === 'unknown'
-                    ? 'Attach file (image support for this model is unverified)'
-                    : 'Attach file'
+                    ? `${t('chat_page.attach_file')} (image support for this model is unverified)`
+                    : t('chat_page.attach_file')
               }
               data-testid="chat-attach-button"
               data-vision-support={visionCap}
@@ -699,8 +701,8 @@ function ChatPane({
                 type="submit"
                 variant="secondary"
                 className="h-11 px-4"
-                aria-label="Stop generating"
-                title="Stop"
+                aria-label={t('chat_page.stop_generating')}
+                title={t('chat_page.stop')}
               >
                 <Icon icon={Square} size="md" fill="currentColor" />
               </Button>
@@ -710,8 +712,8 @@ function ChatPane({
                 variant="primary"
                 disabled={!draft.trim() && pendingAttachments.length === 0}
                 className="h-11 px-4"
-                aria-label="Send message"
-                title="Send"
+                aria-label={t('chat_page.send_message')}
+                title={t('chat_page.send')}
                 data-testid="chat-send"
               >
                 <Icon icon={Send} size="md" />

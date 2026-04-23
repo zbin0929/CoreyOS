@@ -649,8 +649,8 @@ function AppearanceSection() {
             data-testid="settings-lang"
             ariaLabel={t('settings.appearance.language')}
             options={[
-              { value: 'en', label: 'English' },
-              { value: 'zh', label: '中文' },
+              { value: 'en', label: t('settings.appearance.lang_en') },
+              { value: 'zh', label: t('settings.appearance.lang_zh') },
             ]}
           />
         </div>

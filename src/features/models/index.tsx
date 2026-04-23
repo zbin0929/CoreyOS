@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   CheckCircle2,
@@ -102,6 +103,7 @@ const PROVIDER_CATALOG: Array<{
 ];
 
 export function ModelsRoute() {
+  const { t } = useTranslation();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
 
   const [provider, setProvider] = useState('');
@@ -231,8 +233,8 @@ export function ModelsRoute() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Language models"
-        subtitle="The LLM backing the Hermes agent — configured in ~/.hermes/config.yaml"
+        title={t('models_page.title')}
+        subtitle={t('models_page.subtitle')}
         actions={
           <Button
             variant="secondary"
@@ -293,8 +295,8 @@ export function ModelsRoute() {
 
               <form onSubmit={onSubmit} className="flex flex-col gap-5">
                 <Section
-                  title="Change model"
-                  description="Pick a provider, set the model id, and save. The gateway must be restarted for changes to take effect."
+                  title={t('models_page.change_model')}
+                  description={t('models_page.change_model_desc')}
                 >
                   <Field label="Provider">
                     <Combobox

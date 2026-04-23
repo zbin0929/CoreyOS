@@ -20,6 +20,26 @@
     "budgets": "预算",
     "settings": "设置"
   },
+  "chat_page": {
+    "title": "对话",
+    "subtitle": "Hermes · 流式输出 · Sprint 2",
+    "stop": "停止",
+    "send": "发送",
+    "delete_confirm": "再次点击确认",
+    "delete": "删除",
+    "copied": "已复制",
+    "copy": "复制",
+    "attach_file": "添加附件",
+    "stop_generating": "停止生成",
+    "send_message": "发送消息",
+    "remove_attachment": "移除"
+  },
+  "models_page": {
+    "title": "语言模型",
+    "subtitle": "Hermes Agent 的 LLM 后端 — 在 ~/.hermes/config.yaml 中配置",
+    "change_model": "更改模型",
+    "change_model_desc": "选择供应商，设置模型 ID，然后保存。更改需要重启网关才能生效。"
+  },
   "topbar": {
     "profile": "Profile",
     "model_unknown": "未指定模型",
@@ -219,7 +239,9 @@
       "theme_dark": "深色",
       "theme_light": "浅色",
       "theme_system": "跟随系统",
-      "language": "语言"
+      "language": "语言",
+      "lang_en": "English",
+      "lang_zh": "中文"
     },
     "gateway": {
       "title": "网关",

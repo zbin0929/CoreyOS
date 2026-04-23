@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, MessageSquarePlus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/icon';
@@ -218,6 +219,7 @@ function adapterBadgeLabel(id: string, names: Record<string, string>): string {
  * webview (needs per-capability permission), so we do it in-app.
  */
 function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
+  const { t } = useTranslation();
   const [armed, setArmed] = useState(false);
   const timer = useRef<number | null>(null);
 
@@ -248,8 +250,8 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
           ? 'bg-danger/15 text-danger'
           : 'invisible text-fg-subtle hover:bg-danger/10 hover:text-danger group-hover:visible',
       )}
-      aria-label={armed ? 'Confirm delete' : 'Delete session'}
-      title={armed ? 'Click again to confirm' : 'Delete'}
+      aria-label={armed ? t('chat_page.delete_confirm') : t('chat_page.delete')}
+      title={armed ? t('chat_page.delete_confirm') : t('chat_page.delete')}
     >
       <Icon icon={armed ? Check : Trash2} size="sm" />
     </button>

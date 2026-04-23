@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   Check,
@@ -89,6 +90,7 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
  * to be seen on touch).
  */
 function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   async function onClick() {
@@ -112,18 +114,17 @@ function CopyButton({ text }: { text: string }) {
           ? 'visible text-gold-500'
           : 'invisible group-hover:visible focus-visible:visible',
       )}
-      aria-label={copied ? 'Copied' : 'Copy message'}
-      title={copied ? 'Copied' : 'Copy'}
+      aria-label={copied ? t('chat_page.copied') : t('chat_page.copy')}
+      title={copied ? t('chat_page.copied') : t('chat_page.copy')}
     >
       {copied ? (
         <>
           <Icon icon={Check} size="xs" />
-          Copied
+          {t('chat_page.copied')}
         </>
       ) : (
         <>
           <Icon icon={Copy} size="xs" />
-          Copy
         </>
       )}
     </button>
