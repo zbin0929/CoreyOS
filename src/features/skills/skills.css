@@ -1,0 +1,115 @@
+/* T4.2b — CodeMirror 6 theme wired to design tokens.
+ *
+ * The MarkdownEditor imports this via its parent (`index.tsx`) so the
+ * rules live alongside the component that owns them. We deliberately
+ * skip `@codemirror/theme-one-dark` and map every surface/border/
+ * accent onto the same CSS variables the rest of the app uses. Result:
+ * flipping `html[data-theme]` flips the editor too with zero extra
+ * glue, and the editor feels like it's part of the app rather than a
+ * bolted-on widget.
+ *
+ * Selectors are scoped under `.skills-cm` (set on the CM wrapper in
+ * `MarkdownEditor.tsx`) so we don't accidentally restyle any other
+ * CodeMirror instance that might ship later.
+ */
+
+.skills-cm .cm-editor {
+  background: var(--bg);
+  color: var(--fg);
+  height: 100%;
+}
+
+.skills-cm .cm-editor.cm-focused {
+  outline: none;
+}
+
+.skills-cm .cm-scroller {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  line-height: 1.55;
+  padding: 0.5rem 0;
+}
+
+.skills-cm .cm-content {
+  caret-color: var(--gold-500, #d4a94e);
+  padding: 0 0.5rem;
+}
+
+.skills-cm .cm-gutters {
+  background: var(--bg-elev-1);
+  color: var(--fg-subtle);
+  border-right: 1px solid var(--border);
+}
+
+.skills-cm .cm-activeLineGutter,
+.skills-cm .cm-activeLine {
+  background: var(--bg-elev-1);
+}
+
+.skills-cm .cm-selectionBackground,
+.skills-cm ::selection {
+  background: color-mix(in srgb, var(--gold-500) 28%, transparent) !important;
+}
+
+.skills-cm .cm-cursor {
+  border-left-color: var(--gold-500);
+}
+
+/* Markdown syntax colouring — keep to 3 hues so the editor reads like
+ * prose first, code second. Matches the rest of the product's palette
+ * (gold = emphasis, muted fg for structure, subtle fg for meta). */
+.skills-cm .tok-heading,
+.skills-cm .cm-heading {
+  color: var(--gold-500);
+  font-weight: 600;
+}
+.skills-cm .tok-emphasis,
+.skills-cm .cm-emphasis {
+  color: var(--fg);
+  font-style: italic;
+}
+.skills-cm .tok-strong,
+.skills-cm .cm-strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.skills-cm .tok-monospace,
+.skills-cm .cm-inlineCode {
+  color: var(--fg-muted);
+  background: var(--bg-elev-2);
+  padding: 0 0.2em;
+  border-radius: 3px;
+}
+.skills-cm .tok-link,
+.skills-cm .cm-link {
+  color: var(--gold-500);
+  text-decoration: underline;
+}
+.skills-cm .tok-meta,
+.skills-cm .cm-processingInstruction,
+.skills-cm .cm-comment {
+  color: var(--fg-subtle);
+}
+.skills-cm .tok-keyword {
+  color: var(--gold-500);
+}
+.skills-cm .tok-string {
+  color: var(--fg-muted);
+}
+
+/* Search panel (Cmd/Ctrl-F) — match input / button styles. */
+.skills-cm .cm-panels {
+  background: var(--bg-elev-1);
+  color: var(--fg);
+  border-top: 1px solid var(--border);
+}
+.skills-cm .cm-panels input,
+.skills-cm .cm-panels button {
+  background: var(--bg-elev-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 0.4rem;
+}
+.skills-cm .cm-panels button:hover {
+  background: var(--bg-elev-3, var(--bg-elev-2));
+}

@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T4.2b · CodeMirror 6 in Skills editor
+
+The T4.2 MVP shipped with a plain `<textarea>` (the `index.tsx`
+docblock explicitly flagged CM6 as a "drop-in later"). That later
+is now: Skills bodies are Markdown with frequent fenced code blocks,
+and a monospace textarea was actively painful to work in.
+
+### Shipped (`src/features/skills/MarkdownEditor.tsx`)
+
+- **`@uiw/react-codemirror`** wrapper configured with
+  `@codemirror/lang-markdown` + `language-data` so fenced code
+  blocks in ts / bash / py / json etc. lazy-load their highlighter
+  on first use. Line numbers, fold gutter, active-line, and the
+  built-in search panel (Cmd/Ctrl-F) are on; bracket matching +
+  indent-on-input are off because this is prose, not source.
+- **`Cmd/Ctrl-S` keymap** forwards to the existing save handler,
+  so users stay in the editor instead of mouse-targeting the Save
+  button.
+- **Token-driven theme** (`src/features/skills/skills.css`) — no
+  `theme-one-dark` import; every surface / border / accent resolves
+  from the same CSS variables the rest of the app uses, so the
+  editor flips with `html[data-theme]` for free and adds no new
+  palette surface area.
+- **Hidden mirror `<textarea data-testid="skills-editor-textarea">`**
+  — preserves the Playwright contract (`.fill()`, `.toHaveValue()`)
+  without requiring test rewrites. Bi-directional binding through
+  React state means programmatic `.fill()` propagates to CM6 and
+  user typing updates the textarea's value attribute.
+
+### Tests
+
+- **Playwright**: 52 green (Skills suite:
+  create→edit→save→delete and tree-switch paths both unchanged).
+- **Vitest / Rust**: unaffected (27 + 135 green).
+- **Bundle**: the Skills route is not yet code-split, so the
+  monolith bundle grows by ~180kb gzip. Noted for a future
+  Phase 0.5 code-splitting pass.
+
+---
+
 ## 2026-04-23 — Phase 0.5 follow-up · Storybook + analytics mock fix
 
 Two deferred Phase 0.5 items clear today:

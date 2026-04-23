@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { MarkdownEditor } from './MarkdownEditor';
+import './skills.css';
 import {
   ipcErrorMessage,
   skillDelete,
@@ -317,13 +319,7 @@ function Editor({
           </Button>
         </div>
       </header>
-      <textarea
-        value={sel.dirty}
-        onChange={(e) => onChange(e.target.value)}
-        spellCheck={false}
-        className="min-h-0 flex-1 resize-none border-0 bg-bg p-4 font-mono text-xs leading-relaxed text-fg placeholder:text-fg-subtle focus:outline-none"
-        data-testid="skills-editor-textarea"
-      />
+      <MarkdownEditor value={sel.dirty} onChange={onChange} onSave={onSave} />
     </div>
   );
 }
