@@ -500,7 +500,21 @@ function ChatPane({
   }
 
   function onTextareaKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    // IME guard. `isComposing` alone is not enough on macOS WKWebView +
+    // Chinese pinyin: after a candidate commit, some IMEs fire a
+    // trailing Enter keydown with `isComposing === false` but
+    // `keyCode === 229` (the "IME still processing" sentinel). Without
+    // checking 229 we'd treat that trailing Enter as "send" and split
+    // the user's typed CJK across a literal newline (bug: "下午好" → bubble
+    // shows "下午\n好"). React's `KeyboardEvent` doesn't expose
+    // `keyCode`, so read it off the native event.
+    const ne = e.nativeEvent as unknown as { keyCode?: number };
+    if (
+      e.key === 'Enter' &&
+      !e.shiftKey &&
+      !e.nativeEvent.isComposing &&
+      ne.keyCode !== 229
+    ) {
       e.preventDefault();
       if (!sending) void send(draft);
     }

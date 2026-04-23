@@ -1108,6 +1108,16 @@ export function configTest(config: GatewayConfigDto): Promise<HealthProbe> {
   return invoke<HealthProbe>('config_test', { config });
 }
 
+// ───────────────────────── Menu ─────────────────────────
+
+/** Tell Rust which locale to rebuild the native menubar in. Called from
+ *  `useMenuEvents` on boot + whenever the user switches languages in
+ *  Settings. Non-Tauri contexts (Storybook / Playwright without the
+ *  mock) safely noop. */
+export function menuSetLocale(lang: string): Promise<void> {
+  return invoke<void>('menu_set_locale', { lang });
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

@@ -23,6 +23,7 @@ mod hermes_logs;
 mod hermes_profiles;
 mod hermes_profiles_archive;
 mod ipc;
+mod menu;
 mod pty;
 mod sandbox;
 mod skills;
@@ -138,6 +139,7 @@ pub fn run() {
             ipc::sandbox::sandbox_grant_once,
             ipc::sandbox::sandbox_set_enforced,
             ipc::sandbox::sandbox_clear_session_grants,
+            ipc::menu::menu_set_locale,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Caduceus booting");
@@ -233,6 +235,24 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
+            }
+
+            // Native menubar. Build + install once at setup; the menu is
+            // app-wide on macOS (single NSMenu) and per-window elsewhere
+            // (Tauri mirrors it automatically for new windows).
+            // Fallback locale is English — the frontend pushes the real
+            // one via `menu_set_locale` a few ticks later, once i18next
+            // has hydrated. This keeps the bar usable during the cold-
+            // boot JS load without blocking startup on UI.
+            match menu::build(app.handle(), menu::Locale::En) {
+                Ok(m) => {
+                    if let Err(e) = app.set_menu(m) {
+                        tracing::warn!(error = %e, "failed to install menu");
+                    } else {
+                        menu::install_handler(app.handle());
+                    }
+                }
+                Err(e) => tracing::warn!(error = %e, "failed to build menu"),
             }
             Ok(())
         })

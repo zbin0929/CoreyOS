@@ -36,7 +36,15 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
       >
         <Icon icon={isUser ? User : Sparkles} size="md" />
       </div>
-      <div className={cn('flex min-w-0 flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
+      {/* `flex-1 min-w-0` is load-bearing: without `flex-1` the column
+          shrinks to its children's intrinsic width, and the bubble's
+          `max-w-[85%]` then resolves against that shrunk width — a
+          circular constraint that collapses the bubble to min-content
+          (1 char per line for CJK, since Chinese text has no word
+          boundary for `overflow-wrap` to anchor on). Giving the column
+          `flex-1` pins it to the full available row width so 85% has a
+          stable reference. */}
+      <div className={cn('flex min-w-0 flex-1 flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
         <div
           className={cn(
             'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed',

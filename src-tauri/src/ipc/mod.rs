@@ -12,6 +12,7 @@ pub mod health;
 pub mod hermes_config;
 pub mod hermes_logs;
 pub mod hermes_profiles;
+pub mod menu;
 pub mod model;
 pub mod paths;
 pub mod pty;

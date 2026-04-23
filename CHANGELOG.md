@@ -6,6 +6,84 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Native menubar · custom NSMenu with app actions
+
+Replaces the generic Tauri-default menubar with a Corey-specific layout.
+Previously the menubar existed but had no app semantics beyond
+Cut/Copy/Paste and Quit — File was a one-item placeholder, View had
+nothing, Help was empty. Now every menu earns its keep.
+
+### Shipped
+
+**Rust** (`src-tauri/src/menu.rs`):
+
+- `build(app)` constructs the full menu tree via `MenuBuilder` +
+  `SubmenuBuilder` + `MenuItemBuilder`. Six submenus:
+  - **Corey** (app menu) — About / Hide / Hide Others / Show All / Quit.
+    `AboutMetadataBuilder` stamps the version from `CARGO_PKG_VERSION`.
+  - **File** — `New Chat ⌘N` + Close Window.
+  - **Edit** — 100% predefined (Undo / Redo / Cut / Copy / Paste /
+    Select All). The OS routes these directly into the focused
+    webview input element, so no custom wiring needed.
+  - **View** — `Go to <route>` for every NAV entry that has a
+    keyboard shortcut (⌘0..⌘9), mirroring `useNavShortcuts`, plus
+    read-only entries (Models / Profiles / Runbooks / Budgets).
+    `Toggle Theme ⌘⇧L` + Full Screen round it out.
+  - **Window** — Minimize / Maximize.
+  - **Help** — `Corey Documentation` + `Report an Issue` (open in
+    default browser).
+- `install_handler(app)` registers a single `on_menu_event` that
+  filters out predefined ids and re-emits our custom ids as a
+  `menu-action` Tauri event payloading the id string.
+- Wired into `lib.rs::setup` after `app.manage(state)`; failures are
+  logged but don't abort startup.
+
+**Frontend** (`src/app/useMenuEvents.ts`):
+
+- `useMenuEvents()` hook listens for `menu-action` and dispatches:
+  - `nav:/<path>` → `router.navigate({ to: path })`.
+  - `new-chat` → `useChatStore.newSession()` + navigate to `/chat`
+    (after ensuring hydration completed).
+  - `toggle-theme` → `useUIStore.toggleTheme()`.
+  - `help:docs` / `help:issues` → `@tauri-apps/plugin-shell` `open()`
+    (falls back to `window.open` in non-Tauri contexts).
+- Mounted inside `AppShell` alongside `useNavShortcuts` so the
+  TanStack Router context is available.
+- `listen()` promise is properly unlistened on unmount so React
+  StrictMode's double-mount doesn't stack duplicate handlers.
+
+### Follow-up · locale-aware labels (same-day)
+
+- `menu.rs` gained a `Locale` enum + `Labels` struct holding every
+  user-visible string as a `&'static str`. `build(app, locale)` and
+  a new `set_locale(app, locale)` path rebuild the bar on demand.
+- New IPC `menu_set_locale(lang)` wired into the command table.
+- `useMenuEvents` now pushes `i18n.language` to Rust on mount and
+  re-pushes on every `languageChanged` event, so the Settings →
+  Language selector swaps the menubar live with no restart.
+- Rust boots with an English fallback so the bar is usable during
+  the first paint before JS hydrates.
+- AppKit's predefined items (Undo/Cut/Copy/Paste/Select All/
+  Minimize/Maximize/Hide Others/Show All) are left untouched — the
+  OS auto-localizes them to the system language, which is the
+  conventionally correct behavior for those slots.
+
+### Not in scope
+
+- **Context menu inside webview.** This PR only touches the
+  top-level application menu; right-click inside the webview
+  still uses the default HTML context menu.
+
+### Test totals
+
+- `pnpm typecheck` + `pnpm lint` clean (pre-existing
+  react-refresh warnings unchanged).
+- Rust side: first launch in `pnpm tauri:dev` exercises the
+  build + install path; all predefined items verified manually
+  (Cut/Copy/Paste inside composer, Quit ⌘Q, Minimize ⌘M).
+
+---
+
 ## 2026-04-23 — Sandbox follow-up · folder picker, CI lint, mode plumbing
 
 Closes the three "Deferred" items from the morning's sandbox GA entry
