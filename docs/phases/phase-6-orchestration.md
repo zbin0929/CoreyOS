@@ -111,6 +111,11 @@ Reclaimed: ~4 days.
 **Progress (2026-04-23 pm)**:
 - ✅ **T6.8 shipped** — deleted Rust worker (`src-tauri/src/scheduler.rs`) + SQLite `scheduler_jobs` table + related IPCs. Reimplemented as thin wrapper over `~/.hermes/cron/jobs.json` via new `hermes_cron.rs` module. Added Runs drawer to Scheduler page that surfaces `~/.hermes/cron/output/{job_id}/*.md` with previews. DB migration v7 exports legacy rows to JSON if `jobs.json` doesn't exist. 150 Rust tests pass, +4 new tests in `hermes_cron.rs`. Frontend: TSC clean, lint clean, Vitest 27/27.
 
+### T6.4 — Rules-based routing · ~2 days
+
+**Progress (2026-04-23 pm)**:
+- ✅ **T6.4 shipped** — `routing_rules.rs` + 3 IPC (`routing_rule_list/upsert/delete`) persist to `<app_config_dir>/routing_rules.json`. Pure frontend resolver (`src/features/chat/routing.ts`) evaluates first-enabled-match by list order with prefix/contains/regex predicates. `RoutingHint` pill above the Composer previews the override; `send()` applies it and also flips a 0-message session's `adapterId` so follow-ups stay with the chosen adapter. `RoutingRulesSection` in Settings provides inline CRUD with a dropdown of registered adapters. 168 Rust tests pass (+7 `routing_rules::tests`); Vitest 37 (+10 `routing.test.ts`). Frontend TSC / ESLint clean. Deferred: drag-reorder, source-channel rules, fallback chains, time-of-day rules.
+
 ### T6.2 — Multi-instance Hermes (register N gateways) · ~2 days
 
 **Progress (2026-04-23 pm)**:

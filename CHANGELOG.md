@@ -6,6 +6,54 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.4 · Rules-based routing (auto-pick adapter by content)
+
+Corey can now auto-pick which adapter (including a named Hermes instance from T6.2) handles the next chat turn, based on a user-defined list of predicates against the composed text. First visible "smart routing" surface — users no longer have to manually flip the AgentSwitcher to send `/code` prompts to Claude Code.
+
+### Context
+
+Pairs directly with T6.2: once users have multiple Hermes instances + Claude Code + Aider registered, toggling the AgentSwitcher on every turn is friction. T6.4 is a minimal "if this, then that" rule engine that runs in the composer before send. MVP scope explicitly excludes source-channel matching, fallback chains, and time-of-day rules — those land only if real usage turns up demand.
+
+### Shipped
+
+**Rust `routing_rules.rs`**: mirrors the T6.2 pattern — `RoutingRule { id, name, enabled, match, target_adapter_id }` + `RoutingRulesFile { rules: [...] }` persisted to `<app_config_dir>/routing_rules.json`. Three match kinds: `prefix`, `contains`, `regex` (frontend-compiled at resolve time so the Rust side never runs untrusted regex). Atomic write + id/match validators + upsert/delete helpers. 7 new tests: `load_missing_returns_empty`, `save_then_load_roundtrips_all_variants`, `load_tolerates_corrupt_file`, `validate_id_rules`, `validate_match_rejects_empty_values`, `upsert_replaces_by_id_preserves_order`, `delete_returns_removed_flag`.
+
+**IPC** (`src-tauri/src/ipc/routing_rules.rs`): `routing_rule_list / upsert / delete`. Upsert normalises id + trims name + validates all inputs before touching disk. Delete is idempotent. All three registered in `lib.rs` + `ipc/mod.rs`.
+
+**Frontend pure resolver** (`src/features/chat/routing.ts`): `resolveRoutedRule(rules, text)` walks the list in file order and returns the first enabled rule whose predicate matches. Case-insensitive by default; regex failures are swallowed + logged so a typo in Settings never bricks the composer. 10 vitest cases covering empty list, prefix case toggles, contains anywhere-search, regex with `i` flag, invalid regex skip, disabled-skip, first-match ordering, empty-value never-fires.
+
+**Zustand store** (`src/stores/routing.ts`): tiny `useRoutingStore` with `rules` + `hydrate()` + `setRules()`. Hydrated once at boot from `providers.tsx`. Settings panel writes push into the store so the composer pill updates without a page reload.
+
+**Chat wiring** (`src/features/chat/index.tsx`):
+- `send()` now resolves a routing rule against the trimmed draft. If matched AND the target adapter is registered, override `activeAdapterId` for this send. For a fresh session (0 prior user messages) also flip `session.adapterId` so subsequent turns stay with the chosen adapter — mid-session matches only override THIS turn to avoid silently splitting history across adapters.
+- New `RoutingHint` chip above the Composer: shows `→ Claude Code · rule "Code prefix"` when a rule will fire. Goes red when the target adapter isn't registered so the user knows to fix something.
+
+**Settings panel** (`src/features/settings/index.tsx`): `RoutingRulesSection` + `RoutingRuleRow`. Inline CRUD (like T6.2): each rule edits in place with Save/Delete buttons, new rules get a cancel option. Dropdowns for match kind (prefix/contains/regex) and target adapter (populated from the live AgentRegistry). Checkboxes for `enabled` + `case_sensitive`. Disabled rules visually dim.
+
+**i18n**: `chat_page.routing_hint` / `routing_hint_missing` + `settings.routing_rules.*` in both `en.json` and `zh.json`.
+
+**e2e mock**: in-memory `routingRules` array + 3 command handlers in `e2e/fixtures/tauri-mock.ts`.
+
+### Test totals
+
+- Rust: **168 pass, 0 fail** (+7 in `routing_rules::tests`).
+- Frontend: TSC clean; ESLint clean (5 pre-existing warnings only); Vitest **37 pass** (+10 in `routing.test.ts`).
+
+### Deferred
+
+- Reorder-by-drag: priority today = list order = save order. Manual reorder IPC lands if/when users ask.
+- Source-channel rules (route by Telegram vs Discord vs CLI): needs upstream metadata plumbing.
+- Fallback chains ("if A isn't registered, try B").
+- Time-of-day / day-of-week rules.
+- Preview "simulate against my last 20 messages" — useful for regex tuning but outside MVP.
+
+### Next
+
+- T6.3: surface Hermes native `delegate_task` subagent tree in the Trajectory pane.
+- T6.5: per-agent sandbox.
+
+---
+
 ## 2026-04-23 — T6.2 · Multi-instance Hermes (register N gateways, route per session)
 
 Corey can now talk to more than one Hermes gateway concurrently. Users register extra instances in Settings (each with its own base URL / API key / default model / label); each becomes a first-class adapter under `adapter_id = "hermes:<id>"`, slotting into the existing AgentSwitcher, unified inbox, and analytics rollups without any chat-side code change.

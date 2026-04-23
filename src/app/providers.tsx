@@ -5,6 +5,7 @@ import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useUIStore } from '@/stores/ui';
 import { useAppStatusStore } from '@/stores/appStatus';
+import { useRoutingStore } from '@/stores/routing';
 import { useSandboxStore } from '@/stores/sandbox';
 import { SandboxConsentModal } from '@/components/sandbox/ConsentModal';
 
@@ -53,6 +54,13 @@ export function Providers({ children }: { children: ReactNode }) {
   // only changes via explicit user action).
   useEffect(() => {
     void useSandboxStore.getState().refresh();
+  }, []);
+
+  // T6.4 — hydrate the routing-rules store once. Composer reads it on
+  // every keystroke via the pure resolver; an un-hydrated store
+  // degrades cleanly to "no routing" rather than erroring.
+  useEffect(() => {
+    void useRoutingStore.getState().hydrate();
   }, []);
 
   // Apply theme on mount

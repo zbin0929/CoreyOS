@@ -37,6 +37,8 @@ import {
 } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 import { useComposerStore } from '@/stores/composer';
+import { useRoutingStore } from '@/stores/routing';
+import { resolveRoutedRule } from './routing';
 import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
@@ -387,7 +389,43 @@ function ChatPane({
     // Topbar AgentSwitcher. Read the store imperatively (no subscribe)
     // because we only need the value at send-time; any later change should
     // apply to the NEXT send, not retroactively hijack this stream.
-    const activeAdapterId = useAgentsStore.getState().activeId ?? undefined;
+    //
+    // T6.4 — routing-rule override. If the composed text matches an
+    // enabled rule AND its target adapter is registered, prefer that
+    // adapter over the active one. Missing targets are silently
+    // ignored (the composer pill already warned the user); we never
+    // send to a non-existent adapter. For a fresh session (0 prior
+    // user messages) the session's pinned adapter_id is also updated
+    // so subsequent turns stay with the chosen adapter — mid-session
+    // rule matches only override THIS turn so history isn't silently
+    // split across adapters.
+    const fallbackAdapterId = useAgentsStore.getState().activeId ?? undefined;
+    const registered = new Set(
+      useAgentsStore.getState().adapters?.map((a) => a.id) ?? [],
+    );
+    const matched = resolveRoutedRule(useRoutingStore.getState().rules, trimmed);
+    const routedAdapterId =
+      matched && registered.has(matched.target_adapter_id)
+        ? matched.target_adapter_id
+        : null;
+    const activeAdapterId = routedAdapterId ?? fallbackAdapterId;
+    if (routedAdapterId) {
+      const priorUserCount = messages.filter((m) => m.role === 'user').length;
+      if (priorUserCount === 0) {
+        // Flip the session's pinned adapter before appending user +
+        // pending bubbles so their adapter badge renders correctly.
+        useChatStore.setState((s) => {
+          const sess = s.sessions[sessionId];
+          if (!sess) return s;
+          return {
+            sessions: {
+              ...s.sessions,
+              [sessionId]: { ...sess, adapterId: routedAdapterId },
+            },
+          };
+        });
+      }
+    }
 
     try {
       const handle = await chatStream(
@@ -540,8 +578,9 @@ function ChatPane({
       )}
 
       <div className="border-t border-border bg-bg/80 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center px-6 pt-3">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 pt-3">
           <ActiveLLMBadge />
+          <RoutingHint draft={draft} />
         </div>
         <form
           onSubmit={onSubmit}
@@ -773,3 +812,44 @@ function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
   );
 }
 
+/**
+ * T6.4 — inline hint above the Composer showing which routing rule
+ * (if any) will fire on the current draft. When a rule matches but
+ * its `target_adapter_id` isn't registered, we show a warning chip so
+ * the user knows to either add the adapter or edit the rule.
+ */
+function RoutingHint({ draft }: { draft: string }) {
+  const { t } = useTranslation();
+  const rules = useRoutingStore((s) => s.rules);
+  const adapters = useAgentsStore((s) => s.adapters);
+
+  if (!rules || rules.length === 0) return null;
+  const matched = resolveRoutedRule(rules, draft);
+  if (!matched) return null;
+
+  const registered = new Set(adapters?.map((a) => a.id) ?? []);
+  const isRegistered = registered.has(matched.target_adapter_id);
+  const adapterLabel =
+    adapters?.find((a) => a.id === matched.target_adapter_id)?.name ??
+    matched.target_adapter_id;
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
+        isRegistered
+          ? 'border border-gold-500/30 bg-gold-500/10 text-gold-600'
+          : 'border border-danger/30 bg-danger/5 text-danger',
+      )}
+      data-testid="chat-routing-hint"
+      title={matched.name}
+    >
+      {isRegistered
+        ? t('chat_page.routing_hint', { adapter: adapterLabel, rule: matched.name })
+        : t('chat_page.routing_hint_missing', {
+            adapter: matched.target_adapter_id,
+            rule: matched.name,
+          })}
+    </span>
+  );
+}

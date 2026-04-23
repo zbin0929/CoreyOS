@@ -131,6 +131,15 @@ export const tauriMockInitScript = /* js */ `
       api_key: string | null;
       default_model: string | null;
     }>,
+    // T6.4 — routing rules. Empty by default; tests that need a
+    // populated list push before navigating.
+    routingRules: [] as Array<{
+      id: string;
+      name: string;
+      enabled: boolean;
+      match: { kind: string; value: string; case_sensitive?: boolean };
+      target_adapter_id: string;
+    }>,
     // Fixture lines for hermes_log_tail, keyed by kind. Tests can override
     // lines or missing at runtime via window.__CADUCEUS_MOCK__.state.
     hermesLogs: {
@@ -376,6 +385,26 @@ export const tauriMockInitScript = /* js */ `
           else row.yaml_values[path] = val;
         }
         return JSON.parse(JSON.stringify(row));
+      }
+
+      // T6.4 — routing rules. In-memory CRUD mirror of
+      // routing_rules.json so Composer + Settings tests can drive the
+      // full loop without a real config file.
+      case 'routing_rule_list': {
+        return { rules: state.routingRules.map((r: any) => ({ ...r })) };
+      }
+      case 'routing_rule_upsert': {
+        const inc = args.rule;
+        const idx = state.routingRules.findIndex((r: any) => r.id === inc.id);
+        if (idx >= 0) state.routingRules[idx] = { ...inc };
+        else state.routingRules.push({ ...inc });
+        return { ...inc };
+      }
+      case 'routing_rule_delete': {
+        state.routingRules = state.routingRules.filter(
+          (r: any) => r.id !== args.id,
+        );
+        return null;
       }
 
       // T6.2 — extra Hermes instances. Kept in-memory so Settings-page

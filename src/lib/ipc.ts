@@ -1132,6 +1132,44 @@ export function hermesInstanceTest(
   return invoke<HermesInstanceProbeResult>('hermes_instance_test', { instance });
 }
 
+// ─────────────── T6.4 · Routing rules ───────────────
+
+/** Predicate evaluated against the composed message text. One of
+ *  `'prefix' | 'contains' | 'regex'`. The case-toggle applies to
+ *  both `value` and the input text. */
+export type RoutingMatch =
+  | { kind: 'prefix'; value: string; case_sensitive?: boolean }
+  | { kind: 'contains'; value: string; case_sensitive?: boolean }
+  | { kind: 'regex'; value: string; case_sensitive?: boolean };
+
+/** One user-declared routing rule. Stored in
+ *  `<app_config_dir>/routing_rules.json`. First enabled match in file
+ *  order wins; `target_adapter_id` is looked up in the AdapterRegistry
+ *  at send time. */
+export interface RoutingRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  match: RoutingMatch;
+  target_adapter_id: string;
+}
+
+export interface RoutingRulesFile {
+  rules: RoutingRule[];
+}
+
+export function routingRuleList(): Promise<RoutingRulesFile> {
+  return invoke<RoutingRulesFile>('routing_rule_list');
+}
+
+export function routingRuleUpsert(rule: RoutingRule): Promise<RoutingRule> {
+  return invoke<RoutingRule>('routing_rule_upsert', { rule });
+}
+
+export function routingRuleDelete(id: string): Promise<void> {
+  return invoke<void>('routing_rule_delete', { id });
+}
+
 // ───────────────────────── Menu ─────────────────────────
 
 /** Tell Rust which locale to rebuild the native menubar in. Called from

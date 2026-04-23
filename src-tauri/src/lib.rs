@@ -27,6 +27,7 @@ mod hermes_profiles_archive;
 mod ipc;
 mod menu;
 mod pty;
+mod routing_rules;
 mod sandbox;
 mod skills;
 mod state;
@@ -148,6 +149,9 @@ pub fn run() {
             ipc::hermes_instances::hermes_instance_upsert,
             ipc::hermes_instances::hermes_instance_delete,
             ipc::hermes_instances::hermes_instance_test,
+            ipc::routing_rules::routing_rule_list,
+            ipc::routing_rules::routing_rule_upsert,
+            ipc::routing_rules::routing_rule_delete,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");
