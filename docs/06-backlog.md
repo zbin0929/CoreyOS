@@ -197,15 +197,13 @@ Categories, newest-phase first:
 - **Re-open when**: users start using runbooks cross-profile in
   the palette.
 
-### Icon system replacement (lucide-react → custom / alt library)
-- **Priority**: medium
-- **Why parked**: full audit shipped at `docs/icon-audit.md` —
-  ~80 icons across 30 files, categorised by surface (nav / topbar
-  / UI components / action buttons / empty-states) with current
-  and recommended sizes. Replacement itself is a mechanical sweep
-  once a strategy is picked (custom SVG assets, switch to Tabler
-  / Phosphor / Heroicons / Remix, or wrap lucide-react in a
-  unified `<Icon>` component with theme tokens).
-- **Re-open when**: user selects a strategy. Driving reasons:
-  brand consistency (Corey mark + nav glyphs feel different) or
-  a11y (stroke-width standardisation).
+### Icon system batch-refactor (migrate ~80 lucide call sites → `<Icon>`)
+- **Priority**: low
+- **Why parked**: the unified wrapper landed 2026-04-23
+  (`src/components/ui/icon.tsx`) and new code will adopt it. The
+  existing ~80 call sites still render correctly with raw
+  `<LucideX size={…} strokeWidth={…}/>` — migration is a mechanical
+  sweep, not blocking. Keep `docs/icon-audit.md` as the worklist.
+- **Re-open when**: a stroke-width / size-token inconsistency shows
+  up in review, or we do a second-pass design polish across
+  routes.

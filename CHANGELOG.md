@@ -6,6 +6,48 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Brand · Corey logo + Icon wrapper
+
+First pass of brand identity: ship the Corey logo across all Tauri
+platforms + favicon, and install a unified `<Icon>` wrapper around
+lucide-react to stop per-call-site drift.
+
+### Shipped
+
+- **Tauri multi-platform icons** — ran `pnpm tauri icon
+  src-tauri/icons/Corey.png` (1024×1024 source). Generated the full
+  set: macOS `icon.icns`, Windows `icon.ico` + Appx `Square*Logo.png`,
+  Linux `32/64/128/128@2x/icon.png`, iOS `AppIcon-*@{1,2,3}x.png` for
+  every required size, Android `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher{,_round,_foreground}.png`.
+  `tauri.conf.json` was already wired to the canonical filenames so
+  no config change needed.
+- **Favicon** — copied the 1024×1024 source to `public/favicon.png`
+  and the 32×32 rasterisation to `public/favicon-32.png`; `index.html`
+  registers both plus an `apple-touch-icon` entry.
+- **`<Icon>` wrapper** (`src/components/ui/icon.tsx`) — thin
+  `forwardRef` around any `LucideIcon`. Enforces:
+    - `strokeWidth={1.5}` (matches the logo's thin-stroke geometry)
+    - `size` accepts discrete tokens (`xs|sm|md|lg|xl` → 12/14/16/20/28 px)
+      **or** a raw pixel number for edge cases
+    - `className` auto-`shrink-0` so flex layouts don't compress it
+    - `aria-hidden={true}` by default (decorative unless caller
+      overrides)
+  Size tokens align with the groupings in `docs/icon-audit.md`.
+
+### Deferred
+
+- **Batch refactor** of the ~80 existing lucide-react call sites to
+  use `<Icon>`. Non-blocking; current code still renders correctly.
+  New code SHOULD go through `<Icon>` from now on; mechanical sweep
+  planned as a follow-up commit.
+
+### Test totals
+
+- typecheck + lint: clean (same 4 pre-existing fast-refresh
+  warnings).
+
+---
+
 ## 2026-04-23 — UI polish · drag region, zoom suppression, themed Select, layout hardening
 
 Post-close-out polish session driven by `pnpm tauri:dev` user report.
