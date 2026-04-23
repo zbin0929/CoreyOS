@@ -60,6 +60,43 @@ test.describe('profiles', () => {
     await expect(page.getByTestId('profile-card-staging-clone2')).toHaveCount(0);
   });
 
+  test('activate: click Activate on non-active profile → confirm modal → flips active badge', async ({
+    page,
+  }) => {
+    await page.goto('/profiles');
+
+    // Initial state: dev is active, prod is not. The Activate button
+    // should only render on the non-active card.
+    await expect(page.getByTestId('profile-action-activate-dev')).toHaveCount(0);
+    await expect(page.getByTestId('profile-action-activate-prod')).toBeVisible();
+
+    // Open the confirm modal; it should render `dev → prod` and the
+    // gateway-restart toggle on by default.
+    await page.getByTestId('profile-action-activate-prod').click();
+    await expect(page.getByTestId('profiles-activate-modal')).toBeVisible();
+    await expect(page.getByTestId('profiles-activate-modal')).toContainText(/dev/);
+    await expect(page.getByTestId('profiles-activate-modal')).toContainText(/prod/);
+    await expect(
+      page.getByTestId('profiles-activate-restart-toggle'),
+    ).toBeChecked();
+
+    // Uncheck the restart so the test doesn't also rely on the
+    // gateway-restart mock path (the mock accepts it, but the more
+    // we assert here the flakier the test gets).
+    await page.getByTestId('profiles-activate-restart-toggle').uncheck();
+
+    // Confirm → modal closes, prod becomes the active card, dev
+    // loses its pill.
+    await page.getByTestId('profiles-activate-confirm').click();
+    await expect(page.getByTestId('profiles-activate-modal')).toHaveCount(0);
+    await expect(
+      page.getByTestId('profile-card-prod').getByText(/Active|使用中/),
+    ).toBeVisible();
+    await expect(page.getByTestId('profile-action-activate-prod')).toHaveCount(0);
+    // dev is no longer active → its Activate button materialises.
+    await expect(page.getByTestId('profile-action-activate-dev')).toBeVisible();
+  });
+
   test('import a .tar.gz: preview shows manifest; confirm adds the card; overwrite path prompts', async ({
     page,
   }) => {

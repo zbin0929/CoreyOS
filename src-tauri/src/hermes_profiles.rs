@@ -33,6 +33,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::changelog;
+use crate::fs_atomic;
 
 /// Read-only view of a profile directory. `updated_at` is the mtime of
 /// the directory entry itself (matches the "Last used" column in list
@@ -347,6 +348,79 @@ pub fn clone_profile_at(
     })
 }
 
+/// Flip the active-profile pointer so Hermes's next gateway start
+/// picks up the named profile. This doesn't bounce the gateway —
+/// callers who want that immediate effect (`hermes gateway restart`)
+/// should chain it after the successful write.
+///
+/// Safety model:
+/// - Name validation up-front so a traversal attempt dies before we
+///   touch disk.
+/// - Refuse when the profile directory doesn't exist; silently
+///   activating a phantom profile would leave the gateway wedged on
+///   the next restart.
+/// - Atomic write via `fs_atomic::atomic_write` — the pointer file
+///   never exists in a partially-written state, so a crash mid-op
+///   doesn't leave `active_profile` empty (which `read_active` would
+///   then surface as "no active profile").
+/// - Journalled with the `from`/`to` shape the changelog revert UI
+///   already understands.
+pub fn activate_profile_at(
+    home: &Path,
+    name: &str,
+    changelog_path: Option<&Path>,
+) -> io::Result<ProfileInfo> {
+    validate_name(name).map_err(io::Error::other)?;
+    let dir = profiles_root(home).join(name);
+    if !dir.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("profile '{name}' not found"),
+        ));
+    }
+
+    let previous = read_active(home);
+    // No-op when already active — saves a disk write + a no-op
+    // journal entry that would clutter the changelog tab.
+    if previous.as_deref() == Some(name) {
+        return Ok(ProfileInfo {
+            name: name.to_string(),
+            path: dir.display().to_string(),
+            is_active: true,
+            updated_at: now_ms(),
+        });
+    }
+
+    let pointer = active_pointer(home);
+    if let Some(parent) = pointer.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    // Trailing newline so `cat` reads cleanly and matches Hermes's own
+    // writes (verified against the reference `hermes init` output).
+    let contents = format!("{name}\n");
+    fs_atomic::atomic_write(&pointer, contents.as_bytes(), None)?;
+
+    if let Some(p) = changelog_path {
+        let _ = changelog::append(
+            p,
+            "hermes.profile.activate",
+            previous.as_ref().map(|n| json!({ "name": n })),
+            Some(json!({ "name": name })),
+            match &previous {
+                Some(prev) => format!("Activated profile '{name}' (was '{prev}')"),
+                None => format!("Activated profile '{name}'"),
+            },
+        );
+    }
+
+    Ok(ProfileInfo {
+        name: name.to_string(),
+        path: dir.display().to_string(),
+        is_active: true,
+        updated_at: now_ms(),
+    })
+}
+
 fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
@@ -388,6 +462,12 @@ pub fn clone_profile(
     changelog_path: Option<&Path>,
 ) -> io::Result<ProfileInfo> {
     clone_profile_at(&home_dir(None), src, dst, changelog_path)
+}
+pub fn activate_profile(
+    name: &str,
+    changelog_path: Option<&Path>,
+) -> io::Result<ProfileInfo> {
+    activate_profile_at(&home_dir(None), name, changelog_path)
 }
 
 fn now_ms() -> i64 {
@@ -591,5 +671,53 @@ mod tests {
         assert!(validate_name("a/b").is_err());
         assert!(validate_name(".hidden").is_err());
         assert!(validate_name(&"x".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn activate_writes_pointer_and_marks_active() {
+        let h = TempHome::new();
+        h.seed("dev");
+        h.seed("prod");
+        h.seed_active("dev");
+
+        let info = activate_profile_at(h.path(), "prod", None).unwrap();
+        assert!(info.is_active);
+        assert_eq!(info.name, "prod");
+
+        // Pointer file now reads "prod\n".
+        let pointer = h.path().join(".hermes/active_profile");
+        let raw = fs::read_to_string(&pointer).unwrap();
+        assert_eq!(raw.trim(), "prod");
+
+        // Next list() reflects the flip.
+        let view = list_profiles_at(h.path()).unwrap();
+        assert_eq!(view.active.as_deref(), Some("prod"));
+        let prod = view.profiles.iter().find(|p| p.name == "prod").unwrap();
+        assert!(prod.is_active);
+    }
+
+    #[test]
+    fn activate_refuses_nonexistent_profile() {
+        let h = TempHome::new();
+        h.seed("dev");
+        let err = activate_profile_at(h.path(), "ghost", None).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        // Pointer file was never written.
+        assert!(!h.path().join(".hermes/active_profile").exists());
+    }
+
+    #[test]
+    fn activate_is_idempotent_when_already_active() {
+        let h = TempHome::new();
+        h.seed("dev");
+        h.seed_active("dev");
+
+        // Sanity: starting state.
+        assert_eq!(read_active(h.path()).as_deref(), Some("dev"));
+
+        // Activating again succeeds without throwing — the no-op path
+        // avoids clutter in the changelog journal.
+        let info = activate_profile_at(h.path(), "dev", None).unwrap();
+        assert!(info.is_active);
     }
 }

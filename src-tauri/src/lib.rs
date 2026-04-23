@@ -105,6 +105,7 @@ pub fn run() {
             ipc::hermes_profiles::hermes_profile_rename,
             ipc::hermes_profiles::hermes_profile_delete,
             ipc::hermes_profiles::hermes_profile_clone,
+            ipc::hermes_profiles::hermes_profile_activate,
             ipc::hermes_profiles::hermes_profile_export,
             ipc::hermes_profiles::hermes_profile_import,
             ipc::hermes_profiles::hermes_profile_import_preview,

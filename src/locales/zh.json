@@ -432,7 +432,13 @@
     "import_target_name": "安装为",
     "import_confirm": "导入",
     "import_confirm_overwrite": "覆盖现有",
-    "import_overwrite_warn": "已存在名为 \"{{name}}\" 的配置集。继续会覆盖磁盘上的旧版本。"
+    "import_overwrite_warn": "已存在名为 \"{{name}}\" 的配置集。继续会覆盖磁盘上的旧版本。",
+    "activate": "启用",
+    "activate_confirm": "启用",
+    "activate_busy": "切换中…",
+    "activate_confirm_from_to": "将活跃配置集从 \"{{from}}\" 切换到 \"{{to}}\"？",
+    "activate_confirm_fresh": "将 \"{{to}}\" 设为当前 Hermes 配置集？",
+    "activate_restart_gateway": "同时重启 Hermes 网关以让变更立即生效。"
   },
   "hermes_logs": {
     "page_subtitle": "Agent · 网关 · 错误 · 配置历史",

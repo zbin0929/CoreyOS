@@ -757,13 +757,21 @@ export function hermesProfileDelete(name: string): Promise<void> {
   return invoke<void>('hermes_profile_delete', { name });
 }
 
-/** Recursive copy. The clone starts inactive; switching is a Phase 3
- *  concern alongside per-profile gateway control. */
+/** Recursive copy. The clone starts inactive; switching is via
+ *  `hermesProfileActivate` below. */
 export function hermesProfileClone(args: {
   src: string;
   dst: string;
 }): Promise<HermesProfileInfo> {
   return invoke<HermesProfileInfo>('hermes_profile_clone', args);
+}
+
+/** Switch the active-profile pointer (`~/.hermes/active_profile`) to
+ *  `name`. Atomic on disk; journaled alongside the rest of the profile
+ *  ops. Does **not** bounce the gateway — callers chain
+ *  `hermesGatewayRestart()` when the user opts in. */
+export function hermesProfileActivate(name: string): Promise<HermesProfileInfo> {
+  return invoke<HermesProfileInfo>('hermes_profile_activate', { name });
 }
 
 // ─────────────────── tar.gz import / export ───────────────────

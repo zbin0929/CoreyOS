@@ -432,7 +432,13 @@
     "import_target_name": "Install as",
     "import_confirm": "Import",
     "import_confirm_overwrite": "Replace existing",
-    "import_overwrite_warn": "A profile named \"{{name}}\" already exists. Continuing will replace it on disk."
+    "import_overwrite_warn": "A profile named \"{{name}}\" already exists. Continuing will replace it on disk.",
+    "activate": "Activate",
+    "activate_confirm": "Activate",
+    "activate_busy": "Switching…",
+    "activate_confirm_from_to": "Switch active profile from \"{{from}}\" to \"{{to}}\"?",
+    "activate_confirm_fresh": "Set \"{{to}}\" as the active Hermes profile?",
+    "activate_restart_gateway": "Also restart the Hermes gateway so the change takes effect immediately."
   },
   "hermes_logs": {
     "page_subtitle": "Agent · gateway · errors · config history",

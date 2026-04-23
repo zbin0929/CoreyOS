@@ -438,6 +438,24 @@ export const tauriMockInitScript = /* js */ `
         };
       }
 
+      // 2026-04-23 — switch active profile. Matches the backend shape
+      // (refuses unknown names, idempotent for already-active) and
+      // mutates state.profilesActive so subsequent list calls reflect
+      // the flip.
+      case 'hermes_profile_activate': {
+        const name = args.name;
+        if (!state.profiles.some((p) => p.name === name)) {
+          throw new Error('not found: ' + name);
+        }
+        state.profilesActive = name;
+        return {
+          name,
+          path: state.profilesRoot + '/' + name,
+          is_active: true,
+          updated_at: Date.now(),
+        };
+      }
+
       // Tar.gz import/export (2026-04-23). We don't actually run tar
       // encoding in the mock — tests only care about the control flow
       // (button wired, preview renders, import + overwrite round-trip).

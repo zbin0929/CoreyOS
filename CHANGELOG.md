@@ -6,6 +6,78 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Phase 2 · Active-profile switching
+
+Closes the second Phase-2 deferral. Users can now flip the active
+Hermes profile from the UI — previously the pointer file
+(`~/.hermes/active_profile`) had to be edited by hand. The reality-
+check here was that Hermes gateway is a singleton process, so the
+meaningful primitive isn't "start a gateway per profile" but
+"switch the pointer + (optionally) bounce the gateway so the change
+takes effect".
+
+### Shipped
+
+**Rust** (`src-tauri/src/hermes_profiles.rs`):
+
+- `activate_profile_at(home, name, changelog_path)` — validates the
+  name, refuses nonexistent profiles, writes the pointer file
+  atomically via `fs_atomic::atomic_write`, journals the change as
+  `hermes.profile.activate` with a `from`/`to` shape so the
+  changelog revert UI can un-do it.
+- Idempotent: activating the already-active profile is a no-op (no
+  disk write, no journal entry — keeps the log clean under rapid
+  re-clicks).
+- Public `activate_profile(name, journal)` wrapper + IPC command
+  `hermes_profile_activate`.
+
+**TypeScript** (`src/features/profiles/index.tsx`, `src/lib/ipc.ts`):
+
+- **Activate button** on every non-active profile card (`Play` icon
+  + label, `data-testid="profile-action-activate-<name>"`). Active
+  cards don't render the button — the UI communicates "you can't
+  activate what's already active" by absence.
+- **Confirm modal** (`ActivateModal`) with `from → to` copy and a
+  checkbox for "Also restart the Hermes gateway". Default on,
+  because switching without a bounce leaves the running gateway on
+  the old profile — confusing for anyone not already wise to
+  Hermes's singleton model.
+- **Two-call sequence** on confirm: `hermesProfileActivate(name)`,
+  then (if opted-in) `hermesGatewayRestart()`. The second call is
+  best-effort: a missing / stopped gateway surfaces the restart
+  error inline but doesn't roll back the pointer flip, because the
+  pointer is the source of truth and a manual `hermes gateway
+  start` picks up the new profile anyway.
+
+### Tests
+
+- **Rust** `cargo test --lib`: 141 → **144** (+3 in
+  `hermes_profiles::tests`: `activate_writes_pointer_and_marks_active`,
+  `activate_refuses_nonexistent_profile`,
+  `activate_is_idempotent_when_already_active`).
+- **Playwright** `profiles.spec.ts`: 5 → **6** (new
+  `activate: click → confirm modal → flips active badge`).
+- `cargo clippy --lib --tests -- -D warnings`: clean.
+- typecheck + lint: clean (pre-existing fast-refresh warnings only).
+- Bundle: unchanged (main chunk 243 KB gzip, well within the 260 KB
+  CI budget).
+
+### i18n
+
+- 6 new `profiles.activate*` keys in `en` + `zh`.
+
+### Deferred (explicitly)
+
+- **Start / stop the gateway as a child of Caduceus.** Decided
+  against: Hermes already owns its own `gateway start/stop/restart`
+  CLI and persisting Caduceus-owned PIDs crosses the "manage
+  someone else's service" line we've been careful to stay on our
+  side of. If a user wants "gateway auto-runs when Caduceus does",
+  that's a follow-up conversation about installer behaviour, not a
+  feature of this page.
+
+---
+
 ## 2026-04-23 — Phase 2 · Profile tar.gz import / export
 
 Closes the first of two Phase-2 deferrals. Users can now export a

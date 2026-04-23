@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Loader2,
   Pencil,
+  Play,
   Plus,
   RefreshCw,
   Trash2,
@@ -20,6 +21,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
+  hermesGatewayRestart,
+  hermesProfileActivate,
   hermesProfileClone,
   hermesProfileCreate,
   hermesProfileDelete,
@@ -84,6 +87,17 @@ type ImportMode =
   | { kind: 'overwrite-prompt'; preview: ProfileImportPreview; bytesBase64: string; targetName: string }
   | { kind: 'error'; message: string };
 
+/** Activate-profile flow. `confirm` carries the target and the previous
+ *  active profile (when known) so the modal can render `dev → prod`
+ *  and the user gets one last chance to back out before the gateway
+ *  gets bounced. `restarting` is the transient state we hold while the
+ *  two IPC calls (activate + optional gateway restart) run in series. */
+type ActivateMode =
+  | { kind: 'idle' }
+  | { kind: 'confirm'; target: string; previous: string | null; restartGateway: boolean }
+  | { kind: 'busy'; target: string; restartGateway: boolean }
+  | { kind: 'error'; target: string; message: string };
+
 export function ProfilesRoute() {
   const { t } = useTranslation();
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -95,6 +109,10 @@ export function ProfilesRoute() {
   const [importMode, setImportMode] = useState<ImportMode>({ kind: 'idle' });
   const [importBusy, setImportBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // 2026-04-23 — per-profile activate flow. Lives at the page level
+  // (not per-card) because the confirm dialog spans profiles (shows
+  // `from → to`) and because the gateway-restart opt-in is global.
+  const [activateMode, setActivateMode] = useState<ActivateMode>({ kind: 'idle' });
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -254,6 +272,64 @@ export function ProfilesRoute() {
     }
   }
 
+  /**
+   * Kick off the activate flow for `target`. The card surface calls us
+   * with the target name; we look up the current active profile from
+   * the loaded view so the modal can show `current → target`. The
+   * restart-gateway toggle starts on because it's the whole point of
+   * switching — users who just want the pointer flipped without an
+   * immediate bounce can uncheck it before confirming.
+   */
+  function openActivate(target: string) {
+    if (state.kind !== 'loaded') return;
+    const previous = state.view.active;
+    // Short-circuit if the user somehow clicked Activate on the
+    // already-active profile — the button is disabled in that case
+    // but this makes the flow idempotent against double-clicks.
+    if (previous === target) return;
+    setActivateMode({
+      kind: 'confirm',
+      target,
+      previous,
+      restartGateway: true,
+    });
+  }
+
+  async function commitActivate() {
+    if (activateMode.kind !== 'confirm') return;
+    const { target, restartGateway } = activateMode;
+    setActivateMode({ kind: 'busy', target, restartGateway });
+    try {
+      await hermesProfileActivate(target);
+      if (restartGateway) {
+        // Bounce is best-effort — Hermes might not be running, in
+        // which case `hermes gateway restart` will error. We still
+        // consider the activation a success because the pointer
+        // flipped; surface the restart-specific error inline so the
+        // user knows to start the gateway manually.
+        try {
+          await hermesGatewayRestart();
+        } catch (err) {
+          setActivateMode({
+            kind: 'error',
+            target,
+            message: ipcErrorMessage(err),
+          });
+          await load();
+          return;
+        }
+      }
+      setActivateMode({ kind: 'idle' });
+      await load();
+    } catch (err) {
+      setActivateMode({
+        kind: 'error',
+        target,
+        message: ipcErrorMessage(err),
+      });
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
@@ -322,6 +398,19 @@ export function ProfilesRoute() {
             )
           }
           onConfirm={(overwrite) => void commitImport(overwrite)}
+        />
+      )}
+
+      {activateMode.kind !== 'idle' && (
+        <ActivateModal
+          mode={activateMode}
+          onCancel={() => setActivateMode({ kind: 'idle' })}
+          onToggleRestart={(v) =>
+            setActivateMode((m) =>
+              m.kind === 'confirm' ? { ...m, restartGateway: v } : m,
+            )
+          }
+          onConfirm={() => void commitActivate()}
         />
       )}
 
@@ -451,6 +540,7 @@ export function ProfilesRoute() {
                 }
                 onDelete={() => runWrite(p.name, () => hermesProfileDelete(p.name))}
                 onExport={() => void onExport(p.name)}
+                onActivate={() => openActivate(p.name)}
               />
             ))}
         </div>
@@ -470,6 +560,7 @@ interface CardProps {
   onClone: (dst: string) => void;
   onDelete: () => void;
   onExport: () => void;
+  onActivate: () => void;
 }
 
 function ProfileCard({
@@ -481,6 +572,7 @@ function ProfileCard({
   onClone,
   onDelete,
   onExport,
+  onActivate,
 }: CardProps) {
   const { t } = useTranslation();
   const busy = status.kind === 'busy';
@@ -556,6 +648,19 @@ function ProfileCard({
             >
               <Icon icon={Download} size="sm" />
             </Button>
+            {!profile.is_active && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={onActivate}
+                disabled={busy}
+                title={t('profiles.activate')}
+                data-testid={`profile-action-activate-${profile.name}`}
+              >
+                <Icon icon={Play} size="sm" />
+                <span className="ml-1">{t('profiles.activate')}</span>
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -887,6 +992,120 @@ function base64FromArrayBuffer(buf: ArrayBuffer): string {
     binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
   }
   return btoa(binary);
+}
+
+// ───────────────────────── Activate modal ─────────────────────────
+
+/**
+ * Confirm dialog for switching the active profile. Walks through three
+ * visible states: `confirm` (the default — shows from → to + the
+ * restart-gateway toggle), `busy` (spinner while IPCs run), and
+ * `error` (when either the pointer write or the subsequent gateway
+ * bounce fails). `idle` is filtered out at the call site so we never
+ * see it here.
+ */
+function ActivateModal({
+  mode,
+  onCancel,
+  onToggleRestart,
+  onConfirm,
+}: {
+  mode: ActivateMode;
+  onCancel: () => void;
+  onToggleRestart: (v: boolean) => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  if (mode.kind === 'idle') return null;
+  const busy = mode.kind === 'busy';
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+      data-testid="profiles-activate-modal"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-md rounded-lg border border-border bg-bg-elev-1 p-4 shadow-xl">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <Icon icon={Play} size="sm" className="text-gold-500" />
+            {t('profiles.activate')}
+          </div>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={busy}
+            aria-label={t('profiles.cancel')}
+          >
+            <Icon icon={X} size="xs" />
+          </Button>
+        </div>
+
+        {(mode.kind === 'confirm' || mode.kind === 'busy') && (
+          <div className="mt-4 flex flex-col gap-3 text-sm">
+            <p className="text-fg-muted">
+              {mode.kind === 'confirm' && mode.previous
+                ? t('profiles.activate_confirm_from_to', {
+                    from: mode.previous,
+                    to: mode.target,
+                  })
+                : t('profiles.activate_confirm_fresh', { to: mode.target })}
+            </p>
+            <label className="flex items-center gap-2 text-xs text-fg-muted">
+              <input
+                type="checkbox"
+                checked={
+                  mode.kind === 'confirm' ? mode.restartGateway : mode.restartGateway
+                }
+                disabled={busy}
+                onChange={(e) => onToggleRestart(e.target.checked)}
+                data-testid="profiles-activate-restart-toggle"
+              />
+              <span>{t('profiles.activate_restart_gateway')}</span>
+            </label>
+          </div>
+        )}
+
+        {mode.kind === 'error' && (
+          <div className="mt-4 flex items-start gap-2 rounded border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+            <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
+            <span className="break-all">{mode.message}</span>
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={busy}
+            data-testid="profiles-activate-cancel"
+          >
+            {t('profiles.cancel')}
+          </Button>
+          {mode.kind === 'confirm' && (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={onConfirm}
+              data-testid="profiles-activate-confirm"
+            >
+              <Icon icon={Check} size="sm" />
+              {t('profiles.activate_confirm')}
+            </Button>
+          )}
+          {mode.kind === 'busy' && (
+            <Button size="sm" variant="primary" disabled>
+              <Icon icon={Loader2} size="sm" className="animate-spin" />
+              {t('profiles.activate_busy')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function formatBytes(n: number): string {

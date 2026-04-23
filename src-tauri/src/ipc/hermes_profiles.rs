@@ -99,6 +99,25 @@ pub async fn hermes_profile_clone(
         })
 }
 
+/// Switch the Hermes active-profile pointer. Does NOT bounce the
+/// gateway — the UI chains `hermes_gateway_restart` after a successful
+/// activation when the user has opted into that in the confirm dialog.
+#[tauri::command]
+pub async fn hermes_profile_activate(
+    state: State<'_, AppState>,
+    name: String,
+) -> IpcResult<hp::ProfileInfo> {
+    let changelog = state.changelog_path.clone();
+    tokio::task::spawn_blocking(move || hp::activate_profile(&name, Some(&changelog)))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("profile activate join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("profile activate: {e}"),
+        })
+}
+
 // Silence the unused-helper warning when other wrappers don't use it
 // yet; keep the helper in case a non-changelog op needs it later.
 #[allow(dead_code)]
