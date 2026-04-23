@@ -256,6 +256,31 @@
       "changelog_path": "Mutation journal",
       "copy": "Copy",
       "copied": "Copied"
+    },
+    "sandbox": {
+      "title": "File sandbox",
+      "desc": "Control which directories the app can reach. Corey's disk operations are confined to workspace roots; sensitive system paths (e.g. ~/.ssh) are always denied.",
+      "mode_dev_allow": "Dev mode",
+      "mode_dev_allow_hint": "First launch. Everything outside the denylist is allowed. Adding a root flips to enforced mode.",
+      "mode_enforced": "Enforced",
+      "mode_enforced_hint": "Only paths inside an approved workspace root can be touched.",
+      "enforce_now": "Enforce now",
+      "roots_title": "Workspace roots",
+      "no_roots": "No roots configured yet.",
+      "add_title": "Add a root",
+      "path_placeholder": "/Users/you/code/my-project",
+      "label_placeholder": "Display label (optional)",
+      "browse": "Browse…",
+      "add": "Add",
+      "remove": "Remove",
+      "mode_label": "Access",
+      "mode_read": "Read-only",
+      "mode_read_short": "RO",
+      "mode_read_write": "Read / write",
+      "mode_read_write_short": "RW",
+      "session_grants_title": "Session grants (one-shot)",
+      "clear_grants": "Clear",
+      "config_path": "Config file:"
     }
   },
   "logs": {
@@ -504,6 +529,19 @@
   "common": {
     "coming_soon": "Coming soon",
     "loading": "Loading…",
-    "phase": "Phase {{n}}"
+    "phase": "Phase {{n}}",
+    "close": "Close"
+  },
+  "sandbox": {
+    "consent": {
+      "title": "Access permission required",
+      "desc": "The app is trying to reach the path below, which sits outside your current workspace. Choose how to proceed:",
+      "mode_label": "Access:",
+      "mode_read": "Read-only",
+      "mode_read_write": "Read / write",
+      "deny": "Deny",
+      "grant_once": "Just this once",
+      "add_root": "Add to workspace"
+    }
   }
 }

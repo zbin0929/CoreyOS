@@ -1,8 +1,11 @@
 # Path sandbox (TRAE-style workspace roots)
 
-**Status**: Phase 0 ships plumbing (types, `PathAuthority`, `sandbox::fs`, denylist). Interactive consent UI + persistence land in Phase 2 Settings.
+**Status**: **Live** (2026-04-23). Rust enforcement, `sandbox.json`
+persistence, Settings > Workspace UI, and root-level consent modal all
+shipped. See `CHANGELOG.md` entry "Path sandbox · real enforcement"
+for the full deltas from the earlier Phase 0 plumbing-only state.
 
-**Last updated**: 2026-04-21.
+**Last updated**: 2026-04-23.
 
 ## Verified behavior (2026-04-21)
 
@@ -37,14 +40,14 @@ Unit tests in `src-tauri/src/sandbox/mod.rs` — 3/3 green on macOS arm64:
 
 ## Goals
 
-1. Caduceus's Rust-side fs operations (IPC commands) can only touch paths inside user-approved **workspace roots**, with a hard **denylist** that wins unconditionally.
+1. Corey's Rust-side fs operations (IPC commands) can only touch paths inside user-approved **workspace roots**, with a hard **denylist** that wins unconditionally.
 2. Cross-boundary access triggers an in-app consent prompt (Phase 2). User picks: *Just this once* / *Add to workspace* / *Deny*.
 3. Business code cannot bypass the sandbox. All disk I/O must flow through `sandbox::fs::*`; `use std::fs` / `use tokio::fs` is banned outside the sandbox module.
 4. Canonicalization defeats `..` traversal and symlink escapes.
 
 ## Non-goals
 
-- Sandboxing the **agent** (Hermes / Claude Code / Aider). That happens inside each agent's runtime, not Caduceus's. Caduceus can only surface whatever sandboxing the agent already exposes (see Phase 5 adapter capability matrix).
+- Sandboxing the **agent** (Hermes / Claude Code / Aider). That happens inside each agent's runtime, not Corey's. Corey can only surface whatever sandboxing the agent already exposes (see Phase 5 adapter capability matrix).
 - Seccomp / syscall-level confinement of Rust process itself. Out of scope.
 - Network sandboxing. Separate concern, future doc.
 
@@ -87,30 +90,34 @@ Denylist matching occurs **after** canonicalization, so symlinks like `$HOME/sho
 
 | Phase | Behavior |
 |-------|----------|
-| 0 (now) | Plumbing live. `home_stats` demo goes through sandbox. Roots empty → dev-allow. Denylist enforced. |
-| 2 | Settings → Workspace UI: add/remove roots with native folder picker. Persist to `$APPCONFIG/caduceus/sandbox.json`. Consent dialog component. IPC event `sandbox:consent_requested` triggers modal. Once a user sets at least one root, mode flips from `dev-allow` to `enforced` and the Home page badge turns gold. |
+| 0 | Plumbing live. `home_stats` demo goes through sandbox. Roots empty → dev-allow. Denylist enforced. |
+| 2 | **Shipped 2026-04-23.** Settings → Workspace UI (add/remove roots, RO vs RW, session-grants viewer). Persist to `$APPCONFIG/corey/sandbox.json` via `fs_atomic::atomic_write` (0600 on Unix). `SandboxConsentModal` mounted at app root: frontend catches `SandboxConsentRequired` via `withSandboxConsent(run, path)`, awaits user decision (Deny / Just this once / Add to workspace), and retries. First-launch seeds `~/.hermes/` as a `ReadWrite` root when present and stays in `DevAllow`; first mutation flips to `Enforced` and writes the config file. Native folder picker deferred. |
 | 4 | Skill editor, attachment picker, trajectory export — all gated. |
-| 5 | Multi-agent adapter matrix: surface each agent's own sandboxing capability (`agent.sandbox.roots`, `agent.sandbox.consent_mode`) in Settings so users understand what Caduceus controls vs what the agent controls. |
+| 5 | Multi-agent adapter matrix: surface each agent's own sandboxing capability (`agent.sandbox.roots`, `agent.sandbox.consent_mode`) in Settings so users understand what Corey controls vs what the agent controls. |
 
-## IPC surface (Phase 2)
-
-```
-sandbox_get_state()                           → SandboxState { roots, mode }
-sandbox_add_root(path, label, mode)           → WorkspaceRoot
-sandbox_remove_root(path)                     → ()
-sandbox_decide(request_id, decision)          → ()    // Allow | GrantOnce | AddAsRoot | Deny
-sandbox_pending_requests()                    → Vec<ConsentRequest>
-```
-
-Event:
+## IPC surface (shipped)
 
 ```
-"sandbox:consent_requested" → { request_id, path, op, caller_hint }
+sandbox_get_state()                           → { mode, roots, session_grants, config_path }
+sandbox_add_root({ path, label, mode })       → WorkspaceRoot (canonical)
+sandbox_remove_root({ path })                 → ()
+sandbox_grant_once({ path })                  → { canonical }   // session-only; denylist still wins
+sandbox_set_enforced()                        → ()              // flip mode without adding a root
+sandbox_clear_session_grants()                → ()
 ```
+
+**No `sandbox:consent_requested` event.** The originally-planned
+Rust-side pending-request registry was simplified into a pure error
+round-trip: IPCs that hit `PathAuthority::check()` and need consent
+return `IpcError::SandboxConsentRequired { path }`, the TS
+`withSandboxConsent(run, path)` helper catches it, opens the modal
+(backed by the Zustand `pending` queue in `stores/sandbox.ts`), then
+replays the original call after the decision. Zero Rust-side blocking,
+no `AppHandle` event plumbing required.
 
 ## Persistence
 
-`$APPCONFIG/caduceus/sandbox.json`:
+`$APPCONFIG/corey/sandbox.json`:
 
 ```json
 {
@@ -125,9 +132,21 @@ Session grants are never persisted.
 
 ## Code hygiene
 
-- `sandbox::fs` is the only module allowed to `use std::fs` / `use tokio::fs`.
-- CI grep check (future): `rg -l 'use (std|tokio)::fs' src-tauri/src --glob '!src-tauri/src/sandbox/**'` must be empty.
-- All new IPC commands take `State<'_, AppState>` and call `state.authority` via `sandbox::fs::*`.
+- `sandbox::fs` is the only module where raw `std::fs` / `tokio::fs`
+  are expected. Two bootstrap files (`fs_atomic.rs`, `db.rs`) are also
+  allowlisted since they run before `PathAuthority` is loaded.
+- **CI grep lint** (live as of 2026-04-23): `pnpm check:sandbox-fs`
+  runs `scripts/check-sandbox-fs.mjs`. It flags any `std::fs::` /
+  `tokio::fs::` call outside the allowlist unless the line (or a
+  contiguous `//` comment block directly above it) carries a
+  `sandbox-allow: <reason>` marker. `#[cfg(test)]` modules are
+  auto-skipped.
+- All new IPC commands take `State<'_, AppState>` and call
+  `state.authority` via `sandbox::fs::*`.
+- Known leftover `sandbox-allow` sites (tracked for migration):
+  `ipc/channels.rs` (`~/.hermes/.env`, `config.yaml` readers) and
+  `adapters/hermes/mod.rs` (attachment image → base64). Both need
+  async plumbing before they can move.
 
 ## Tests
 

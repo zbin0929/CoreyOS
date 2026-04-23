@@ -147,6 +147,11 @@ fn build_content(text: String, attachments: Vec<ChatAttachmentRef>) -> ChatMessa
     for a in attachments {
         let is_image = a.mime.starts_with("image/");
         if is_image {
+            // sandbox-allow: attachment paths are already validated at
+            // stage time (see `attachment_stage_path`) and live under
+            // the app's attachments dir. Adapter code runs without an
+            // `AppState` handle; a follow-up will thread the authority
+            // through the adapter trait and swap to `sandbox::fs::read`.
             match std::fs::read(&a.path) {
                 Ok(bytes) => {
                     let data_url = format!("data:{};base64,{}", a.mime, BASE64.encode(&bytes));

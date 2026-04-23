@@ -4,7 +4,21 @@ import { BookOpen, Plug, Sparkles, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoreyMark } from '@/components/ui/corey-mark';
 import { Icon } from '@/components/ui/icon';
-import { homeStats, type HomeStats } from '@/lib/ipc';
+import { homeStats, ipcErrorMessage, type HomeStats } from '@/lib/ipc';
+
+/**
+ * Collapse a user-home-prefixed absolute path into the familiar `~`
+ * form so the demo chip stays readable on narrow windows. Falls back
+ * to the raw path on Windows / when the path doesn't match.
+ */
+function shortenHome(abs: string): string {
+  const segs = abs.split('/').filter(Boolean);
+  // macOS / Linux: /Users/<name>/... or /home/<name>/...
+  if ((segs[0] === 'Users' || segs[0] === 'home') && segs.length >= 2) {
+    return '~/' + segs.slice(2).join('/');
+  }
+  return abs;
+}
 
 export function HomeRoute() {
   const { t } = useTranslation();
@@ -14,7 +28,11 @@ export function HomeRoute() {
   useEffect(() => {
     homeStats()
       .then(setStats)
-      .catch((e) => setError(String(e?.message ?? e)));
+      // IPC errors are structured objects (`{kind,...}`) with no
+      // `.message` field — `String(obj)` would stringify to
+      // "[object Object]". Route through `ipcErrorMessage` so the
+      // sandbox/unreachable/etc. kinds render human text.
+      .catch((e) => setError(ipcErrorMessage(e)));
   }, []);
   return (
     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden p-8">
@@ -64,7 +82,9 @@ export function HomeRoute() {
           ) : stats ? (
             <span className="flex items-center gap-2">
               <span>
-                <span className="text-fg-subtle">$HOME</span>
+                <span className="text-fg-subtle" title={stats.path}>
+                  {shortenHome(stats.path)}
+                </span>
                 {' '}contains{' '}
                 <span className="text-fg">{stats.entry_count}</span>{' '}
                 <span className="text-fg-subtle">entries</span>

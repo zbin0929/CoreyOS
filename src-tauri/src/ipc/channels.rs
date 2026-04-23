@@ -206,6 +206,11 @@ fn build_channel_states() -> std::io::Result<Vec<ChannelState>> {
 /// token-style names (`TELEGRAM_BOT_TOKEN`, `MATRIX_ACCESS_TOKEN`, …).
 fn read_nonempty_env_keys() -> std::io::Result<std::collections::HashSet<String>> {
     let path = env_path()?;
+    // sandbox-allow: `~/.hermes/.env` is the seeded default root. This
+    // helper is sync and called from both IPC and test code; rewiring
+    // through the async sandbox::fs API would cascade into the whole
+    // channels module. Tracked for follow-up alongside hermes_config /
+    // hermes_profiles migration.
     let raw = match std::fs::read_to_string(&path) {
         Ok(s) => s,
         // Missing .env is a valid "none configured yet" state; surface
@@ -257,6 +262,7 @@ fn read_config_yaml_value() -> std::io::Result<YamlValue> {
             )
         })?;
     let path = Path::new(&home).join(".hermes/config.yaml");
+    // sandbox-allow: same rationale as `read_nonempty_env_keys` above.
     let raw = match std::fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(YamlValue::Null),

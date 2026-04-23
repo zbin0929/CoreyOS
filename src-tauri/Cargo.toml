@@ -25,6 +25,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
+# Native folder picker for Settings › Workspace. Wired into the sandbox
+# "Add root" form so users don't hand-type `/Users/…/Projects` paths.
+tauri-plugin-dialog = "2"
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "io-util", "process"] }
 async-trait = "0.1"

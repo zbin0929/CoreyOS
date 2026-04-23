@@ -6,6 +6,142 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Sandbox follow-up · folder picker, CI lint, mode plumbing
+
+Closes the three "Deferred" items from the morning's sandbox GA entry
+into a single pass so the next phase starts with a clean slate.
+
+### Shipped
+
+- **Native folder picker** in Settings › Workspace. Adds
+  `tauri-plugin-dialog` (Rust) + `@tauri-apps/plugin-dialog` (TS) and a
+  `dialog:allow-open` capability, plus a "Browse…" button next to the
+  path input. Selecting a folder auto-fills the label from the last
+  path segment when empty. Falls back gracefully to text entry in
+  Storybook / Playwright contexts where the plugin isn't loaded.
+- **`ipc/demo.rs · home_stats`** now reports `state.authority.mode()`
+  directly instead of guessing from `roots.is_empty()`. The old
+  heuristic was wrong post-GA because `~/.hermes/` is seeded as a root
+  even while mode is still `DevAllow`.
+- **CI grep-lint** at `scripts/check-sandbox-fs.mjs` (wired as
+  `pnpm check:sandbox-fs`). Flags any `std::fs::` / `tokio::fs::`
+  usage outside the sandbox module, `fs_atomic`, `db.rs` bootstrap,
+  or an explicit `// sandbox-allow: <reason>` marker. Test modules
+  (detected via `#[cfg(test)]` + `mod … {` pattern) are skipped.
+- Current production callsites that still reach for raw `std::fs`
+  (`adapters/hermes/mod.rs` attachment reads, `ipc/channels.rs` env /
+  yaml helpers) now carry `sandbox-allow` rationales pointing at the
+  follow-up async migration.
+
+### Deferred
+
+- Full migration of `hermes_config` / `hermes_profiles` /
+  `adapters/hermes` from `std::fs` to `sandbox::fs::*`. Requires
+  threading the `PathAuthority` through the adapter trait and
+  converting sync helpers to async; tracked as a dedicated PR.
+
+---
+
+## 2026-04-23 — Path sandbox · real enforcement
+
+Graduates the Phase 0 sandbox plumbing into a fully interactive access
+control layer. Previously `PathAuthority` held roots in memory only and
+the Phase 2 roadmap said "UI + consent dialog pending". Both now ship:
+workspace roots persist to `~/.config/corey/sandbox.json`, the Settings
+page has a Workspace section to add / remove them, and a root-level
+`SandboxConsentModal` catches `SandboxConsentRequired` errors so the
+user can grant one-shot access or promote the path to a persisted root
+without losing their original action.
+
+### Shipped
+
+**Rust** (`src-tauri/src/sandbox/`):
+
+- `sandbox/persistence.rs` — versioned `SandboxConfig` (mode + roots)
+  with atomic JSON writes via `fs_atomic::atomic_write`. 0600 perms on
+  Unix so other users on a shared box can't enumerate workspace roots.
+  Round-trip + missing-file + unknown-field tests.
+- `PathAuthority::init_from_disk(app_config_dir)` — loads
+  `sandbox.json` if present; on first launch seeds `~/.hermes/` as a
+  `ReadWrite` root (when the directory exists) and stays in `DevAllow`
+  mode so the app works without any configuration.
+- `add_root` / `remove_root` / `set_enforced` / `grant_once` — all
+  canonicalize + persist + auto-flip mode to `Enforced` on first
+  mutation. `grant_once` still honours the denylist so a session grant
+  can never unlock `~/.ssh`.
+- `SandboxMode::{DevAllow, Enforced}` serialized to JSON;
+  `check()` now consults the mode instead of hard-coding the
+  "empty-roots ⇒ dev allow" shortcut.
+- 3 new persistence unit tests + 3 Windows verbatim-prefix regressions
+  retained. `cargo test --lib` now runs **147 tests, 0 failures**.
+
+**IPC** (`src-tauri/src/ipc/sandbox.rs`, 6 commands):
+
+- `sandbox_get_state` — `{ mode, roots, session_grants, config_path }`.
+- `sandbox_add_root { path, label, mode }` → stored root (canonical).
+- `sandbox_remove_root { path }`.
+- `sandbox_grant_once { path }` → `{ canonical }`; denylist still wins.
+- `sandbox_set_enforced` — flip mode without adding a root.
+- `sandbox_clear_session_grants`.
+
+**Frontend** (`src/stores/sandbox.ts`, `src/components/sandbox/ConsentModal.tsx`,
+`src/features/settings/index.tsx`):
+
+- Zustand sandbox store with `pending` consent queue + a
+  `withSandboxConsent(run, path)` helper that wraps any IPC call,
+  catches `SandboxConsentRequired`, awaits the modal decision, and
+  retries transparently.
+- Settings > Workspace section: mode pill (DevAllow / Enforced) with
+  "Enforce now" shortcut, root list with per-row mode badge + remove
+  button, add-root form with Read/RW toggle, session-grants viewer with
+  a one-click clear, live `sandbox.json` path readout.
+- Root-level `SandboxConsentModal` (mounted in `Providers`) — renders
+  whenever `pending.length > 0`, shows the offending path + access
+  selector, three outcomes: **Deny** / **Just this once** / **Add to
+  workspace**.
+- `asSandboxConsentRequired(e)` type-narrowing helper for callers that
+  want their own retry strategy.
+
+**i18n** — `settings.sandbox.*` (22 keys) + `sandbox.consent.*` (8 keys)
++ `common.close` in both `en.json` and `zh.json`.
+
+**e2e mocks** — `sandbox_*` commands mocked in
+`e2e/fixtures/tauri-mock.ts`; fixture state is mutable so add/remove
+round-trip through the same list the UI reads back.
+
+### Deferred
+
+- **Native folder picker** — the add-root form currently takes a typed
+  path. Hooking Tauri's `dialog` plugin is one call but needs a
+  permission in `tauri.conf.json`; deferred so this change stays
+  plumbing-only.
+- **Sandbox-aware `ipc/demo.rs` rewrite** — `home_stats` still labels
+  itself `dev-allow`/`enforced` from the old "roots empty?" heuristic;
+  swapping it to read `authority.mode()` is a one-liner but touches
+  the Phase 0 demo contract.
+- **Capability-gated fs ops across every IPC** — the sandbox surface
+  is live but several modules (`hermes_config`, `hermes_profiles`,
+  `skills`) still go through `std::fs`/`tokio::fs` directly. Those
+  paths either live under `~/.hermes/` (auto-rooted) or
+  `$APPDATA/corey/` (implicit workspace), so the user-visible effect
+  is nil today; a follow-up sweep will route them through
+  `sandbox::fs::*` for the CI grep guard.
+
+### Test totals
+
+Rust `cargo test --lib`: **147 passed** (was 141 · +6 sandbox).
+TypeScript: `pnpm typecheck` + `pnpm lint` clean.
+
+### Next
+
+- Native folder picker for the add-root form.
+- Move the remaining `std::fs`/`tokio::fs` call sites behind
+  `sandbox::fs::*` so the CI grep lint can turn on.
+- Playwright spec for Settings > Workspace (add / remove / enforce) +
+  a consent-modal flow driven by a failing IPC.
+
+---
+
 ## 2026-04-23 — Phase 2 · Active-profile switching
 
 Closes the second Phase-2 deferral. Users can now flip the active

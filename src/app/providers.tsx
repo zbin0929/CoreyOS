@@ -5,6 +5,8 @@ import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useUIStore } from '@/stores/ui';
 import { useAppStatusStore } from '@/stores/appStatus';
+import { useSandboxStore } from '@/stores/sandbox';
+import { SandboxConsentModal } from '@/components/sandbox/ConsentModal';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +45,14 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
     useAgentsStore.getState().startBackgroundRefresh();
     return () => useAgentsStore.getState().stopBackgroundRefresh();
+  }, []);
+
+  // Hydrate sandbox state (mode + roots) once at boot so Settings can
+  // render synchronously and every IPC wrapper can consult the mode
+  // without round-tripping. Cheap — one IPC, no polling (sandbox state
+  // only changes via explicit user action).
+  useEffect(() => {
+    void useSandboxStore.getState().refresh();
   }, []);
 
   // Apply theme on mount
@@ -98,5 +108,13 @@ export function Providers({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      {/* Sandbox consent prompt — mounted once at app root; only renders
+          when `useSandboxStore.pending` has entries. Z-index 50 puts it
+          above every feature-level modal (which sit at z-40). */}
+      <SandboxConsentModal />
+    </QueryClientProvider>
+  );
 }

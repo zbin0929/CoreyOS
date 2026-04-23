@@ -28,6 +28,15 @@ export const tauriMockInitScript = /* js */ `
   // ── user-editable fixture state ──
   const state = {
     homeStats: { path: '/tmp/caduceus', entry_count: 3, sandbox_mode: 'dev-allow' },
+    // Sandbox: matches the Rust SandboxStateDto. Tests start in dev_allow
+    // with an empty workspace so the Settings > Workspace section renders
+    // its "no roots yet" empty state by default.
+    sandbox: /** @type {any} */ ({
+      mode: 'dev_allow',
+      roots: [],
+      session_grants: [],
+      config_path: '/tmp/corey/sandbox.json',
+    }),
     // T3.2 channel state — kept as mutable state so save round-trips.
     // Shape mirrors the hermes_channel_list response exactly.
     channels: /** @type {any[]} */ ([
@@ -275,6 +284,41 @@ export const tauriMockInitScript = /* js */ `
 
       case 'app_paths':
         return state.appPaths;
+
+      case 'sandbox_get_state':
+        return JSON.parse(JSON.stringify(state.sandbox));
+
+      case 'sandbox_add_root': {
+        const { path, label, mode } = args.args;
+        const existing = state.sandbox.roots.findIndex((r: any) => r.path === path);
+        const entry = { path, label, mode };
+        if (existing >= 0) state.sandbox.roots[existing] = entry;
+        else state.sandbox.roots.push(entry);
+        state.sandbox.mode = 'enforced';
+        return entry;
+      }
+
+      case 'sandbox_remove_root': {
+        const { path } = args.args;
+        state.sandbox.roots = state.sandbox.roots.filter((r: any) => r.path !== path);
+        return null;
+      }
+
+      case 'sandbox_grant_once': {
+        const { path } = args.args;
+        if (!state.sandbox.session_grants.includes(path)) {
+          state.sandbox.session_grants.push(path);
+        }
+        return { canonical: path };
+      }
+
+      case 'sandbox_set_enforced':
+        state.sandbox.mode = 'enforced';
+        return null;
+
+      case 'sandbox_clear_session_grants':
+        state.sandbox.session_grants = [];
+        return null;
 
       case 'hermes_channel_list': {
         // Return a deep clone so the UI can't accidentally mutate

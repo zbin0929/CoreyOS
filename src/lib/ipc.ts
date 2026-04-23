@@ -1108,6 +1108,63 @@ export function configTest(config: GatewayConfigDto): Promise<HealthProbe> {
   return invoke<HealthProbe>('config_test', { config });
 }
 
+// ───────────────────────── Sandbox ─────────────────────────
+
+export type SandboxAccessMode = 'read' | 'read_write';
+export type SandboxMode = 'dev_allow' | 'enforced';
+
+export interface SandboxRoot {
+  path: string;
+  label: string;
+  mode: SandboxAccessMode;
+}
+
+export interface SandboxStateDto {
+  mode: SandboxMode;
+  roots: SandboxRoot[];
+  session_grants: string[];
+  config_path: string;
+}
+
+export function sandboxGetState(): Promise<SandboxStateDto> {
+  return invoke<SandboxStateDto>('sandbox_get_state');
+}
+
+export function sandboxAddRoot(args: {
+  path: string;
+  label: string;
+  mode: SandboxAccessMode;
+}): Promise<SandboxRoot> {
+  return invoke<SandboxRoot>('sandbox_add_root', { args });
+}
+
+export function sandboxRemoveRoot(path: string): Promise<void> {
+  return invoke<void>('sandbox_remove_root', { args: { path } });
+}
+
+export function sandboxGrantOnce(path: string): Promise<{ canonical: string }> {
+  return invoke<{ canonical: string }>('sandbox_grant_once', { args: { path } });
+}
+
+export function sandboxSetEnforced(): Promise<void> {
+  return invoke<void>('sandbox_set_enforced');
+}
+
+export function sandboxClearSessionGrants(): Promise<void> {
+  return invoke<void>('sandbox_clear_session_grants');
+}
+
+/** Narrow an unknown rejection into a SandboxConsentRequired payload. */
+export function asSandboxConsentRequired(e: unknown): { path: string } | null {
+  if (e && typeof e === 'object' && 'kind' in e) {
+    const err = e as IpcError;
+    if (err.kind === 'sandbox_consent_required' && typeof err.path === 'string') {
+      return { path: err.path };
+    }
+  }
+  return null;
+}
+
 // ───────────────────────── Error envelope ─────────────────────────
 
 export type IpcErrorKind =

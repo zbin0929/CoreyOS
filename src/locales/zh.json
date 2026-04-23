@@ -256,6 +256,31 @@
       "changelog_path": "变更日志",
       "copy": "复制",
       "copied": "已复制"
+    },
+    "sandbox": {
+      "title": "文件沙箱",
+      "desc": "控制应用可访问的目录。Corey 的文件操作仅能触及工作区以内的路径；系统敏感目录（如 ~/.ssh）永远被拒绝。",
+      "mode_dev_allow": "开发模式",
+      "mode_dev_allow_hint": "首次运行。除系统敏感路径外，所有访问均放行。添加根目录后将自动切换到严格模式。",
+      "mode_enforced": "严格模式",
+      "mode_enforced_hint": "仅允许已批准的工作区内的文件操作。",
+      "enforce_now": "立即启用严格模式",
+      "roots_title": "工作区根目录",
+      "no_roots": "尚未添加根目录。",
+      "add_title": "添加根目录",
+      "path_placeholder": "/Users/你/code/my-project",
+      "label_placeholder": "显示名（可选）",
+      "browse": "浏览…",
+      "add": "添加",
+      "remove": "移除",
+      "mode_label": "权限",
+      "mode_read": "仅读",
+      "mode_read_short": "只读",
+      "mode_read_write": "读写",
+      "mode_read_write_short": "读写",
+      "session_grants_title": "会话临时授权",
+      "clear_grants": "清除",
+      "config_path": "配置文件："
     }
   },
   "logs": {
@@ -504,6 +529,19 @@
   "common": {
     "coming_soon": "即将推出",
     "loading": "加载中…",
-    "phase": "Phase {{n}}"
+    "phase": "Phase {{n}}",
+    "close": "关闭"
+  },
+  "sandbox": {
+    "consent": {
+      "title": "需要访问授权",
+      "desc": "应用尝试访问以下路径，但它不在当前工作区内。请选择如何处理：",
+      "mode_label": "权限：",
+      "mode_read": "只读",
+      "mode_read_write": "读写",
+      "deny": "拒绝",
+      "grant_once": "仅本次",
+      "add_root": "添加到工作区"
+    }
   }
 }

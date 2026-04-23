@@ -67,6 +67,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             ipc::agents::adapter_list,
             ipc::health::health_check,
@@ -131,6 +132,12 @@ pub fn run() {
             ipc::db::db_attachment_insert,
             ipc::db::db_attachment_delete,
             ipc::demo::home_stats,
+            ipc::sandbox::sandbox_get_state,
+            ipc::sandbox::sandbox_add_root,
+            ipc::sandbox::sandbox_remove_root,
+            ipc::sandbox::sandbox_grant_once,
+            ipc::sandbox::sandbox_set_enforced,
+            ipc::sandbox::sandbox_clear_session_grants,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Caduceus booting");
@@ -205,17 +212,24 @@ pub fn run() {
             // on first IPC call — startup does no work here.
             let channel_status = Arc::new(channel_status::ChannelStatusCache::new());
 
-            app.manage(AppState::new(
+            let app_state = AppState::new(
                 registry,
                 cfg,
-                config_dir,
+                config_dir.clone(),
                 db,
                 changelog_path,
                 app_data_dir,
                 db_path,
                 wechat,
                 channel_status,
-            ));
+            );
+
+            // Load sandbox.json (or seed ~/.hermes/ + stay in DevAllow on
+            // first launch). Safe to call before `manage` — `authority` is
+            // already inside the Arc inside AppState.
+            app_state.authority.init_from_disk(&config_dir);
+
+            app.manage(app_state);
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
