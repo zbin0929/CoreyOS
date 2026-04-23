@@ -34,6 +34,7 @@ import {
   type UiMessage,
   type UiToolCall,
 } from '@/stores/chat';
+import { useAgentsStore } from '@/stores/agents';
 import { useComposerStore } from '@/stores/composer';
 import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { MessageBubble } from './MessageBubble';
@@ -376,12 +377,18 @@ function ChatPane({
       toDto('user', contentForMessage, hasAttachments ? attachmentsSnapshot : undefined),
     ];
 
+    // T5.5b — route the stream to whichever adapter the user picked in the
+    // Topbar AgentSwitcher. Read the store imperatively (no subscribe)
+    // because we only need the value at send-time; any later change should
+    // apply to the NEXT send, not retroactively hijack this stream.
+    const activeAdapterId = useAgentsStore.getState().activeId ?? undefined;
+
     try {
       const handle = await chatStream(
         // Model is NOT sent — Hermes always uses its own ~/.hermes/config.yaml,
         // ignoring any `model` field in chat requests. See LLMs page for real
         // provider/model switching.
-        { messages: historyForIpc },
+        { messages: historyForIpc, adapter_id: activeAdapterId },
         {
           onDelta: (chunk) => {
             // Read current content from store to append — avoids stale closures.

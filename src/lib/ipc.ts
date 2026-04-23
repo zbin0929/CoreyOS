@@ -39,6 +39,12 @@ export interface ChatMessageAttachment {
 export interface ChatSendArgs {
   messages: ChatMessageDto[];
   model?: string;
+  /** T5.1 — optional working directory hint for code-centric adapters. */
+  cwd?: string;
+  /** T5.5b — route this request to the named adapter; `undefined` uses
+   *  the registry default. The Topbar `AgentSwitcher` populates this
+   *  from `useAgentsStore.activeId`. */
+  adapter_id?: string;
 }
 
 export interface ChatSendReply {
@@ -960,11 +966,33 @@ export interface AdapterHealth {
   uptime_ms?: number | null;
 }
 
+/** Capability flags for an adapter. Mirrors Rust `adapters::Capabilities`.
+ *  `channels` is a list of messenger-channel slugs (empty when the adapter
+ *  doesn't integrate with any external messengers). */
+export interface AdapterCapabilities {
+  streaming: boolean;
+  tool_calls: boolean;
+  attachments: boolean;
+  multiple_sessions: boolean;
+  session_search: boolean;
+  skills: boolean;
+  memory: boolean;
+  scheduler: boolean;
+  channels: string[];
+  logs: boolean;
+  terminal: boolean;
+  vector_search: boolean;
+  trajectory_export: boolean;
+  cost_accounting: boolean;
+}
+
 /** One row in the agent switcher. Mirrors Rust `ipc::agents::AdapterListEntry`. */
 export interface AdapterListEntry {
   id: string;
   name: string;
   is_default: boolean;
+  /** T5.5b — live capability snapshot; drives Sidebar nav filtering. */
+  capabilities: AdapterCapabilities;
   /** `null` when the probe itself failed; see `health_error`. */
   health: AdapterHealth | null;
   /** Only populated when `health` is `null`. */

@@ -23,6 +23,8 @@ export function AgentSwitcher() {
   const adapters = useAgentsStore((s) => s.adapters);
   const loading = useAgentsStore((s) => s.loading);
   const refresh = useAgentsStore((s) => s.refresh);
+  const activeId = useAgentsStore((s) => s.activeId);
+  const setActive = useAgentsStore((s) => s.setActive);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -43,7 +45,18 @@ export function AgentSwitcher() {
     if (open) void refresh();
   }, [open, refresh]);
 
-  const active = adapters?.find((a) => a.is_default) ?? adapters?.[0] ?? null;
+  // Active entry resolution: prefer the persisted user selection, fall
+  // back to the registry's default, then to the first entry. Mirrors
+  // `useAgentsStore.getActiveEntry` but inline so this component
+  // re-renders reactively when `activeId` or `adapters` changes.
+  const active = (() => {
+    if (!adapters || adapters.length === 0) return null;
+    if (activeId) {
+      const hit = adapters.find((a) => a.id === activeId);
+      if (hit) return hit;
+    }
+    return adapters.find((a) => a.is_default) ?? adapters[0] ?? null;
+  })();
   const activeOk = active?.health?.ok === true;
 
   // First boot: no adapters loaded yet. Render a muted placeholder so the
@@ -102,11 +115,32 @@ export function AgentSwitcher() {
           </div>
           <ul className="max-h-80 overflow-y-auto py-1">
             {adapters.map((a) => (
-              <AgentRow key={a.id} entry={a} />
+              <AgentRow
+                key={a.id}
+                entry={a}
+                active={active?.id === a.id}
+                onSelect={() => {
+                  setActive(a.id);
+                  setOpen(false);
+                }}
+              />
             ))}
           </ul>
+          {activeId !== null && (
+            <button
+              type="button"
+              onClick={() => setActive(null)}
+              className={cn(
+                'flex w-full items-center justify-center border-t border-border px-3 py-1.5',
+                'text-[11px] text-fg-subtle transition-colors hover:bg-bg-elev-2 hover:text-fg',
+              )}
+              data-testid="agent-switcher-clear"
+            >
+              Clear selection (follow default)
+            </button>
+          )}
           <div className="border-t border-border px-3 py-1.5 text-[10px] text-fg-subtle">
-            Auto-refresh every 30s. Active selection + routing coming in T5.5b.
+            Auto-refreshes every 10s. Chat routes to the active adapter.
           </div>
         </div>
       )}
@@ -114,18 +148,39 @@ export function AgentSwitcher() {
   );
 }
 
-function AgentRow({ entry }: { entry: AdapterListEntry }) {
+function AgentRow({
+  entry,
+  active,
+  onSelect,
+}: {
+  entry: AdapterListEntry;
+  active: boolean;
+  onSelect: () => void;
+}) {
   const ok = entry.health?.ok === true;
   return (
     <li
-      className="flex items-start gap-2 px-3 py-2 text-xs"
+      className={cn(
+        'group flex items-start gap-2 px-3 py-2 text-xs transition-colors',
+        'cursor-pointer hover:bg-bg-elev-2',
+        active && 'bg-bg-elev-2',
+      )}
       data-testid={`agent-row-${entry.id}`}
+      data-active={active || undefined}
       title={rowDescription(entry)}
+      onClick={onSelect}
+      role="option"
+      aria-selected={active}
     >
       <HealthDot ok={ok} pending={false} className="mt-1.5" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate font-medium text-fg">{entry.name}</span>
+          {active && (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-emerald-500">
+              active
+            </span>
+          )}
           {entry.is_default && (
             <span className="rounded-full border border-gold-500/40 bg-gold-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-gold-500">
               default

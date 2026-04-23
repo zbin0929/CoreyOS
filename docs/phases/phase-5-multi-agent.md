@@ -134,11 +134,31 @@ Split into **T5.5a — read-only switcher** (shipped 2026-04-23) and
   with health dots, version, uptime, latency, and error strips.
   Mounted between gateway pill and the right-hand nav cluster.
 
-#### T5.5b — pending
+#### T5.5b · **Shipped** (2026-04-23)
 
-- `src/app/shell/Topbar.tsx` grows an `AgentSwitcher.tsx` combo (All agents · Hermes · Claude Code · Aider).
-- Sessions panel: "All agents" mode merges lists; each session shows a small adapter badge.
-- Route-level guards hide nav items based on `capabilities` of the current context (All-agents context = union of hidden items).
+- `useAgentsStore` now owns `activeId: string | null` + `setActive(id)`
+  + `getActiveEntry()`, persisted to `localStorage` under
+  `corey.active_adapter_id`. Stale persisted ids fall through to
+  the registry default so adapter removal never breaks the app.
+- `AgentSwitcher` dropdown rows are clickable (`onSelect` → `setActive`);
+  emerald "active" badge + highlight + "Clear selection" footer button
+  communicate user override vs registry default.
+- `NavEntry.requires: NavCapability` filters Sidebar nav against the
+  active adapter's live `capabilities`. Claude Code hides
+  Channels / Skills / Scheduler; Hermes keeps everything.
+  `AdapterListEntry` now carries `capabilities` so no extra IPC is needed.
+- Chat routing: `ChatSendArgs` + `ChatStreamArgs` gain
+  `adapter_id: Option<String>` (back-compat `#[serde(default)]`).
+  `pick_adapter` helper routes (explicit id → registry.get, else →
+  default). Frontend `chatSend` / `chatStream` forward
+  `useAgentsStore.getState().activeId` imperatively so switching
+  adapters mid-stream doesn't retroactively hijack an in-flight send.
+
+#### T5.5c — pending
+
+- **Unified inbox** — merge sessions from every enabled adapter into
+  the chat SessionsPanel with per-row adapter badges; add an
+  "All agents" filter pill.
 
 ### T5.6 — Cross-adapter analytics & budgets (half day)
 

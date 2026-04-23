@@ -35,6 +35,7 @@ import {
   type ModelInfo,
 } from '@/lib/ipc';
 import { Markdown } from '@/features/chat/MessageBubble';
+import { useAgentsStore } from '@/stores/agents';
 
 /**
  * Phase 4 · T4.1 — Multi-model compare.
@@ -149,13 +150,18 @@ export function CompareRoute() {
 
     const msg: ChatMessageDto = { role: 'user', content: trimmed };
 
+    // T5.5b — route every lane through the active adapter. Compare runs
+    // multiple models against the SAME adapter; cross-adapter compare
+    // (lanes against different adapters) is a post-Phase-5 idea.
+    const activeAdapterId = useAgentsStore.getState().activeId ?? undefined;
+
     // Fire all streams in parallel. Each resolves with its own handle, which
     // we stash so Stop-all / per-lane X can cancel them.
     await Promise.all(
       freshLanes.map(async (lane) => {
         try {
           const handle = await chatStream(
-            { messages: [msg], model: lane.model.id },
+            { messages: [msg], model: lane.model.id, adapter_id: activeAdapterId },
             {
               onDelta: (chunk) => {
                 setLanes((prev) =>

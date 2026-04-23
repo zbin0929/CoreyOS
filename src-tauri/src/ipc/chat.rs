@@ -4,9 +4,34 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::adapters::hermes::gateway::ChatStreamEvent;
-use crate::adapters::{ChatMessageDto, ChatTurn};
+use crate::adapters::{AgentAdapter, ChatMessageDto, ChatTurn};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
+
+/// T5.5b — resolve the adapter the UI wants this request routed to.
+/// `None` means "follow the registry default", matching the pre-T5.5b
+/// behaviour; an explicit id that isn't registered fails loudly so
+/// stale ids in persisted frontend state don't silently fall through
+/// to a different adapter.
+fn pick_adapter(
+    state: &AppState,
+    explicit: Option<&str>,
+) -> IpcResult<std::sync::Arc<dyn AgentAdapter>> {
+    if let Some(id) = explicit {
+        return state
+            .adapters
+            .get(id)
+            .ok_or_else(|| IpcError::NotConfigured {
+                hint: format!("adapter '{id}' is not registered"),
+            });
+    }
+    state
+        .adapters
+        .default_adapter()
+        .ok_or_else(|| IpcError::NotConfigured {
+            hint: "no default adapter registered".into(),
+        })
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ChatSendArgs {
@@ -20,6 +45,10 @@ pub struct ChatSendArgs {
     /// (Claude Code / Aider). Hermes ignores it.
     #[serde(default)]
     pub cwd: Option<String>,
+    /// T5.5b — route this request to the named adapter. `None` means
+    /// "use the registry default" (back-compat with pre-Phase-5 callers).
+    #[serde(default)]
+    pub adapter_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -31,12 +60,7 @@ pub struct ChatSendReply {
 /// `chat_once`. Streaming (`chat:delta:{handle}` events) lands in Sprint 2.
 #[tauri::command]
 pub async fn chat_send(state: State<'_, AppState>, args: ChatSendArgs) -> IpcResult<ChatSendReply> {
-    let adapter = state
-        .adapters
-        .default_adapter()
-        .ok_or_else(|| IpcError::NotConfigured {
-            hint: "no default adapter registered".into(),
-        })?;
+    let adapter = pick_adapter(&state, args.adapter_id.as_deref())?;
 
     let turn = ChatTurn {
         messages: args.messages,
@@ -62,6 +86,10 @@ pub struct ChatStreamArgs {
     /// T5.1 — working directory for code-centric adapters.
     #[serde(default)]
     pub cwd: Option<String>,
+    /// T5.5b — route this stream to the named adapter (same semantics
+    /// as `ChatSendArgs.adapter_id`).
+    #[serde(default)]
+    pub adapter_id: Option<String>,
 }
 
 /// Kick off a streaming completion. Returns the handle used to scope events:
@@ -75,12 +103,7 @@ pub async fn chat_stream_start(
     state: State<'_, AppState>,
     args: ChatStreamArgs,
 ) -> IpcResult<String> {
-    let adapter = state
-        .adapters
-        .default_adapter()
-        .ok_or_else(|| IpcError::NotConfigured {
-            hint: "no default adapter registered".into(),
-        })?;
+    let adapter = pick_adapter(&state, args.adapter_id.as_deref())?;
 
     let handle = args.handle.unwrap_or_else(|| Uuid::new_v4().to_string());
 

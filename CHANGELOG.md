@@ -6,6 +6,66 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T5.5b · Active adapter + capability-gated nav + chat routing
+
+Makes the AgentSwitcher actually useful. Selecting an adapter in the
+Topbar now routes chat through it, filters the Sidebar nav to match
+its `Capabilities`, and persists across reloads.
+
+### Shipped
+
+- **Active adapter slice** in `useAgentsStore` (`src/stores/agents.ts`):
+  `activeId: string | null`, `setActive(id)`, `getActiveEntry()`.
+  Persisted to `localStorage` (`corey.active_adapter_id`) with
+  defensive try/catch so storage failures never crash the app.
+  `null` means "follow the registry default"; a stale id (adapter
+  removed) also falls through to the default.
+- **AgentSwitcher now selects** (`src/app/shell/AgentSwitcher.tsx`):
+  clicking a row in the dropdown marks that adapter active (emerald
+  "active" badge on the row + active row highlight); a "Clear
+  selection (follow default)" button appears once an override is
+  set. Footer updated from "coming in T5.5b" to
+  "Chat routes to the active adapter."
+- **Capability-gated Sidebar** (`src/app/shell/Sidebar.tsx` +
+  `src/app/nav-config.ts`): `NavEntry` gains optional
+  `requires: NavCapability`. Entries are filtered against the
+  active adapter's live `capabilities` snapshot.
+  Claude Code (`channels=[]`, `skills=false`, `scheduler=false`)
+  hides Channels / Skills / Scheduler; Hermes keeps all three.
+  Entries without `requires` (Chat, Home, Settings, Compare,
+  Analytics, Models, Budgets, Profiles, Runbooks) always show.
+- **Chat routing IPC** (`src-tauri/src/ipc/chat.rs`):
+  `ChatSendArgs` + `ChatStreamArgs` gain
+  `adapter_id: Option<String>` (`#[serde(default)]`).
+  New private helper `pick_adapter` resolves `explicit → get()`
+  or `None → default_adapter()`, returning `NotConfigured` loudly
+  when an explicit id isn't registered (safer than silently
+  falling back and running against the wrong adapter).
+  Frontend `chatSend` / `chatStream` forward
+  `useAgentsStore.getState().activeId` on each send; read is
+  non-reactive on purpose (selection changes apply to the NEXT
+  send, never retroactively).
+- **IPC exposes capabilities** (`src-tauri/src/ipc/agents.rs`):
+  `AdapterListEntry` now includes the live `capabilities`
+  snapshot; unlocks the Sidebar filter without a second IPC
+  round-trip.
+
+### Tests
+
+- **Rust**: 124 → **125** (+1 `t55b_list_includes_capabilities_per_adapter`
+  — Hermes has messenger channels, Claude Code doesn't claim
+  `skills` but does claim `terminal`).
+- typecheck + lint clean.
+
+### Deferred to T5.5c
+
+- **Unified inbox** — merge sessions from every enabled adapter
+  into the chat SessionsPanel with per-row adapter badges.
+  Requires rewriting the sessions selector + adding adapter
+  filter UI; scope creep vs. what this commit ships.
+
+---
+
 ## 2026-04-23 — T5.5a · Topbar AgentSwitcher (read-only)
 
 First visible multi-adapter surface. With two adapters registered

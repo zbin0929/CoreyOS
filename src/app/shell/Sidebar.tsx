@@ -3,16 +3,48 @@ import { useTranslation } from 'react-i18next';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { NAV } from '@/app/nav-config';
+import { NAV, type NavEntry } from '@/app/nav-config';
 import { CoreyMark } from '@/components/ui/corey-mark';
 import { Icon } from '@/components/ui/icon';
+import { useAgentsStore } from '@/stores/agents';
+import type { AdapterCapabilities, AdapterListEntry } from '@/lib/ipc';
+
+/** T5.5b — resolve whether a nav entry is allowed under the active
+ *  adapter's capabilities. Entries with no `requires` field are always
+ *  visible. Before the registry's first probe lands, nothing is hidden
+ *  (we default to the full nav set so first paint doesn't flash shrink).
+ *  `channels` is the only capability backed by an array — empty counts
+ *  as "not supported". */
+function entryVisible(entry: NavEntry, caps: AdapterCapabilities | null): boolean {
+  if (!entry.requires || !caps) return true;
+  if (entry.requires === 'channels') return caps.channels.length > 0;
+  return Boolean(caps[entry.requires]);
+}
 
 export function Sidebar() {
   const { t } = useTranslation();
   const { location } = useRouterState();
 
-  const primary = NAV.filter((n) => n.group === 'primary');
-  const ops = NAV.filter((n) => n.group === 'ops');
+  // T5.5b — capability-gated navigation. Derive the effective active
+  // adapter reactively: persisted selection wins, fallback to registry
+  // default, fallback to the first row. Using the raw array comparison
+  // below avoids a store-selector function that would re-subscribe on
+  // every render.
+  const adapters = useAgentsStore((s) => s.adapters);
+  const activeId = useAgentsStore((s) => s.activeId);
+  const activeEntry: AdapterListEntry | null = (() => {
+    if (!adapters || adapters.length === 0) return null;
+    if (activeId) {
+      const hit = adapters.find((a) => a.id === activeId);
+      if (hit) return hit;
+    }
+    return adapters.find((a) => a.is_default) ?? adapters[0] ?? null;
+  })();
+  const caps = activeEntry?.capabilities ?? null;
+
+  const visible = NAV.filter((n) => entryVisible(n, caps));
+  const primary = visible.filter((n) => n.group === 'primary');
+  const ops = visible.filter((n) => n.group === 'ops');
 
   return (
     <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-border bg-bg-elev-1">
