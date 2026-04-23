@@ -54,26 +54,53 @@
 - **Migrations**: schema v8 adds `memory_entries` table as a mirror of the qdrant metadata (for fast Analytics without hitting qdrant).
 - **Tests**: Rust — round-trip embed → search → retrieve with a mocked embed endpoint. Playwright — 👍 a turn, visit Memory, see the entry; orchestrator run with recall on vs off, different outputs.
 
-### T7.4 — openclaw integration · 2–5 days (TBD)
+### T7.4 — OpenClaw integration · ~7 days
 
-**Blocked on user clarification**. The original brainstorm mentions "openclaw" with no context; no repo exists under this workspace. Options once the user clarifies:
+**Project**: <https://github.com/openclaw/openclaw> — steipete's "Personal AI Assistant, any OS / any platform. The lobster way 🦞". TypeScript-based, active (102 releases, 1744 contributors as of 2026-04-23).
 
-- **If openclaw is a CLI tool** → wrap as an `AgentAdapter` along the lines of `AiderAdapter`.
-- **If openclaw is a library** → expose its API as a Skill provider (conversations can invoke it without a separate adapter).
-- **If openclaw is a fork of Claude Code** → merge useful changes into the existing `ClaudeCodeAdapter`.
+**Honest positioning note**: OpenClaw is **not** a subordinate tool we wrap. It is a **functionally overlapping competitor** to the Corey + Hermes stack. It ships its own gateway, its own macOS menu-bar app, its own iOS/Android nodes, 24 channel integrations (we have 8), its own cron tool, Voice Wake + Talk Mode, a Live Canvas UI (A2UI), and the ClawHub skills marketplace.
 
-Effort estimate in the table above assumes adapter-style integration.
+Given the overlap, "integration" means one of three stances:
+
+1. **Adapter route (T7.4a)** — Treat OpenClaw's Gateway as another `AgentAdapter`, same shape as `HermesAdapter`. Users can drive OpenClaw agents from Corey's chat surface. This is the most honest use of our adapter abstraction — if Corey can't front another control plane, its "agent-agnostic" claim isn't real.
+2. **Skills route (T7.4b)** — Pull ClawHub skills into Corey's Skills page via a simple import flow. Doesn't require a live OpenClaw gateway. Piggybacks on their ecosystem without taking on integration complexity.
+3. **No integration (rejected)** — Would leave the "we're a universal console" claim undermined by the most visible OSS project in the same niche.
+
+**Plan: ship both T7.4a (adapter) and T7.4b (skills)**. Reject option 3.
+
+#### T7.4a — `OpenClawAdapter` · ~5 days
+
+- **Surface**: OpenClaw's gateway exposes an HTTP API (config lives in `~/.openclaw/openclaw.json`, gateway URL reachable on a known port). Adapter maps OpenClaw's session/turn model onto our `AgentAdapter` trait.
+- **Config**: new `openclaw: { base_url, api_key }` section in `GatewayConfig`, parallel to the existing Hermes block. `config_test` hits OpenClaw's `/status` endpoint for the "Test" button.
+- **Capabilities**: the adapter advertises `channels: [...OpenClaw's 24 channels]`, `scheduler: true`, `skills: true`, `memory: false` (until we wire their memory surface separately).
+- **Chat**: delegate to OpenClaw's session API for both `chat_once` and `chat_stream`. Stream events map to our `ChatStreamEvent` variants; unknown events pass through as `Annotation` for forward-compat.
+- **Sessions**: OpenClaw's sessions appear in Corey's unified inbox with `adapter_id = "openclaw"` and their channel badge intact.
+- **Discovery**: on Corey first-run, if `~/.openclaw/openclaw.json` exists we auto-suggest enabling the adapter. Prompt, not silent.
+- **Tests**: conformance suite must pass (same bar as Hermes / Claude Code / Aider). Mock bridge for CI; real OpenClaw gateway for manual verification.
+
+#### T7.4b — ClawHub skill importer · ~2 days
+
+- **Flow**: Skills page grows an "Import from ClawHub" button next to "New skill". Opens a dialog with a search bar backed by ClawHub's registry API (<https://clawhub.ai>).
+- **Schema translation**: ClawHub skills are `SKILL.md` files with frontmatter; we parse that into Corey's `SkillRow` shape. Fields that don't map (OpenClaw-specific tool bindings) get dropped with a warning.
+- **Licensing**: import respects the skill's declared license; we show it in the preview. No automatic batch-import.
+- **Tests**: Rust — parser round-trip on a handful of real ClawHub skills. Playwright — search, pick, import, verify the skill lands in the list.
+
+#### Why this matters
+
+The existence of OpenClaw is the strongest real-world validation of the Corey + Hermes bet (there's demand for a personal agent control plane) **and** the strongest pressure to sharpen differentiation. Phase 7's OpenClaw integration is primarily a **positioning statement** — Corey is the console where agents from multiple ecosystems converge, not a walled garden around Hermes.
+
+If, during Phase 7, we find that Corey users are just using the OpenClaw adapter and ignoring Hermes, that's a signal to rethink upstream strategy — not an engineering failure of this task.
 
 ## Test totals target
 
-- Rust unit: **+10** (4 LangGraph bridge, 3 memory ingest/retrieve, 3 openclaw-dependent)
-- Playwright: **+4** (LangGraph run, skill-from-chat, memory recall, memory page)
+- Rust unit: **+14** (4 LangGraph bridge, 3 memory ingest/retrieve, 5 OpenClaw adapter conformance, 2 ClawHub parser)
+- Playwright: **+6** (LangGraph run, skill-from-chat, memory recall, memory page, OpenClaw-adapter chat round-trip, ClawHub skill import)
 
 ## Deltas vs the original brainstorm
 
 | Brainstorm item | Landed in Phase 7 as |
 |-----------------|----------------------|
-| 1️⃣ openclaw 集成 | T7.4 (pending clarification) |
+| 1️⃣ openclaw 集成 | T7.4 (adapter + skills importer; positioning statement — not a subordinate integration) |
 | 4.1 技能学习 | T7.2 (conversation distillation; builds on Phase 4 Skills page) |
 | 4.4 知识沉淀 | T7.3 (memory layer, feeds recall) |
 | 5.1 任务 DAG | T7.1 (**LangGraph adapter, not self-built**) |
@@ -91,3 +118,6 @@ Effort estimate in the table above assumes adapter-style integration.
 3. 👍 the final summary. Open the Memory page. See the entry.
 4. Start a new session with the orchestrator adapter, memory-recall enabled. Ask "what were my notes on sparse attention?". The orchestrator injects the memory entry into the manager's prompt; the reply cites it.
 5. On an unrelated session, click "Save as Skill" → review → save. Verify the Skills page now has a new entry with extracted inputs.
+6. In Settings › Agent, enable the OpenClaw adapter (auto-suggested if `~/.openclaw/` exists). Open AgentSwitcher, see OpenClaw listed alongside Hermes / Claude Code / Aider.
+7. Switch to OpenClaw, send a message. Note the reply carries an `openclaw` badge in the unified inbox.
+8. On the Skills page, click "Import from ClawHub", search "meeting summary", preview, import. Verify the skill lands in Corey's Skills list with its upstream license displayed.

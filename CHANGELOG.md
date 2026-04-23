@@ -6,6 +6,29 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Phase 7 sharpening: OpenClaw positioning
+
+Followup to the roadmap extension after the user clarified that "openclaw" in the original brainstorm refers to <https://github.com/openclaw/openclaw> — a functionally overlapping competitor, not a subordinate tool.
+
+### Shipped (docs only)
+
+**`docs/phases/phase-7-expansion.md`** T7.4 rewritten:
+- Explicit positioning note: OpenClaw is a competing personal-assistant control plane (own gateway, own macOS/iOS/Android apps, 24 channels, Voice Wake + Live Canvas + ClawHub skills marketplace, 102 releases, 1744 contributors). "Integration" means interoperability, not subordination.
+- Split into T7.4a (`OpenClawAdapter`, ~5 days) + T7.4b (ClawHub skill importer, ~2 days). Both ship; "no integration" explicitly rejected because it would undermine Corey's agent-agnostic claim.
+- Test targets updated: Rust +14 (was +10), Playwright +6 (was +4).
+- Demo script extended to cover OpenClaw adapter and ClawHub skill import.
+
+**`docs/05-roadmap.md`** Phase 7 row: label + status text refined; removes "pending user clarification".
+
+**`docs/00-vision.md`** Positioning table: adds OpenClaw row. Explicit framing — "the positioning fight isn't 'best assistant', it's 'best console for N assistants'."
+
+### Next
+
+- Phase 6 still "Planned"; starts when user greenlights.
+- Phase 7 T7.4 now fully specified (adapter + skills importer, concrete 7-day estimate).
+
+---
+
 ## 2026-04-23 — Roadmap extension: Phases 6–8 + explicit rejections
 
 Extends the roadmap beyond Phase 5 with three new phases and — importantly — a `Will not do` section that documents which brainstorm items are **permanently off the table**. Purely a docs update; no code.
