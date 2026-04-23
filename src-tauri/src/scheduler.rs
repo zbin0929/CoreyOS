@@ -28,8 +28,8 @@ use std::time::Duration as StdDuration;
 
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use tauri::async_runtime::{spawn as tauri_spawn, JoinHandle};
 use tokio::sync::{mpsc, Notify};
-use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -59,14 +59,23 @@ pub fn next_fire_after(expr: &str, from: DateTime<Utc>) -> Option<DateTime<Utc>>
 /// sleep target.
 pub struct Scheduler {
     reload_tx: mpsc::Sender<()>,
+    /// Held so the background task is dropped (and cancelled) when the
+    /// `Scheduler` itself is dropped. We never poll the handle directly —
+    /// the worker owns its own exit logic via the reload channel close.
     _join: JoinHandle<()>,
 }
 
 impl Scheduler {
+    /// Spawn the background worker. Must be called from a context where
+    /// Tauri's async runtime is available (eg. the `setup` hook or any
+    /// IPC command). Using `tauri::async_runtime::spawn` instead of
+    /// `tokio::spawn` lets this work during setup — `tokio::spawn`
+    /// requires an active reactor on the current thread, which Tauri 2
+    /// hasn't attached yet at setup time.
     pub fn spawn(db: Arc<Db>, adapters: Arc<AdapterRegistry>) -> Self {
         let (reload_tx, reload_rx) = mpsc::channel(8);
         let notify = Arc::new(Notify::new());
-        let join = tokio::spawn(run_loop(db, adapters, reload_rx, notify));
+        let join = tauri_spawn(run_loop(db, adapters, reload_rx, notify));
         Self {
             reload_tx,
             _join: join,
