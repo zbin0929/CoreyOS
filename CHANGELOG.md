@@ -6,6 +6,27 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Documentation · Chinese user manual
+
+Adds comprehensive Chinese-language user documentation covering all Corey features. Previously documentation existed only in English and technical phase plans; this provides end-user guidance for Chinese-speaking users.
+
+### Shipped
+
+- **`docs/user/用户手册.md`** — 616-line comprehensive user manual in Chinese covering:
+  - Quick start guide
+  - Core features (Chat, Platform Channels, Profiles, Models, Analytics, Logs, Settings)
+  - Advanced features (Multi-model comparison, Skills editor, Timeline trace, Terminal, Runbooks, Budget management, Scheduled tasks)
+  - Keyboard shortcuts
+  - FAQ section
+- **`package.json`** — added `tauri:dev:clean` script to kill orphaned cargo/rustc processes and free port 5173 before starting dev, addressing build blocking issues during development.
+
+### Test totals
+
+- No code changes affecting runtime; no test suite touched.
+- Documentation verified for completeness and accuracy.
+
+---
+
 ## 2026-04-23 — Native menubar · custom NSMenu with app actions
 
 Replaces the generic Tauri-default menubar with a Corey-specific layout.
