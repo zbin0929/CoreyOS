@@ -18,7 +18,7 @@
 | T1.5b Multimodal wire format        | ✅ | `ChatMessageDto.attachments` → OpenAI `content: [{type:"text"},{type:"image_url"}]` array assembled by the Hermes adapter from staged bytes. Non-image MIMEs degrade to `[attached: …]` markers. |
 | T1.6 Per-session model override     | ✅ | Zustand-persisted; composer dropdown.                                 |
 | T1.7 Cancel mid-stream              | ✅ | Stop button swaps in during a stream; partial text preserved.         |
-| T1.8 Reconnect                      | ⚠️ | Works on next send after a gateway restart; there's no auto-health-poll yet. Acceptable for a local-gateway use case. |
+| T1.8 Reconnect                      | ✅ | Initial-connect retry with exponential backoff (500/1000/2000 ms, 3 attempts) — covers the "gateway just restarted" window transparently. Mid-stream drops still degrade gracefully via the existing `received_any_delta` path (`finish_reason="interrupted"`). Landed 2026-04-23 with a unit test driving a flaky TCP listener; see `src-tauri/src/adapters/hermes/gateway.rs::connect_chat_stream` + `t18_chat_stream_retries_connect_on_transport_error`. |
 | T1.9 10k-message virtualisation     | ⚠️ | No virtualisation implemented; scroll perf is fine up to ~2k messages on M1. Re-open when a user hits the wall. |
 
 ### Deferred to later phases

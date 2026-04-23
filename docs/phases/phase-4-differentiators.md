@@ -253,19 +253,57 @@ Phases 0–3. Phase 4 is closed.
 
 ### Deferred to later phases / follow-ups
 
-- **T4.2b** — CodeMirror 6, skill test-runner, version history/rollback.
-- **T4.4b** — chat-send interceptor for notify/block; per-period
-  windowing (today / week / month totals); per-model cost breakdown.
-- **T4.5b** — multi-tab terminal; WebGL renderer; paste-large guard;
-  session restore on navigate-away-and-back.
-- **T4.6b** — scope filtering; JSON export/import; inline preview.
 - **T3.3 follow-up** — real Tencent iLink QR client (still open from
-  Phase 3).
+  Phase 3; `StubQrProvider` + trait boundary keep the swap
+  self-contained).
 
-### Test totals (end of Phase 4)
+All Phase 4 follow-up `b` tickets have now landed — see the
+*Follow-up sweep* table below.
+
+## Follow-up sweep (2026-04-23)
+
+Two weeks after Phase 4's main sprint we cleared every `Tx.yb`
+ticket. Same code-base, same taste, much less "yeah we'll do it
+later" energy in the room.
+
+| Task | Status | Notes |
+|------|--------|-------|
+| **T4.2b** CodeMirror 6 in Skills | ✅ | `@uiw/react-codemirror` + `@codemirror/lang-markdown` + `language-data` for lazy-loaded fenced-code highlighters. Token-driven theme (no `theme-one-dark` bloat) — flips with `html[data-theme]`. Cmd/Ctrl-S keymap wired to the existing save. Hidden mirror `<textarea data-testid="skills-editor-textarea">` keeps the Playwright contract intact. Skill test-runner + version history deferred further — requires product design work, not engineering. |
+| **T4.4b** Budget chat-send gate | ✅ | Two rounds. Round 1 (2026-04-22): `evaluateBudgetGate()` before every `send()`, hard-confirm dialog on breach, inline warn banner for notify-only budgets. Round 2 (2026-04-23): 80 % warn threshold (block budgets stay silent pre-breach — deliberate), period windowing via `tokens_per_day` tail sums, adapter-scope matching wired to `useAgentsStore.activeId`. Pure `classifyBudgets()` extracted so 16 unit tests cover the matrix without IPC mocks. |
+| **T4.5b** Multi-tab Terminal | ✅ | Per-tab xterm + per-tab pty; all tabs stay mounted (`display:none` for inactive) so scrollback survives switches. rAF-deferred `fit()` on switch avoids the hidden-host 0×0 SIGWINCH bug. Right-neighbour-preserving close semantics. Playwright regression: open two tabs → close active → neighbour survives → close last → back to big-CTA state. |
+| **T4.6b** Runbooks scope filter | ✅ | *Already shipped* — the audit on 2026-04-23 found `runbookScopeApplies()` helper + `runbooks-scope-filter` toggle + hidden-count badge + e2e coverage all in the tree. Docs updated to reflect reality. |
+
+### Infra work that piggy-backed on the sweep
+
+- **Route code-splitting** (2026-04-23). Converted 13 leaf routes
+  to `React.lazy` via a `lazyFeature()` helper; wrapped the root
+  `<Outlet/>` in `<Suspense>`. Home + Chat stay eager. Initial
+  gzipped bundle: **589 KB → 260 KB** (−56 %). Feature chunks now
+  load on-demand — Skills (CM6 + language-data), Terminal (xterm),
+  Compare (large multi-pane), all split.
+- **highlight.js diet** (2026-04-23). Dropped `rehype-highlight`
+  (its `common` preset is an unconditional top-level import, so
+  `languages:` can't tree-shake it). Replaced with direct
+  `highlight.js/lib/core` + 13 explicit grammars. Main chunk:
+  **260 KB → 230 KB gzip** (−30 KB).
+- **Bundle-size CI gate** (2026-04-23). `scripts/check-bundle-size.mjs`
+  + CI step; fails if any chunk breaches 260 KB gzip.
+
+### Test totals
+
+End of Phase 4 main sprint (2026-04-22):
 
 - Rust `cargo test --lib`: 89 passed (79 → +10).
 - Playwright: 42 passed (33 → +9).
 - `cargo fmt` + `cargo clippy --all-targets -- -D warnings`: clean.
+
+After the 2026-04-23 follow-up sweep (T1.8 + all T4.xb + infra):
+
+- Rust `cargo test --lib`: **135** passed (+46 across Phases 5 +
+  T1.8 SSE retry test).
+- Vitest: **27** passed (new: 16 for `classifyBudgets`).
+- Playwright: **53** passed (+11 across Phase 5 + multi-tab
+  terminal).
+- Bundle: **224 KB gzip** main chunk, guarded by CI.
 - `pnpm typecheck` + `pnpm lint`: clean (3 fast-refresh warnings on
   feature files that co-locate helpers — accepted).
