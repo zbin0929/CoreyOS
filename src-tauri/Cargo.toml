@@ -10,6 +10,15 @@ rust-version = "1.77"
 name = "caduceus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# Rename the dev binary so macOS Dock shows "Corey" during `pnpm tauri:dev`.
+# The package name stays `caduceus` to avoid rewriting every `use caduceus_lib::…`
+# import across the codebase. This only affects the compiled binary filename
+# (`target/debug/Corey`) — which the Dock process name mirrors in dev mode.
+# Production builds already use `productName` from `tauri.conf.json`.
+[[bin]]
+name = "Corey"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
