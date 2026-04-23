@@ -6,6 +6,41 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Phase 6 scope expansion: conversational scheduler + channel e2e proof
+
+Two items the user called out after asking "哪些渠道真的能对话" got promoted from backlog into Phase 6. Both change Phase 6's scope; estimate bumps from 2-3 weeks to 3-4 weeks.
+
+### Shipped (docs only)
+
+**`docs/phases/phase-6-orchestration.md`**:
+- New exit criteria #6 (one channel proven e2e with a real bot) and #7 (users can create scheduled jobs by talking).
+- New **T6.6 Conversational scheduler (~4 days)** — Stage 1 `/schedule` slash command + Stage 2 post-turn intent detection with opt-in suggestion cards. Stage 3 (native Hermes `tool_calls`) stays deferred. Consent-gated, rate-limited, budget-aware.
+- New **T6.7 Channel e2e verification (~3 days)** — writes `docs/channels-smoke-test.md`, runs Telegram end-to-end first, records outcomes in `channels_verified.json`, renders a ✅/⚠️ badge on the Channels page. Resolves the WhatsApp env-name uncertainty as a side effect.
+- Test targets bumped: Rust +20 (was +18), Playwright +7 (was +5), plus manual smoke verification of at least one channel.
+- Deltas table and demo script extended.
+
+**`docs/05-roadmap.md`** Phase 6 row:
+- Adds "conversational scheduling + first channel e2e proven" to exit criteria.
+- Estimate 2-3 weeks → 3-4 weeks.
+- Total Phase 0→8 estimate 12-14 → 13-15 weeks.
+
+**`docs/06-backlog.md`**:
+- "Conversational scheduler" entry flipped from "medium, parked" to "promoted into T6.6". Stage 3 still parked pending Hermes `tool_calls`.
+- New entry "Platform channel e2e verification (post-Phase-3 debt)" flipped to "promoted into T6.7" — explicit record that Phase 3 shipped config UIs without ever e2e-verifying that any channel actually works with a real bot.
+
+### Context
+
+The user observed that my summary "5 of 8 channels are real" was misleading. Corey-side config writes are verified, but the Corey repo has never run a real bot-token smoke test against any channel. That's a significant claim gap. T6.7 closes it.
+
+Separately, the user asked to re-include conversational scheduling. It was in `docs/09-conversational-scheduler.md` with a 3-stage plan; Stages 1-2 now land in Phase 6 as T6.6. Stage 3 stays parked behind the Hermes upstream gate.
+
+### Next
+
+- Phase 6 still "Planned"; starts on user greenlight.
+- First real work when resuming: T6.1 feedback loop remains the recommended opener (smallest, highest-leverage).
+
+---
+
 ## 2026-04-23 — Phase 7 sharpening: OpenClaw positioning
 
 Followup to the roadmap extension after the user clarified that "openclaw" in the original brainstorm refers to <https://github.com/openclaw/openclaw> — a functionally overlapping competitor, not a subordinate tool.

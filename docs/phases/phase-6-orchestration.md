@@ -1,8 +1,8 @@
 # Phase 6 · Orchestration Core
 
-**Goal**: Turn Corey from a single-agent control panel into a **multi-Hermes orchestration plane**. Users can run several Hermes instances (different models, roles, permissions) side-by-side, have one instance delegate to others, and feed the results back through a single chat pane. Also lands the long-overdue 👍/👎 feedback loop and a rules-based routing layer.
+**Goal**: Turn Corey from a single-agent control panel into a **multi-Hermes orchestration plane**. Users can run several Hermes instances (different models, roles, permissions) side-by-side, have one instance delegate to others, and feed the results back through a single chat pane. Also lands the long-overdue 👍/👎 feedback loop, a rules-based routing layer, conversational scheduling, and — critically — the first real end-to-end channel verification.
 
-**Est.**: 2–3 weeks solo.
+**Est.**: 3–4 weeks solo.
 
 **Depends on**: Phase 5 complete (adapter registry, per-session `adapter_id`, AgentSwitcher, unified inbox).
 
@@ -17,7 +17,9 @@ This phase is where Corey's "control plane" story becomes **provably differentia
 3. Every assistant message in chat has a **👍 / 👎 button**. Feedback persists to SQLite (`message_feedback` table v7 migration) and surfaces in Analytics as "👍 rate per model / per adapter / per skill".
 4. Routing rules — a user-editable YAML or JSON list — can direct a chat turn to a specific instance based on content triggers (code detection, language detection, attachment presence). No ML involved; pure declarative.
 5. Each Hermes instance gets its own `PathAuthority` scope (per-instance workspace roots) so an "employee" instance can't silently read files outside the "manager" instance's sandbox.
-6. All user-facing strings land in `i18n` with zh/en parity from day 1.
+6. At least **one platform channel is proven end-to-end** with a real bot token and a real human-sent message round-tripping through Hermes to an AI reply.
+7. Users can say "每天早上 9 点发一份 GitHub issue 摘要" in chat and get a scheduled job created — without hand-writing a cron expression. (Stage 1 + Stage 2 of `docs/09-conversational-scheduler.md`.)
+8. All user-facing strings land in `i18n` with zh/en parity from day 1.
 
 ## Task breakdown
 
@@ -89,10 +91,48 @@ Currently `PathAuthority` is a singleton on `AppState`. Split it:
 - **UI**: Settings › Sandbox grows a scope tab. Default scope is the current behaviour; adding an instance with a custom scope is opt-in.
 - **Security property**: a worker instance misbehaving (e.g. prompted to `rm -rf`) can't touch paths outside its scope. Demonstrated via a Playwright e2e where a worker with no roots tries to read `~/.ssh` and gets `sandbox_denied`.
 
+### T6.6 — Conversational scheduler (natural-language job creation) · ~4 days
+
+The base Scheduler (shipped 2026-04-23) makes users hand-write cron expressions. T6.6 adds two of the three stages from `docs/09-conversational-scheduler.md` — Stage 3 (native `tool_calls` in SSE) stays deferred until Hermes exposes it.
+
+- **Stage 1: `/schedule` slash command** (~1 day)
+  - New chat-input grammar: typing `/schedule` opens a lightweight form inline. Fields prefilled from surrounding context (if user pasted "every weekday 9am ...", parse attempts to pre-fill).
+  - On submit, calls the existing `scheduler_upsert` IPC — zero new backend surface.
+  - Tests: Playwright — slash-command opens form, submit creates a job visible on Scheduler page.
+
+- **Stage 2: Post-turn intent detection + suggestion card** (~3 days)
+  - After each user turn, a **cheap secondary LLM call** (the same active adapter, minimal system prompt: "Is this a request to schedule a recurring task? If yes, return strict JSON `{cron, prompt, name}`. If no, return `{skip: true}`.") evaluates whether to show a suggestion card.
+  - Only triggers when the user message contains timing keywords (每天 / 每周 / every / daily / 定时 / schedule / remind ...). Cheap regex gate avoids wasting a round-trip on obvious non-matches.
+  - Suggestion card appears below the assistant reply with "Create schedule" and "Dismiss" buttons. Never creates jobs automatically.
+  - **Consent**: opt-in via Settings › Scheduler → "Suggest schedules from chat". OFF by default for privacy (every suggestion = one extra LLM call billed to active budget).
+  - **Rate limit**: 1 suggestion per 5 turns per session, to avoid nagging.
+  - Tests: Rust — regex gate + JSON-parse robustness. Playwright — enable the toggle, say "每天早上 9 点提醒我喝水", see the card, click Create, verify the job lands on the Scheduler page with the right cron + prompt.
+
+- **Stage 3 explicitly deferred**: native `tool_calls` in the Hermes SSE stream. Reopens when Hermes exposes OpenAI-compatible tool calling on its gateway streams. Until then Stage 2's separate LLM call is the production path.
+
+### T6.7 — Channel e2e verification (proof the channels we ship actually work) · ~3 days
+
+Phase 3 shipped configuration UIs for 8 platform channels (`@/Users/zbin/AI项目/hermes_ui/docs/phases/phase-3-channels.md`) but **we have never verified that a user can send a message on Telegram and get an AI reply**. We only verified that our `.env` / `config.yaml` writes are correct — whether Hermes can actually turn those creds into a working bot is unknown.
+
+This task closes that gap for at least one channel, produces a reusable smoke-test protocol for the rest, and records which channels are known-good.
+
+- **Pick one channel first**: Telegram. BotFather registration is 5 minutes, the API is documented, and Hermes' Telegram integration is the most likely to be production-ready.
+- **Write `docs/channels-smoke-test.md`** with a per-channel checklist:
+  1. Where to get the credential (BotFather link / Discord Dev Portal URL / ...)
+  2. Exact Corey UI steps (filled the right env key, toggled `mention_required`, etc.)
+  3. Exact Hermes restart steps + which log lines prove the channel came up.
+  4. The test message to send from the phone and the expected reply.
+  5. Fail modes + known Hermes upstream gaps.
+- **Ship `channels_verified.json`** in the Corey repo: a per-channel record of `{ channel_id, last_verified_at, hermes_commit_sha, verifier, notes }`. The Channels page renders a "✅ Verified YYYY-MM-DD against Hermes @abcd1234" or "⚠️ Not yet verified" badge from this file. No backend changes — pure static JSON + React render.
+- **Run the smoke test on Telegram first**, then Discord, then Slack. Matrix/Feishu/WeCom are nice-to-have if time permits. WhatsApp env-name uncertainty gets resolved during this task (look at what Hermes actually reads).
+- **Update `@/Users/zbin/AI项目/hermes_ui/docs/06-backlog.md`** with any upstream Hermes bugs we hit so they're on record.
+- **Explicit non-goal**: maintaining live test credentials in CI. One-time manual verification + documented recipe + dated badge is the bar. Re-verify on demand (e.g. after a Hermes upgrade).
+
 ## Test totals target
 
-- Rust unit: **+18** (3 feedback + 4 multi-instance + 6 orchestrator + 6 routing + auxiliaries)
-- Playwright: **+5** (1 feedback, 1 multi-instance, 1 orchestrator tree, 1 routing pill, 1 sandbox isolation)
+- Rust unit: **+20** (3 feedback + 4 multi-instance + 6 orchestrator + 6 routing + 1 conversational-intent regex/parse)
+- Playwright: **+7** (feedback, multi-instance, orchestrator tree, routing pill, sandbox isolation, `/schedule` flow, suggestion-card accept)
+- Manual smoke: ≥ 1 channel e2e verified with recorded `channels_verified.json` entry.
 - Conformance: orchestrator adapter must pass the existing suite.
 
 ## Deltas vs the original brainstorm
@@ -106,6 +146,8 @@ Currently `PathAuthority` is a singleton on `AppState`. Split it:
 | 4.2 反馈回路 | T6.1 |
 | 5.2 安全/权限 (per-agent 沙盒) | T6.5 |
 | 5.4 策略配置 (失败 N 次切换) | T6.4 rules can include `after_n_failures` predicate as a follow-up |
+| 对话式创建定时任务 (P3 backlog) | T6.6 (Stage 1 + 2; Stage 3 still deferred until Hermes `tool_calls`) |
+| 平台通道真实打通验证 (post-Phase-3 debt) | T6.7 (Telegram first, reusable smoke-test recipe, `channels_verified.json`) |
 
 ## Explicitly deferred out of Phase 6
 
@@ -120,3 +162,5 @@ Currently `PathAuthority` is a singleton on `AppState`. Split it:
 3. Switch to Orchestrator adapter. Send "Refactor this Python file and then write a unit test for it." Expect to see a tree in the bubble: manager → worker ("Refactor") → worker ("Test"). All three nodes expandable.
 4. 👍 the final answer. Reopen the Analytics page, see the 👍 rate blip up for this session's adapter.
 5. Open Settings › Routing. Add a rule `lang == zh → hermes-deepseek`. Send a Chinese message; observe the "Routed to: deepseek" pill.
+6. Enable "Suggest schedules from chat" in Settings › Scheduler. Say "每天早上 9 点提醒我喝水" in chat. See the suggestion card below the reply; click Create; verify the job on the Scheduler page.
+7. Open the Channels page. See the ✅ "Verified 2026-MM-DD against Hermes @<sha>" badge on Telegram. Pick up your phone, send "hello" to the registered bot, observe an AI reply arriving in Corey's inbox within a few seconds.

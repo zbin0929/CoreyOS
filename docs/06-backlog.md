@@ -272,18 +272,25 @@ them requires a product-direction pivot, not an engineering decision.
 "Brand · Corey logo + Icon wrapper + Dock/window polish".)
 
 ### Conversational scheduler (natural-language job creation)
-- **Priority**: medium
-- **Why parked**: the base Scheduler page (shipped 2026-04-23) requires
-  users to hand-write cron expressions. A full "chat-to-schedule"
-  experience requires either (a) a second LLM round-trip per eligible
-  turn for intent detection, or (b) native OpenAI-compatible
-  `tool_calls` in the Hermes SSE stream — which Hermes does not expose
-  today. Both add meaningful surface area (protocol, settings, consent
-  flow) and neither is on the critical path for the Scheduler MVP.
-- **Design doc**: `docs/09-conversational-scheduler.md` — lays out a
-  three-stage rollout: slash command (`/schedule`) → post-turn LLM
-  intent detection with suggestion cards → native tool calling.
-- **Re-open when**: either (a) we get repeated user feedback that the
-  cron-expression UX is a wall, at which point we ship Stage 1 + 2; or
-  (b) Hermes side exposes `tool_calls` in SSE, at which point we skip
-  to Stage 3.
+- **Status**: **promoted into Phase 6 as T6.6** on 2026-04-23 pm.
+  Stage 1 (`/schedule` slash command) + Stage 2 (post-turn intent
+  detection + suggestion card). Stage 3 (native `tool_calls` in
+  Hermes SSE) **remains deferred** until Hermes exposes the wire
+  format.
+- **Design doc**: `docs/09-conversational-scheduler.md`.
+- **Re-open Stage 3 when**: Hermes side exposes `tool_calls` in its
+  SSE stream.
+
+### Platform channel e2e verification (post-Phase-3 debt)
+- **Status**: **promoted into Phase 6 as T6.7** on 2026-04-23 pm.
+- **What was missing**: Phase 3 shipped 8 channel configuration UIs
+  but we never ran a real bot-token round-trip on any of them. Only
+  configuration-write correctness was tested. Whether Hermes actually
+  turns those creds into a working Telegram/Discord/Slack/... bot
+  was unknown.
+- **What T6.7 does**: ship `docs/channels-smoke-test.md`, prove
+  Telegram end-to-end first, record outcomes in `channels_verified.json`,
+  render a "✅ Verified / ⚠️ Not yet verified" badge on the Channels
+  page. WhatsApp env-name ambiguity resolved as a side effect.
+- **Re-open when**: a Hermes upgrade or a new channel is added. Each
+  verified channel gets a fresh dated entry.
