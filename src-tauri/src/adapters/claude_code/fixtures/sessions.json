@@ -1,0 +1,26 @@
+[
+  {
+    "id": "cc_01HZXK4P2Q8RF3MN",
+    "title": "Refactor SSE parser to handle reconnects",
+    "source": "cli",
+    "model_id": "anthropic/claude-sonnet-4-5",
+    "token_usage": { "input": 18420, "output": 5280, "cached": 11200 },
+    "last_message_at": "2026-04-22T15:41:03Z",
+    "created_at": "2026-04-22T14:10:00Z",
+    "is_live": true,
+    "adapter_id": "claude_code",
+    "metadata": { "cwd": "/Users/demo/projects/hermes_ui" }
+  },
+  {
+    "id": "cc_01HZXK4P2QABCDEF",
+    "title": "Add multimodal attachment tests",
+    "source": "cli",
+    "model_id": "anthropic/claude-opus-4",
+    "token_usage": { "input": 9140, "output": 2640, "cached": 4800 },
+    "last_message_at": "2026-04-21T20:12:48Z",
+    "created_at": "2026-04-21T19:00:00Z",
+    "is_live": false,
+    "adapter_id": "claude_code",
+    "metadata": { "cwd": "/Users/demo/projects/caduceus" }
+  }
+]

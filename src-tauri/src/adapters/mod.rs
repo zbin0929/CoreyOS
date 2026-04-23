@@ -3,7 +3,11 @@
 //! See `docs/03-agent-adapter.md` for the full spec. Phase 0 ships the trait
 //! and types only; real implementations land in Phase 1+.
 
+pub mod claude_code;
 pub mod hermes;
+
+#[cfg(test)]
+pub(crate) mod conformance;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

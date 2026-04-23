@@ -6,6 +6,67 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T5.2a · Claude Code mock adapter + conformance suite
+
+Lands a second first-class `AgentAdapter` alongside Hermes, plus the
+shared conformance harness the rest of Phase 5 will gate on. Mock-
+first: the real `claude-code` CLI wrapper (T5.2b) follows once the
+UI surface (T5.5) is up and driveable against two citizens.
+
+### Shipped
+
+- **`ClaudeCodeAdapter::new_mock()`** (`src-tauri/src/adapters/claude_code/`):
+    - Capabilities match the Phase 5 spec: `streaming=true`,
+      `tool_calls=true`, `attachments=true`, `skills=false`,
+      `channels=[]`, `terminal=true`, `trajectory_export=true`.
+    - `list_sessions` / `list_models` load from committed fixtures
+      (`fixtures/sessions.json` + `fixtures/models.json`): 2 demo
+      Claude Code sessions, 3 Claude models (Sonnet 4.5, Opus 4,
+      Haiku 3.5).
+    - `chat_once` returns a canned reply that echoes the last user
+      message + `turn.cwd` — cheapest end-to-end proof that the
+      T5.1 `ChatTurn.cwd` plumbing survived IPC → registry →
+      adapter.
+    - `chat_stream` emits one synthetic `ToolProgress` ("📖 read")
+      then word-chunked deltas at 20ms each, so the UI's tool-card
+      + streaming paths exercise this adapter the same way they
+      exercise Hermes live mode.
+- **Shared conformance suite** (`src-tauri/src/adapters/conformance.rs`):
+  `conformance::run(adapter)` asserts id/name validity,
+  `capabilities()` sanity (no empty channel strings), `health()`
+  shape (matching `adapter_id`), per-row `adapter_id` tagging on
+  `list_sessions`, and query pass-through. Two parameterised
+  tests — `hermes_stub_is_conformant` +
+  `claude_code_mock_is_conformant` — run it against both adapters
+  so any new adapter can add one line to join the gate.
+- **Registered in `lib.rs`** alongside Hermes (non-default). Boot
+  log now prints the populated adapter list; today it's
+  `["hermes", "claude_code"]`.
+
+### Tests
+
+- **Rust**: 116 → **123** (+7). 5 new claude_code mock unit tests
+  (health, capabilities, fixture load + search, `cwd` echo,
+  stream emits tool-then-deltas); 2 conformance parameterisations.
+- `cargo check` + `cargo clippy --lib -- -D warnings`: clean.
+
+### Deferred
+
+- **T5.2b real CLI** — `cli.rs` / `sessions.rs` / `stream.rs` for
+  the upstream `claude-code` binary + recorded fixtures. Blocked
+  on nothing except time; will follow once T5.5 surfaces the
+  switcher.
+
+### Next
+
+- **T5.5 AgentSwitcher** — Topbar picker + capability-gated nav.
+  With two registered adapters, we can now build the UI against a
+  real multi-citizen registry instead of a singleton.
+- Or **T5.3 Aider adapter** (process-pooled JSONL) — same mock-first
+  pattern once you give the word.
+
+---
+
 ## 2026-04-23 — T5.1 · Adapter trait polish (Phase 5 kickoff)
 
 Opens Phase 5 (Multi-agent console) with the lowest-risk task: evolve

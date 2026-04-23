@@ -1,0 +1,26 @@
+[
+  {
+    "id": "anthropic/claude-sonnet-4-5",
+    "provider": "anthropic",
+    "display_name": "Claude Sonnet 4.5",
+    "context_window": 200000,
+    "is_default": true,
+    "capabilities": { "vision": true, "tool_use": true, "reasoning": false }
+  },
+  {
+    "id": "anthropic/claude-opus-4",
+    "provider": "anthropic",
+    "display_name": "Claude Opus 4",
+    "context_window": 200000,
+    "is_default": false,
+    "capabilities": { "vision": true, "tool_use": true, "reasoning": true }
+  },
+  {
+    "id": "anthropic/claude-haiku-3-5",
+    "provider": "anthropic",
+    "display_name": "Claude Haiku 3.5",
+    "context_window": 200000,
+    "is_default": false,
+    "capabilities": { "vision": true, "tool_use": true, "reasoning": false }
+  }
+]

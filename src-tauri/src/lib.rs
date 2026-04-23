@@ -34,7 +34,7 @@ use tauri::Manager;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::adapters::{hermes::HermesAdapter, AdapterRegistry};
+use crate::adapters::{claude_code::ClaudeCodeAdapter, hermes::HermesAdapter, AdapterRegistry};
 use crate::config::GatewayConfig;
 use crate::state::AppState;
 
@@ -143,9 +143,19 @@ pub fn run() {
             // Build the registry + state with the resolved config.
             let registry = AdapterRegistry::new();
             registry.register(build_hermes_adapter(&cfg));
+            // Phase 5 · T5.2a — register the Claude Code mock adapter so the
+            // upcoming AgentSwitcher (T5.5) has a second citizen to list.
+            // Mock mode only; the real CLI integration lands in T5.2b.
+            // Non-default: Hermes stays the primary chat target until the
+            // UI offers a way to switch.
+            registry.register(Arc::new(ClaudeCodeAdapter::new_mock()));
             registry
                 .set_default("hermes")
                 .expect("hermes is registered");
+            info!(
+                adapters = ?registry.all().iter().map(|a| &a.id).collect::<Vec<_>>(),
+                "adapter registry populated"
+            );
 
             // Open the SQLite DB under <app_data_dir>/caduceus.db. Missing
             // parent dirs are created by `Db::open`. If it fails we log loudly

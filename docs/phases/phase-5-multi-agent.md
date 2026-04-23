@@ -52,22 +52,46 @@ total lib tests 112 → 116, all green.
 
 ### T5.2 — Claude Code adapter (2 days)
 
-**Scope**
+Split into **T5.2a — mock-first** (shipped 2026-04-23) and
+**T5.2b — real CLI** (pending).
 
-- Wrap `claude-code` CLI (assume the upstream official Anthropic CLI). Use its session directories + its streaming JSON output.
-- Map `ToolUse`/`ToolResult` events from its stream into our `Delta` enum.
-- Sessions are CLI-native directories; `list_sessions` enumerates the known sessions root.
+#### T5.2a · **Shipped** (2026-04-23)
 
-**Tasks**
+- `src-tauri/src/adapters/claude_code/mod.rs` with `ClaudeCodeAdapter::new_mock()`.
+  Fixtures at `fixtures/{sessions,models}.json` (2 sessions, 3 Claude
+  models). Capabilities match the Phase 5 spec: streaming=true,
+  tool_calls=true, attachments=true, skills=false, channels=[],
+  terminal=true, trajectory_export=true.
+- Mock `chat_once` returns a deterministic reply that echoes the last
+  user turn + `turn.cwd` — which is the cheapest E2E proof that the
+  T5.1 `ChatTurn.cwd` plumbing survived the IPC → registry → adapter
+  chain.
+- Mock `chat_stream` emits one synthetic `ToolProgress` then
+  word-chunked deltas at 20ms each, so the UI's tool-card + streaming
+  paths exercise both adapters identically.
+- Hermes `list_sessions` search/limit filtering was lifted into Claude
+  Code's mock too; unified behaviour across adapters.
+- **Registered** in `lib.rs` alongside Hermes (non-default). Boot log
+  now includes an `adapters = [...]` line.
+- **Conformance suite** (`src-tauri/src/adapters/conformance.rs`): a
+  shared harness that asserts id/name validity, capabilities sanity,
+  health shape, per-row `adapter_id` tagging, and search
+  pass-through. Two tests (`hermes_stub_is_conformant` +
+  `claude_code_mock_is_conformant`) run it against both adapters.
 
-- `src-tauri/src/adapters/claude_code/{mod,cli,sessions,stream}.rs`.
-- Recorded fixtures (real output captured, secrets scrubbed).
-- Conformance suite parameterized over `ClaudeCodeAdapter { mock: true }`.
+#### T5.2b — pending
 
-**UX adjustments**
+- `cli.rs` + `sessions.rs` + `stream.rs` for the real `claude-code`
+  CLI: spawn + bidirectional JSONL, enumerate `~/.claude/sessions`,
+  parse upstream events into `ChatStreamEvent` (Delta + ToolProgress).
+- Recorded fixtures: real CLI output captured and scrubbed.
+- Enable via a `new_cli(exe_path, sessions_dir)` constructor; auto-
+  fall back to mock if the binary isn't present.
 
-- Its capabilities: `streaming=true`, `tool_calls=true`, `attachments=true`, `skills=false`, `channels=[]`, `terminal=true` (it *is* terminal-first), `trajectory_export=true`.
-- Sidebar nav auto-hides Channels/Skills/Scheduler when this adapter is the active context.
+**UX adjustments (T5.5)**
+
+- Sidebar nav auto-hides Channels/Skills/Scheduler when this
+  adapter is the active context.
 
 ### T5.3 — Aider adapter (1.5 days)
 
