@@ -80,26 +80,23 @@ export const tauriMockInitScript = /* js */ `
         yaml_values: {},
       },
       {
-        id: 'wechat',
-        display_name: 'WeChat',
-        yaml_root: '',
-        env_keys: [{ name: 'WECHAT_SESSION', required: false }],
+        id: 'weixin',
+        display_name: 'WeiXin (Personal)',
+        yaml_root: 'channels.weixin',
+        env_keys: [
+          { name: 'WEIXIN_ACCOUNT_ID', required: true },
+          { name: 'WEIXIN_TOKEN', required: true },
+        ],
         yaml_fields: [],
         hot_reloadable: false,
-        has_qr_login: true,
-        env_present: { WECHAT_SESSION: false },
+        has_qr_login: false,
+        env_present: { WEIXIN_ACCOUNT_ID: false, WEIXIN_TOKEN: false },
         yaml_values: {},
       },
     ]),
     // Captured save payloads, so tests can assert the exact
     // env_updates / yaml_updates the UI sent.
     channelSaves: /** @type {any[]} */ ([]),
-    // T3.3 WeChat QR stub. Each wechat_qr_start mints a new id;
-    // subsequent wechat_qr_poll calls advance on the same cadence
-    // the Rust stub uses (2 pending, 1 scanning, then scanned). On
-    // scanned we flip WECHAT_SESSION on the WeChat card so the UI
-    // sees the same end state the real backend would produce.
-    wechatSessions: /** @type {any} */ ({}),
     // T4.6 Runbooks — mutable in-memory list.
     runbooks: /** @type {any[]} */ ([]),
     // T4.2 Skills — in-memory file tree. Keyed by relative posix path.
@@ -341,60 +338,6 @@ export const tauriMockInitScript = /* js */ `
             probed_at_ms: now,
           };
         });
-      }
-
-      case 'wechat_qr_start': {
-        const qrId = 'stub-' + Math.random().toString(36).slice(2);
-        state.wechatSessions[qrId] = {
-          pollCount: 0,
-          status: { kind: 'pending' },
-          cancelled: false,
-          createdAt: Date.now(),
-        };
-        return {
-          qr_id: qrId,
-          // Tiny inline SVG placeholder — the real backend returns a
-          // much richer one but the test only asserts on testid, not
-          // pixel count.
-          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#000"/></svg>',
-          expires_in_s: 300,
-        };
-      }
-
-      case 'wechat_qr_poll': {
-        const s = state.wechatSessions[args.qrId];
-        if (!s) throw { kind: 'internal', message: 'qr session expired: ' + args.qrId };
-        if (s.status.kind && ['scanned', 'expired', 'cancelled', 'failed'].includes(s.status.kind)) {
-          return {
-            qr_id: args.qrId,
-            status: s.status,
-            elapsed_s: Math.floor((Date.now() - s.createdAt) / 1000),
-          };
-        }
-        s.pollCount += 1;
-        if (s.pollCount <= 2) s.status = { kind: 'pending' };
-        else if (s.pollCount <= 3) s.status = { kind: 'scanning' };
-        else {
-          s.status = { kind: 'scanned' };
-          // Flip env_present on the WeChat fixture row so the card
-          // refresh sees the new credential state.
-          const w = state.channels.find((c) => c.id === 'wechat');
-          if (w) w.env_present.WECHAT_SESSION = true;
-        }
-        return {
-          qr_id: args.qrId,
-          status: s.status,
-          elapsed_s: Math.floor((Date.now() - s.createdAt) / 1000),
-        };
-      }
-
-      case 'wechat_qr_cancel': {
-        const s = state.wechatSessions[args.qrId];
-        if (!s) throw { kind: 'internal', message: 'qr session expired: ' + args.qrId };
-        if (!['scanned', 'expired', 'cancelled', 'failed'].includes(s.status.kind)) {
-          s.status = { kind: 'cancelled' };
-        }
-        return null;
       }
 
       case 'hermes_channel_save': {

@@ -215,7 +215,7 @@ impl AgentAdapter for HermesAdapter {
                 "whatsapp".into(),
                 "matrix".into(),
                 "feishu".into(),
-                "wechat".into(),
+                "weixin".into(),
                 "wecom".into(),
             ],
             logs: true,

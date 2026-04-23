@@ -12,7 +12,6 @@ use crate::db::Db;
 use crate::pty::Pty;
 use crate::sandbox::PathAuthority;
 use crate::scheduler::Scheduler;
-use crate::wechat::WechatRegistry;
 
 /// Shared application state managed by Tauri.
 pub struct AppState {
@@ -43,12 +42,6 @@ pub struct AppState {
     /// Resolved path to the SQLite DB (`<data_dir>/caduceus.db`). Stored so
     /// the `app_paths` IPC doesn't have to re-derive it.
     pub db_path: PathBuf,
-    /// WeChat QR-login provider registry (Phase 3 · T3.3). Wraps an
-    /// `Arc<dyn QrProvider>`, so swapping from the stub to the real
-    /// iLink client is a one-line change at startup with zero UI
-    /// impact. Sessions live in the provider (not here) — this
-    /// struct is effectively a lazy accessor.
-    pub wechat: Arc<WechatRegistry>,
     /// Phase 3 · T3.4: cached per-channel liveness, derived from
     /// `~/.hermes/logs/*.log`. 30s TTL; the Channels page surfaces
     /// it as an extra pill. Arc so spawn_blocking can take a clone
@@ -75,7 +68,6 @@ impl AppState {
         changelog_path: PathBuf,
         data_dir: PathBuf,
         db_path: PathBuf,
-        wechat: Arc<WechatRegistry>,
         channel_status: Arc<ChannelStatusCache>,
     ) -> Self {
         let adapters = Arc::new(registry);
@@ -91,7 +83,6 @@ impl AppState {
             changelog_path,
             data_dir,
             db_path,
-            wechat,
             channel_status,
             ptys: Arc::new(Mutex::new(HashMap::new())),
             scheduler,

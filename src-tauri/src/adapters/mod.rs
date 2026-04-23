@@ -33,7 +33,9 @@ pub enum Source {
     WhatsApp,
     Matrix,
     Feishu,
-    WeChat,
+    // Corrected 2026-04-23 pm (T6.7a): was `WeChat` which serialised as
+    // `we_chat`. Hermes' slug is `weixin`; aligning the wire value.
+    Weixin,
     WeCom,
     Api,
     Unknown,

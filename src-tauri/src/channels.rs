@@ -1,5 +1,5 @@
 //! Static catalog of the 8 messaging channels Hermes supports
-//! (Telegram, Discord, Slack, WhatsApp, Matrix, Feishu, WeChat, WeCom).
+//! (Telegram, Discord, Slack, WhatsApp, Matrix, Feishu, WeiXin, WeCom).
 //!
 //! Phase 3 · T3.1 — the schema that drives everything downstream:
 //!   - Rust side: env-key allowlist extension so `hermes_env_set_key` can
@@ -9,13 +9,24 @@
 //!
 //! The catalog is a `Lazy<Vec<ChannelSpec>>` built at first access, keyed
 //! by the channel's stable slug (`telegram`, `discord`, …). Slugs never
-//! change — frontend code, changelog entries, and the WeChat QR flow all
-//! reference them.
+//! change — frontend code and changelog entries reference them.
+//!
+//! **2026-04-23 pm (T6.7a)**: schema reconciled against `hermes-agent`
+//! upstream (see `docs/hermes-reality-check-2026-04-23.md`). Three env
+//! names were silently mismatched and are now corrected:
+//!   - `WHATSAPP_TOKEN` (never read by Hermes) → `WHATSAPP_ENABLED` +
+//!     `WHATSAPP_MODE` + `WHATSAPP_ALLOWED_USERS`.
+//!   - `WECOM_BOT_SECRET` → `WECOM_SECRET` (no `BOT_` prefix).
+//!   - `WECHAT_SESSION` + fake QR flow → `WEIXIN_ACCOUNT_ID` +
+//!     `WEIXIN_TOKEN` + `WEIXIN_BASE_URL`. Hermes hits iLink directly;
+//!     there is no QR flow upstream. The slug changes `wechat` →
+//!     `weixin` to match Hermes' naming.
+//! Slack also gained the optional `SLACK_APP_TOKEN` required for
+//! Socket Mode.
 //!
 //! What this module is NOT:
 //!   - No actual write path. `write_env_key` / `write_channel_yaml`
-//!     (landing with T3.2) consume the spec for validation but the
-//!     spec itself is pure data.
+//!     consume the spec for validation but the spec itself is pure data.
 //!   - No live status probing. Hermes exposes per-channel health on its
 //!     own schedule; see T3.4.
 
@@ -82,7 +93,7 @@ pub struct ChannelSpec {
     pub display_name: &'static str,
     /// Dotted prefix for this channel's sub-tree in `config.yaml`
     /// (e.g. `channels.telegram`). Empty when the channel has no yaml
-    /// footprint (WeChat is credentials-only).
+    /// footprint (all channels have one post-T6.7a).
     pub yaml_root: &'static str,
     pub env_keys: Vec<EnvKeySpec>,
     pub yaml_fields: Vec<YamlFieldSpec>,
@@ -91,8 +102,11 @@ pub struct ChannelSpec {
     /// a save. Conservatively start at `false` for everything — we don't
     /// have runtime evidence yet — and flip on channel-by-channel.
     pub hot_reloadable: bool,
-    /// Set for WeChat so the UI can render a QR scanner instead of a
-    /// plain form. Reserved for T3.3.
+    /// Reserved: `true` when a channel uses a QR scan flow. No channel
+    /// in Hermes uses one today — the previous WeChat QR implementation
+    /// was based on a misread of the upstream schema. Kept in the type
+    /// for forward-compatibility; always `false` today. Frontend treats
+    /// it as a hint only and no longer mounts a QR panel.
     pub has_qr_login: bool,
 }
 
@@ -188,15 +202,29 @@ fn build_specs() -> Vec<ChannelSpec> {
             has_qr_login: false,
         },
         // ── Slack ────────────────────────────────────────────────────
+        //
+        // Slack's real deployment uses Socket Mode, which requires BOTH
+        // a bot token (`xoxb-...`) and an app-level token (`xapp-...`).
+        // We surface both so users don't end up with a gateway that
+        // silently fails to connect. Only the bot token is marked
+        // `required` so we don't hard-block users on webhook-style
+        // integrations that skip Socket Mode.
         ChannelSpec {
             id: "slack",
             display_name: "Slack",
             yaml_root: "channels.slack",
-            env_keys: vec![EnvKeySpec {
-                name: "SLACK_BOT_TOKEN".into(),
-                required: true,
-                hint_key: "channels.slack.hint_token".into(),
-            }],
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "SLACK_BOT_TOKEN".into(),
+                    required: true,
+                    hint_key: "channels.slack.hint_token".into(),
+                },
+                EnvKeySpec {
+                    name: "SLACK_APP_TOKEN".into(),
+                    required: false,
+                    hint_key: "channels.slack.hint_app_token".into(),
+                },
+            ],
             yaml_fields: vec![
                 YamlFieldSpec {
                     path: "mention_required".into(),
@@ -218,26 +246,39 @@ fn build_specs() -> Vec<ChannelSpec> {
         },
         // ── WhatsApp ─────────────────────────────────────────────────
         //
-        // Credential env names are marked TBD in the Phase 3 doc — we
-        // need to verify against a live Hermes. For now ship a single
-        // placeholder key and let T3.2 nail it down when we wire forms.
+        // Hermes has no `WHATSAPP_TOKEN` (the old Corey schema wrote to
+        // a variable Hermes never reads). Real integration uses a bridge
+        // process, configured via `WHATSAPP_ENABLED` / `WHATSAPP_MODE`
+        // (`bot` vs `self-chat`) / `WHATSAPP_ALLOWED_USERS` etc. — none
+        // of which is a secret, so these all render as plain text inputs
+        // without the password mask.
         ChannelSpec {
             id: "whatsapp",
             display_name: "WhatsApp",
             yaml_root: "channels.whatsapp",
-            env_keys: vec![EnvKeySpec {
-                name: "WHATSAPP_TOKEN".into(),
-                required: true,
-                hint_key: "channels.whatsapp.hint_token".into(),
-            }],
-            yaml_fields: vec![
-                YamlFieldSpec {
-                    path: "enable".into(),
-                    kind: FieldKind::Bool,
-                    label_key: "channels.field.enable".into(),
-                    default_bool: Some(false),
-                    default_string: None,
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "WHATSAPP_ENABLED".into(),
+                    required: true,
+                    hint_key: "channels.whatsapp.hint_enabled".into(),
                 },
+                EnvKeySpec {
+                    name: "WHATSAPP_MODE".into(),
+                    required: false,
+                    hint_key: "channels.whatsapp.hint_mode".into(),
+                },
+                EnvKeySpec {
+                    name: "WHATSAPP_ALLOWED_USERS".into(),
+                    required: false,
+                    hint_key: "channels.whatsapp.hint_allowed_users".into(),
+                },
+                EnvKeySpec {
+                    name: "WHATSAPP_ALLOW_ALL_USERS".into(),
+                    required: false,
+                    hint_key: "channels.whatsapp.hint_allow_all".into(),
+                },
+            ],
+            yaml_fields: vec![
                 YamlFieldSpec {
                     path: "mention_required".into(),
                     kind: FieldKind::Bool,
@@ -319,26 +360,57 @@ fn build_specs() -> Vec<ChannelSpec> {
             hot_reloadable: false,
             has_qr_login: false,
         },
-        // ── WeChat ───────────────────────────────────────────────────
+        // ── WeiXin (personal WeChat via Tencent iLink) ───────────────
         //
-        // Credentials come in via the QR scan flow (T3.3), not a text
-        // input. We still ship an EnvKeySpec so the allowlist accepts
-        // the eventual write, but `required=false` + `has_qr_login=true`
-        // tell the UI to render a QR button in place of an input.
+        // Replaces the old `wechat` slug + fake QR flow. Hermes hits
+        // `WEIXIN_BASE_URL` (defaults to `https://ilinkai.weixin.qq.com`)
+        // directly with a plain account_id + token — no QR scan, no
+        // session cookie dance. See `docs/hermes-reality-check-2026-04-23.md`.
         ChannelSpec {
-            id: "wechat",
-            display_name: "WeChat",
-            yaml_root: "",
-            env_keys: vec![EnvKeySpec {
-                name: "WECHAT_SESSION".into(),
-                required: false,
-                hint_key: "channels.wechat.hint_qr".into(),
-            }],
+            id: "weixin",
+            display_name: "WeiXin (Personal)",
+            yaml_root: "channels.weixin",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "WEIXIN_ACCOUNT_ID".into(),
+                    required: true,
+                    hint_key: "channels.weixin.hint_account_id".into(),
+                },
+                EnvKeySpec {
+                    name: "WEIXIN_TOKEN".into(),
+                    required: true,
+                    hint_key: "channels.weixin.hint_token".into(),
+                },
+                EnvKeySpec {
+                    name: "WEIXIN_BASE_URL".into(),
+                    required: false,
+                    hint_key: "channels.weixin.hint_base_url".into(),
+                },
+                EnvKeySpec {
+                    name: "WEIXIN_DM_POLICY".into(),
+                    required: false,
+                    hint_key: "channels.weixin.hint_dm_policy".into(),
+                },
+                EnvKeySpec {
+                    name: "WEIXIN_GROUP_POLICY".into(),
+                    required: false,
+                    hint_key: "channels.weixin.hint_group_policy".into(),
+                },
+                EnvKeySpec {
+                    name: "WEIXIN_ALLOWED_USERS".into(),
+                    required: false,
+                    hint_key: "channels.weixin.hint_allowed_users".into(),
+                },
+            ],
             yaml_fields: vec![],
             hot_reloadable: false,
-            has_qr_login: true,
+            has_qr_login: false,
         },
         // ── WeCom (Enterprise WeChat) ────────────────────────────────
+        //
+        // Corrected 2026-04-23 pm: `WECOM_BOT_SECRET` in our old schema
+        // was an off-by-prefix mistake; Hermes reads `WECOM_SECRET`.
+        // Added websocket URL and allowlist for parity with Hermes.
         ChannelSpec {
             id: "wecom",
             display_name: "WeCom",
@@ -350,9 +422,19 @@ fn build_specs() -> Vec<ChannelSpec> {
                     hint_key: "channels.wecom.hint_bot_id".into(),
                 },
                 EnvKeySpec {
-                    name: "WECOM_BOT_SECRET".into(),
+                    name: "WECOM_SECRET".into(),
                     required: true,
-                    hint_key: "channels.wecom.hint_bot_secret".into(),
+                    hint_key: "channels.wecom.hint_secret".into(),
+                },
+                EnvKeySpec {
+                    name: "WECOM_WEBSOCKET_URL".into(),
+                    required: false,
+                    hint_key: "channels.wecom.hint_websocket_url".into(),
+                },
+                EnvKeySpec {
+                    name: "WECOM_ALLOWED_USERS".into(),
+                    required: false,
+                    hint_key: "channels.wecom.hint_allowed_users".into(),
                 },
             ],
             yaml_fields: vec![],
@@ -412,17 +494,57 @@ mod tests {
     }
 
     #[test]
-    fn wechat_is_the_only_qr_channel() {
-        let qrs: Vec<_> = CHANNEL_SPECS.iter().filter(|s| s.has_qr_login).collect();
-        assert_eq!(qrs.len(), 1);
-        assert_eq!(qrs[0].id, "wechat");
+    fn no_channel_uses_qr_login_post_t6_7a() {
+        // Before T6.7a we carried a fake `wechat` QR flow. Hermes upstream
+        // has no QR integration; the fictional flow was deleted. This
+        // test locks in that none of the catalog claims `has_qr_login`
+        // and fails loudly if someone re-introduces one without updating
+        // the frontend QR-panel gate.
+        for spec in CHANNEL_SPECS.iter() {
+            assert!(
+                !spec.has_qr_login,
+                "channel '{}' sets has_qr_login=true; no Hermes channel supports QR today",
+                spec.id,
+            );
+        }
     }
 
     #[test]
     fn find_spec_lookup_works_and_unknown_returns_none() {
         assert_eq!(find_spec("telegram").unwrap().id, "telegram");
         assert_eq!(find_spec("feishu").unwrap().display_name, "Feishu (Lark)");
+        assert_eq!(
+            find_spec("weixin").unwrap().display_name,
+            "WeiXin (Personal)",
+        );
+        assert!(find_spec("wechat").is_none(), "legacy `wechat` slug removed");
         assert!(find_spec("twitter").is_none());
+    }
+
+    #[test]
+    fn t6_7a_schema_fixes_in_place() {
+        // Lock in the three silently-broken env names we fixed. If a
+        // future refactor accidentally reverts any of these, this test
+        // fails loudly before users hit a silent miswrite.
+        let whatsapp = find_spec("whatsapp").unwrap();
+        let names: Vec<&str> = whatsapp.env_keys.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"WHATSAPP_ENABLED"));
+        assert!(!names.contains(&"WHATSAPP_TOKEN"), "WHATSAPP_TOKEN is not read by Hermes");
+
+        let wecom = find_spec("wecom").unwrap();
+        let names: Vec<&str> = wecom.env_keys.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"WECOM_SECRET"));
+        assert!(!names.contains(&"WECOM_BOT_SECRET"), "WECOM_BOT_SECRET is an off-by-prefix typo");
+
+        let weixin = find_spec("weixin").unwrap();
+        let names: Vec<&str> = weixin.env_keys.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"WEIXIN_ACCOUNT_ID"));
+        assert!(names.contains(&"WEIXIN_TOKEN"));
+
+        let slack = find_spec("slack").unwrap();
+        let names: Vec<&str> = slack.env_keys.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"SLACK_BOT_TOKEN"));
+        assert!(names.contains(&"SLACK_APP_TOKEN"), "Socket Mode needs both tokens");
     }
 
     #[test]
@@ -481,8 +603,10 @@ mod tests {
     fn yaml_root_matches_id_convention_except_for_rootless_channels() {
         for spec in CHANNEL_SPECS.iter() {
             if spec.yaml_root.is_empty() {
-                // Only WeChat should be rootless at the moment.
-                assert_eq!(spec.id, "wechat");
+                // Post-T6.7a no channel should be rootless; the old
+                // `wechat` exception is gone. Keeping the branch so a
+                // future channel without yaml can opt in explicitly
+                // without this test blocking.
                 continue;
             }
             assert!(

@@ -398,24 +398,13 @@
     "restart_prompt": "Saved. Restart the Hermes gateway so the change takes effect now?",
     "restart_now": "Restart now",
     "restart_later": "Later",
-    "qr_cta": "Scan to log in.",
-    "qr_pending": "WeChat credentials arrive via the QR scan below; there's nothing to type.",
-    "wechat": {
-      "hint_qr": "WeChat login is QR-only (Tencent iLink).",
-      "qr_intro": "Start a QR session, scan it with the WeChat app, and confirm on your phone. The session token is written to ~/.hermes/.env automatically.",
-      "start": "Start QR session",
-      "restart": "Start over",
-      "cancel": "Cancel",
-      "written_by_qr": "written by QR scan",
-      "expires_in_s": "expires in {{s}}s",
-      "status": {
-        "pending": "Waiting for scan…",
-        "scanning": "Scanned — confirm on your phone",
-        "scanned": "Signed in — credentials saved",
-        "expired": "QR code expired",
-        "cancelled": "Session cancelled",
-        "failed": "QR login failed: {{detail}}"
-      }
+    "weixin": {
+      "hint_account_id": "WeiXin account identifier (the iLink bot account).",
+      "hint_token": "iLink access token paired with the account ID.",
+      "hint_base_url": "Overrides the default https://ilinkai.weixin.qq.com endpoint. Leave blank unless you're on a forked deployment.",
+      "hint_dm_policy": "DM policy: open | allowlist | pairing | disabled. Defaults to 'open'.",
+      "hint_group_policy": "Group policy: open | allowlist | disabled. Defaults to 'disabled'.",
+      "hint_allowed_users": "Comma-separated WeiXin user IDs allowed to talk to the bot."
     },
     "diff": {
       "env_set": "set",
@@ -427,7 +416,6 @@
       "offline": "offline",
       "unknown": "unknown"
     },
-    "qr_hint": "Log in via QR code (scan with the app).",
     "behavior_fields_zero": "No behavior fields",
     "behavior_fields_one": "1 behavior field",
     "behavior_fields_other": "{{count}} behavior fields",
@@ -437,6 +425,13 @@
       "partial": "Partial",
       "unconfigured": "Not configured",
       "qr": "QR login"
+    },
+    "whatsapp": {
+      "hint_enabled": "Set to 'true' to enable the WhatsApp bridge process.",
+      "hint_mode": "'bot' (standard bot) or 'self-chat' (route to your own WhatsApp account).",
+      "hint_allowed_users": "Comma-separated phone numbers (+<country><number>) allowed to talk to the bot.",
+      "hint_allow_all": "Set to 'true' to skip the allowlist (dangerous on public deployments).",
+      "mention_patterns": "Regex patterns that count as a mention"
     },
     "field": {
       "mention_required": "Only respond when @-mentioned",
@@ -454,12 +449,9 @@
       "ignore_channels": "Channel IDs to ignore"
     },
     "slack": {
-      "hint_token": "Slack App settings → OAuth & Permissions → Bot User OAuth Token.",
+      "hint_token": "Slack App settings → OAuth & Permissions → Bot User OAuth Token (xoxb-…).",
+      "hint_app_token": "App-level token (xapp-…) required for Socket Mode. Both tokens are needed for the standard Hermes Slack setup.",
       "handle_bot_messages": "Respond to other bots"
-    },
-    "whatsapp": {
-      "hint_token": "WhatsApp Business API access token (verify env name against your Hermes version).",
-      "mention_patterns": "Regex patterns that count as a mention"
     },
     "matrix": {
       "hint_token": "Matrix client-server access token.",
@@ -472,7 +464,9 @@
     },
     "wecom": {
       "hint_bot_id": "WeCom admin console → bot ID.",
-      "hint_bot_secret": "WeCom bot secret."
+      "hint_secret": "WeCom bot secret (stored as WECOM_SECRET).",
+      "hint_websocket_url": "Optional override for the WeCom websocket endpoint. Defaults to wss://openws.work.weixin.qq.com.",
+      "hint_allowed_users": "Comma-separated WeCom user IDs allowed to talk to the bot."
     }
   },
   "profiles": {

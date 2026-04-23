@@ -6,6 +6,66 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.7a · Channel schema hotfix (3 silently-broken channels fixed, QR stack deleted)
+
+First code of the post-audit plan. Fixes three live user-facing bugs introduced by Phase 3 against an inferred Hermes schema, and deletes the fictional WeChat QR flow.
+
+### Context
+
+Per `docs/hermes-reality-check-2026-04-23.md`, three of our 8 channel integrations silently failed because the env var names didn't match `hermes-agent` upstream. Users filling tokens saw "Configured" pills but Hermes never read the values. T6.7a reconciles the schema against `hermes-agent.nousresearch.com/docs/reference/environment-variables` and deletes the WeChat QR machinery (Hermes has no QR flow — the entire `StubQrProvider` + `WeChatQr.tsx` + `wechat_qr_*` IPC trio was based on a misread).
+
+### Shipped
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/channels.rs`** — catalog reconciled:
+- **WhatsApp**: `WHATSAPP_TOKEN` → `WHATSAPP_ENABLED` + `WHATSAPP_MODE` + `WHATSAPP_ALLOWED_USERS` + `WHATSAPP_ALLOW_ALL_USERS`.
+- **WeCom**: `WECOM_BOT_SECRET` → `WECOM_SECRET`; added `WECOM_WEBSOCKET_URL` + `WECOM_ALLOWED_USERS`.
+- **WeChat → WeiXin**: slug changes `wechat` → `weixin`; env schema replaced with `WEIXIN_ACCOUNT_ID` + `WEIXIN_TOKEN` + `WEIXIN_BASE_URL` + `WEIXIN_DM_POLICY` + `WEIXIN_GROUP_POLICY` + `WEIXIN_ALLOWED_USERS`. No more QR.
+- **Slack**: added optional `SLACK_APP_TOKEN` (Socket Mode needs both tokens).
+- New tests `no_channel_uses_qr_login_post_t6_7a` and `t6_7a_schema_fixes_in_place` lock in the fixes; updated `find_spec_lookup_works_and_unknown_returns_none` to assert `wechat` slug is gone.
+
+**QR stack deleted** (Hermes upstream has no QR flow):
+- `src-tauri/src/wechat.rs` — deleted.
+- `src-tauri/src/ipc/wechat.rs` — deleted.
+- `src/features/channels/WeChatQr.tsx` — deleted.
+- `wechat_qr_start` / `wechat_qr_poll` / `wechat_qr_cancel` IPC registrations removed from `lib.rs`.
+- `WechatRegistry` field removed from `AppState`.
+- `WechatQrStart` / `WechatQrPoll` / `WechatQrStatus` / `isWechatQrTerminal` / the three `wechatQr*` invokers removed from `src/lib/ipc.ts`.
+- `onWechatScanned` prop + `QrCode` icon + "channel-status-qr" pill rendering removed from `ChannelForm.tsx` + `index.tsx`.
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/adapters/mod.rs`** — `Source::WeChat` → `Source::Weixin` (wire value `"we_chat"` → `"weixin"`).
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/adapters/hermes/mod.rs`** — capabilities `channels` list `"wechat"` → `"weixin"`.
+
+**`@/Users/zbin/AI项目/hermes_ui/src-tauri/src/channel_status.rs`** — test renamed `classify_wechat_*` → `classify_weixin_*`.
+
+**`@/Users/zbin/AI项目/hermes_ui/src/locales/en.json` + `zh.json`** — removed `channels.wechat.*` + `channels.qr_hint` + `channels.qr_pending` + `channels.qr_cta`; added `channels.weixin.hint_*` (6 keys), `channels.whatsapp.hint_*` (4 keys, replacing the single `hint_token`), `channels.slack.hint_app_token`, `channels.wecom.hint_secret` + `hint_websocket_url` + `hint_allowed_users`.
+
+**`@/Users/zbin/AI项目/hermes_ui/e2e/fixtures/tauri-mock.ts`** — fixture channel swapped `wechat` → `weixin`; `wechatSessions` state field + three `wechat_qr_*` IPC cases removed.
+
+**`@/Users/zbin/AI项目/hermes_ui/e2e/channels.spec.ts`** — card visibility assertion updated to `channel-card-weixin` (now bucketed `unconfigured`); T3.3 WeChat QR flow test deleted.
+
+### Fixed
+
+- Users filling WhatsApp / WeCom / WeChat credentials will now have them actually reach Hermes (they silently didn't before).
+- Slack Socket Mode (the standard Hermes path) can now be fully configured from the UI via the new `SLACK_APP_TOKEN` field.
+
+### Test totals
+
+- Rust: **146 pass, 0 fail** (+2 new schema-lock tests).
+- Frontend: TSC clean, ESLint clean (only pre-existing fast-refresh warnings in routes/budgets/runbooks), Vitest 27/27 pass.
+- Playwright: pre-existing environmental failures on `main` (verified via `git stash` comparison) unrelated to T6.7a. T6.7a-specific spec (channels.spec.ts) will green once the wider Playwright env is fixed; fixture + assertions already updated.
+
+### Deferred
+
+- The pre-existing Playwright environment breakage is a separate follow-up (mock script appears to not install reliably into the test page's runtime; reproduces on `main` with no T6.7a edits).
+
+### Next
+
+- T6.7b: write `docs/channels-smoke-test.md` + run real Telegram end-to-end.
+- T6.7c: Discord + Slack + one CN channel e2e.
+
+---
+
 ## 2026-04-23 — Product audit applied to Phase 6/7 docs
 
 Full KEEP/SURFACE/DROP reclassification (per `docs/10-product-audit-2026-04-23.md`) executed. User approved the aggressive path.

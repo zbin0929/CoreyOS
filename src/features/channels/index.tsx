@@ -8,7 +8,6 @@ import {
   Loader2,
   MessageSquareMore,
   Pencil,
-  QrCode,
   RefreshCw,
   RotateCw,
   X,
@@ -28,9 +27,6 @@ import {
   type ChannelLiveStatus,
   type ChannelState,
 } from '@/lib/ipc';
-// hermesChannelList is re-used by the WeChat scan handler to re-read
-// env_present after the backend writes WECHAT_SESSION; pulling it
-// via the top-level import keeps the card component synchronous.
 import {
   ChannelForm,
   type ChannelDiffLine,
@@ -62,17 +58,16 @@ type State =
   | { kind: 'loaded'; channels: ChannelState[] }
   | { kind: 'error'; message: string };
 
-/** Stable ordering for the status-dot severity, highest-priority first. */
+/** Stable ordering for the status-dot severity, highest-priority first.
+ *  Post-T6.7a the `'qr'` bucket is unreachable in practice (no Hermes
+ *  channel uses QR) but is kept in the union for forward-compat with
+ *  the `has_qr_login` spec flag. */
 function computeStatus(c: ChannelState):
   | 'configured'
   | 'partial'
   | 'unconfigured'
   | 'qr' {
-  if (c.has_qr_login) {
-    // WeChat: QR-only. Bucket as "qr" regardless of credential presence
-    // until T3.3 wires live session-state checks.
-    return 'qr';
-  }
+  if (c.has_qr_login) return 'qr';
   const required = c.env_keys.filter((k) => k.required);
   if (required.length === 0) return 'configured';
   const setCount = required.filter((k) => c.env_present[k.name]).length;
@@ -394,13 +389,6 @@ function ChannelCard({
             </ul>
           )}
 
-          {channel.has_qr_login && (
-            <div className="flex items-center gap-1.5 rounded border border-gold-500/40 bg-gold-500/5 px-2 py-1 text-[11px] text-gold-500">
-              <Icon icon={QrCode} size="xs" />
-              {t('channels.qr_hint')}
-            </div>
-          )}
-
           {channel.yaml_fields.length > 0 && (
             <details className="group">
               <summary className="cursor-pointer text-[11px] text-fg-subtle group-open:text-fg-muted">
@@ -467,21 +455,6 @@ function ChannelCard({
           channel={channel}
           busy={false}
           onCancel={() => setMode({ kind: 'view' })}
-          onWechatScanned={async () => {
-            // WeChat wrote WECHAT_SESSION directly via the QR flow;
-            // no hermes_channel_save call happened. Re-read the
-            // channel so the presence pill flips to Configured, then
-            // surface the restart prompt (WeChat is
-            // hot_reloadable=false).
-            try {
-              const rows = await hermesChannelList();
-              const fresh = rows.find((r) => r.id === channel.id);
-              if (fresh) onSaved(fresh);
-              setMode({ kind: 'restart-prompt' });
-            } catch (e) {
-              setMode({ kind: 'error', message: ipcErrorMessage(e) });
-            }
-          }}
           onSubmit={(submission) => {
             // Empty patches → no-op. Keep the user in edit mode so
             // they notice nothing changed rather than silently

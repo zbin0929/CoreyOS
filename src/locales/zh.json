@@ -398,24 +398,13 @@
     "restart_prompt": "已保存。现在重启 Hermes 网关让改动立即生效？",
     "restart_now": "立即重启",
     "restart_later": "稍后",
-    "qr_cta": "扫码登录。",
-    "qr_pending": "微信凭证通过下方扫码流程写入，无需手动输入。",
-    "wechat": {
-      "hint_qr": "微信登录仅支持扫码（Tencent iLink）。",
-      "qr_intro": "开启扫码会话，用微信 App 扫一下并在手机上确认。Session Token 将自动写入 ~/.hermes/.env。",
-      "start": "开启扫码",
-      "restart": "重新开始",
-      "cancel": "取消",
-      "written_by_qr": "由扫码写入",
-      "expires_in_s": "{{s}} 秒后过期",
-      "status": {
-        "pending": "等待扫码…",
-        "scanning": "已扫码 —— 请在手机上确认",
-        "scanned": "已登录 —— 凭证已保存",
-        "expired": "二维码已过期",
-        "cancelled": "会话已取消",
-        "failed": "扫码登录失败：{{detail}}"
-      }
+    "weixin": {
+      "hint_account_id": "个人微信帐号标识 (iLink 机器人帐号)。",
+      "hint_token": "与账号配对的 iLink 访问令牌。",
+      "hint_base_url": "覆盖默认端点 https://ilinkai.weixin.qq.com，自建部署才需填写。",
+      "hint_dm_policy": "私聊策略：open | allowlist | pairing | disabled，默认 open。",
+      "hint_group_policy": "群聊策略：open | allowlist | disabled，默认 disabled。",
+      "hint_allowed_users": "逗号分隔的允许用户 ID 列表。"
     },
     "diff": {
       "env_set": "已设置",
@@ -427,7 +416,6 @@
       "offline": "离线",
       "unknown": "未知"
     },
-    "qr_hint": "扫码登录（用对应 App 扫一下即可）。",
     "behavior_fields_zero": "无行为字段",
     "behavior_fields_one": "1 个行为字段",
     "behavior_fields_other": "{{count}} 个行为字段",
@@ -454,11 +442,15 @@
       "ignore_channels": "忽略这些频道 ID"
     },
     "slack": {
-      "hint_token": "Slack App 设置 → OAuth & Permissions → Bot Token。",
+      "hint_token": "Slack App 设置 → OAuth & Permissions → Bot Token (xoxb-…)。",
+      "hint_app_token": "App 级 Token (xapp-…)，Socket Mode 必填，Hermes 默认配置两者都需要。",
       "handle_bot_messages": "也回应其他机器人"
     },
     "whatsapp": {
-      "hint_token": "WhatsApp Business API 访问令牌（env 名需按你的 Hermes 版本核对）。",
+      "hint_enabled": "设为 true 启用 WhatsApp 桥接进程。",
+      "hint_mode": "bot（标准机器人）或 self-chat（转发到自己的 WhatsApp 账号）。",
+      "hint_allowed_users": "逗号分隔、+国家码的手机号白名单。",
+      "hint_allow_all": "设为 true 跳过白名单（公网部署慎用）。",
       "mention_patterns": "匹配为 @ 的正则表达式"
     },
     "matrix": {
@@ -472,7 +464,9 @@
     },
     "wecom": {
       "hint_bot_id": "企业微信管理后台 → 机器人 ID。",
-      "hint_bot_secret": "企业微信机器人密钥。"
+      "hint_secret": "企业微信机器人密钥（存为 WECOM_SECRET）。",
+      "hint_websocket_url": "可选：覆盖默认 wss://openws.work.weixin.qq.com。",
+      "hint_allowed_users": "逗号分隔的允许用户 ID 列表。"
     }
   },
   "profiles": {

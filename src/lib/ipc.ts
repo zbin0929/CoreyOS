@@ -639,46 +639,7 @@ export function hermesChannelSave(args: ChannelSaveArgs): Promise<ChannelState> 
   return invoke<ChannelState>('hermes_channel_save', { args });
 }
 
-// ───────────────────────── WeChat QR (T3.3) ─────────────────────────
-
-/** Discriminated-union status from the backend QR state machine.
- *  Matches `QrStatus` in `src-tauri/src/wechat.rs`. Terminal
- *  variants: `scanned`, `expired`, `cancelled`, `failed`. */
-export type WechatQrStatus =
-  | { kind: 'pending' }
-  | { kind: 'scanning' }
-  | { kind: 'scanned' }
-  | { kind: 'expired' }
-  | { kind: 'cancelled' }
-  | { kind: 'failed'; detail: string };
-
-/** Returned by `wechatQrStart`. `svg` is inline markup ready to
- *  drop into the DOM (via dangerouslySetInnerHTML on a wrapper);
- *  no network fetch required. */
-export interface WechatQrStart {
-  qr_id: string;
-  svg: string;
-  expires_in_s: number;
-}
-
-export interface WechatQrPoll {
-  qr_id: string;
-  status: WechatQrStatus;
-  elapsed_s: number;
-}
-
-/** Convenience: the four terminal variants the UI treats as "stop
- *  polling". Exported so the component and tests share one rule. */
-export function isWechatQrTerminal(s: WechatQrStatus): boolean {
-  return (
-    s.kind === 'scanned' ||
-    s.kind === 'expired' ||
-    s.kind === 'cancelled' ||
-    s.kind === 'failed'
-  );
-}
-
-// ───────────────────────── Channel live status (T3.4) ─────────────────────────
+// ──────────────────────── Channel live status (T3.4) ─────────────────────────
 
 /** Three-way liveness verdict for a single channel. `unknown` when the
  *  logs have no recent line matching the channel's slug — distinct
@@ -702,18 +663,6 @@ export interface ChannelLiveStatus {
  *  most-recent marker per channel. */
 export function hermesChannelStatusList(force = false): Promise<ChannelLiveStatus[]> {
   return invoke<ChannelLiveStatus[]>('hermes_channel_status_list', { force });
-}
-
-export function wechatQrStart(): Promise<WechatQrStart> {
-  return invoke<WechatQrStart>('wechat_qr_start');
-}
-
-export function wechatQrPoll(qrId: string): Promise<WechatQrPoll> {
-  return invoke<WechatQrPoll>('wechat_qr_poll', { qrId });
-}
-
-export function wechatQrCancel(qrId: string): Promise<void> {
-  return invoke<void>('wechat_qr_cancel', { qrId });
 }
 
 // ───────────────────────── Hermes profiles ─────────────────────────

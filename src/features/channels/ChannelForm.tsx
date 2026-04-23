@@ -4,12 +4,11 @@ import { Check, Eye, EyeOff, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import type { ChannelFieldKind, ChannelState } from '@/lib/ipc';
-import { WeChatQr } from './WeChatQr';
 
 /**
  * Phase 3 · T3.2 — dynamic channel form.
  *
- * One component drives all 8 channels: fields + env keys come from the
+ * One component drives all channels: fields + env keys come from the
  * `ChannelSpec` the backend shipped with each card. Design intent:
  *
  *   - Secrets never pre-fill. We only know PRESENCE (`env_present`),
@@ -22,8 +21,10 @@ import { WeChatQr } from './WeChatQr';
  *   - Booleans default to the spec's `default_bool` when unset on
  *     disk, matching how Hermes itself resolves defaults.
  *
- * WeChat is the one exception — `has_qr_login` channels get a CTA
- * placeholder instead of text inputs (real QR flow lands in T3.3).
+ * T6.7a (2026-04-23 pm): removed the WeChat QR path. Hermes upstream
+ * has no QR flow — WeiXin uses plain text inputs for account_id +
+ * token. `has_qr_login` remains in the spec type for forward
+ * compatibility but the form no longer renders a QR panel when set.
  */
 
 /** One pending field, keyed in two flavors: `env:NAME` or `yaml:path`.
@@ -50,18 +51,11 @@ export function ChannelForm({
   busy,
   onCancel,
   onSubmit,
-  onWechatScanned,
 }: {
   channel: ChannelState;
   busy: boolean;
   onCancel: () => void;
   onSubmit: (submission: ChannelFormSubmission) => void;
-  /** Called after a successful WeChat QR scan wrote
-   *  `WECHAT_SESSION` to disk. The parent card should refetch its
-   *  `ChannelState` so the env_present map reflects the new token.
-   *  Separate from `onSubmit` because the form save path doesn't
-   *  fire — the backend wrote the env directly. */
-  onWechatScanned?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -146,15 +140,7 @@ export function ChannelForm({
                 : t('channels.optional')}
             </span>
           </div>
-          {channel.has_qr_login && !k.required ? (
-            // T3.3: the optional "sentinel" env key for QR-login
-            // channels (WeChat's WECHAT_SESSION) isn't typed — it's
-            // written by the QR flow below. Suppress the password
-            // input entirely; the `WeChatQr` panel handles it.
-            <span className="text-[10px] text-fg-subtle">
-              {t('channels.wechat.written_by_qr')}
-            </span>
-          ) : (
+          {(
             <div className="flex items-center gap-1">
               <input
                 type={revealed[k.name] ? 'text' : 'password'}
@@ -202,14 +188,6 @@ export function ChannelForm({
           onChange={(v) => setYamlValues((s) => ({ ...s, [f.path]: v }))}
         />
       ))}
-
-      {/* T3.3: QR-login panel. Rendered for channels whose spec
-          sets `has_qr_login = true` (today only WeChat). Owns its
-          own network + timing; on success it calls back to the
-          parent card so the env_present map refreshes. */}
-      {channel.has_qr_login && (
-        <WeChatQr onScanned={() => onWechatScanned?.()} />
-      )}
 
       {/* Footer ------------------------------------------------- */}
       <div className="flex items-center justify-end gap-2 border-t border-border pt-2">

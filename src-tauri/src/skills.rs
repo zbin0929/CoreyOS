@@ -193,9 +193,10 @@ fn resolve(rel_path: &str) -> anyhow::Result<PathBuf> {
 }
 
 /// Test-only global lock on `$HOME` mutation. Any test in the crate that
-/// set_var("HOME", …) should take this first — otherwise parallel runs of
-/// `skills::tests::*` and `wechat::tests::*` (both of which point HOME at
-/// a tempdir) clobber each other and produce spurious failures.
+/// set_var("HOME", …) should take this first — otherwise parallel tests
+/// that point HOME at a tempdir clobber each other and produce spurious
+/// failures. (Historically used by `wechat::tests::*`; kept available
+/// for any future HOME-sensitive suites.)
 #[cfg(test)]
 pub(crate) static HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 

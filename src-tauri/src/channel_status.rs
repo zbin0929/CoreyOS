@@ -237,12 +237,11 @@ mod tests {
     }
 
     #[test]
-    fn classify_wechat_does_not_match_wecom_and_vice_versa() {
+    fn classify_weixin_does_not_match_wecom_and_vice_versa() {
         let lines = vec!["2026-04-22 wecom ready".to_string()];
-        let (s, _) = classify("wechat", &lines);
-        // wecom does not contain the substring "wechat" (wecom vs
-        // wechat — `we` prefix but different suffix), so wechat
-        // stays Unknown.
+        let (s, _) = classify("weixin", &lines);
+        // Totally disjoint substrings; weixin stays Unknown when only
+        // wecom logs are present.
         assert_eq!(s, LiveState::Unknown);
 
         let (s2, _) = classify("wecom", &lines);
