@@ -32,13 +32,41 @@
     "attach_file": "Attach file",
     "stop_generating": "Stop generating",
     "send_message": "Send message",
-    "remove_attachment": "Remove"
+    "remove_attachment": "Remove",
+    "sessions": "Sessions",
+    "new": "New",
+    "new_chat": "New chat",
+    "session_scope": "Session scope",
+    "scope_active": "Active",
+    "scope_all": "All agents",
+    "empty_sessions": "No sessions yet. Start chatting to create one.",
+    "empty_adapter_sessions": "No {{adapter}} sessions. Switch to “All agents” to see others.",
+    "message_placeholder": "Message Hermes…  (Enter to send, Shift+Enter for newline)",
+    "current_llm": "Current LLM (click to configure)",
+    "hero_title": "Talk to Hermes",
+    "hero_subtitle_prefix": "Connected through the local gateway on ",
+    "hero_subtitle_suffix": ".",
+    "hero_suggestion_1": "Explain what Hermes Agent is in one sentence.",
+    "hero_suggestion_2": "Summarize the TRAE sandboxing model in 3 bullets.",
+    "hero_suggestion_3": "Generate a basic Rust Tokio example for me."
   },
+  
   "models_page": {
     "title": "Language models",
     "subtitle": "The LLM backing the Hermes agent — configured in ~/.hermes/config.yaml",
     "change_model": "Change model",
-    "change_model_desc": "Pick a provider, set the model id, and save. The gateway must be restarted for changes to take effect."
+    "change_model_desc": "Pick a provider, set the model id, and save. The gateway must be restarted for changes to take effect.",
+    "reload_config": "Re-read ~/.hermes/config.yaml",
+    "probe_title": "GET /v1/models against this endpoint",
+    "dismiss": "Dismiss"
+  },
+  "widgets": {
+    "close": "Close",
+    "toggle_options": "Toggle options",
+    "registered_agents": "Registered agents",
+    "agents_fallback": "Agents",
+    "llm_loading": "Loading…",
+    "llm_not_configured": "(LLM not configured)"
   },
   "topbar": {
     "profile": "Profile",

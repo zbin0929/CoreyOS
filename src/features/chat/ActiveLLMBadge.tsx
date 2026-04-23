@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { Cpu, Settings2 } from 'lucide-react';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
@@ -13,6 +14,7 @@ import { hermesConfigRead, type HermesModelSection } from '@/lib/ipc';
  * can actually change the underlying provider/model.
  */
 export function ActiveLLMBadge() {
+  const { t } = useTranslation();
   const [model, setModel] = useState<HermesModelSection | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -50,7 +52,7 @@ export function ActiveLLMBadge() {
         'bg-bg-elev-1 text-fg transition',
         'hover:border-gold-500/40 hover:bg-bg-elev-2',
       )}
-      title="Current LLM (click to configure)"
+      title={t('chat_page.current_llm')}
     >
       <Icon icon={Cpu} size="xs" className="opacity-60" />
       <code className="font-mono">{label}</code>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
@@ -20,6 +21,7 @@ import type { AdapterListEntry } from '@/lib/ipc';
  *   - unified inbox across adapters
  */
 export function AgentSwitcher() {
+  const { t } = useTranslation();
   const adapters = useAgentsStore((s) => s.adapters);
   const loading = useAgentsStore((s) => s.loading);
   const refresh = useAgentsStore((s) => s.refresh);
@@ -93,7 +95,7 @@ export function AgentSwitcher() {
       >
         <HealthDot ok={activeOk} pending={loading} />
         <span className="max-w-[140px] truncate font-medium">
-          {active?.name ?? 'Agents'}
+          {active?.name ?? t('widgets.agents_fallback')}
         </span>
         <span className="text-fg-subtle">{adapters.length}</span>
         <Icon icon={ChevronDown} size="xs" className="text-fg-subtle" />
@@ -102,7 +104,7 @@ export function AgentSwitcher() {
       {open && (
         <div
           role="listbox"
-          aria-label="Registered agents"
+          aria-label={t('widgets.registered_agents')}
           className={cn(
             'absolute right-0 top-full z-40 mt-1 w-72 overflow-hidden',
             'rounded-md border border-border bg-bg-elev-1 shadow-2',
@@ -110,7 +112,7 @@ export function AgentSwitcher() {
           data-testid="agent-switcher-list"
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2 text-[10px] uppercase tracking-wider text-fg-subtle">
-            <span>Registered agents</span>
+            <span>{t('widgets.registered_agents')}</span>
             <span className="font-mono">{adapters.length}</span>
           </div>
           <ul className="max-h-80 overflow-y-auto py-1">

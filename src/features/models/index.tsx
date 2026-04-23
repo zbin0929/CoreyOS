@@ -241,7 +241,7 @@ export function ModelsRoute() {
             size="sm"
             onClick={load}
             disabled={state.kind === 'loading'}
-            title="Re-read ~/.hermes/config.yaml"
+            title={t('models_page.reload_config')}
           >
             <Icon
               icon={RefreshCw}
@@ -468,6 +468,7 @@ function RestartBanner({
   onDismiss: () => void;
   onRestarted: (view: HermesConfigView | null) => void;
 }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<
     | { kind: 'idle' }
     | { kind: 'running' }
@@ -542,7 +543,7 @@ function RestartBanner({
       <button
         onClick={onDismiss}
         className="rounded p-1 text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg"
-        aria-label="Dismiss"
+        aria-label={t('models_page.dismiss')}
       >
         ×
       </button>

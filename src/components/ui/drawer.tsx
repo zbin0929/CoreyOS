@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ export function Drawer({
    *  multiple drawers on one page stay distinguishable. */
   testId?: string;
 }) {
+  const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
 
   // ESC handler + body scroll lock. Both opt out cleanly on unmount
@@ -107,7 +109,7 @@ export function Drawer({
             size="sm"
             variant="ghost"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('widgets.close')}
             data-testid={testId ? `${testId}-close` : undefined}
           >
             <Icon icon={X} size="md" />

@@ -347,7 +347,7 @@ function Inspector({
             {formatDate(msg.created_at)}
           </div>
         </div>
-        <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close">
+        <Button size="sm" variant="ghost" onClick={onClose} aria-label={t('widgets.close')}>
           ×
         </Button>
       </header>

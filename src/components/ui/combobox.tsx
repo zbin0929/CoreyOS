@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/icon';
@@ -43,6 +44,7 @@ export function Combobox({
   inputClassName,
   id,
 }: ComboboxProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -144,7 +146,7 @@ export function Combobox({
         }}
         className="absolute right-0 top-0 flex h-full w-9 items-center justify-center text-fg-subtle transition hover:text-fg"
         tabIndex={-1}
-        aria-label="Toggle options"
+        aria-label={t('widgets.toggle_options')}
       >
         <Icon
           icon={ChevronDown}

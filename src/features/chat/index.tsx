@@ -52,7 +52,6 @@ import { SessionsPanel } from './SessionsPanel';
 const EMPTY_MESSAGES: UiMessage[] = [];
 
 export function ChatRoute() {
-  const { t } = useTranslation();
   const currentId = useChatStore((s) => s.currentId);
   const hydrated = useChatStore((s) => s.hydrated);
   const newSession = useChatStore((s) => s.newSession);
@@ -113,6 +112,7 @@ function ChatPane({
   appendToolCall,
   renameSession,
 }: ChatPaneProps) {
+  const { t } = useTranslation();
   // T4.6: read pendingDraft as initial state so a Runbook launch is
   // reflected on the very first paint. Clearing it happens in the mount
   // effect below — doing it inside the initializer would race with
@@ -686,7 +686,7 @@ function ChatPane({
               onKeyDown={onTextareaKeyDown}
               onPaste={onPaste}
               rows={1}
-              placeholder="Message Hermes…  (Enter to send, Shift+Enter for newline)"
+              placeholder={t('chat_page.message_placeholder')}
               disabled={sending}
               className={cn(
                 'min-h-[44px] max-h-[200px] flex-1 resize-none rounded-xl border border-border',
@@ -739,10 +739,11 @@ function formatBytes(n: number): string {
 }
 
 function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
+  const { t } = useTranslation();
   const suggestions = [
-    '用一句话解释什么是 Hermes Agent。',
-    'Summarize the TRAE sandboxing model in 3 bullets.',
-    '帮我生成一个 Rust 的 Tokio 基础示例。',
+    t('chat_page.hero_suggestion_1'),
+    t('chat_page.hero_suggestion_2'),
+    t('chat_page.hero_suggestion_3'),
   ];
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
@@ -750,9 +751,11 @@ function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
         <Icon icon={Sparkles} size={24} />
       </div>
       <div className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight">Talk to Hermes</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">{t('chat_page.hero_title')}</h2>
         <p className="text-sm text-fg-muted">
-          Connected through the local gateway on <code className="font-mono text-xs">:8642</code>.
+          {t('chat_page.hero_subtitle_prefix')}
+          <code className="font-mono text-xs">:8642</code>
+          {t('chat_page.hero_subtitle_suffix')}
         </p>
       </div>
       <div className="grid w-full max-w-xl gap-2 sm:grid-cols-1">

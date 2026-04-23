@@ -25,6 +25,7 @@ import { useChatStore } from '@/stores/chat';
  * resolved (first-paint before the registry probe lands).
  */
 export function SessionsPanel() {
+  const { t } = useTranslation();
   const orderedIds = useChatStore((s) => s.orderedIds);
   const sessions = useChatStore((s) => s.sessions);
   const currentId = useChatStore((s) => s.currentId);
@@ -83,7 +84,7 @@ export function SessionsPanel() {
       {adapters && adapters.length > 1 && activeCount !== totalCount && (
         <div
           role="tablist"
-          aria-label="Session scope"
+          aria-label={t('chat_page.session_scope')}
           className="mx-3 mb-2 inline-flex rounded-md border border-border bg-bg-elev-2 p-0.5 text-[11px]"
           data-testid="sessions-scope"
         >
@@ -99,7 +100,7 @@ export function SessionsPanel() {
                 : 'text-fg-subtle hover:text-fg',
             )}
           >
-            {activeAdapterName ?? 'Active'}
+            {activeAdapterName ?? t('chat_page.scope_active')}
             <span className="ml-1 font-mono text-[10px] text-fg-subtle">
               {activeCount}
             </span>
@@ -128,8 +129,8 @@ export function SessionsPanel() {
         {filteredIds.length === 0 ? (
           <p className="px-2 py-4 text-xs text-fg-subtle">
             {scope === 'all' || totalCount === 0
-              ? 'No sessions yet. Start chatting to create one.'
-              : `No ${activeAdapterName ?? 'active-adapter'} sessions. Switch to \u201CAll agents\u201D to see others.`}
+              ? t('chat_page.empty_sessions')
+              : t('chat_page.empty_adapter_sessions', { adapter: activeAdapterName ?? '' })}
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5">

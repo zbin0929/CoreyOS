@@ -32,13 +32,41 @@
     "attach_file": "添加附件",
     "stop_generating": "停止生成",
     "send_message": "发送消息",
-    "remove_attachment": "移除"
+    "remove_attachment": "移除",
+    "sessions": "会话",
+    "new": "新建",
+    "new_chat": "新建会话",
+    "session_scope": "会话范围",
+    "scope_active": "当前 Agent",
+    "scope_all": "全部 Agent",
+    "empty_sessions": "还没有会话。开始聊天即可创建一个。",
+    "empty_adapter_sessions": "没有 {{adapter}} 的会话。切换到“全部 Agent”查看其他。",
+    "message_placeholder": "向 Hermes 发送消息…（Enter 发送，Shift+Enter 换行）",
+    "current_llm": "当前 LLM（点击配置）",
+    "hero_title": "与 Hermes 对话",
+    "hero_subtitle_prefix": "通过本地网关 ",
+    "hero_subtitle_suffix": " 连接。",
+    "hero_suggestion_1": "用一句话解释什么是 Hermes Agent。",
+    "hero_suggestion_2": "用 3 个要点总结 TRAE 的沙箱模型。",
+    "hero_suggestion_3": "帮我生成一个 Rust 的 Tokio 基础示例。"
   },
+  
   "models_page": {
     "title": "语言模型",
     "subtitle": "Hermes Agent 的 LLM 后端 — 在 ~/.hermes/config.yaml 中配置",
     "change_model": "更改模型",
-    "change_model_desc": "选择供应商，设置模型 ID，然后保存。更改需要重启网关才能生效。"
+    "change_model_desc": "选择供应商，设置模型 ID，然后保存。更改需要重启网关才能生效。",
+    "reload_config": "重新读取 ~/.hermes/config.yaml",
+    "probe_title": "对该端点执行 GET /v1/models",
+    "dismiss": "关闭"
+  },
+  "widgets": {
+    "close": "关闭",
+    "toggle_options": "切换选项",
+    "registered_agents": "已注册的 Agent",
+    "agents_fallback": "Agent",
+    "llm_loading": "加载中…",
+    "llm_not_configured": "（未配置 LLM）"
   },
   "topbar": {
     "profile": "Profile",
