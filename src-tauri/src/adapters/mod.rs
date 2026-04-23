@@ -228,8 +228,17 @@ pub trait AgentAdapter: Send + Sync + 'static {
 
 pub struct AdapterRegistry {
     /// RwLock so adapters can be hot-swapped at runtime (e.g. when the
-    /// user saves new gateway settings in the UI).
-    adapters: RwLock<HashMap<&'static str, Arc<dyn AgentAdapter>>>,
+    /// user saves new gateway settings in the UI). Keys are `String` so
+    /// T6.2 can register multiple `HermesAdapter` instances under
+    /// dynamic ids like `hermes:work` alongside the built-in `hermes`
+    /// slot.
+    adapters: RwLock<HashMap<String, Arc<dyn AgentAdapter>>>,
+    /// Parallel table of "display names" keyed by the same map key as
+    /// `adapters`. Built-in adapters report `&'static str` for their
+    /// name via the trait, but for T6.2 Hermes instances we want the
+    /// instance's user-chosen label to surface in the AgentSwitcher /
+    /// analytics without mutating the `HermesAdapter` itself.
+    labels: RwLock<HashMap<String, String>>,
     default: RwLock<Option<String>>,
 }
 
@@ -237,18 +246,81 @@ impl AdapterRegistry {
     pub fn new() -> Self {
         Self {
             adapters: RwLock::new(HashMap::new()),
+            labels: RwLock::new(HashMap::new()),
             default: RwLock::new(None),
         }
     }
 
-    /// Insert-or-replace. Takes `&self` so it can be called on an `Arc`
-    /// shared into Tauri state.
+    /// Insert-or-replace using the adapter's own `id()`. The common path
+    /// for built-in adapters (hermes, claude_code, aider). Takes `&self`
+    /// so it can be called on an `Arc` shared into Tauri state.
     pub fn register(&self, adapter: Arc<dyn AgentAdapter>) {
-        let id = adapter.id();
+        self.register_with_id(adapter.id().to_string(), adapter);
+    }
+
+    /// T6.2 — insert-or-replace under an explicit `id` that may differ
+    /// from the adapter's trait-level `id()`. Lets us register several
+    /// `HermesAdapter`s (pointing at different base URLs) under slugs
+    /// like `"hermes:work"`, `"hermes:home"` while they all still
+    /// report `id() == "hermes"` internally.
+    pub fn register_with_id(&self, id: String, adapter: Arc<dyn AgentAdapter>) {
+        // Trait-default label. `register_with_id_and_label` lets callers
+        // override; this one keeps the adapter's own advertised name.
+        let label = adapter.name().to_string();
         self.adapters
             .write()
             .expect("registry poisoned")
-            .insert(id, adapter);
+            .insert(id.clone(), adapter);
+        self.labels
+            .write()
+            .expect("registry poisoned")
+            .insert(id, label);
+    }
+
+    /// T6.2 — register with both an explicit id AND a display label
+    /// (distinct from the adapter's `name()`). Used for named Hermes
+    /// instances so the AgentSwitcher can show "Hermes · work" rather
+    /// than just "Hermes" for every instance.
+    pub fn register_with_id_and_label(
+        &self,
+        id: String,
+        label: String,
+        adapter: Arc<dyn AgentAdapter>,
+    ) {
+        self.adapters
+            .write()
+            .expect("registry poisoned")
+            .insert(id.clone(), adapter);
+        self.labels
+            .write()
+            .expect("registry poisoned")
+            .insert(id, label);
+    }
+
+    /// T6.2 — drop an adapter from the registry. Returns `true` if a
+    /// row was removed. No-op + `false` for missing ids. Used by the
+    /// Hermes-instances IPC when the user deletes an extra instance.
+    pub fn unregister(&self, id: &str) -> bool {
+        let removed = self
+            .adapters
+            .write()
+            .expect("registry poisoned")
+            .remove(id)
+            .is_some();
+        self.labels
+            .write()
+            .expect("registry poisoned")
+            .remove(id);
+        if removed {
+            // If the victim was the default, clear the pointer so the
+            // next `default_adapter()` call returns `None` rather than
+            // a dangling id.
+            let mut d = self.default.write().expect("registry poisoned");
+            if d.as_deref() == Some(id) {
+                *d = None;
+            }
+        }
+        removed
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn AgentAdapter>> {
@@ -285,14 +357,18 @@ impl AdapterRegistry {
 
     pub fn all(&self) -> Vec<AdapterInfo> {
         let default_id = self.default.read().expect("registry poisoned").clone();
+        let labels = self.labels.read().expect("registry poisoned");
         self.adapters
             .read()
             .expect("registry poisoned")
-            .values()
-            .map(|a| AdapterInfo {
-                id: a.id().to_string(),
-                name: a.name().to_string(),
-                is_default: default_id.as_deref() == Some(a.id()),
+            .iter()
+            .map(|(key, a)| AdapterInfo {
+                id: key.clone(),
+                name: labels
+                    .get(key)
+                    .cloned()
+                    .unwrap_or_else(|| a.name().to_string()),
+                is_default: default_id.as_deref() == Some(key.as_str()),
             })
             .collect()
     }

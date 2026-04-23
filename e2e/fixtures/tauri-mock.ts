@@ -121,6 +121,16 @@ export const tauriMockInitScript = /* js */ `
       { name: 'dev', is_active: true, updated_at: 1714000000000 },
       { name: 'prod', is_active: false, updated_at: 1713000000000 },
     ],
+    // T6.2 — extra Hermes instances. Empty by default so the list shows
+    // the empty-state copy; tests that need a populated list push into
+    // this array before navigating.
+    hermesInstances: [] as Array<{
+      id: string;
+      label: string;
+      base_url: string;
+      api_key: string | null;
+      default_model: string | null;
+    }>,
     // Fixture lines for hermes_log_tail, keyed by kind. Tests can override
     // lines or missing at runtime via window.__CADUCEUS_MOCK__.state.
     hermesLogs: {
@@ -366,6 +376,33 @@ export const tauriMockInitScript = /* js */ `
           else row.yaml_values[path] = val;
         }
         return JSON.parse(JSON.stringify(row));
+      }
+
+      // T6.2 — extra Hermes instances. Kept in-memory so Settings-page
+      // tests can exercise list/upsert/delete without a real config file.
+      case 'hermes_instance_list': {
+        return { instances: state.hermesInstances.map((i: any) => ({ ...i })) };
+      }
+      case 'hermes_instance_upsert': {
+        const inc = args.instance;
+        const idx = state.hermesInstances.findIndex((i: any) => i.id === inc.id);
+        if (idx >= 0) state.hermesInstances[idx] = { ...inc };
+        else state.hermesInstances.push({ ...inc });
+        return { ...inc };
+      }
+      case 'hermes_instance_delete': {
+        state.hermesInstances = state.hermesInstances.filter(
+          (i: any) => i.id !== args.id,
+        );
+        return null;
+      }
+      case 'hermes_instance_test': {
+        return {
+          id: args.instance.id,
+          ok: true,
+          latency_ms: 12,
+          body: '{"status":"ok"}',
+        };
       }
 
       case 'hermes_profile_list': {

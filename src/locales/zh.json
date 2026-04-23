@@ -303,6 +303,27 @@
       "dirty": "有未保存的更改。",
       "clean": "无改动。"
     },
+    "hermes_instances": {
+      "title": "额外的 Hermes 实例",
+      "desc": "登记额外的 Hermes 网关，可在 AgentSwitcher 中切换。每条以 'hermes:<id>' 注册，与上面的主网关并列。",
+      "empty": "暂无额外实例。点击“新增实例”来登记。",
+      "add": "新增实例",
+      "new_row": "新实例",
+      "field_id": "Id",
+      "field_id_hint": "1–32 字符：小写字母、数字、'-' 或 '_'。保存后不可修改（用作 adapter id）。",
+      "field_label": "显示名",
+      "field_label_placeholder": "工作电脑",
+      "field_base_url": "Base URL",
+      "field_api_key": "API Key",
+      "field_api_key_placeholder": "（未鉴权网关可留空）",
+      "field_default_model": "默认模型",
+      "field_default_model_placeholder": "（可选，留空则使用网关自带默认模型）",
+      "test": "测试",
+      "test_ok": "健康 · {{ms}} ms",
+      "save": "保存",
+      "create": "创建",
+      "confirm_delete": "删除实例“{{id}}”？其已有会话仍保留在历史中，但无法再发送新消息。"
+    },
     "model": {
       "title": "默认语言模型",
       "desc": "Hermes Agent 在会话未指定时使用的默认模型。单个会话可在输入栏覆盖。",

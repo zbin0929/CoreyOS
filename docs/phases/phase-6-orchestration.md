@@ -111,6 +111,11 @@ Reclaimed: ~4 days.
 **Progress (2026-04-23 pm)**:
 - ✅ **T6.8 shipped** — deleted Rust worker (`src-tauri/src/scheduler.rs`) + SQLite `scheduler_jobs` table + related IPCs. Reimplemented as thin wrapper over `~/.hermes/cron/jobs.json` via new `hermes_cron.rs` module. Added Runs drawer to Scheduler page that surfaces `~/.hermes/cron/output/{job_id}/*.md` with previews. DB migration v7 exports legacy rows to JSON if `jobs.json` doesn't exist. 150 Rust tests pass, +4 new tests in `hermes_cron.rs`. Frontend: TSC clean, lint clean, Vitest 27/27.
 
+### T6.2 — Multi-instance Hermes (register N gateways) · ~2 days
+
+**Progress (2026-04-23 pm)**:
+- ✅ **T6.2 shipped (MVP)** — extra Hermes gateways can be registered via a new `HermesInstancesSection` in Settings. Each entry lives in `<app_config_dir>/hermes_instances.json` and is registered at boot + on upsert as `adapter_id = "hermes:<id>"`. The `AdapterRegistry` was refactored to use `String` keys (adding `register_with_id`, `register_with_id_and_label`, `unregister`) so dynamic ids coexist with the built-in `hermes` / `claude_code` / `aider` slots. 4 new IPC commands (`hermes_instance_list/upsert/delete/test`). AgentSwitcher / unified inbox / analytics pick up the extras automatically via the existing `adapter_id` route. 161 Rust tests pass (+8 in `hermes_instances::tests`). Frontend: TSC clean, lint clean, Vitest 27/27. Deferred: auto-start (`hermes gateway start --port N`), port-conflict detection, health auto-failover, merging `gateway.json` into the same file.
+
 ### T6.1 — Feedback loop (👍/👎 per assistant reply) · ~2 days
 
 **Progress (2026-04-23 pm)**:

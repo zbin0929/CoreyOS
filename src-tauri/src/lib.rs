@@ -20,6 +20,7 @@ mod error;
 mod fs_atomic;
 mod hermes_config;
 mod hermes_cron;
+mod hermes_instances;
 mod hermes_logs;
 mod hermes_profiles;
 mod hermes_profiles_archive;
@@ -143,6 +144,10 @@ pub fn run() {
             ipc::scheduler::scheduler_delete_job,
             ipc::scheduler::scheduler_validate_cron,
             ipc::scheduler::scheduler_list_runs,
+            ipc::hermes_instances::hermes_instance_list,
+            ipc::hermes_instances::hermes_instance_upsert,
+            ipc::hermes_instances::hermes_instance_delete,
+            ipc::hermes_instances::hermes_instance_test,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");
@@ -176,6 +181,37 @@ pub fn run() {
             registry
                 .set_default("hermes")
                 .expect("hermes is registered");
+
+            // T6.2 — register any extra Hermes instances from
+            // `<app_config_dir>/hermes_instances.json`. Failures per
+            // instance are logged and swallowed so one bad URL
+            // doesn't block the others (or the whole app).
+            for inst in hermes_instances::load(&config_dir) {
+                match HermesAdapter::new_live(
+                    inst.base_url.clone(),
+                    inst.api_key.clone(),
+                    inst.default_model.clone(),
+                ) {
+                    Ok(adapter) => {
+                        let adapter_id = hermes_instances::adapter_id_for(&inst.id);
+                        let label = if inst.label.trim().is_empty() {
+                            inst.id.clone()
+                        } else {
+                            inst.label.clone()
+                        };
+                        registry.register_with_id_and_label(
+                            adapter_id.clone(),
+                            label,
+                            Arc::new(adapter),
+                        );
+                        info!(id = %inst.id, base_url = %inst.base_url, "T6.2: Hermes instance registered");
+                    }
+                    Err(e) => {
+                        tracing::warn!(id = %inst.id, error = %e, "T6.2: skipping malformed Hermes instance");
+                    }
+                }
+            }
+
             info!(
                 adapters = ?registry.all().iter().map(|a| &a.id).collect::<Vec<_>>(),
                 "adapter registry populated"

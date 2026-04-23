@@ -13,8 +13,10 @@ import {
   Lock,
   Monitor,
   Moon,
+  Plus,
   RotateCcw,
   Save,
+  Server,
   ShieldCheck,
   Sun,
   Trash2,
@@ -36,9 +38,15 @@ import {
   configGet,
   configSet,
   configTest,
+  hermesInstanceDelete,
+  hermesInstanceList,
+  hermesInstanceTest,
+  hermesInstanceUpsert,
   ipcErrorMessage,
   type AppPaths,
   type GatewayConfigDto,
+  type HermesInstance,
+  type HermesInstanceProbeResult,
 } from '@/lib/ipc';
 
 type TestStatus =
@@ -270,6 +278,11 @@ export function SettingsRoute() {
               </div>
             </form>
           )}
+
+          {/* T6.2 — extra Hermes instances. Lives between the primary
+              gateway form and the workspace roots so related network
+              settings stay adjacent. */}
+          <HermesInstancesSection />
 
           {/* Sandbox workspace roots — lives between gateway and storage so
               the control-plane order roughly matches "what agents can reach". */}
@@ -587,6 +600,374 @@ function WorkspaceSection() {
  * tracking — changes are applied immediately and visible on the same
  * render.
  */
+// ───────────────────────── Hermes instances (T6.2) ─────────────────────────
+
+/**
+ * T6.2 — CRUD for extra Hermes gateways beyond the primary one managed
+ * by the Gateway section above. Each entry is persisted in
+ * `<app_config_dir>/hermes_instances.json` and registered at boot (and
+ * on upsert) under `adapter_id = "hermes:<id>"`, so they flow through
+ * the same AgentSwitcher / session / analytics paths as the built-in
+ * `hermes` adapter.
+ *
+ * Not a form with a global save button (unlike Gateway) — each row is
+ * edited inline and saved independently, so adding a second instance
+ * never risks overwriting the first.
+ */
+function HermesInstancesSection() {
+  const { t } = useTranslation();
+  const [rows, setRows] = useState<HermesInstance[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  async function refresh() {
+    setError(null);
+    try {
+      const { instances } = await hermesInstanceList();
+      setRows(instances);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+      setRows([]);
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  return (
+    <Section
+      title={t('settings.hermes_instances.title')}
+      description={t('settings.hermes_instances.desc')}
+    >
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {rows === null ? (
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
+          <Icon icon={Loader2} size="sm" className="animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2" data-testid="hermes-instances-list">
+          {rows.map((r) => (
+            <HermesInstanceRow
+              key={r.id}
+              initial={r}
+              onSaved={async (next) => {
+                setRows((prev) =>
+                  (prev ?? []).map((p) => (p.id === next.id ? next : p)),
+                );
+              }}
+              onDeleted={async () => {
+                setRows((prev) => (prev ?? []).filter((p) => p.id !== r.id));
+              }}
+            />
+          ))}
+          {rows.length === 0 && !adding && (
+            <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-subtle">
+              {t('settings.hermes_instances.empty')}
+            </div>
+          )}
+        </ul>
+      )}
+
+      {adding ? (
+        <HermesInstanceRow
+          initial={{
+            id: '',
+            label: '',
+            base_url: 'http://127.0.0.1:8642',
+            api_key: null,
+            default_model: null,
+          }}
+          isNew
+          onSaved={async (next) => {
+            setRows((prev) => [...(prev ?? []), next]);
+            setAdding(false);
+          }}
+          onCancelNew={() => setAdding(false)}
+        />
+      ) : (
+        <div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => setAdding(true)}
+            data-testid="hermes-instances-add"
+          >
+            <Icon icon={Plus} size="sm" />
+            {t('settings.hermes_instances.add')}
+          </Button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * One editable row. Maintains local draft state + probe/save status.
+ * `isNew` switches the action buttons so an empty, never-saved row
+ * offers "Save" + "Cancel" rather than "Save" + "Delete".
+ */
+function HermesInstanceRow({
+  initial,
+  isNew = false,
+  onSaved,
+  onDeleted,
+  onCancelNew,
+}: {
+  initial: HermesInstance;
+  isNew?: boolean;
+  onSaved: (next: HermesInstance) => void | Promise<void>;
+  onDeleted?: () => void | Promise<void>;
+  onCancelNew?: () => void;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState<HermesInstance>(initial);
+  const [showKey, setShowKey] = useState(false);
+  const [probe, setProbe] = useState<HermesInstanceProbeResult | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onTest() {
+    setProbing(true);
+    setErr(null);
+    try {
+      const r = await hermesInstanceTest(draft);
+      setProbe(r);
+    } catch (e) {
+      setErr(ipcErrorMessage(e));
+    } finally {
+      setProbing(false);
+    }
+  }
+
+  async function onSave() {
+    setSaving(true);
+    setErr(null);
+    try {
+      const saved = await hermesInstanceUpsert(draft);
+      setDraft(saved);
+      await onSaved(saved);
+    } catch (e) {
+      setErr(ipcErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onDelete() {
+    if (!onDeleted) return;
+    if (
+      !window.confirm(t('settings.hermes_instances.confirm_delete', { id: draft.id }))
+    )
+      return;
+    setSaving(true);
+    setErr(null);
+    try {
+      await hermesInstanceDelete(draft.id);
+      await onDeleted();
+    } catch (e) {
+      setErr(ipcErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <li
+      className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-3"
+      data-testid={`hermes-instance-row-${initial.id || 'new'}`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon icon={Server} size="sm" className="text-fg-subtle" />
+        <span className="text-sm font-medium text-fg">
+          {draft.label.trim() || draft.id || t('settings.hermes_instances.new_row')}
+        </span>
+        {!isNew && (
+          <code className="rounded bg-bg-elev-3 px-1 py-0.5 text-[10px] text-fg-muted">
+            hermes:{initial.id}
+          </code>
+        )}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field
+          label={t('settings.hermes_instances.field_id')}
+          hint={t('settings.hermes_instances.field_id_hint')}
+        >
+          <input
+            type="text"
+            className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none disabled:opacity-50"
+            value={draft.id}
+            onChange={(e) => setDraft({ ...draft, id: e.target.value })}
+            placeholder="work"
+            disabled={!isNew}
+            spellCheck={false}
+          />
+        </Field>
+        <Field label={t('settings.hermes_instances.field_label')}>
+          <input
+            type="text"
+            className="rounded-md border border-border bg-bg px-2 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
+            value={draft.label}
+            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+            placeholder={t('settings.hermes_instances.field_label_placeholder')}
+          />
+        </Field>
+      </div>
+
+      <Field label={t('settings.hermes_instances.field_base_url')}>
+        <input
+          type="url"
+          className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+          value={draft.base_url}
+          onChange={(e) => setDraft({ ...draft, base_url: e.target.value })}
+          placeholder="http://127.0.0.1:8642"
+          spellCheck={false}
+        />
+      </Field>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label={t('settings.hermes_instances.field_api_key')}>
+          <div className="flex items-center gap-1">
+            <input
+              type={showKey ? 'text' : 'password'}
+              className="flex-1 rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+              value={draft.api_key ?? ''}
+              onChange={(e) =>
+                setDraft({ ...draft, api_key: e.target.value || null })
+              }
+              placeholder={t('settings.hermes_instances.field_api_key_placeholder')}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowKey((v) => !v)}
+              aria-label={
+                showKey
+                  ? t('settings.gateway.hide_key')
+                  : t('settings.gateway.show_key')
+              }
+            >
+              <Icon icon={showKey ? EyeOff : Eye} size="sm" />
+            </Button>
+          </div>
+        </Field>
+        <Field label={t('settings.hermes_instances.field_default_model')}>
+          <input
+            type="text"
+            className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+            value={draft.default_model ?? ''}
+            onChange={(e) =>
+              setDraft({ ...draft, default_model: e.target.value || null })
+            }
+            placeholder={t('settings.hermes_instances.field_default_model_placeholder')}
+            spellCheck={false}
+          />
+        </Field>
+      </div>
+
+      {/* Probe result */}
+      {probe && (
+        <div
+          className={cn(
+            'flex items-start gap-2 rounded-md border p-2 text-xs',
+            probe.ok
+              ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-500'
+              : 'border-danger/40 bg-danger/5 text-danger',
+          )}
+        >
+          <Icon
+            icon={probe.ok ? CheckCircle2 : AlertCircle}
+            size="xs"
+            className="mt-0.5 flex-none"
+          />
+          <span className="break-all">
+            {probe.ok
+              ? t('settings.hermes_instances.test_ok', { ms: probe.latency_ms })
+              : probe.body}
+          </span>
+        </div>
+      )}
+
+      {err && (
+        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
+          <span>{err}</span>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onTest}
+          disabled={probing || !draft.base_url.trim()}
+        >
+          {probing ? (
+            <Icon icon={Loader2} size="sm" className="animate-spin" />
+          ) : (
+            <Icon icon={Wifi} size="sm" />
+          )}
+          {t('settings.hermes_instances.test')}
+        </Button>
+        {isNew ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => onCancelNew?.()}
+          >
+            {t('common.cancel')}
+          </Button>
+        ) : (
+          onDeleted && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onDelete}
+              disabled={saving}
+            >
+              <Icon icon={Trash2} size="sm" className="text-danger" />
+              {t('common.delete')}
+            </Button>
+          )
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          onClick={onSave}
+          disabled={saving || !draft.id.trim() || !draft.base_url.trim()}
+          data-testid={`hermes-instance-save-${initial.id || 'new'}`}
+        >
+          {saving ? (
+            <Icon icon={Loader2} size="sm" className="animate-spin" />
+          ) : (
+            <Icon icon={Save} size="sm" />
+          )}
+          {isNew
+            ? t('settings.hermes_instances.create')
+            : t('settings.hermes_instances.save')}
+        </Button>
+      </div>
+    </li>
+  );
+}
+
 function AppearanceSection() {
   const { t, i18n } = useTranslation();
   const theme = useUIStore((s) => s.theme);

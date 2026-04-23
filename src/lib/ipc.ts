@@ -1078,6 +1078,60 @@ export function configTest(config: GatewayConfigDto): Promise<HealthProbe> {
   return invoke<HealthProbe>('config_test', { config });
 }
 
+// ─────────────── T6.2 · Named Hermes instances ───────────────
+
+/** One user-declared extra Hermes gateway, persisted in
+ *  `<app_config_dir>/hermes_instances.json`. Mirrors the Rust
+ *  `HermesInstance` DTO 1:1. Registered at boot under
+ *  `adapter_id = "hermes:<id>"` alongside the built-in `hermes`
+ *  adapter so the AgentSwitcher can route chats to it. */
+export interface HermesInstance {
+  /** 1..32 chars of `[a-z0-9_-]`. Case-sensitive. Used as the stable
+   *  key across renames and embedded in the registered adapter id. */
+  id: string;
+  /** UI-facing label. Falls back to `id` when empty on the wire. */
+  label: string;
+  base_url: string;
+  api_key?: string | null;
+  default_model?: string | null;
+}
+
+export interface HermesInstancesFile {
+  instances: HermesInstance[];
+}
+
+export interface HermesInstanceProbeResult {
+  id: string;
+  ok: boolean;
+  latency_ms: number;
+  body: string;
+}
+
+/** List extra Hermes instances. Empty array = no file yet (first-run). */
+export function hermesInstanceList(): Promise<HermesInstancesFile> {
+  return invoke<HermesInstancesFile>('hermes_instance_list');
+}
+
+/** Create-or-update by `id`. Validates id + base_url + probes the URL.
+ *  Hot-registers the adapter under `hermes:<id>` on success. */
+export function hermesInstanceUpsert(instance: HermesInstance): Promise<HermesInstance> {
+  return invoke<HermesInstance>('hermes_instance_upsert', { instance });
+}
+
+/** Idempotent delete. Unregisters the adapter and persists. */
+export function hermesInstanceDelete(id: string): Promise<void> {
+  return invoke<void>('hermes_instance_delete', { id });
+}
+
+/** Dry-run `/health` against a proposed instance config without
+ *  persisting. The result always resolves (never rejects) so the UI
+ *  can show red/green alongside an error string. */
+export function hermesInstanceTest(
+  instance: HermesInstance,
+): Promise<HermesInstanceProbeResult> {
+  return invoke<HermesInstanceProbeResult>('hermes_instance_test', { instance });
+}
+
 // ───────────────────────── Menu ─────────────────────────
 
 /** Tell Rust which locale to rebuild the native menubar in. Called from

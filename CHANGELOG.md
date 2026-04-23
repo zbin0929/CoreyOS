@@ -6,6 +6,63 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T6.2 · Multi-instance Hermes (register N gateways, route per session)
+
+Corey can now talk to more than one Hermes gateway concurrently. Users register extra instances in Settings (each with its own base URL / API key / default model / label); each becomes a first-class adapter under `adapter_id = "hermes:<id>"`, slotting into the existing AgentSwitcher, unified inbox, and analytics rollups without any chat-side code change.
+
+### Context
+
+Per the post-audit plan (`docs/10-product-audit-2026-04-23.md`), T6.2 was flagged as a KEEP feature — users running work/home/dev Hermes gateways want to switch between them, not maintain N copies of Corey. MVP scope stays small: no auto-starting gateway processes, no port management, no cross-instance profile binding. You bring your own Hermes (`hermes gateway start` on each box); Corey just registers the URL and routes turns.
+
+### Shipped
+
+**New Rust module `hermes_instances.rs`**:
+- `HermesInstance { id, label, base_url, api_key, default_model }` DTO; file format wrapped in `HermesInstancesFile { instances: [...] }` so future fields can land without a migration.
+- Atomic `save()` via `<FILE>.tmp` + rename; `load()` tolerates missing / unparseable files by returning an empty list so a corrupt save never breaks boot.
+- `validate_id` (1..32 chars `[a-z0-9_-]`) + `validate_base_url` (requires `http(s)://` scheme) shared by the IPC layer.
+- `adapter_id_for("work") == "hermes:work"` — helper so the registry key scheme is a one-line change if we ever want to rename it.
+- Tests: `load_missing_file_returns_empty`, `save_then_load_roundtrips_all_fields`, `load_returns_empty_on_corrupt_file`, `validate_id_accepts_slug_and_rejects_bad`, `validate_base_url_requires_scheme`, `upsert_replaces_by_id_and_preserves_order`, `delete_removes_row_and_reports`, `adapter_id_for_uses_namespaced_slug`.
+
+**`AdapterRegistry` refactor** (`src-tauri/src/adapters/mod.rs`):
+- Internal map keyed by `String` instead of `&'static str`, so dynamic ids like `hermes:work` are first-class alongside the built-ins.
+- New `register_with_id`, `register_with_id_and_label`, and `unregister` methods. Old `register(adapter)` still works and keeps the trait-level `id()` / `name()` as before.
+- `AdapterInfo` now reports the registry KEY (not `adapter.id()`) so the AgentSwitcher sees `hermes:work` rather than a duplicate `hermes` per instance.
+- Label table (parallel to the adapter map) lets us show user-chosen labels instead of the generic "Hermes" for every instance.
+- `unregister` also clears the default pointer if the victim was the default, avoiding a dangling id.
+
+**IPC** (`src-tauri/src/ipc/hermes_instances.rs`):
+- `hermes_instance_list` / `hermes_instance_upsert` / `hermes_instance_delete` / `hermes_instance_test` commands.
+- Upsert validates → builds a live `HermesAdapter` (fail-fast on bad URL) → persists → hot-registers. Existing in-flight streams keep their own `Arc<dyn AgentAdapter>` and are unaffected.
+- Test is a dry-run `/health` probe; always resolves (never rejects) so the UI can surface red/green inline.
+- All four commands registered in `lib.rs` + `ipc/mod.rs`.
+
+**Boot-time registration** (`lib.rs`): after registering the built-in `hermes` / `claude_code` / `aider` adapters, walk `hermes_instances.load(&config_dir)` and register each with `register_with_id_and_label`. Per-instance failures are logged and swallowed so one bad URL doesn't brick the whole app.
+
+**Frontend**:
+- `@/Users/zbin/AI项目/hermes_ui/src/lib/ipc.ts` — `HermesInstance`, `HermesInstancesFile`, `HermesInstanceProbeResult` types + 4 bindings.
+- `@/Users/zbin/AI项目/hermes_ui/src/features/settings/index.tsx` — new `HermesInstancesSection` + `HermesInstanceRow` components. Inline-edit rows with per-row Test / Save / Delete buttons; "Add instance" button reveals a new-row editor with cancel. Id is frozen after save so renames don't silently migrate sessions across adapters.
+- i18n (`en.json` + `zh.json`): `settings.hermes_instances.*` block with title, desc, field labels, empty/new row copy, test/save/create actions, and delete confirmation.
+
+**e2e mock** (`e2e/fixtures/tauri-mock.ts`): in-memory `hermesInstances` array + handlers for all 4 IPCs so Playwright's Settings-page tests can exercise the flow without a real config file.
+
+### Test totals
+
+- Rust: **161 pass, 0 fail** (+8 new in `hermes_instances::tests`).
+- Frontend: TSC clean; ESLint clean (5 pre-existing fast-refresh warnings only); Vitest 27/27.
+
+### Deferred
+
+- Auto-start: Corey does not run `hermes gateway start --port N --profile X`. User brings their own running gateways.
+- Port conflict detection, health auto-failover, cross-instance profile binding.
+- Migrating the primary `gateway.json` into a unified `hermes_instances.json` — left as-is so existing users see zero schema change. The file can be merged later if the dual-source-of-truth becomes a real pain point.
+
+### Next
+
+- T6.3: surface Hermes native `delegate_task` subagent tree in the Trajectory pane.
+- T6.4: rules-based routing (which instance / adapter gets which kind of chat).
+
+---
+
 ## 2026-04-23 — T6.1 · Feedback loop (👍/👎 per assistant reply)
 
 Users can now rate individual assistant replies in the Chat page. Ratings persist in SQLite, survive reloads, and roll up into a new Analytics card. First visible "quality signal" surface inside Corey — sets up later phases (RLHF exports, per-adapter ranking) without committing to anything now.

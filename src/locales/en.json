@@ -303,6 +303,27 @@
       "dirty": "Unsaved changes.",
       "clean": "No changes."
     },
+    "hermes_instances": {
+      "title": "Extra Hermes instances",
+      "desc": "Register additional Hermes gateways so you can switch between them in the AgentSwitcher. Each entry is registered as 'hermes:<id>' alongside the primary gateway above.",
+      "empty": "No extra instances yet. Click \"Add instance\" to register one.",
+      "add": "Add instance",
+      "new_row": "New instance",
+      "field_id": "Id",
+      "field_id_hint": "1–32 chars: lowercase letters, digits, '-' or '_'. Frozen after save (used as the adapter id).",
+      "field_label": "Label",
+      "field_label_placeholder": "Work laptop",
+      "field_base_url": "Base URL",
+      "field_api_key": "API key",
+      "field_api_key_placeholder": "(leave empty if unauthenticated)",
+      "field_default_model": "Default model",
+      "field_default_model_placeholder": "(optional, falls back to the gateway's own default)",
+      "test": "Test",
+      "test_ok": "Healthy · {{ms}} ms",
+      "save": "Save",
+      "create": "Create",
+      "confirm_delete": "Delete instance \"{{id}}\"? Its sessions remain in history but can no longer send new turns."
+    },
     "model": {
       "title": "Default language model",
       "desc": "Which LLM the Hermes agent uses when a chat doesn't specify one. Individual chats can override this from the composer.",
