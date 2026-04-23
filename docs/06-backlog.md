@@ -199,3 +199,20 @@ Categories, newest-phase first:
 
 (Icon batch-refactor shipped 2026-04-23; see CHANGELOG entry
 "Brand · Corey logo + Icon wrapper + Dock/window polish".)
+
+### Conversational scheduler (natural-language job creation)
+- **Priority**: medium
+- **Why parked**: the base Scheduler page (shipped 2026-04-23) requires
+  users to hand-write cron expressions. A full "chat-to-schedule"
+  experience requires either (a) a second LLM round-trip per eligible
+  turn for intent detection, or (b) native OpenAI-compatible
+  `tool_calls` in the Hermes SSE stream — which Hermes does not expose
+  today. Both add meaningful surface area (protocol, settings, consent
+  flow) and neither is on the critical path for the Scheduler MVP.
+- **Design doc**: `docs/09-conversational-scheduler.md` — lays out a
+  three-stage rollout: slash command (`/schedule`) → post-turn LLM
+  intent detection with suggestion cards → native tool calling.
+- **Re-open when**: either (a) we get repeated user feedback that the
+  cron-expression UX is a wall, at which point we ship Stage 1 + 2; or
+  (b) Hermes side exposes `tool_calls` in SSE, at which point we skip
+  to Stage 3.
