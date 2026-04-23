@@ -6,6 +6,40 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T1.8 · SSE initial-connect retry
+
+When the Hermes gateway restarts (or the user reopens the laptop
+and dials a stale socket) the very first chat send used to fail
+instantly with "gateway unreachable". This lands bounded retry on
+the *initial* SSE connect — the most common real-world case — so
+the user can't even tell the gateway blipped.
+
+### Shipped (`src-tauri/src/adapters/hermes/gateway.rs`)
+
+- **`connect_chat_stream()` helper** — wraps the
+  `POST /v1/chat/completions?stream=true` `send()` in a retry loop:
+  up to 3 attempts, exponential backoff (500ms → 1s → 2s, total
+  worst-case ~3.5s). Only `reqwest::Error` from the head phase
+  retries; once the server produces a status line (even 5xx) we
+  surface it unchanged. Zero retries after bytes start flowing —
+  that would double-charge tokens and duplicate output.
+- Existing `received_any_delta` guard (mid-stream drops → graceful
+  `finish_reason="interrupted"`) stays intact; the new retry only
+  covers the window *before* the stream opens.
+
+### Tests
+
+- **Rust**: 134 → **135** (+1
+  `t18_chat_stream_retries_connect_on_transport_error`) —
+  spawns a real TCP listener that accepts and immediately drops
+  each connection, asserts the gateway hits it exactly 3 times
+  and ultimately surfaces `AdapterError::Unreachable`. No HTTP
+  mock library needed; test runs in ~1.5s (matches the
+  500+1000 ms backoff sum).
+- `cargo clippy --tests -- -D warnings`: clean.
+
+---
+
 ## 2026-04-23 — T4.4b · Budget gate round 2
 
 The `send()` gate already existed (shipped with T4.4) but only fired

@@ -23,6 +23,16 @@ const DEFAULT_TIMEOUT_S: u64 = 120;
 /// without reqwest killing the TCP connection.
 const STREAM_TIMEOUT_S: u64 = 30 * 60;
 
+/// T1.8 — max number of attempts when opening a streaming chat connection.
+/// Covers the common "gateway just restarted" window (≤ a few seconds);
+/// past that we surface the failure rather than spin for minutes. Only
+/// applies to the **initial connect** — mid-stream drops are never
+/// retried (would double-charge tokens + produce duplicated output).
+const STREAM_CONNECT_ATTEMPTS: u32 = 3;
+/// Initial backoff between connect retries. Doubles each retry:
+/// 500 ms → 1 s → 2 s (total ~3.5 s wall-clock).
+const STREAM_CONNECT_BACKOFF_MS: u64 = 500;
+
 // ───────────────────────── Client ─────────────────────────
 
 #[derive(Debug, Clone)]
@@ -200,23 +210,14 @@ impl HermesGateway {
             stream: true,
         };
 
-        let mut req = self
-            .http
-            .post(format!("{}/v1/chat/completions", self.base_url))
-            // Override the client-wide 120 s timeout — reasoning models can
-            // idle for minutes before emitting a token, and we don't want
-            // reqwest to reset the TCP connection mid-stream.
-            .timeout(Duration::from_secs(STREAM_TIMEOUT_S))
-            .json(&body);
-        if let Some(key) = &self.api_key {
-            req = req.bearer_auth(key);
-        }
-
+        // T1.8 — retry the initial connect on `Unreachable` errors
+        // (gateway just restarted / transient network blip). Once bytes
+        // start flowing we NEVER retry: resending the prompt mid-stream
+        // would re-charge tokens and duplicate output. Deterministic
+        // failures (401/429/5xx with body) skip the retry loop — they'd
+        // just fail the same way on the next attempt.
         let started = Instant::now();
-        let resp = req.send().await.map_err(|e| AdapterError::Unreachable {
-            endpoint: self.base_url.clone(),
-            source: anyhow::anyhow!(e),
-        })?;
+        let resp = self.connect_chat_stream(&body).await?;
 
         let status = resp.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -348,6 +349,67 @@ impl HermesGateway {
             latency_ms: started.elapsed().as_millis() as u32,
             prompt_tokens,
             completion_tokens,
+        })
+    }
+
+    /// T1.8 — open the SSE stream with bounded retry.
+    ///
+    /// Retries only on `reqwest::Error`s raised by `send()` — i.e. the
+    /// TCP connect / TLS handshake / HTTP-head phase failed before the
+    /// server produced a status line. Anything that comes back with a
+    /// status (even 5xx) is surfaced to the caller unchanged: we don't
+    /// want to hammer a `502` 3× in a row, and we never re-send a
+    /// prompt after the server acknowledged it.
+    ///
+    /// Backoff is exponential (500 / 1000 / 2000 ms) so total worst-case
+    /// latency stays under ~4 s. Jitter isn't worth it at this scale
+    /// (single-tenant desktop app; no thundering herd).
+    async fn connect_chat_stream(
+        &self,
+        body: &ChatCompletionRequest,
+    ) -> AdapterResult<reqwest::Response> {
+        let mut last_err: Option<reqwest::Error> = None;
+        for attempt in 0..STREAM_CONNECT_ATTEMPTS {
+            let mut req = self
+                .http
+                .post(format!("{}/v1/chat/completions", self.base_url))
+                // Override the client-wide 120 s timeout — reasoning
+                // models can idle for minutes before emitting a token,
+                // and we don't want reqwest to reset the TCP connection
+                // mid-stream.
+                .timeout(Duration::from_secs(STREAM_TIMEOUT_S))
+                .json(body);
+            if let Some(key) = &self.api_key {
+                req = req.bearer_auth(key);
+            }
+            match req.send().await {
+                Ok(resp) => {
+                    if attempt > 0 {
+                        tracing::info!(attempts = attempt + 1, "chat stream connected after retry");
+                    }
+                    return Ok(resp);
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    // Don't sleep after the final attempt — we're about
+                    // to surface the error to the caller anyway.
+                    if attempt + 1 < STREAM_CONNECT_ATTEMPTS {
+                        let backoff = STREAM_CONNECT_BACKOFF_MS << attempt;
+                        tracing::warn!(
+                            attempt = attempt + 1,
+                            backoff_ms = backoff,
+                            error = %last_err.as_ref().expect("just set"),
+                            "chat stream connect failed; retrying"
+                        );
+                        tokio::time::sleep(Duration::from_millis(backoff)).await;
+                    }
+                }
+            }
+        }
+        let err = last_err.expect("STREAM_CONNECT_ATTEMPTS > 0");
+        Err(AdapterError::Unreachable {
+            endpoint: self.base_url.clone(),
+            source: anyhow::anyhow!(err),
         })
     }
 }
@@ -533,4 +595,72 @@ struct StreamChoice {
 struct StreamDelta {
     #[serde(default)]
     content: Option<String>,
+}
+
+// ───────────────────────── Tests ─────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
+    use tokio::sync::mpsc;
+
+    /// Spawn a TCP listener that accepts N connections, increments a
+    /// counter, then immediately drops each socket so the client's
+    /// `send()` fails mid-HTTP-head. Returns the bound port and the
+    /// shared counter. The listener task terminates on its own once
+    /// the parent drops the returned guard.
+    async fn spawn_flaky_listener() -> (u16, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let count = Arc::new(AtomicUsize::new(0));
+        let count_task = count.clone();
+        tokio::spawn(async move {
+            while let Ok((mut s, _)) = listener.accept().await {
+                count_task.fetch_add(1, Ordering::SeqCst);
+                // Kill the socket before writing a status line — this
+                // reliably surfaces as a reqwest transport error at
+                // `send()` time.
+                let _ = s.shutdown().await;
+            }
+        });
+        (port, count)
+    }
+
+    /// T1.8 — chat_stream retries the initial connect up to
+    /// `STREAM_CONNECT_ATTEMPTS` times when the gateway keeps dropping
+    /// the TCP connection during the HTTP head. Each attempt lands on
+    /// our flaky listener, which lets us assert the retry count
+    /// without needing an HTTP mock library.
+    #[tokio::test]
+    async fn t18_chat_stream_retries_connect_on_transport_error() {
+        let (port, count) = spawn_flaky_listener().await;
+        let base = format!("http://127.0.0.1:{port}");
+        let gw = HermesGateway::new(base, None).unwrap();
+
+        let (tx, _rx) = mpsc::channel::<ChatStreamEvent>(4);
+        let result = gw
+            .chat_stream(
+                "test-model",
+                vec![ChatMessage {
+                    role: "user".into(),
+                    content: ChatMessageContent::Text("hi".into()),
+                }],
+                tx,
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(AdapterError::Unreachable { .. })),
+            "expected Unreachable after exhausting retries, got {result:?}"
+        );
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            STREAM_CONNECT_ATTEMPTS as usize,
+            "each retry should hit the listener exactly once"
+        );
+    }
 }
