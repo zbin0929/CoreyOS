@@ -451,6 +451,12 @@
     "empty_title": "Pick at least one model and type a prompt",
     "empty_desc": "Each selected model runs the same prompt in parallel. Lanes appear here with streaming output, per-lane latency, and winner highlights."
   },
+  "chat": {
+    "reasoning": {
+      "thinking": "Thinking…",
+      "thought": "Thought process"
+    }
+  },
   "channels": {
     "title": "Platform channels",
     "subtitle": "Credentials + behavior for every messenger Hermes can talk through.",
@@ -517,8 +523,18 @@
       "reactions": "React with emoji on receipt",
       "enable": "Enable this channel"
     },
+    "card_desc": {
+      "telegram": "Telegram group/DM bot. Easiest to configure, most common.",
+      "discord": "Discord server bot. Good for community groups.",
+      "slack": "Slack workspace bot (Socket Mode, needs Bot + App tokens).",
+      "whatsapp": "WhatsApp bridge (unofficial API, requires a separate bridge process).",
+      "matrix": "Matrix protocol (open-source, self-host-first).",
+      "feishu": "Feishu/Lark bot. Create an app in the Feishu Open Platform.",
+      "weixin": "Personal WeChat (via iLink relay — unofficial).",
+      "wecom": "WeCom (Enterprise WeChat) custom bot."
+    },
     "telegram": {
-      "hint_token": "Create via @BotFather on Telegram → /newbot.",
+      "hint_token": "In Telegram, @BotFather → /newbot.",
       "free_chats": "Chat IDs allowed without @-mention"
     },
     "discord": {

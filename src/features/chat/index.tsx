@@ -76,7 +76,15 @@ export function ChatRoute() {
     <div className="flex h-full min-h-0 w-full">
       <SessionsPanel />
       {hydrated && currentId ? (
+        // `key={currentId}` force-remounts ChatPane (and therefore
+        // `MessageList` / Virtuoso) when the user switches sessions.
+        // Without this, Virtuoso's `initialTopMostItemIndex` only
+        // applies on first mount, so entering an old session scrolled
+        // the user to the top of the history instead of the latest
+        // reply. Remount cost is cheap — Virtuoso only renders
+        // viewport rows regardless.
         <ChatPane
+          key={currentId}
           sessionId={currentId}
           messages={sessionMessages}
           appendMessage={appendMessage}
@@ -440,6 +448,24 @@ function ChatPane({
             const current = sess?.messages.find((m) => m.id === pendingId);
             patchMessage(sessionId, pendingId, {
               content: (current?.content ?? '') + chunk,
+              pending: false,
+            });
+          },
+          onReasoning: (chunk) => {
+            // Reasoning-content stream (deepseek-reasoner / o1). Same
+            // append-style update as `onDelta`; we keep it on a
+            // separate field so the main bubble body stays the final
+            // answer and the chain-of-thought renders in its own
+            // collapsible panel inside MessageBubble.
+            const sess = useChatStore.getState().sessions[sessionId];
+            const current = sess?.messages.find((m) => m.id === pendingId);
+            patchMessage(sessionId, pendingId, {
+              reasoning: (current?.reasoning ?? '') + chunk,
+              // Clear the pending spinner on the first reasoning
+              // token too — reasoning models idle before producing
+              // any content delta, and showing the spinner while
+              // the chain-of-thought is visibly streaming is
+              // confusing.
               pending: false,
             });
           },

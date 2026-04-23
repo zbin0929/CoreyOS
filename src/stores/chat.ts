@@ -17,6 +17,12 @@ export interface UiMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  /** Reasoning / chain-of-thought tokens accumulated from the
+   *  `chat:reasoning:*` stream. Present on assistant messages produced
+   *  by reasoning-capable models (deepseek-reasoner, o1) and absent
+   *  otherwise. Rendered as a collapsible panel ABOVE the main bubble
+   *  body so the final answer stays the visual focus. */
+  reasoning?: string;
   /** True while waiting on the first delta. */
   pending?: boolean;
   /** Frontend-only error text (shown inline as a red bubble). */

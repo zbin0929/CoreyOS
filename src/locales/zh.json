@@ -448,6 +448,12 @@
     "empty_title": "选至少一个模型并输入 prompt",
     "empty_desc": "每个选中的模型都会并行跑同一 prompt。泳道将在下方出现，显示流式输出、单泳道时延与胜者标注。"
   },
+  "chat": {
+    "reasoning": {
+      "thinking": "推理中…",
+      "thought": "推理过程"
+    }
+  },
   "channels": {
     "title": "平台通道",
     "subtitle": "所有 Hermes 可接入的即时通讯平台的凭证与行为设置。",
@@ -506,6 +512,16 @@
       "auto_thread": "自动开新线程回复",
       "reactions": "收到消息时用 emoji 回应",
       "enable": "启用此通道"
+    },
+    "card_desc": {
+      "telegram": "Telegram 群聊 / 私聊机器人。最常用、最容易配好。",
+      "discord": "Discord 服务器机器人。适合社区群组。",
+      "slack": "Slack 工作区机器人（Socket Mode，需 Bot + App 双 Token）。",
+      "whatsapp": "WhatsApp 桥接进程（非官方 API，需要单独部署 bridge）。",
+      "matrix": "Matrix 协议（开源、自托管优先）。",
+      "feishu": "飞书机器人。在飞书开放平台建应用即可。",
+      "weixin": "个人微信（通过 iLink 中转，非官方）。",
+      "wecom": "企业微信自建应用机器人。"
     },
     "telegram": {
       "hint_token": "在 Telegram 中找 @BotFather → /newbot 创建。",

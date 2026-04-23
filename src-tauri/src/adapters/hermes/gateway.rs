@@ -317,6 +317,28 @@ impl HermesGateway {
                         if let Some(reason) = choice.finish_reason {
                             finish_reason = Some(reason);
                         }
+                        // Reasoning chunks are emitted BEFORE content
+                        // chunks so the UI can render the "thinking"
+                        // panel in arrival order even when a single
+                        // SSE chunk carries both fields.
+                        if let Some(reasoning) = choice.delta.reasoning_content {
+                            if !reasoning.is_empty() {
+                                if tx
+                                    .send(ChatStreamEvent::Reasoning(reasoning))
+                                    .await
+                                    .is_err()
+                                {
+                                    return Ok(ChatStreamDone {
+                                        finish_reason: Some("cancelled".into()),
+                                        model: resolved_model,
+                                        latency_ms: started.elapsed().as_millis() as u32,
+                                        prompt_tokens,
+                                        completion_tokens,
+                                    });
+                                }
+                                received_any_delta = true;
+                            }
+                        }
                         if let Some(delta_content) = choice.delta.content {
                             if !delta_content.is_empty() {
                                 if tx
@@ -542,6 +564,11 @@ pub struct ModelListEntry {
 pub enum ChatStreamEvent {
     /// Assistant content chunk (appended to the message body).
     Delta(String),
+    /// Reasoning-content chunk (e.g. DeepSeek-reasoner / OpenAI o1
+    /// `reasoning_content` field). Rendered in a collapsible
+    /// "Thinking" section above the main content, NOT mixed into the
+    /// final reply. Empty chunks are filtered out upstream.
+    Reasoning(String),
     /// Hermes-specific tool progress annotation. Emitted once when Hermes
     /// kicks off a tool invocation. The tool's OUTPUT is typically baked
     /// into subsequent `Delta` chunks by the agent, so we don't need a
@@ -595,6 +622,13 @@ struct StreamChoice {
 struct StreamDelta {
     #[serde(default)]
     content: Option<String>,
+    /// DeepSeek-reasoner + OpenAI o1 ship the chain-of-thought as a
+    /// sibling `reasoning_content` field alongside `content`. Plain
+    /// chat models don't emit this, so it stays `None` and we never
+    /// surface it. Surfacing it on reasoning-capable models is
+    /// T6.x.
+    #[serde(default)]
+    reasoning_content: Option<String>,
 }
 
 // ───────────────────────── Tests ─────────────────────────

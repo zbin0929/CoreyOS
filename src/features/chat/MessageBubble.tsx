@@ -62,6 +62,18 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
             msg.error && 'border-danger/40 bg-danger/5 text-danger',
           )}
         >
+          {/* Reasoning / chain-of-thought panel — shown for
+              reasoning-capable models (deepseek-reasoner, o1). Open by
+              default WHILE streaming so the user sees progress; the
+              user can collapse it any time. Once `msg.content` starts
+              arriving we close it by default on subsequent renders so
+              the final answer is the focus. */}
+          {!isUser && msg.reasoning && msg.reasoning.length > 0 && (
+            <ReasoningPanel
+              reasoning={msg.reasoning}
+              streaming={!!msg.pending || msg.content.length === 0}
+            />
+          )}
           {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
             <ToolCallsStrip calls={msg.toolCalls} />
           )}
@@ -199,6 +211,58 @@ function CopyButton({ text }: { text: string }) {
  * tool's OUTPUT into the subsequent text, so we don't need an expandable
  * output panel here — the pill is a signal, not a full trace viewer.
  */
+/**
+ * Collapsible "thinking" panel shown above reasoning-model answers.
+ *
+ * Behavior:
+ *   - While streaming (no content yet), the panel defaults to OPEN so
+ *     the user can watch the chain-of-thought land in real time.
+ *   - Once the final content starts flowing, the panel stays open if
+ *     the user hasn't toggled it; a caller that wants the opposite
+ *     can just close it manually. We don't auto-close on streaming
+ *     finish because that would yank closing motion into the user's
+ *     reading focus right as the answer appears.
+ *   - Uses `<details>` instead of a state hook so browser-native
+ *     expansion works without a re-render on every token.
+ */
+function ReasoningPanel({
+  reasoning,
+  streaming,
+}: {
+  reasoning: string;
+  streaming: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <details
+      className="mb-2 rounded-md border border-border/60 bg-bg-elev-2/50 text-[12px]"
+      open={streaming}
+      data-testid="reasoning-panel"
+    >
+      <summary className="flex cursor-pointer items-center gap-1.5 px-2 py-1.5 text-fg-muted select-none">
+        <Icon
+          icon={streaming ? Loader2 : Sparkles}
+          size="xs"
+          className={cn(streaming && 'animate-spin')}
+        />
+        <span>
+          {streaming
+            ? t('chat.reasoning.thinking', { defaultValue: 'Thinking…' })
+            : t('chat.reasoning.thought', { defaultValue: 'Thought process' })}
+        </span>
+      </summary>
+      {/* Reasoning is plain prose without markdown structure in
+          practice (deepseek-reasoner emits free-form analysis).
+          `whitespace-pre-wrap` preserves newlines without forcing
+          us through ReactMarkdown, which would re-parse tokens on
+          every delta and tank perf during long reasoning streams. */}
+      <div className="border-t border-border/40 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-fg-subtle whitespace-pre-wrap">
+        {reasoning}
+      </div>
+    </details>
+  );
+}
+
 function ToolCallsStrip({ calls }: { calls: UiToolCall[] }) {
   return (
     <div className="mb-2 flex flex-wrap gap-1.5">

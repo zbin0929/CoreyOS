@@ -325,6 +325,23 @@ function ChannelCard({
           <code className="mt-0.5 block text-[11px] text-fg-subtle">
             #{channel.id}
           </code>
+          {/* T6.x — one-line "what is this?" blurb below the brand
+              name. Uses a per-channel i18n key; the fallback is an
+              empty string so channels without a translation just get
+              no subtitle rather than a raw "channels.card_desc.foo"
+              string in the UI. */}
+          {(() => {
+            const key = `channels.card_desc.${channel.id}`;
+            const desc = t(key);
+            // i18next returns the key verbatim on miss. Also treat
+            // empty strings as "no description".
+            if (!desc || desc === key) return null;
+            return (
+              <p className="mt-1 text-[11px] leading-snug text-fg-muted">
+                {desc}
+              </p>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2">
           {/* T6.7b — "Verified" badge for channels with a shipping

@@ -17,6 +17,14 @@ void i18n
     },
     fallbackLng: 'en',
     supportedLngs: [...supportedLngs],
+    // Without this, a browser reporting `navigator.language = 'zh-CN'`
+    // is detected as `zh-CN`, which doesn't match our supportedLngs
+    // list — the detector falls back to `en` and Chinese users see
+    // English copy on first launch. `languageOnly` strips the region
+    // so `zh-CN` / `zh-TW` / `zh-HK` all resolve to `zh` (we only
+    // ship Simplified today; a Traditional bundle would be a separate
+    // supportedLng entry).
+    load: 'languageOnly',
     interpolation: { escapeValue: false },
     detection: {
       order: ['localStorage', 'navigator'],

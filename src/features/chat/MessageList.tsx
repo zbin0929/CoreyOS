@@ -79,6 +79,14 @@ export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
         // button "Copied!" flash, pending attachment thumbnails)
         // across appends.
         computeItemKey={(_, m) => m.id}
+        // Open a session at the LAST message, not the top. Without
+        // this Virtuoso mounts at index 0 and the user sees the
+        // oldest content on entry, having to manually scroll to the
+        // latest reply. `messages.length - 1` clamps to 0 on empty
+        // sessions (Virtuoso handles the -1 → no-op gracefully but
+        // we'd rather not tempt it). Only applied on initial mount;
+        // subsequent appends use `followOutput` for stick-to-bottom.
+        initialTopMostItemIndex={Math.max(0, messages.length - 1)}
         // "Stick to bottom when the user is at bottom; leave them
         // alone otherwise." Matches the old autoscroll-on-every-
         // render behaviour but respects manual scroll-up.

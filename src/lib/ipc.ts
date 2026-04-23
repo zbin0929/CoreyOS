@@ -87,6 +87,11 @@ export interface ChatToolProgress {
 
 export interface ChatStreamCallbacks {
   onDelta: (chunk: string) => void;
+  /** Reasoning-content delta (deepseek-reasoner / o1-style models).
+   *  Plain chat models never emit this. When callers omit the handler
+   *  reasoning is silently dropped, preserving the pre-T6.x behavior
+   *  for UI code that hasn't been updated yet. */
+  onReasoning?: (chunk: string) => void;
   onTool?: (progress: ChatToolProgress) => void;
   onDone: (summary: ChatStreamDone) => void;
   onError: (err: unknown) => void;
@@ -107,6 +112,14 @@ export async function chatStream(
   unlistens.push(
     await listen<string>(`chat:delta:${handle}`, (e) => cbs.onDelta(e.payload)),
   );
+  if (cbs.onReasoning) {
+    const onReasoning = cbs.onReasoning;
+    unlistens.push(
+      await listen<string>(`chat:reasoning:${handle}`, (e) =>
+        onReasoning(e.payload),
+      ),
+    );
+  }
   if (cbs.onTool) {
     const onTool = cbs.onTool;
     unlistens.push(

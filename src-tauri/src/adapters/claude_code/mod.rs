@@ -363,6 +363,7 @@ mod tests {
         while let Some(ev) = rx.recv().await {
             match ev {
                 ChatStreamEvent::Tool(_) => saw_tool = true,
+                ChatStreamEvent::Reasoning(_) => { /* claude_code doesn't surface reasoning */ }
                 ChatStreamEvent::Delta(_) => delta_count += 1,
             }
         }
