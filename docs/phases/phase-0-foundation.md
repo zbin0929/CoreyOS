@@ -10,7 +10,7 @@
 
 | Criterion | State | Notes |
 |---|---|---|
-| 1. `pnpm tauri dev` opens shell | ✅ | `INFO Caduceus booting` logged; window renders |
+| 1. `pnpm tauri dev` opens shell | ✅ | `INFO Corey booting` logged; window renders |
 | 2. ⌘K palette + `Cmd+1..9` | 🟡 | ⌘K works. `Cmd+1..9` shown as hint in palette; global listener deferred |
 | 3. Dark/light theming | ✅ | Tokens in `src/styles/tokens.css`; no hard-coded colors |
 | 4. Typecheck/lint/test pass | 🟡 | `pnpm typecheck`, `pnpm lint`, `cargo check`, `cargo test` all green. `cargo clippy` not installed (rust minimal profile). `pnpm test` (Vitest) not wired |

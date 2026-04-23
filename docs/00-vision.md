@@ -14,7 +14,7 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Sin
 
 ## Positioning vs. existing tools
 
-| Tool                          | What it is                              | Where Caduceus wins |
+| Tool                          | What it is                              | Where Corey wins |
 |-------------------------------|------------------------------------------|---------------------|
 | `EKKOLearnAI/hermes-web-ui`   | Web dashboard for Hermes (Vue + Koa BFF) | Design, desktop integration, multi-agent, differentiators |
 | Hermes built-in TUI           | Terminal interface for Hermes            | Rich UI, non-devs can use, cross-platform gateway visibility |
@@ -48,7 +48,7 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Sin
 - Hermes adapter ships in Phase 1. Claude Code / Aider / OpenHands adapters in Phase 5.
 - Users can run multiple adapters simultaneously; sessions from all agents unified in one inbox.
 
-## What Caduceus explicitly is *not*
+## What Corey explicitly is *not*
 
 - Not a Hermes fork or rewrite. We consume Hermes via its public surface (gateway HTTP, CLI, config files).
 - Not a hosted SaaS. Single-binary desktop app + optional self-hosted web mode. No accounts, no telemetry by default.
@@ -56,13 +56,13 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Sin
 
 ## Success metrics (self-imposed)
 
-- **M1**: Phase 1 ships, a user can run Hermes + Caduceus and never need to touch the Hermes TUI again.
+- **M1**: Phase 1 ships, a user can run Hermes + Corey and never need to touch the Hermes TUI again.
 - **M2**: Phase 4 ships, at least one feature (multi-model compare, skill editor, or trajectory timeline) is demonstrably better than any alternative in the ecosystem.
-- **M3**: Phase 5 ships, Caduceus can drive at least two non-Hermes agents through the same UI.
+- **M3**: Phase 5 ships, Corey can drive at least two non-Hermes agents through the same UI.
 - **Perf**: lighthouse-equivalent smoothness on a $200 Chromebook-class device.
 
 ## Brand
 
-- **Name**: `Caduceus` (working name; easy to replace).
-- **Mark**: stylized caduceus, single-line geometry, gold on obsidian.
+- **Name**: `Corey`
+- **Mark**: stylized C, single-line geometry, gold on obsidian.
 - **Voice**: precise, unembellished, no emoji, no exclamation marks.

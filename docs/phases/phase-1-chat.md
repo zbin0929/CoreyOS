@@ -33,7 +33,7 @@
 
 ### Deltas vs original plan
 
-- **Attachment staging path.** The spec said `~/.caduceus/attachments/{session}/…`;
+- **Attachment staging path.** The spec said `~/.corey/attachments/{session}/…`;
   we shipped under `~/.hermes/attachments/<uuid>.<ext>` — flat UUID
   naming matches how other Hermes tools lay out scratch space and
   avoids a pre-stage "which session are we in?" round-trip for the
@@ -102,7 +102,7 @@
 
 ### T1.5 — Attachments (half day)
 
-- `src-tauri/src/ipc/attach.rs` — accept a file path or base64 blob, stage in `~/.caduceus/attachments/{session}/…`, return an ID.
+- `src-tauri/src/ipc/attach.rs` — accept a file path or base64 blob, stage in `~/.corey/attachments/{session}/…`, return an ID.
 - Frontend: drag-and-drop on the composer area, paste handler for images, file picker button.
 - Only types allowed by the current model's capabilities; dynamically hide image upload when the model isn't vision.
 

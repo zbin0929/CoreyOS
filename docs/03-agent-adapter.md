@@ -1,6 +1,6 @@
 # 03 · Agent Adapter
 
-The single abstraction that lets Caduceus drive multiple agents. Defined in Rust, mirrored in TypeScript via `specta`. Implemented in Phase 0 (trait + Hermes stub), real data in Phase 1, second implementation in Phase 5.
+The single abstraction that lets Corey drive multiple agents. Defined in Rust, mirrored in TypeScript via `specta`. Implemented in Phase 0 (trait + Hermes stub), real data in Phase 1, second implementation in Phase 5.
 
 ## Core trait (Rust)
 

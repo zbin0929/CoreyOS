@@ -10,10 +10,10 @@
 
 1. Models page: add/update/delete providers, OAuth flow for Codex, per-provider model groups, default model switching. All writes go through atomic `auth.json` ops.
 2. Settings page: every setting from `hermes-web-ui` is represented; changes take effect immediately or with explicit "Apply & restart gateway" when necessary; all writes journaled with undo.
-3. Analytics page: total tokens (in/out), session count, daily average, cost estimate, cache hit rate, 30-day trend (bar + table), model distribution donut. Data source is the Caduceus-local SQLite (populated from Hermes gateway usage events + session history).
+3. Analytics page: total tokens (in/out), session count, daily average, cost estimate, cache hit rate, 30-day trend (bar + table), model distribution donut. Data source is the Corey-local SQLite (populated from Hermes gateway usage events + session history).
 4. Logs page: agent / gateway / error streams, filter by level/file/keyword, live tail with pause, structured parser, search with match highlighting.
 5. Profiles page: list, create, rename, delete, clone, import (`.tar.gz`), export; per-profile gateway start/stop with port auto-resolution.
-6. Every destructive action shows a diff or confirms; undo via `~/.caduceus/changelog.jsonl`.
+6. Every destructive action shows a diff or confirms; undo via `~/.corey/changelog.jsonl`.
 7. All pages keyboard-navigable; ⌘K deep-links to any setting.
 
 ## Task breakdown
@@ -22,7 +22,7 @@
 
 - `src-tauri/src/fs_atomic.rs`:
   - `atomic_write(path, bytes, perms)`
-  - `journal_append(entry)` writing JSONL to `~/.caduceus/changelog.jsonl`
+  - `journal_append(entry)` writing JSONL to `~/.corey/changelog.jsonl`
 - `src-tauri/src/adapters/hermes/env.rs`, `config.rs`, `auth.rs`:
   - Each exposes `read`, `patch(mutator) -> Diff`, `rollback(entry_id)`.
   - Tests for round-trip preservation of unknown keys, comments, ordering.
@@ -49,7 +49,7 @@
 
 ### T2.4 — Local store (half day)
 
-- `src-tauri/src/store/` with `sqlx` + SQLite at `~/.caduceus/db.sqlite`.
+- `src-tauri/src/store/` with `sqlx` + SQLite at `~/.corey/db.sqlite`.
 - Tables:
   - `usage(ts, session_id, model, input_tokens, output_tokens, cached_tokens, cost_usd_micro, adapter_id)`
   - `events(ts, level, category, payload_json)`
@@ -87,7 +87,7 @@
 
 ### T2.8 — Undo & changelog (half day)
 
-- `src/features/settings/Changelog.tsx` — viewer for `~/.caduceus/changelog.jsonl`; each entry has "revert" action.
+- `src/features/settings/Changelog.tsx` — viewer for `~/.corey/changelog.jsonl`; each entry has "revert" action.
 - Revert invokes the appropriate adapter `rollback`.
 
 ## Files added (summary)

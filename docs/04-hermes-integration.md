@@ -2,7 +2,7 @@
 
 Concrete spec for `HermesAdapter`. This is the **only** adapter in the repo for Phases 0–4.
 
-## Surfaces Caduceus consumes
+## Surfaces Corey consumes
 
 | # | Surface                         | Purpose                                         |
 |---|---------------------------------|-------------------------------------------------|
@@ -19,7 +19,7 @@ Concrete spec for `HermesAdapter`. This is the **only** adapter in the repo for 
 
 ## 1. Gateway (chat hot path)
 
-Hermes exposes an OpenAI-compatible endpoint. Caduceus uses `POST /v1/chat/completions` with `stream: true`.
+Hermes exposes an OpenAI-compatible endpoint. Corey uses `POST /v1/chat/completions` with `stream: true`.
 
 ```rust
 // src-tauri/src/adapters/hermes/gateway.rs
@@ -47,7 +47,7 @@ impl GatewayClient {
 
 OpenAI-style chunks map to our `Delta` as follows:
 
-| OpenAI chunk                               | Caduceus Delta                              |
+| OpenAI chunk                               | Corey Delta                              |
 |--------------------------------------------|---------------------------------------------|
 | first chunk with `role: assistant`         | `MessageStart { role: Assistant, id }`      |
 | `delta.content: "…"`                       | `TextChunk { text }`                        |
@@ -65,7 +65,7 @@ Drop the HTTP response stream → Hermes notices disconnected client and aborts 
 
 ## 2. CLI wrapper
 
-Not every operation is exposed via the gateway (sessions, logs, profile switching). Caduceus shells out to `hermes` and parses JSON output.
+Not every operation is exposed via the gateway (sessions, logs, profile switching). Corey shells out to `hermes` and parses JSON output.
 
 ```rust
 // src-tauri/src/adapters/hermes/cli.rs
@@ -167,7 +167,7 @@ WECOM_BOT_SECRET
 # + model provider keys (OPENAI_API_KEY, etc.) if used directly
 ```
 
-Caduceus prefers storing credentials in the OS keychain when possible and only projects them into `.env` at gateway start (if the user opts in). Default behavior mirrors the original UI to stay compatible.
+Corey prefers storing credentials in the OS keychain when possible and only projects them into `.env` at gateway start (if the user opts in). Default behavior mirrors the original UI to stay compatible.
 
 ## 5. `auth.json` (model credential pool)
 
@@ -177,11 +177,11 @@ Format (verified in Phase 1): list of provider credentials used by the Hermes `m
 - **Write** to add/update/delete providers.
 - **OAuth flow** for Codex models: open browser, catch callback via localhost redirect, persist token.
 
-Caduceus never displays raw API keys after entry; fields show `••••••…last 4`. Editing re-requires the full key (no in-place edit).
+Corey never displays raw API keys after entry; fields show `••••••…last 4`. Editing re-requires the full key (no in-place edit).
 
 ## 6. Profiles
 
-Each profile is a directory under `~/.hermes/profiles/<name>/` with its own `config.yaml`, `.env`, DB, etc. Caduceus:
+Each profile is a directory under `~/.hermes/profiles/<name>/` with its own `config.yaml`, `.env`, DB, etc. Corey:
 
 - Lists profiles (`hermes profile list --json`).
 - Switches active profile for the current gateway instance.
@@ -190,12 +190,12 @@ Each profile is a directory under `~/.hermes/profiles/<name>/` with its own `con
 
 ## 7. Skills
 
-`~/.hermes/skills/<id>/` contains at minimum `skill.md` (prompt + metadata frontmatter) and optional attached files. Caduceus:
+`~/.hermes/skills/<id>/` contains at minimum `skill.md` (prompt + metadata frontmatter) and optional attached files. Corey:
 
 - Lists skills (directory scan + parse frontmatter).
 - Reads/edits `skill.md` (respect frontmatter fields).
 - Reads attachments (render images, preview text).
-- Writes go through the file-safety layer (atomic, journaled to `~/.caduceus/changelog.jsonl`).
+- Writes go through the file-safety layer (atomic, journaled to `~/.corey/changelog.jsonl`).
 
 ## 8. Logs
 

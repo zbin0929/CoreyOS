@@ -105,7 +105,7 @@ Flat by default. Elevation comes from 1–2 layered borders + subtle top-lit gra
 ## Iconography
 
 - Lucide at 16/18/20 px (stroke 1.5). 14px only inside badges.
-- Custom glyphs for: Caduceus mark, Hermes logotype, platform logos (Telegram/Discord/etc. in their brand color when configured, neutral grey when unconfigured).
+- Custom glyphs for: Corey mark, Hermes logotype, platform logos (Telegram/Discord/etc. in their brand color when configured, neutral grey when unconfigured).
 - No colored emoji anywhere in UI chrome.
 
 ## Components (shadcn-based, restyled)
@@ -162,7 +162,7 @@ Bottom tab bar with 4 primary + "More": Chat · Compare · Analytics · Settings
 
 ## Theming & extensibility
 
-- All colors flow from tokens. Themes are JSON files mapping tokens → HSL triplets; users can drop a theme file into `~/.caduceus/themes/` and pick it at runtime.
+- All colors flow from tokens. Themes are JSON files mapping tokens → HSL triplets; users can drop a theme file into `~/.corey/themes/` and pick it at runtime.
 - Plugins can register their own token sub-namespace (`--plugin-<id>-*`) but cannot override core tokens.
 
 ## Deliverables for Phase 0

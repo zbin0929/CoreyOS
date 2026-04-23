@@ -6,7 +6,7 @@
 
 Consequences users need to know (documented clearly on the download page):
 
-- **macOS**: the `.dmg` opens but Gatekeeper will refuse to run the app on first launch ("cannot be opened because Apple cannot check it for malicious software"). Users right-click → Open, or run `xattr -dr com.apple.quarantine /Applications/Caduceus.app` once. We provide a one-line copyable command and a short screencast on the download page.
+- **macOS**: the `.dmg` opens but Gatekeeper will refuse to run the app on first launch ("cannot be opened because Apple cannot check it for malicious software"). Users right-click → Open, or run `xattr -dr com.apple.quarantine /Applications/Corey.app` once. We provide a one-line copyable command and a short screencast on the download page.
 - **Windows**: SmartScreen will show "Windows protected your PC"; users click "More info" → "Run anyway". We provide screenshots.
 - **Linux**: no warnings; `chmod +x *.AppImage` and run. `.deb` / `.rpm` install normally with `sudo apt install ./file.deb` / `sudo rpm -i file.rpm`.
 
@@ -42,7 +42,7 @@ No paid OS-level code signing. **minisign** is used both for Tauri updater verif
 ## Auto-update
 
 - Tauri updater configured in `tauri.conf.json` with a per-channel manifest URL, **served directly from the GitHub Release**:
-  - `https://github.com/<org>/caduceus/releases/download/<tag>/latest-<channel>.json`
+  - `https://github.com/<org>/corey/releases/download/<tag>/latest-<channel>.json`
   - This avoids any need for self-hosted infra or a domain.
 - Manifest fields: `version`, `notes`, `pub_date`, `platforms.*.signature` (minisign), `platforms.*.url` (GitHub Release asset URL).
 - Users can opt out of auto-update in Settings; opt-out still notifies when a newer version is available.
@@ -102,7 +102,7 @@ Copy-paste into the Release PR:
 
 ## Web-mode distribution (future)
 
-- `caduceus-web` companion package: same frontend + a Node shim replacing the Rust IPC surface over HTTP.
+- `corey-web` companion package: same frontend + a Node shim replacing the Rust IPC surface over HTTP.
 - Distributed as an `npm` package and a single `docker` image.
 - Out of scope for M3; plan in post-Phase-5 Phase 6.
 

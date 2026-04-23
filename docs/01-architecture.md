@@ -4,7 +4,7 @@
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│                         Caduceus (Tauri app)                      │
+│                         Corey (Tauri app)                      │
 │                                                                   │
 │  ┌──────────────────────────┐      ┌──────────────────────────┐   │
 │  │  Frontend  (React SPA)   │◄────►│  Rust core  (Tauri 2)    │   │
@@ -38,7 +38,7 @@ Key contrast with `hermes-web-ui`: no separate Koa BFF. Rust core owns everythin
 ## Process model
 
 - **1 process** (Tauri) with two logical halves: webview + Rust main.
-- **0 long-lived subprocesses** owned by Caduceus. Hermes Gateway runs under its own profile manager; Caduceus only starts/stops it on demand.
+- **0 long-lived subprocesses** owned by Corey. Hermes Gateway runs under its own profile manager; Corey only starts/stops it on demand.
 - **Web-only mode** (`pnpm dev` without Tauri): Rust core is replaced by a thin Node shim that exposes the same command surface over HTTP, for VPS / phone scenarios. Designed from day 1 so adapters don't care which transport they're on.
 
 ## Tech stack (locked)
@@ -118,7 +118,7 @@ User edits form (Telegram token) ─► react-hook-form + zod validate
      invoke('gateway_restart', { profileId })
 ```
 
-Every config write is atomic, produces a diff, and is journaled to `~/.caduceus/changelog.jsonl` for undo.
+Every config write is atomic, produces a diff, and is journaled to `~/.corey/changelog.jsonl` for undo.
 
 ### C. Terminal (PTY)
 
@@ -172,7 +172,7 @@ caduceus/
 │       │   ├── claude_code/       # Phase 5
 │       │   ├── aider/             # Phase 5
 │       │   └── openhands/         # Phase 5
-│       ├── store/                 # SQLite (sqlx) for Caduceus-local data
+│       ├── store/                 # SQLite (sqlx) for Corey-local data
 │       │   ├── mod.rs
 │       │   ├── migrations/
 │       │   ├── sessions.rs
@@ -269,7 +269,7 @@ Measured in CI via Playwright tracing + `performance.now()` marks. Phase 0 sets 
 
 ## Observability (self)
 
-- Rust `tracing` → rolling file at `~/.caduceus/logs/caduceus.log`.
+- Rust `tracing` → rolling file at `~/.corey/logs/corey.log`.
 - Frontend errors captured and forwarded to Rust via `invoke('log_frontend_error', ...)`.
 - Opt-in local-only "debug bundle" export: logs + redacted configs for bug reports.
 - No external telemetry. Ever.
