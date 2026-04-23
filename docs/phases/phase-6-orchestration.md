@@ -1,8 +1,8 @@
 # Phase 6 · Orchestration Core
 
-**Goal**: Turn Corey from a single-agent control panel into a **multi-Hermes orchestration plane**. Users can run several Hermes instances (different models, roles, permissions) side-by-side, have one instance delegate to others, and feed the results back through a single chat pane. Also lands the long-overdue 👍/👎 feedback loop, a rules-based routing layer, conversational scheduling, and — critically — the first real end-to-end channel verification.
+**Goal**: Turn Corey from a single-agent control panel into a **multi-Hermes orchestration plane**. Users can run several Hermes instances side-by-side, have one instance delegate to others, and feed the results back through a single chat pane. Also lands the 👍/👎 feedback loop, rules-based routing, channel schema repair + e2e proof, and a Scheduler refactor to wrap Hermes' native cron.
 
-**Est.**: 3–4 weeks solo.
+**Est.**: ~2 weeks solo (post-audit, see `docs/10-product-audit-2026-04-23.md`). Was 3–4 weeks before the SURFACE/DROP reclassifications.
 
 **Depends on**: Phase 5 complete (adapter registry, per-session `adapter_id`, AgentSwitcher, unified inbox).
 
@@ -45,24 +45,18 @@ The smallest, highest-leverage item on the phase. Ships alone as the first PR.
 - **Tests**: Rust — round-trip `GatewayConfig` v1 → v2 migration; registry can hold 3 simultaneous live Hermes mocks. Playwright — create a second instance, switch to it, send a message, verify the adapter-id on the resulting session row.
 - **Docs**: update `04-hermes-integration.md` with the multi-instance section.
 
-### T6.3 — Supervisor / worker orchestration · ~5 days
+### T6.3 — Surface Hermes' native delegation · ~2 days (refactored 2026-04-23 pm)
 
-The core of the phase. Ships behind a feature flag (`orchestrator.enabled`) until it's proven.
+**Re-scoped from ~5 days of building our own orchestration protocol to ~2 days of visualisation.** Reason: Hermes Agent natively ships a `delegate_task` tool that spawns isolated subagents for parallel workstreams (see [Hermes README features table](https://github.com/NousResearch/hermes-agent#readme) and `docs/user-guide/features` upstream). Building a parallel JSON-line protocol on top would be pure duplication.
 
-- **Orchestrator adapter** (`src-tauri/src/adapters/orchestrator/`): an `AgentAdapter` impl that:
-  - Reads an `OrchestrationPolicy` from disk (per-session or global).
-  - On `chat_stream`, calls a **manager instance** (a specific Hermes instance ID, configurable) with the user's turn + a system prompt that teaches it how to delegate.
-  - Watches the manager's output for a **delegation marker** — we'll reuse an existing mechanism. Simplest v1: the manager emits JSON-lines `{"delegate": "worker-1", "prompt": "..."}`  in its stream; we parse those out, stream `chat_stream` on the named worker, and inject the worker's reply back into the manager's next turn.
-  - Emits a custom `OrchestrationEvent` on the SSE stream (extension of `ChatStreamEvent`) so the frontend can render a nested tree in the chat pane.
-- **Frontend**:
-  - New `OrchestrationBubble.tsx` renders a collapsible "manager → worker" tree under a single assistant turn. Click to expand/collapse each worker's full output. Reuses `TrajectoryPill` primitives.
-  - Settings › Orchestration page — policy editor (YAML textarea for v1, structured form later). Lists manager & eligible workers.
-- **Limits**:
-  - Depth-cap at 3 (manager → worker → sub-worker). Deeper delegations are rejected with a clear error.
-  - Timeout-cap at 5 min per worker call.
-  - Cost-cap via Budgets (already scoped per adapter; orchestrator turns bill the manager adapter + sum across workers).
-- **Tests**: Rust — orchestrator emits correct events for a 1-manager-1-worker scenario using mocked adapters. Playwright — orchestrator policy → manager delegates to worker → both responses render in the same bubble.
-- **Security**: orchestrator cannot be the manager AND a worker in the same turn (detected via ID comparison). Prevents infinite self-delegation.
+- **No Orchestrator meta-adapter.** Drop the `adapters/orchestrator/` plan. `HermesAdapter` stays single-instance.
+- **Multi-instance UX still matters** (T6.2 is independent). User can pick which Hermes instance receives a turn; routing (T6.4) can auto-pick.
+- **What we add on top**: when a Hermes assistant turn includes `delegate_task` tool calls in its SSE stream, render them as a nested tree in the existing `TrajectoryView` with:
+  - One parent node per top-level assistant turn.
+  - Child nodes for each `delegate_task` call, each expandable to show the sub-turn's messages + tool calls (recursive).
+  - Live progress via the existing `ChatStreamEvent::ToolProgress` plumbing — no new event types needed.
+- **Chat bubble flavour**: if a turn contains delegations, `MessageBubble` grows an "N sub-tasks" pill that opens the tree.
+- **Tests**: 2 Rust (parse `delegate_task` tool-call shape, nested progress propagation) + 1 Playwright (send a prompt that triggers a real delegation, verify sub-tree renders).
 
 ### T6.4 — Rules-based routing · ~2 days
 
@@ -91,24 +85,15 @@ Currently `PathAuthority` is a singleton on `AppState`. Split it:
 - **UI**: Settings › Sandbox grows a scope tab. Default scope is the current behaviour; adding an instance with a custom scope is opt-in.
 - **Security property**: a worker instance misbehaving (e.g. prompted to `rm -rf`) can't touch paths outside its scope. Demonstrated via a Playwright e2e where a worker with no roots tries to read `~/.ssh` and gets `sandbox_denied`.
 
-### T6.6 — Conversational scheduler (natural-language job creation) · ~4 days
+### T6.6 — Conversational scheduler — **DROPPED** (2026-04-23 pm)
 
-The base Scheduler (shipped 2026-04-23) makes users hand-write cron expressions. T6.6 adds two of the three stages from `docs/09-conversational-scheduler.md` — Stage 3 (native `tool_calls` in SSE) stays deferred until Hermes exposes it.
+**Reason**: Hermes cron natively supports natural-language creation. From the upstream docs:
 
-- **Stage 1: `/schedule` slash command** (~1 day)
-  - New chat-input grammar: typing `/schedule` opens a lightweight form inline. Fields prefilled from surrounding context (if user pasted "every weekday 9am ...", parse attempts to pre-fill).
-  - On submit, calls the existing `scheduler_upsert` IPC — zero new backend surface.
-  - Tests: Playwright — slash-command opens form, submit creates a job visible on Scheduler page.
+> Ask Hermes normally: "Every morning at 9am, check Hacker News for AI news and send me a summary on Telegram." Hermes will use the unified `cronjob` tool internally.
 
-- **Stage 2: Post-turn intent detection + suggestion card** (~3 days)
-  - After each user turn, a **cheap secondary LLM call** (the same active adapter, minimal system prompt: "Is this a request to schedule a recurring task? If yes, return strict JSON `{cron, prompt, name}`. If no, return `{skip: true}`.") evaluates whether to show a suggestion card.
-  - Only triggers when the user message contains timing keywords (每天 / 每周 / every / daily / 定时 / schedule / remind ...). Cheap regex gate avoids wasting a round-trip on obvious non-matches.
-  - Suggestion card appears below the assistant reply with "Create schedule" and "Dismiss" buttons. Never creates jobs automatically.
-  - **Consent**: opt-in via Settings › Scheduler → "Suggest schedules from chat". OFF by default for privacy (every suggestion = one extra LLM call billed to active budget).
-  - **Rate limit**: 1 suggestion per 5 turns per session, to avoid nagging.
-  - Tests: Rust — regex gate + JSON-parse robustness. Playwright — enable the toggle, say "每天早上 9 点提醒我喝水", see the card, click Create, verify the job lands on the Scheduler page with the right cron + prompt.
+Reimplementing this with a regex gate + secondary LLM call + suggestion card would be strictly worse. When Corey's Scheduler page is refactored to wrap `~/.hermes/cron/jobs.json` (T6.8 below), the "conversational creation" path becomes trivial: the user just talks to Hermes as usual; Corey's page refreshes when a new job lands in the JSON file.
 
-- **Stage 3 explicitly deferred**: native `tool_calls` in the Hermes SSE stream. Reopens when Hermes exposes OpenAI-compatible tool calling on its gateway streams. Until then Stage 2's separate LLM call is the production path.
+Reclaimed: ~4 days.
 
 ### T6.7 — Channel schema audit + e2e verification · ~5 days (was ~3)
 
@@ -143,26 +128,42 @@ If T6.7a-c finishes ahead of schedule, add cards for any of these Hermes-native 
 
 **Explicit non-goal**: maintaining live test credentials in CI. One-time manual verification per channel, documented recipe, dated badge. Re-verify on demand (e.g. after a Hermes upgrade).
 
-## Test totals target
+### T6.8 — Scheduler refactor: wrap Hermes' native cron · ~2 days (NEW, 2026-04-23 pm)
 
-- Rust unit: **+20** (3 feedback + 4 multi-instance + 6 orchestrator + 6 routing + 1 conversational-intent regex/parse)
-- Playwright: **+7** (feedback, multi-instance, orchestrator tree, routing pill, sandbox isolation, `/schedule` flow, suggestion-card accept)
+**Motivation**: the Scheduler MVP shipped this morning duplicates Hermes' native cron. Hermes stores jobs in `~/.hermes/cron/jobs.json`, runs `cronjob(action=...)` as an agent-facing tool, accepts natural-language schedules, and writes run outputs to `~/.hermes/cron/output/{job_id}/{timestamp}.md`. Corey shipping its own Rust worker + SQLite table is pure duplication (see `docs/10-product-audit-2026-04-23.md`).
+
+- **Delete** `src-tauri/src/scheduler.rs` + the `scheduled_jobs` SQLite table + related IPC (`scheduler_list`, `scheduler_upsert`, `scheduler_delete`).
+- **Add** a JSON-file accessor over `~/.hermes/cron/jobs.json`:
+  - `scheduler_list()` → deserialise `jobs.json`.
+  - `scheduler_upsert(job)` → serialise + atomic write back. `job` matches Hermes' schema (fields: `id`, `schedule`, `prompt`, `skills[]`, `name`, `model`, `provider`, `paused`, `repeat`, etc.).
+  - `scheduler_delete(job_id)` → atomic remove.
+  - `scheduler_runs(job_id)` → list files under `~/.hermes/cron/output/{job_id}/` with parsed front-matter + preview. **New capability** only Corey has — a GUI log browser for cron output.
+- **Update the Scheduler page**: unchanged layout, but the underlying IPCs now read/write Hermes' state. A new "Runs" drawer on each job card surfaces the last 10 `.md` outputs.
+- **Migration path**: any jobs in the legacy SQLite table get auto-exported to `jobs.json` format on first boot after T6.8 ships. One-time on-screen notice.
+- **Bonus**: because Hermes' schedule format accepts `"every 2h"`, `"30m"`, ISO timestamps, and classic cron expressions (see upstream docs), we get richer scheduling than our hand-rolled cron crate supported.
+- **Tests**: 3 Rust (roundtrip `jobs.json`, migration from SQLite, atomic write on corrupt file) + 1 Playwright (create a job from the GUI, verify it appears in `~/.hermes/cron/jobs.json`; click a run to see its `.md` content).
+
+## Test totals target (post-audit)
+
+- Rust unit: **+15** (3 feedback + 4 multi-instance + 2 delegation-surface + 6 routing + 3 scheduler-refactor + 1 sandbox)
+- Playwright: **+6** (feedback, multi-instance, delegation tree, routing pill, sandbox isolation, scheduler-wrapped-cron)
 - Manual smoke: ≥ 1 channel e2e verified with recorded `channels_verified.json` entry.
-- Conformance: orchestrator adapter must pass the existing suite.
+- No orchestrator conformance suite (no new adapter).
 
 ## Deltas vs the original brainstorm
 
 | Brainstorm item | Landed in Phase 6 as |
 |-----------------|----------------------|
-| 2️⃣ 多 Agent 实例管理 (主管/员工) | T6.2 (multi-instance) + T6.3 (orchestration) |
+| 2️⃣ 多 Agent 实例管理 (主管/员工) | T6.2 (multi-instance) + T6.3 (surface Hermes' native `delegate_task`) |
 | 3.1 模型池 | T6.2 (each instance declares its model) |
 | 3.2 智能路由 | T6.4 (rules-based, no ML) |
-| 3.4 模型级联 | T6.3 (reuses the orchestrator rather than a separate feature) |
+| 3.4 模型级联 | T6.3 (piggybacks on Hermes delegation; routing if needed) |
 | 4.2 反馈回路 | T6.1 |
 | 5.2 安全/权限 (per-agent 沙盒) | T6.5 |
 | 5.4 策略配置 (失败 N 次切换) | T6.4 rules can include `after_n_failures` predicate as a follow-up |
-| 对话式创建定时任务 (P3 backlog) | T6.6 (Stage 1 + 2; Stage 3 still deferred until Hermes `tool_calls`) |
+| 对话式创建定时任务 | **DROPPED** — Hermes cron natively accepts natural language. |
 | 平台通道真实打通验证 (post-Phase-3 debt) | T6.7 (Telegram first, reusable smoke-test recipe, `channels_verified.json`) |
+| Scheduler UI shipped 2026-04-23 am | T6.8 (refactor to wrap `~/.hermes/cron/jobs.json`, delete duplicate engine) |
 
 ## Explicitly deferred out of Phase 6
 
@@ -173,9 +174,10 @@ If T6.7a-c finishes ahead of schedule, add cards for any of these Hermes-native 
 ## Demo script (end-of-phase)
 
 1. Open Settings › Agent. Add a second Hermes instance pointing at a different model. Save.
-2. Open AgentSwitcher. See both instances listed.
-3. Switch to Orchestrator adapter. Send "Refactor this Python file and then write a unit test for it." Expect to see a tree in the bubble: manager → worker ("Refactor") → worker ("Test"). All three nodes expandable.
-4. 👍 the final answer. Reopen the Analytics page, see the 👍 rate blip up for this session's adapter.
-5. Open Settings › Routing. Add a rule `lang == zh → hermes-deepseek`. Send a Chinese message; observe the "Routed to: deepseek" pill.
-6. Enable "Suggest schedules from chat" in Settings › Scheduler. Say "每天早上 9 点提醒我喝水" in chat. See the suggestion card below the reply; click Create; verify the job on the Scheduler page.
-7. Open the Channels page. See the ✅ "Verified 2026-MM-DD against Hermes @<sha>" badge on Telegram. Pick up your phone, send "hello" to the registered bot, observe an AI reply arriving in Corey's inbox within a few seconds.
+2. Open AgentSwitcher — see both instances listed, each with a role label.
+3. Send a complex prompt ("Refactor this Python file and then write a unit test for it") to the default instance. If it invokes `delegate_task`, see a nested sub-tree in the `TrajectoryView` showing each delegated subagent's turn.
+4. 👍 the final answer. Reopen Analytics, see the 👍 rate blip up.
+5. Open Settings › Routing. Add a rule `lang == zh → hermes-deepseek`. Send a Chinese message; see the "Routed to: deepseek" pill.
+6. In chat, say "Every morning at 9am, check HN for AI news and send me a summary on Telegram." Hermes creates the cron job natively. Open Scheduler page — the new job is there, sourced from `~/.hermes/cron/jobs.json`.
+7. Click the job. See its last runs as a `.md` preview drawer (sourced from `~/.hermes/cron/output/...`).
+8. Open Channels page. See ✅ "Verified 2026-MM-DD against Hermes @<sha>" on Telegram. Send "hello" to the registered bot from your phone; Corey's inbox shows the AI reply within a few seconds.

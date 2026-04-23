@@ -6,6 +6,49 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Product audit applied to Phase 6/7 docs
+
+Full KEEP/SURFACE/DROP reclassification (per `docs/10-product-audit-2026-04-23.md`) executed. User approved the aggressive path.
+
+### Summary of decisions
+
+**DROPPED** — features that purely duplicated Hermes-native functionality:
+- **T6.6 Conversational scheduler**: Hermes `cronjob` tool natively accepts "Every morning at 9am, check HN and send me a summary on Telegram". Reclaimed ~4 days.
+- **T7.4a OpenClawAdapter**: OpenClaw merged into Hermes upstream.
+
+**SURFACE** — reduced from "build parallel engine" to "GUI over Hermes native":
+- **T6.3 Orchestration** 5d → 2d: visualise Hermes' native `delegate_task` subagent tree in Trajectory pane, no meta-adapter.
+- **T7.1 LangGraph adapter** 6d → 3d: replaced with generic **MCP server manager UI** since Hermes natively supports MCP.
+- **T7.3 Long-term memory** 6d → 3d: GUI editor for `~/.hermes/MEMORY.md` + `USER.md` + `session_search` — no qdrant, no separate embedding pipeline.
+- **T7.4b Skills importer** kept at 3d but re-aimed: wrap `hermes skills` CLI (7+ hub sources: official, skills-sh, github, clawhub, lobehub, claude-marketplace, well-known) instead of bespoke ClawHub client.
+- **Skills editor storage**: writes to `~/.hermes/skills/<slug>/SKILL.md` so Hermes picks them up natively; local SQLite becomes a cache only.
+
+**ADDED** — new task:
+- **T6.8 Scheduler refactor (~2d)**: delete `src-tauri/src/scheduler.rs` + `scheduled_jobs` SQLite table + related IPC. Reimplement Scheduler page as a thin read/write wrapper around `~/.hermes/cron/jobs.json`. Bonus: surface `~/.hermes/cron/output/{job_id}/*.md` run logs (unique GUI value).
+
+### Shipped (docs only)
+
+**`docs/phases/phase-6-orchestration.md`** — T6.3 refactored, T6.6 marked dropped, T6.8 added, estimates + test totals + deltas table + demo script all updated. Phase 6 total: ~25 days → ~20.5 days.
+
+**`docs/phases/phase-7-expansion.md`** — T7.1 replaced with MCP manager, T7.2 re-aimed at `~/.hermes/skills/`, T7.3 re-scoped to MEMORY.md GUI, T7.4 refactored to wrap `hermes skills`. Phase 7 total: ~22 days → ~12 days. Exit criteria, guiding principle, demo script all rewritten.
+
+**`docs/05-roadmap.md`** — Phase 6 and 7 rows updated. Total Phase 0-8 estimate: 13-15 → **11-12 weeks**. Explicit note that reclaimed ~3 weeks should go to polishing KEEP features, docs, and user acquisition — not more features.
+
+**`docs/06-backlog.md`** — Conversational scheduler entry flipped from "promoted into T6.6" to "CLOSED AS OBSOLETE (product audit)".
+
+### Lessons applied
+
+- Read upstream docs **before** writing task specs, not after.
+- Default verdict for overlapping features: **SURFACE**, not build parallel.
+- Cite docs URLs / source file paths for every upstream claim in task descriptions.
+
+### Next
+
+- Phase 6 still paused awaiting user greenlight.
+- Recommended order when resumed: T6.7a (channel schema hotfix, ~1.5d) → T6.7b (Telegram e2e, ~1.5d) → T6.8 (Scheduler wrap, ~2d) → T6.1 (feedback loop, ~2d).
+
+---
+
 ## 2026-04-23 — Reality check against Hermes Agent upstream (CRITICAL CORRECTIONS)
 
 User provided the canonical upstream URL <https://github.com/NousResearch/hermes-agent>. Cross-referencing against our code surfaced three silently-broken channels, an obsolete backlog item, and a completely wrong Phase 7 T7.4 design.

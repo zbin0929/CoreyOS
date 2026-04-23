@@ -1,108 +1,124 @@
 # Phase 7 · Agent Expansion
 
-**Goal**: Build on the Phase 6 orchestration plane with three capability expansions that deepen Corey's differentiation without reinventing upstream frameworks. Visual DAG editor (adapts LangGraph), skill-from-conversation distillation, long-term memory (vector DB + RAG), and openclaw integration.
+**Goal**: Surface three Hermes-native capabilities (MCP, memory, skills hub) through Corey-specific GUIs, plus one additive feature (skill-from-conversation distillation). Post-product-audit this phase is mostly **GUI wrappers over features Hermes already ships**, not parallel engines.
 
-**Est.**: 3–4 weeks solo.
+**Est.**: ~1.5 weeks solo (post-audit, see `docs/10-product-audit-2026-04-23.md`). Was 3–4 weeks before T7.1 LangGraph adapter was replaced with MCP manager and T7.3 qdrant was replaced with `MEMORY.md` editor.
 
-**Depends on**: Phase 6 complete (multi-instance, orchestrator adapter, feedback loop).
+**Depends on**: Phase 6 complete (multi-instance Hermes, feedback loop, channels fixed, Scheduler wrapped).
 
 ## Guiding principle
 
-**Adapt rather than build.** The original brainstorm proposed building our own task-DAG framework from scratch (item 5.1). Phase 7 explicitly rejects that — LangGraph / CrewAI / AutoGen have funded teams and 2+ years of production use. We wrap one of them as an `AgentAdapter`, letting Corey's UI drive a DAG runtime we don't own. Same logic applies to memory (chroma / qdrant) and conversation-to-skill distillation (reuse the chat IPC, not a new pipeline).
+**Wrap Hermes, don't duplicate it.** Phase 7 reads upstream docs first, codes second. Per `docs/10-product-audit-2026-04-23.md`:
+- LangGraph (planned as its own adapter) → replaced by **MCP server manager UI** since Hermes supports MCP natively and any LangGraph pipeline can expose itself over MCP.
+- Long-term memory (planned as qdrant + RAG) → replaced by **`MEMORY.md` + `USER.md` + `session_search` GUI** since Hermes already ships all three.
+- Skills hub import (planned as ClawHub client) → replaced by **GUI wrapper around `hermes skills browse/install/audit` CLI** since Hermes already federates 7+ hub sources.
+- Skill-from-conversation → **kept** (Corey-unique: user-initiated distillation button is a UX complement to Hermes' agent-initiated `skill_manage`).
 
 ## Exit criteria
 
-1. A `LangGraphAdapter` ships as a first-class `AgentAdapter`: users can load a `.py` graph definition, see nodes execute in real time, inspect node I/O. No forking of LangGraph itself.
-2. A "Save conversation as Skill" button appears on any session's header; clicking runs a distillation prompt on the conversation history and creates a Skills entry (prompt template + required inputs extracted).
-3. A memory layer with a vector DB (local — qdrant-embedded or similar) captures skill-tagged turns, surfaces them via a `Recall` capability that the orchestrator can call on each new turn.
-4. The openclaw project (pending user clarification — see T7.4) is wired in as an adapter or a skill provider, whichever matches its surface.
+1. **MCP manager UI**: users can list/add/remove/enable MCP servers that Hermes will connect to. Read/write `~/.hermes/` MCP config. No sidecar Python process.
+2. **"Save conversation as Skill" button** in session header: runs a distillation prompt, opens the resulting SKILL.md in the Skills editor pre-filled, writes to `~/.hermes/skills/` on confirm so Hermes picks it up natively.
+3. **Memory page**: a GUI editor for `~/.hermes/MEMORY.md` (agent notes) and `~/.hermes/USER.md` (user profile), plus a search UI on top of Hermes' `session_search`. No local qdrant, no separate embedding pipeline.
+4. **Skills import**: Skills page grows a "Browse / Install" tab wrapping `hermes skills` CLI — search across official / skills-sh / github / clawhub / lobehub / claude-marketplace / well-known sources; inspect; install with security scan prompt. Output lands in `~/.hermes/skills/` and refreshes Corey's Skills list.
 
 ## Task breakdown
 
-### T7.1 — LangGraph adapter · ~6 days
+### T7.1 — MCP server manager UI · ~3 days (replaced LangGraph adapter 2026-04-23 pm)
 
-- **Why not CrewAI/AutoGen**: LangGraph has the cleanest programmatic graph-as-Python-code surface; AutoGen is more "agent-first-conversation", CrewAI less mature. Phase 7 picks LangGraph but the adapter trait leaves room to add the others later.
-- **Approach**: ship a sidecar Python process (`langgraph-bridge.py`) launched by Rust via `tokio::process::Command`. Rust ↔ Python over stdin/stdout with JSON-line protocol. Same pattern as `AiderAdapter` uses for its CLI bridge (see `src-tauri/src/adapters/aider/`).
-- **User-authored graphs**: graphs live in `~/.corey/graphs/<name>.py`, same directory convention as Skills. On adapter start, each file is a registered "graph" the user can select in a new Chat sub-picker.
-- **Streaming**: LangGraph's `astream_events` emits per-node events; the bridge forwards them as `ChatStreamEvent::ToolProgress` (already exists) so the existing Trajectory UI renders the execution live.
-- **Security**: Python process runs under the instance's `SandboxScope` (T6.5). Required Python deps pinned in a `requirements.txt` co-located with the bridge; bridge prompts the user for a one-time `pip install` on first launch.
-- **Tests**: Rust adapter conformance suite passes with a mock bridge. E2E uses a canned 2-node graph.
+**Re-scoped from ~6 days LangGraph adapter to ~3 days MCP manager.** Hermes natively supports MCP servers (see upstream `docs/user-guide/features/mcp`). LangGraph, CrewAI, AutoGen can all be invoked via MCP. Building a parallel sidecar-Python adapter for one specific framework is worse than letting the user wire any MCP server they want.
 
-### T7.2 — Skill-from-conversation distillation · ~3 days
+- **Read Hermes' MCP config location** (likely `~/.hermes/mcp.json` or a section in `config.yaml` — confirm by reading upstream docs before coding).
+- **UI surface**: new Settings › MCP page listing configured MCP servers with columns `name`, `command/url`, `enabled`, `last reachable`, `tool count`.
+- **CRUD**: add / edit / remove / enable-toggle. Form takes MCP standard JSON (stdio command or URL transport).
+- **Reachability probe**: a "Test" button attempts to connect and lists tools; cached for the list view.
+- **Hermes restart nudge**: MCP changes typically need gateway restart — reuse the existing `hermes_gateway_restart` prompt from Phase 3.
+- **Chat-side surfacing**: no change needed. When Hermes invokes an MCP tool, it already emits a `ToolProgress` event; `TrajectoryView` already renders it.
+- **Tests**: 2 Rust (parse Hermes MCP config, round-trip upsert) + 1 Playwright (add a local MCP echo server, toggle enable, restart prompt appears).
+- **Explicitly NOT doing**: executing MCP servers ourselves. Hermes runs them. We just let the user configure which ones.
+
+### T7.2 — Skill-from-conversation distillation · ~3 days (kept)
+
+This is Phase 7's one purely additive feature — Hermes has agent-initiated `skill_manage` but no user-initiated "save this chat as skill" button.
 
 - **Trigger**: new button in session header — "Save as Skill". Available on sessions with ≥ 2 turns.
 - **Pipeline** (all client-side, no new Rust IPC):
   1. Collect session messages.
   2. Ship them to the active adapter via `chat_once` with a system prompt:
-     > "Analyse the following conversation. Extract a reusable skill. Output strict JSON: `{name, description, prompt_template, required_inputs: [{name, description, example}], tags: [...]}`."
-  3. Open the Skills editor pre-filled with the returned JSON.
-  4. User confirms → `skill_upsert` writes to DB.
-- **Handles existing Skills pattern** from Phase 4 — no schema changes, just a new UI entry point.
-- **Graceful degradation**: if the adapter returns unparseable JSON, fall back to opening the Skills editor with the conversation as free-text so the user can trim manually.
+     > "Analyse the following conversation. Extract a reusable skill. Output a SKILL.md file with frontmatter (`name`, `description`, `triggers`, `required_inputs`) and a body describing the skill."
+  3. Open the Skills editor pre-filled with the returned SKILL.md.
+  4. User confirms → write to `~/.hermes/skills/<slug>/SKILL.md` so Hermes picks it up natively (**no longer writes to Corey's own SQLite**; schema alignment with T7.4 / Skills surface refactor).
+- **Graceful degradation**: if the adapter returns unparseable output, fall back to opening the Skills editor with the conversation as free-text so the user can trim manually.
 - **i18n**: 6 new keys.
 
-### T7.3 — Long-term memory (vector DB + RAG) · ~6 days
+### T7.3 — Memory page (GUI over Hermes' native memory) · ~3 days (re-scoped 2026-04-23 pm)
 
-- **Storage**: bundled `qdrant` embedded (single binary, Rust-native, no system deps). Lives under `<data_dir>/qdrant/`.
-- **Ingestion**: every assistant turn that gets 👍 (from T6.1) OR every turn the user explicitly marks "save to memory" is chunked, embedded (via the active adapter's `/v1/embeddings` endpoint), and written to qdrant with metadata `{session_id, adapter_id, model, tags, created_at}`.
-- **Retrieval capability**: a new trait method `AgentAdapter::recall(query, k) -> Vec<MemoryHit>`. Default impl returns empty. The orchestrator (T6.3) gets a policy knob "inject top-3 recalls into the manager prompt".
-- **UI**:
-  - New Memory page lists recent entries with source session / adapter / score.
-  - Delete / pin / export-as-JSON controls.
-  - Search bar hits `/qdrant search` directly.
-- **Privacy**: all vectors stay local. No IPC leaks the raw query to a non-adapter endpoint.
-- **Migrations**: schema v8 adds `memory_entries` table as a mirror of the qdrant metadata (for fast Analytics without hitting qdrant).
-- **Tests**: Rust — round-trip embed → search → retrieve with a mocked embed endpoint. Playwright — 👍 a turn, visit Memory, see the entry; orchestrator run with recall on vs off, different outputs.
+**Re-scoped from ~6 days qdrant + RAG to ~3 days GUI over Hermes' existing stack.** Hermes already ships:
+- `~/.hermes/MEMORY.md` — agent's personal notes, appears in every system prompt.
+- `~/.hermes/USER.md` — user profile, same surface.
+- `session_search` tool — FTS5 over past sessions.
+- Optional Honcho dialectic modeling for deeper user models.
 
-### T7.4 — Skills ecosystem integration (was: OpenClaw) · ~3 days
+We don't need our own vector DB. We need a clean GUI over these files.
 
-**Major re-scope on 2026-04-23 pm** after reading `docs/hermes-reality-check-2026-04-23.md`. Summary: OpenClaw is being **merged into Hermes Agent** (`hermes claw migrate` in the upstream CLI), not a peer competitor. The previous "OpenClawAdapter" + "ClawHub importer" split is obsolete.
+- **Memory page layout** (left sidebar + right editor):
+  - Two tabs: `MEMORY.md` (agent) / `USER.md` (user profile).
+  - Markdown editor (reuse the CodeMirror 6 setup from Skills T4.2b).
+  - Capacity meter showing size vs Hermes' configured cap.
+  - "Add entry" button that appends a timestamped bullet.
+- **Session search panel** (bottom of same page or its own subtab):
+  - Search input hits Hermes' session_search via the chat API or via direct DB access if Hermes exposes one (TBD during implementation).
+  - Results list with session id, timestamp, snippet, link to full session.
+- **No `AgentAdapter::recall` trait addition.** Hermes handles injection itself once MEMORY.md is written.
+- **Tests**: 2 Rust (read/write MEMORY.md with lockfile, capacity check) + 1 Playwright (edit a memory entry, verify file on disk, run session_search).
 
-#### T7.4a — `OpenClawAdapter` — **DROPPED**
+### T7.4 — Skills page refactor: wrap `hermes skills` CLI · ~3 days (final scope 2026-04-23 pm)
 
-No parallel control plane to bridge to. The migration path lives inside the Hermes CLI itself. Corey has nothing to add.
+Our Phase 4 Skills editor stores skills in a local SQLite table. Hermes' native `hermes skills` CLI supports:
 
-#### T7.4b — Skills importer (re-scoped) · ~3 days
+- `hermes skills browse` (list from official, skills-sh, well-known, github, clawhub, lobehub, claude-marketplace)
+- `hermes skills search <query> --source <hub>`
+- `hermes skills inspect <slug>` (preview before install)
+- `hermes skills install <slug>` (with security scan)
+- `hermes skills list --source hub` (list installed)
+- `hermes skills check` / `update` (upstream updates)
+- `hermes skills audit` (re-scan for security)
+- `hermes skills publish` (push to GitHub)
+- `hermes skills reset` (un-stick a bundled skill)
 
-Hermes uses <https://agentskills.io> as its open skill standard and migrates OpenClaw skills into `~/.hermes/skills/openclaw-imports/`. The importer targets these **instead of ClawHub**:
+T7.4 refactors Corey's Skills page to **wrap this CLI** rather than duplicate it.
 
-- **Local import**: Skills page "Import" button scans `~/.hermes/skills/**/SKILL.md` (including the `openclaw-imports/` subtree) and surfaces discovered skills with a preview + select-to-import flow. Translates the SKILL.md frontmatter to our `SkillRow` shape.
-- **Remote import (agentskills.io)**: a second tab on the importer dialog hits the `agentskills.io` registry for community skills. Search → preview → import.
-- **Deduplication**: same skill name already in Corey's DB → show a merge/replace/skip prompt.
-- **Licensing**: preserved and displayed; no automatic batch-import.
-- **Tests**: Rust parser round-trip on sample SKILL.md files. Playwright — scan local skills, import one, verify it appears.
+- **File storage change**: user-authored skills now write to `~/.hermes/skills/<slug>/SKILL.md` instead of our SQLite `skills` table. The local SQLite mirror remains as a **cache** for fast listing only; source of truth is the filesystem.
+- **New "Browse" tab** in the Skills page: wraps `hermes skills browse` output with a search bar (per `--source`), inspect preview, install button (triggers a security-scan confirmation dialog).
+- **New "Installed from hub" section**: lists hub-installed skills separately from user-authored ones. Shows ⚠️ if `hermes skills check` reports an upstream update.
+- **Backend**: Rust calls out to `hermes skills --json` (or equivalent structured output flag — verify during implementation). No re-implementing the hub protocols.
+- **Tests**: 3 Rust (parse SKILL.md frontmatter, listing, install-error path) + 1 Playwright (browse, install a test skill from a mock hub).
 
-#### Why this re-scope
+## Test totals target (post-audit)
 
-The original T7.4 was premised on Corey being the console for multiple **agent ecosystems**. Reality is more modest: Corey is the console for **Hermes**, and Hermes itself absorbs adjacent projects. The skills importer still delivers value — it lets users pull in OpenClaw/community skills — but the adapter-level integration fantasy is gone.
-
-## Test totals target
-
-- Rust unit: **+10** (4 LangGraph bridge, 3 memory ingest/retrieve, 3 SKILL.md parser + agentskills.io client). Down from +14 after OpenClawAdapter dropped.
-- Playwright: **+5** (LangGraph run, skill-from-chat, memory recall, memory page, skills importer). Down from +6.
+- Rust unit: **+10** (2 MCP manager, 2 skill-from-chat, 2 memory file editor, 3 skills CLI wrapper, 1 migration)
+- Playwright: **+4** (MCP add/enable, save-as-skill round-trip, memory editor, skills browse+install)
 
 ## Deltas vs the original brainstorm
 
 | Brainstorm item | Landed in Phase 7 as |
 |-----------------|----------------------|
-| 1️⃣ openclaw 集成 | T7.4 re-scoped to **SKILL.md + agentskills.io importer** after learning OpenClaw merged into Hermes. OpenClawAdapter dropped. |
-| 4.1 技能学习 | T7.2 (conversation distillation; builds on Phase 4 Skills page) |
-| 4.4 知识沉淀 | T7.3 (memory layer, feeds recall) |
-| 5.1 任务 DAG | T7.1 (**LangGraph adapter, not self-built**) |
+| 1️⃣ openclaw 集成 | **DROPPED** — merged into Hermes Agent upstream. |
+| 4.1 技能学习 | T7.2 (user-initiated distillation; complements Hermes' agent-initiated `skill_manage`). |
+| 4.4 知识沉淀 | T7.3 (GUI over Hermes' native `MEMORY.md` + `USER.md` + `session_search` — no local qdrant). |
+| 5.1 任务 DAG | T7.1 (**MCP server manager UI**, not a LangGraph-specific adapter). |
+| Skills ecosystem import | T7.4 (wrap `hermes skills` CLI; 7+ hub sources come free). |
 
 ## Explicitly deferred out of Phase 7
 
-- **Visual drag-and-drop DAG editor**: T7.1 ships read-only visualisation only. A full graph editor (React Flow or similar) is a separate effort worth ~2 weeks and depends on real user need.
-- **Cross-adapter memory**: memory entries today carry `adapter_id`; actually recalling across adapters needs a normalisation layer for embedding spaces. Out of scope.
-- **Automatic skill-suggestion cards in chat**: symmetric with `docs/09-conversational-scheduler.md` Stage 2; same trade-offs. Follow-up.
+- **Visual drag-and-drop DAG editor**: Hermes doesn't need one; MCP servers are configured via JSON. React Flow editor remains follow-up only if a real user signals demand.
+- **Local qdrant memory**: dropped permanently. Hermes' memory stack is the source of truth.
+- **Automatic skill-suggestion cards in chat**: symmetric with the dropped T6.6. Hermes' `skill_manage` tool already handles the agent-initiated half.
 
 ## Demo script (end-of-phase)
 
-1. Create `~/.corey/graphs/research.py` with a 3-node LangGraph (search → summarise → critique). Restart. See `research` in the graph picker.
-2. Run it with input "latest papers on sparse attention". Watch the Trajectory pane animate per-node.
-3. 👍 the final summary. Open the Memory page. See the entry.
-4. Start a new session with the orchestrator adapter, memory-recall enabled. Ask "what were my notes on sparse attention?". The orchestrator injects the memory entry into the manager's prompt; the reply cites it.
-5. On an unrelated session, click "Save as Skill" → review → save. Verify the Skills page now has a new entry with extracted inputs.
-6. In Settings › Agent, enable the OpenClaw adapter (auto-suggested if `~/.openclaw/` exists). Open AgentSwitcher, see OpenClaw listed alongside Hermes / Claude Code / Aider.
-7. Switch to OpenClaw, send a message. Note the reply carries an `openclaw` badge in the unified inbox.
-8. On the Skills page, click "Import from ClawHub", search "meeting summary", preview, import. Verify the skill lands in Corey's Skills list with its upstream license displayed.
+1. Open Settings › MCP. Add a local MCP server (e.g. the official filesystem MCP). Toggle enable. Restart the gateway when prompted.
+2. In chat, ask "list the files in my Downloads folder". Watch Hermes invoke the MCP filesystem tool and render progress in the Trajectory pane.
+3. Mid-session click "Save as Skill". Review the pre-filled SKILL.md. Save. Verify a new file at `~/.hermes/skills/<slug>/SKILL.md` and that the Skills page lists it.
+4. Open the Memory page. Add a bullet "I prefer TypeScript over Python" to USER.md. Save. Start a new session, ask "write me a quick script". Observe that the assistant picks TypeScript without being told.
+5. On the Skills page, open the Browse tab. Search "1password" under the `official` source. Inspect the preview. Install it (security-scan prompt appears). Verify it lands in the Installed-from-hub list.
+6. Run a session_search for "sparse attention" from the Memory page; click a result to open the full session.
