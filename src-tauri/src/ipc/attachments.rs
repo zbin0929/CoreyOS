@@ -16,8 +16,12 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use tauri::State;
+
 use crate::attachments::{self, GcReport, StagedAttachment};
 use crate::error::{IpcError, IpcResult};
+use crate::sandbox::{AccessOp, DEFAULT_SCOPE_ID};
+use crate::state::AppState;
 
 fn map_anyhow(e: anyhow::Error) -> IpcError {
     IpcError::Internal {
@@ -43,12 +47,41 @@ pub async fn attachment_stage_blob(
         .map_err(map_anyhow)
 }
 
+/// T6.5 — stage a user-picked file under the given sandbox scope. The
+/// sandbox check runs BEFORE the copy, so a path outside the scope's
+/// roots surfaces as `SandboxConsentRequired` (UI pops the consent
+/// modal) without ever reading the bytes.
+///
+/// `sandbox_scope_id` is optional for back-compat: `None`, empty, or
+/// `"default"` all resolve to the always-present default scope. The
+/// frontend typically passes the `sandbox_scope_id` of the active
+/// Hermes instance, looked up once at send-time from the agent store.
+///
+/// The copy itself (`attachments::stage_path`) stays synchronous-plus-
+/// blocking-task so the Tokio runtime doesn't stall on large files.
 #[tauri::command]
 pub async fn attachment_stage_path(
+    state: State<'_, AppState>,
     path: String,
     mime_hint: Option<String>,
+    #[allow(non_snake_case)]
+    sandbox_scope_id: Option<String>,
 ) -> IpcResult<StagedAttachment> {
     let p = PathBuf::from(path);
+
+    // Sandbox gate. Empty string / "default" / None all route to the
+    // default scope. An unknown scope id surfaces as Internal here —
+    // the UI re-fetches the scope list on any save error so stale
+    // caches self-heal on the next render.
+    let scope_id = match sandbox_scope_id {
+        Some(ref s) if !s.is_empty() => s.clone(),
+        _ => DEFAULT_SCOPE_ID.to_string(),
+    };
+    state
+        .authority
+        .check_scoped(&scope_id, &p, AccessOp::Read)
+        .map_err(IpcError::from)?;
+
     tokio::task::spawn_blocking(move || attachments::stage_path(&p, mime_hint.as_deref()))
         .await
         .map_err(map_join)?

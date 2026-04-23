@@ -353,10 +353,14 @@ export function attachmentStageBlob(args: {
 
 /** Stage an absolute on-disk path the user picked from a native file
  *  dialog. `mimeHint` is optional; if omitted the backend falls back to
- *  a tiny extension table. */
+ *  a tiny extension table. `sandboxScopeId` (T6.5) routes the sandbox
+ *  check through the given scope — `undefined`, empty string, or
+ *  `"default"` all resolve to the default scope. Paths outside the
+ *  scope's roots surface as `SandboxConsentRequired` before the copy. */
 export function attachmentStagePath(args: {
   path: string;
   mimeHint?: string;
+  sandboxScopeId?: string | null;
 }): Promise<StagedAttachment> {
   return invoke<StagedAttachment>('attachment_stage_path', args);
 }

@@ -758,6 +758,25 @@ export const tauriMockInitScript = /* js */ `
         // once mis-parsed when this whole file is injected as a single
         // template-literal blob.
         const rawPath = args.path || '';
+        // T6.5 sandbox gate. An explicit non-default scope id only allows
+        // paths that fall under one of that scope's roots. 'default' /
+        // empty / missing resolves to the default scope which allows
+        // anything in the mock (tests that need default-scope denials
+        // push roots into the default scope directly).
+        const scopeId = args.sandboxScopeId || 'default';
+        const scope = state.sandboxScopes.find((s) => s.id === scopeId);
+        if (!scope) {
+          throw { kind: 'internal', message: 'unknown sandbox scope: ' + scopeId };
+        }
+        if (scopeId !== 'default' && scope.roots.length > 0) {
+          const allowed = scope.roots.some((r) => rawPath.indexOf(r.path) === 0);
+          if (!allowed) {
+            throw { kind: 'sandbox_consent_required', path: rawPath };
+          }
+        }
+        if (scopeId !== 'default' && scope.roots.length === 0) {
+          throw { kind: 'sandbox_consent_required', path: rawPath };
+        }
         const name = rawPath.split('\\\\').join('/').split('/').pop() || 'unknown';
         const ext = name.split('.').pop() || 'bin';
         return {
