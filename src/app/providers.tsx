@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@/lib/i18n';
+import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useUIStore } from '@/stores/ui';
 import { useAppStatusStore } from '@/stores/appStatus';
@@ -34,6 +35,14 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
     useAppStatusStore.getState().startBackgroundRefresh();
     return () => useAppStatusStore.getState().stopBackgroundRefresh();
+  }, []);
+
+  // T5.5a — boot the agent registry poll so the Topbar AgentSwitcher has
+  // adapters to render by the time the user first looks at it. Same
+  // 30s cadence as the gateway probe; cheap and batched in Rust.
+  useEffect(() => {
+    useAgentsStore.getState().startBackgroundRefresh();
+    return () => useAgentsStore.getState().stopBackgroundRefresh();
   }, []);
 
   // Apply theme on mount

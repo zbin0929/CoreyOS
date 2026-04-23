@@ -944,6 +944,38 @@ export interface HealthProbe {
   body: string;
 }
 
+// ───────────────────────── Agent registry (T5.5a) ─────────────────────────
+
+/** Per-adapter health snapshot. Mirrors Rust `adapters::Health`. */
+export interface AdapterHealth {
+  ok: boolean;
+  adapter_id: string;
+  version: string | null;
+  gateway_url: string | null;
+  latency_ms: number | null;
+  message: string | null;
+  /** T5.1 — most recent probe/invocation failure; `null` when clean. */
+  last_error?: string | null;
+  /** T5.1 — ms since adapter instance was constructed. */
+  uptime_ms?: number | null;
+}
+
+/** One row in the agent switcher. Mirrors Rust `ipc::agents::AdapterListEntry`. */
+export interface AdapterListEntry {
+  id: string;
+  name: string;
+  is_default: boolean;
+  /** `null` when the probe itself failed; see `health_error`. */
+  health: AdapterHealth | null;
+  /** Only populated when `health` is `null`. */
+  health_error?: string | null;
+}
+
+/** List every registered adapter + its live health snapshot in one round trip. */
+export function adapterList(): Promise<AdapterListEntry[]> {
+  return invoke<AdapterListEntry[]>('adapter_list');
+}
+
 /** Current in-memory gateway config (synced with `~/.../gateway.json`). */
 export function configGet(): Promise<GatewayConfigDto> {
   return invoke<GatewayConfigDto>('config_get');

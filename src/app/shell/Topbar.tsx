@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { Sun, Moon, Search, CircleDot } from 'lucide-react';
+import { AgentSwitcher } from '@/app/shell/AgentSwitcher';
 import { Icon } from '@/components/ui/icon';
 import { Kbd } from '@/components/ui/kbd';
 import { usePaletteStore } from '@/stores/palette';
@@ -65,6 +66,11 @@ export function Topbar() {
         <Icon icon={CircleDot} size="xs" className={gateway === 'online' ? 'animate-pulse' : undefined} />
         <span>{gatewayLabel(gateway, gatewayLatencyMs, t)}</span>
       </button>
+
+      {/* T5.5a — registered agents. Sits between the gateway pill and the
+          right-hand palette/theme cluster so it reads left-to-right as
+          "gateway → agent → navigation". */}
+      <AgentSwitcher />
 
       <div className="flex-1" />
 

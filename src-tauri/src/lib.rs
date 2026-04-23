@@ -65,6 +65,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            ipc::agents::adapter_list,
             ipc::health::health_check,
             ipc::session::session_list,
             ipc::session::session_get,

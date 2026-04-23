@@ -118,6 +118,24 @@ Split into **T5.2a — mock-first** (shipped 2026-04-23) and
 
 ### T5.5 — Unified inbox + agent switcher (1 day)
 
+Split into **T5.5a — read-only switcher** (shipped 2026-04-23) and
+**T5.5b — active selection, capability-gated nav, unified inbox**
+(pending).
+
+#### T5.5a · **Shipped** (2026-04-23)
+
+- `src-tauri/src/ipc/agents.rs :: adapter_list` — fans out
+  `health()` per adapter in parallel; returns
+  `[{ info, health, health_error? }]`. Probe failures don't fail
+  the IPC so the switcher can show "registered but unreachable".
+- `src/stores/agents.ts` — Zustand slice + 30s background poll,
+  booted once from `<Providers>`.
+- `src/app/shell/AgentSwitcher.tsx` — Topbar pill + dropdown
+  with health dots, version, uptime, latency, and error strips.
+  Mounted between gateway pill and the right-hand nav cluster.
+
+#### T5.5b — pending
+
 - `src/app/shell/Topbar.tsx` grows an `AgentSwitcher.tsx` combo (All agents · Hermes · Claude Code · Aider).
 - Sessions panel: "All agents" mode merges lists; each session shows a small adapter badge.
 - Route-level guards hide nav items based on `capabilities` of the current context (All-agents context = union of hidden items).

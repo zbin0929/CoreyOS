@@ -6,6 +6,58 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T5.5a · Topbar AgentSwitcher (read-only)
+
+First visible multi-adapter surface. With two adapters registered
+(Hermes + Claude Code mock), the Topbar now lists them side-by-side
+with live health dots and uptime. Selection / routing / capability-
+gated nav land in T5.5b once the read-only switcher proves its shape.
+
+### Shipped
+
+- **`adapter_list` IPC** (`src-tauri/src/ipc/agents.rs`) —
+  fans out per-adapter `health()` probes in parallel via
+  `tokio::spawn`, merges results with `AdapterRegistry::all()`,
+  and returns one row per adapter (`AdapterListEntry { info,
+  health, health_error? }`). Individual probe failures don't
+  fail the IPC — the row lands with `health: null` +
+  `health_error` so the switcher can render "registered but
+  unreachable" distinctly from "not registered at all". One test:
+  `adapter_list_shape_matches_expectations` exercises the
+  fan-out + default-flag round-trip.
+- **`useAgentsStore`** (`src/stores/agents.ts`) — Zustand slice
+  that owns `{ adapters, error, loading }`. `startBackgroundRefresh`
+  runs an immediate probe + 30s poll, idempotent for HMR
+  (mirrors `useAppStatusStore`). Booted once from
+  `<Providers>` so every consumer reads the same cached list.
+- **`<AgentSwitcher />`** (`src/app/shell/AgentSwitcher.tsx`) —
+  Topbar pill showing the default adapter's name, adapter count,
+  and a health dot (green/red/pulsing-grey). Dropdown rows show:
+  name + id + `default` badge + version + uptime + latency, plus
+  amber `last_error` / red `health_error` strips when present.
+  Mounted between the gateway pill and the right-hand
+  palette/theme cluster so the topbar reads
+  "gateway → agent → navigation".
+
+### Tests
+
+- **Rust**: 123 → **124** (+1 for the IPC fan-out shape).
+- **TS**: typecheck + lint clean; no new e2e specs yet (T5.5b
+  will add one that asserts switcher lists both adapters).
+
+### Deferred to T5.5b
+
+- **Active adapter selection** — store currently surfaces the
+  registry's default; the switcher is read-only. Making it
+  clickable requires a store slice for the "user-selected
+  adapter" plus routing the chat send path through it.
+- **Capability-gated nav** — hide Channels/Skills/Scheduler when
+  the active adapter doesn't claim the capability.
+- **Unified inbox** — merge sessions from every enabled adapter
+  into the chat sidebar with per-row adapter badges.
+
+---
+
 ## 2026-04-23 — T5.2a · Claude Code mock adapter + conformance suite
 
 Lands a second first-class `AgentAdapter` alongside Hermes, plus the
