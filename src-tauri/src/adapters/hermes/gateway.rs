@@ -64,6 +64,29 @@ impl HermesGateway {
         &self.base_url
     }
 
+    /// Build an OpenAI-compatible endpoint URL relative to `base_url`.
+    ///
+    /// Most vendors publish under `.../v1`; a few (智谱 GLM at `/api/paas/v4`,
+    /// tencent 混元 variants, …) live under a different `/v<N>` prefix. If
+    /// the stored `base_url` already ends in `/v<digits>`, we just append
+    /// `{suffix}` to it. Otherwise we keep the pre-existing behaviour of
+    /// injecting `/v1/` so bare hosts like `http://127.0.0.1:8642` still
+    /// resolve to the canonical `/v1/...` path.
+    ///
+    /// `suffix` is the leaf path WITHOUT a leading slash,
+    /// e.g. `"chat/completions"` or `"models"`.
+    fn api_url(&self, suffix: &str) -> String {
+        if let Some(last) = self.base_url.rsplit('/').next() {
+            if last.starts_with('v')
+                && last.len() >= 2
+                && last.as_bytes()[1].is_ascii_digit()
+            {
+                return format!("{}/{suffix}", self.base_url);
+            }
+        }
+        format!("{}/v1/{suffix}", self.base_url)
+    }
+
     /// `GET /health` — returns `(ok, latency_ms, raw_body)`.
     pub async fn health(&self) -> AdapterResult<HealthProbe> {
         let started = Instant::now();
@@ -94,7 +117,7 @@ impl HermesGateway {
     /// response is sparse (just `id` + `owned_by`); the adapter enriches it into
     /// `ModelInfo` by synthesizing missing fields.
     pub async fn list_models(&self) -> AdapterResult<Vec<ModelListEntry>> {
-        let mut req = self.http.get(format!("{}/v1/models", self.base_url));
+        let mut req = self.http.get(self.api_url("models"));
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
         }
@@ -139,7 +162,7 @@ impl HermesGateway {
 
         let mut req = self
             .http
-            .post(format!("{}/v1/chat/completions", self.base_url))
+            .post(self.api_url("chat/completions"))
             .json(&body);
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
@@ -394,7 +417,7 @@ impl HermesGateway {
         for attempt in 0..STREAM_CONNECT_ATTEMPTS {
             let mut req = self
                 .http
-                .post(format!("{}/v1/chat/completions", self.base_url))
+                .post(self.api_url("chat/completions"))
                 // Override the client-wide 120 s timeout — reasoning
                 // models can idle for minutes before emitting a token,
                 // and we don't want reqwest to reset the TCP connection
@@ -638,6 +661,58 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    /// `api_url` is the single source of truth for how we derive the
+    /// OpenAI-compatible endpoint from an LLM Profile's `base_url`. It
+    /// has three shapes to keep straight:
+    ///   - Bare host (`.../8642`) → inject `/v1/`
+    ///   - Already `/v1` → append directly
+    ///   - Non-v1 versioned (`/v4`, `/v3beta`, …) → append directly
+    ///     (bug fix for 智谱 GLM which lives at `/api/paas/v4`; pre-fix
+    ///     builds produced `/v4/v1/chat/completions` → 404)
+    #[test]
+    fn api_url_handles_bare_v1_and_non_v1_bases() {
+        let bare = HermesGateway::new("http://127.0.0.1:8642", None).unwrap();
+        assert_eq!(
+            bare.api_url("chat/completions"),
+            "http://127.0.0.1:8642/v1/chat/completions"
+        );
+        assert_eq!(bare.api_url("models"), "http://127.0.0.1:8642/v1/models");
+
+        let v1 = HermesGateway::new("https://api.openai.com/v1", None).unwrap();
+        assert_eq!(
+            v1.api_url("chat/completions"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+
+        // Regression: 智谱 GLM. Previously the client appended
+        // /v1/chat/completions regardless, producing /v4/v1/... → 404.
+        let glm = HermesGateway::new(
+            "https://open.bigmodel.cn/api/paas/v4",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            glm.api_url("chat/completions"),
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        );
+        assert_eq!(
+            glm.api_url("models"),
+            "https://open.bigmodel.cn/api/paas/v4/models"
+        );
+
+        // Trailing slashes are stripped at construction so we never
+        // accidentally emit `.../v4//chat/completions`.
+        let glm_slash = HermesGateway::new(
+            "https://open.bigmodel.cn/api/paas/v4/",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            glm_slash.api_url("chat/completions"),
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        );
+    }
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpListener;
     use tokio::sync::mpsc;
