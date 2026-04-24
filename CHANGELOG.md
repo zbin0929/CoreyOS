@@ -6,6 +6,148 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-24 (night) — T8 · Multi-LLM + multi-Agent architecture
+
+Post-v0.1.0 expansion beyond the single-model / single-Hermes mental
+model Phases 0–7 were built around. Same machine can now run multiple
+Hermes instances side-by-side, each backed by a named LLM profile the
+user defines once and reuses across agents. Wizard-driven onboarding
+for non-engineers, with 10 pre-built provider templates spanning
+OpenAI + Anthropic + Gemini + 6 major 国产 LLMs.
+
+### Shipped
+
+**Rust: `llm_profiles` module + CRUD IPC.** New persisted type
+`LlmProfile { id, label, provider, base_url, model, api_key_env }`
+stored in `<config_dir>/llm_profiles.json`. Four IPC commands
+(`llm_profile_list`, `llm_profile_upsert`, `llm_profile_delete`,
+`llm_profile_get`) mirror the `HermesInstance` surface.
+`HermesInstance` gains an optional `llm_profile_id` foreign key — a
+row can either own its fields inline (legacy / one-off) or delegate to
+a profile (edit once, every linked agent inherits).
+
+**`/agents` as a top-level route.** `HermesInstancesSection` promoted
+out of `/settings` into its own page. Sidebar link + `⌘4` shortcut.
+Settings keeps a stub note pointing users to the new location. All
+related Playwright tests (`agent-wizard`, `sandbox-scopes`) migrated
+to navigate there.
+
+**LLM profiles page (`/models`).** Responsive card grid (1/2/3
+columns) above the legacy Hermes-gateway-default-model config form
+(now collapsed under a `<details>` disclosure — it was the single
+biggest source of "clutter" complaints). Click a card → full-screen
+focused edit view. Provider field is our themed `<Combobox>`
+(freeSolo, auto-fills base_url + api_key_env + suggested model on
+pick). Model field is the same Combobox with the provider template's
+model shortlist. ID auto-slugs from label on create; manual override
+always wins. Two-click delete with display-name label — replaces
+`window.confirm` which no-ops in the Tauri WebView on some platforms.
+
+**Agent wizard redesign.** Step 1 surfaces existing LLM profiles as
+golden cards *above* the provider template grid when any profile
+exists. Clicking a profile jumps straight to a "just name it" Step 2
+with the profile pre-attached — no re-entering the API key for a
+second agent on the same LLM. New provider = the original template
+grid, now one screen lower. Every native `<select>` replaced with
+`<Select>` / `<Combobox>`.
+
+**6 国产 LLM provider templates.** All vendor-official OpenAI-
+compatible endpoints, one-click-in-the-wizard setup:
+
+| Template | Base URL | Env Var |
+|---|---|---|
+| 通义千问 (Qwen / 阿里百炼) | `dashscope.aliyuncs.com/compatible-mode/v1` | `DASHSCOPE_API_KEY` |
+| 智谱 GLM | `open.bigmodel.cn/api/paas/v4` | `ZHIPUAI_API_KEY` |
+| 月之暗面 Kimi | `api.moonshot.cn/v1` | `MOONSHOT_API_KEY` |
+| 零一万物 Yi | `api.lingyiwanwu.com/v1` | `YI_API_KEY` |
+| 百川 Baichuan | `api.baichuan-ai.com/v1` | `BAICHUAN_API_KEY` |
+| 腾讯混元 | `api.hunyuan.cloud.tencent.com/v1` | `HUNYUAN_API_KEY` |
+
+All ship `setupUrl` pointing at the vendor's API-key page so the "↗"
+link in the wizard drops users directly at the console.
+
+**Test button fix.** `hermes_instance_test` used to call the gateway's
+`/health` endpoint, which is Hermes-specific. Upstream providers
+(DeepSeek, OpenAI, …) 401 / 404 for unknown paths — DeepSeek's
+governor emits a misleading `Authentication Fails` string that made
+the button lie about valid credentials. Switched to `GET /v1/models`
+via the existing probe module; body now previews the first few model
+ids on success so users can sanity-check the endpoint actually speaks
+OpenAI.
+
+**i18n sweep.** Localized the `/models` legacy form ("Discover",
+"Reload", "Save to config.yaml", restart banner), SessionsPanel
+("Sessions", "New", aria-labels), and AgentWizard profile-summary env
+chip. All new keys exist in both `en.json` and `zh.json`.
+
+### Fixed
+
+- `window.confirm` no longer gates destructive actions anywhere —
+  replaced with a two-click armed-then-fire pattern (3s auto-disarm,
+  `variant="danger"` re-skin on arm, display-name label).
+- Provider switching in the LLM form / Agent wizard now **overwrites**
+  base_url + api_key_env + suggested model. Old "only fill if empty"
+  behaviour silently kept stale URLs when users switched providers.
+- All native `<select>` elements across `/settings`, `/models`,
+  `/agents`, and `AgentWizard` replaced with the themed `<Select>`
+  (strict) or `<Combobox>` (freeSolo) components. macOS native popup
+  chrome no longer leaks through.
+- Drawer title on the focused edit view shows the display name, not
+  the id.
+
+### Deferred
+
+- **字节豆包 (Volcengine Ark)** — OpenAI-compatible in theory, but
+  model ids must be `ep-xxxxx` endpoint references the user creates
+  in the vendor console first. Adding it to the template list
+  without UI accommodation would fail for every first-run user.
+  Needs a bespoke "paste your endpoint id" affordance; not yet
+  scoped.
+- **百度文心 (Qianfan)** — authentication is split between legacy
+  AK/SK pair-auth and newer Bearer; OpenAI-compat mode has edge
+  cases. Needs an adapter-side branch, not a template.
+- **Masonic-style card grid + Drawer edit UX** — user explicitly
+  picked the lightweight card grid + focused full-screen edit over
+  the fancier hover-animated cards with right-side Drawer. Full
+  version stays parked; present impl is fine.
+- **Card-based `AgentWizard.DetailsStep`** — the form inside the
+  wizard's Step 2 is still vertical-stack. Cards there would improve
+  density but the existing layout already reads well.
+
+### Test totals
+
+- Rust: **211 / 211 pass** (+19 since v0.1.0 — mostly
+  `llm_profiles` CRUD + `hermes_instance_test` probe refactor).
+- Playwright: **81 / 81 pass** (+7: 4 T8 specs covering the new
+  wizard flow, plus adjustments to existing `sandbox-scopes` /
+  `logs` / `agents-llms` specs for the new navigation + testids).
+- TSC clean. ESLint clean.
+
+### Commits (this session)
+
+`31ab255` bundled default preset + one-click install CTA ·
+`ed5c767` guided wizard with 4 provider templates + Ollama ·
+`070677d` HermesInstallCard (Home) ·
+`28b60a9` inline wizard id validation + save-error visibility ·
+`1d4d3a2` hermes_instances wizard contract tests ·
+`a8b4d36` Rust llm_profiles module + 4 IPC commands ·
+`eaf0cd4` `/agents` top-level route ·
+`a88fd04` LlmProfilesSection multi-LLM CRUD ·
+`4074f78` wizard links agents to profiles (pick / auto-create) ·
+`7f61cef` 4 T8 Playwright specs + screenshots ·
+`41e1d25` test-button probe `/v1/models`, two-click delete w/ label ·
+`72306ff` provider dropdown + model datalist + auto-slug + legacy form collapsed ·
+`1167384` default-model datalist + styled scope select ·
+`2db2b4a` custom `<Select>`; provider-change overwrites base_url ·
+`7ebe962` `<Combobox>` (freeSolo) for Provider + Model ·
+`7ec8991` wizard Step 1 shows existing profiles first ·
+`2cd3727` remaining native selects in AgentWizard → Select/Combobox ·
+`a4604f6` i18n sweep: /models legacy form + SessionsPanel + env chip ·
+`5ef8da8` responsive card grid + focused full-screen edit view ·
+`3682cb0` 6 国产 LLM provider templates.
+
+---
+
 ## 2026-04-24 — Polish pass: onboarding · model picker · release infra · v0.1.0
 
 Post-Phase-7 polish day. No new feature phases — the goal was to make

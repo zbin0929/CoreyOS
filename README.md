@@ -16,7 +16,10 @@ _TODO: drop a hero shot + 3 feature screenshots here once we have signed builds.
 
 ## What it does
 
-- 💬 **Chat** with any OpenAI-compatible model (OpenAI, Anthropic, DeepSeek, local Ollama, …) — streaming, multi-turn, with session history in a local SQLite DB.
+- 🤖 **Multi-agent console** — run multiple Hermes instances side-by-side, each backed by its own LLM profile. Switch between `deepseek`, `gpt-4o`, `claude`, `qwen-max`, `kimi-k2`, and a local Ollama from the chat composer.
+- 💬 **Chat** with any OpenAI-compatible model — streaming, multi-turn, with session history in a local SQLite DB.
+- 🧩 **LLM profile library** — define `{provider, base_url, model, api_key_env}` once on the `/models` page, reuse across as many agents as you want. Edit once, every linked agent picks it up.
+- 🌐 **Guided wizard** with 10 pre-built provider templates: OpenAI · Anthropic · DeepSeek · Gemini · Ollama · OpenRouter · **通义千问 (Qwen) · 智谱 GLM · Kimi · 零一万物 Yi · 百川 · 腾讯混元**. Pick a template, paste the key, done.
 - 📎 **Attach files** via drag-drop, paste, or file picker. Per-agent sandbox scopes keep sensitive folders isolated.
 - 🧰 **Skills Hub** — browse + install from 7+ community sources (official, skills-sh, clawhub, lobehub, …) by wrapping the `hermes skills` CLI.
 - 🧠 **Memory editor** — `~/.hermes/MEMORY.md` + `USER.md` in a real editor with syntax highlighting, capacity meter, FTS5 search across past sessions.
@@ -58,9 +61,10 @@ Press `⌘K` anywhere to fuzzy-search across every page + runbook. Click the `?`
 | Phase | Title | Status |
 |---|---|---|
 | 0 – 7 | Foundation → Agent expansion | **✅ All shipped** (2026-04-23) |
+| 7.5 (T8) | Multi-LLM profiles + multi-Agent console + 国产 LLM templates | **✅ Shipped** (2026-04-24 night) |
 | 8 | Multimodal (voice / video) | Conditional — gated on product direction |
 
-Test totals: Rust **192** · Vitest **46** · Playwright **72** · all green.
+Test totals: Rust **211** · Vitest **46** · Playwright **81** · all green.
 
 Full roadmap in [`docs/05-roadmap.md`](./docs/05-roadmap.md); dated milestone entries in [`CHANGELOG.md`](./CHANGELOG.md).
 

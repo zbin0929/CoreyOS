@@ -3,11 +3,6 @@
 //! See `docs/01-architecture.md` for the high-level layout and
 //! `docs/03-agent-adapter.md` for the adapter abstraction.
 
-// Phase 0 ships the full scaffold (adapter trait surface, sandbox APIs,
-// error taxonomy) but only a subset is wired to IPC. The remaining items
-// are consumed starting Phase 1. TODO(phase-1-end): remove this allow
-// once every symbol has at least one production call site.
-
 mod adapters;
 mod attachments;
 mod changelog;

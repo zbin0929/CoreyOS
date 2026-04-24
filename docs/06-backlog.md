@@ -12,6 +12,7 @@ here.
 Categories, newest-phase first:
 
 - [Will not do (2026-04-23 reaffirmation)](#will-not-do-2026-04-23-reaffirmation)
+- [T8 (Phase 7.5) follow-ups](#t8-phase-75-follow-ups)
 - [P4 follow-ups](#p4-follow-ups)
 - [P3 follow-ups](#p3-follow-ups)
 - [P2 follow-ups](#p2-follow-ups)
@@ -87,6 +88,67 @@ them requires a product-direction pivot, not an engineering decision.
 - **What we ship instead** (conditional on Phase 8 running):
   push-to-talk only, via cloud ASR (OpenAI Realtime / Gemini Live).
 - **Re-open trigger**: none. Push-to-talk stays the ceiling.
+
+---
+
+## T8 (Phase 7.5) follow-ups
+
+### 字节豆包 (Volcengine Ark) provider template
+- **Priority**: medium
+- **Why parked**: vendor is OpenAI-compatible on paper but requires
+  the user to create an "inference endpoint" in the Volcengine
+  console first; the model field in our template has to then hold
+  an opaque `ep-20XXXXXX…` reference, not a model name. Shipping a
+  template without special UI (a "paste your endpoint id" affordance
+  with a link to the console) would fail first-run for every user.
+- **Re-open when**: a user requests it, or we decide to do a UI
+  accommodation round for non-standard OpenAI-compat vendors
+  (豆包 + Qianfan + possibly Mistral's European residency mode).
+
+### 百度文心 (Qianfan) provider template
+- **Priority**: low-medium
+- **Why parked**: authentication is split across legacy AK/SK
+  pair-auth (for classic ERNIE APIs) and newer Bearer tokens (for
+  the V2 / OpenAI-compat mode). Our current template contract
+  assumes "one env var with a Bearer token"; serving Qianfan
+  cleanly needs an adapter-side branch in `adapters::*`, not a
+  template entry.
+- **Re-open when**: there's user demand and we're already touching
+  adapter auth.
+
+### Masonic card grid + side-Drawer editor
+- **Priority**: low
+- **Why parked**: user explicitly picked the lightweight
+  "cards → full-screen focused edit" UX over the animated Masonic
+  grid with a right-side Drawer. Current impl reads well in both
+  light and dark mode and responds down to 1-col mobile.
+- **Re-open when**: the /agents or /models page grows dense enough
+  (20+ entries) that "full-screen edit takes you away from your
+  grid" starts mattering.
+
+### AgentWizard DetailsStep cardification
+- **Priority**: low
+- **Why parked**: Step 2 is still a vertical form stack. Splitting
+  the id/label/api-key/model fields into grouped cards would help
+  visual scanning but doesn't unlock new capability. Punt until a
+  user complains about it specifically.
+
+### Reachability badges on LLM profile cards
+- **Priority**: low
+- **Why parked**: `LlmProfileCard` currently doesn't know whether
+  the most recent `hermes_instance_test` against that profile
+  succeeded. A ✅/⚠ badge would be useful UX but needs either a
+  background probe worker or a lazy-on-first-render ping, both of
+  which add complexity.
+- **Re-open when**: the grid grows past ~5 entries and users start
+  losing track of which ones are actually live.
+
+### Profile import/export + bulk env-var edit
+- **Priority**: low
+- **Why parked**: power-user sugar. Import/export (YAML or JSON
+  round-trip) would help sharing configs across machines; a "rename
+  env var X → Y across all profiles" bulk action would help API-key
+  rotation. Neither unlocks new capability today.
 
 ---
 
