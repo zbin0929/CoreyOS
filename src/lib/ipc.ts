@@ -636,6 +636,26 @@ export function memoryWrite(kind: MemoryKind, content: string): Promise<MemoryFi
   return invoke<MemoryFile>('memory_write', { kind, content });
 }
 
+// ──────────────────── Session search (T7.3b) ────────────────────
+
+export interface SessionSearchHit {
+  session_id: string;
+  session_title: string | null;
+  /** Platform that fed this session (cli / telegram / discord / …). */
+  session_source: string;
+  role: string;
+  /** FTS5 snippet with `>>>match<<<` markers around the hits. */
+  snippet: string;
+  timestamp_ms: number;
+}
+
+/** Run a full-text search over Hermes' session database
+ *  (`~/.hermes/state.db`). Empty query returns `[]` without
+ *  round-tripping. Missing DB (fresh install) also returns `[]`. */
+export function sessionSearch(query: string, limit?: number): Promise<SessionSearchHit[]> {
+  return invoke<SessionSearchHit[]>('session_search', { query, limit });
+}
+
 // ───────────────────────── MCP servers (T7.1) ─────────────────────────
 
 /** One MCP server entry. `config` is the OPAQUE blob that maps 1:1

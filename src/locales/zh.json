@@ -470,7 +470,10 @@
       "body_hint": "已预填前置信息 + 完整对话。保存前可随意修剪。",
       "save": "保存技能",
       "saved": "已保存到 {{path}}",
-      "open_in_skills": "在技能页查看"
+      "open_in_skills": "在技能页查看",
+      "distill": "用 LLM 提炼",
+      "distill_hint": "让当前模型把对话重写为规范的 SKILL.md。",
+      "distill_empty": "模型返回了空内容。保留现有草稿不变。"
     }
   },
   "skill_hub": {
@@ -519,6 +522,13 @@
     "subtitle": "编辑 Hermes 每次对话都会注入的笔记。智能体记忆存放在 ~/.hermes/MEMORY.md；用户偏好存放在 ~/.hermes/USER.md。",
     "tab_agent": "智能体记忆",
     "tab_user": "用户偏好",
+    "tab_search": "搜索历史",
+    "search_placeholder": "docker 部署、\"精确短语\"、term*",
+    "search_hint": "在 Hermes 的会话数据库 (~/.hermes/state.db) 中做全文搜索，支持 FTS5 语法。",
+    "search_run": "搜索",
+    "search_idle": "输入关键词并回车搜索历史会话。",
+    "search_no_hits": "没有匹配。",
+    "search_untitled": "（未命名会话）",
     "save": "保存",
     "saved": "已保存",
     "saved_ago": "{{seconds}} 秒前已保存",
@@ -545,6 +555,9 @@
     "hide": "隐藏",
     "env_placeholder_new": "粘贴 Token…",
     "env_placeholder_overwrite": "留空保持不变",
+    "env_placeholder_will_clear": "保存时将清除",
+    "env_clear": "保存时清除此密钥",
+    "env_clear_undo": "保留此密钥",
     "list_placeholder": "每行一个",
     "no_changes": "没有待保存的改动。",
     "confirm_title": "确认改动",

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
-import { AlertCircle, Check, Loader2, Wand2 } from 'lucide-react';
+import { AlertCircle, Check, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
-import { ipcErrorMessage, skillSave } from '@/lib/ipc';
+import { chatSend, ipcErrorMessage, skillSave } from '@/lib/ipc';
+import { useAgentsStore } from '@/stores/agents';
 import type { UiMessage } from '@/stores/chat';
 
 /**
@@ -63,6 +64,8 @@ export function SaveAsSkillDrawer({
   const [saving, setSaving] = useState(false);
   const [savedPath, setSavedPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [distilling, setDistilling] = useState(false);
+  const activeAdapter = useAgentsStore((s) => s.activeId);
 
   // When the drawer re-opens with new inputs the `useMemo` recomputes
   // but useState's initial values don't re-apply. React's ref-style
@@ -86,6 +89,61 @@ export function SaveAsSkillDrawer({
     if (!slug) return t('chat.save_as_skill.name_required');
     return null;
   }, [slug, t]);
+
+  /**
+   * Optional LLM-distillation pass. Ships the transcript to the
+   * currently-active adapter with a prompt that asks for a proper
+   * SKILL.md: frontmatter, a description, concrete steps. Replaces
+   * the textarea body with the response; the user can edit further
+   * before saving. On any failure we surface the error inline but
+   * LEAVE the existing body intact so the user doesn't lose their
+   * raw-transcript fallback.
+   */
+  const onDistill = async () => {
+    if (distilling) return;
+    setDistilling(true);
+    setError(null);
+    try {
+      const transcript = messages
+        .filter((m) => (m.content ?? '').trim().length > 0)
+        .map((m) => {
+          const who = m.role === 'user' ? 'User' : 'Assistant';
+          return `${who}: ${m.content.trim()}`;
+        })
+        .join('\n\n');
+      const systemPrompt =
+        'You turn conversations into reusable Hermes SKILL.md files. ' +
+        'Analyse the conversation below and extract the single most useful ' +
+        'reusable skill. Output ONLY a valid SKILL.md file — nothing else, ' +
+        'no prose before or after, no ``` fences. Start with YAML ' +
+        'frontmatter enclosed in --- that has these keys (strings unless ' +
+        'noted): name, description, triggers (YAML list of strings), ' +
+        'required_inputs (YAML list of strings). After the closing --- ' +
+        'write a concise body in Markdown describing what the skill does ' +
+        'and the steps to perform it, in the imperative voice. Keep the ' +
+        'total under ~400 words.';
+      const { content } = await chatSend({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: transcript },
+        ],
+        adapter_id: activeAdapter ?? undefined,
+      });
+      // Strip accidental code-fence wrappers some models add even
+      // when asked not to. Everything between a leading ```markdown /
+      // ``` and the matching trailing ``` is the real body.
+      const cleaned = stripCodeFences(content).trim();
+      if (cleaned.length > 0) {
+        setBody(cleaned);
+      } else {
+        setError(t('chat.save_as_skill.distill_empty'));
+      }
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setDistilling(false);
+    }
+  };
 
   const onSave = async () => {
     if (nameError || saving) return;
@@ -178,7 +236,25 @@ export function SaveAsSkillDrawer({
             </label>
 
             <label className="flex flex-col gap-1 text-xs">
-              <span className="text-fg-muted">{t('chat.save_as_skill.body')}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-fg-muted">{t('chat.save_as_skill.body')}</span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => void onDistill()}
+                  disabled={distilling}
+                  title={t('chat.save_as_skill.distill_hint')}
+                  data-testid="save-as-skill-distill"
+                >
+                  {distilling ? (
+                    <Icon icon={Loader2} size="xs" className="animate-spin" />
+                  ) : (
+                    <Icon icon={Sparkles} size="xs" />
+                  )}
+                  {t('chat.save_as_skill.distill')}
+                </Button>
+              </div>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
@@ -274,6 +350,22 @@ function escapeYaml(s: string): string {
 function deriveSlug(messages: UiMessage[]): string {
   const firstUser = messages.find((m) => m.role === 'user')?.content ?? '';
   return sanitizeSlug((firstUser.split('\n')[0] ?? '').slice(0, 40));
+}
+
+/** Some models wrap SKILL.md output in ``` fences despite the system
+ *  prompt asking otherwise. Strip a single leading / trailing fence
+ *  (with or without a language tag) so the textarea gets the raw
+ *  Markdown. If the fencing is malformed, just return the original —
+ *  the user can clean it up manually. */
+function stripCodeFences(s: string): string {
+  const lines = s.split('\n');
+  if (lines.length < 2) return s;
+  const firstFence = /^```(\w+)?\s*$/;
+  const lastFence = /^```\s*$/;
+  if (firstFence.test(lines[0]!.trim()) && lastFence.test(lines[lines.length - 1]!.trim())) {
+    return lines.slice(1, -1).join('\n');
+  }
+  return s;
 }
 
 /** Normalise a free-form name to a filesystem-safe slug:

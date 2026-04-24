@@ -42,6 +42,29 @@ test.describe('memory page (T7.3)', () => {
     await expect(userTa).toHaveValue(/User profile/);
   });
 
+  test('search tab runs FTS query and renders hits with highlights', async ({
+    page,
+  }) => {
+    await page.goto('/memory');
+    await page.getByTestId('memory-tab-search').click();
+
+    // Idle state visible before any search runs.
+    await expect(page.getByTestId('memory-search-results')).toContainText(
+      /Type a query|输入关键词/,
+    );
+
+    await page.getByTestId('memory-search-input').fill('docker');
+    await page.getByTestId('memory-search-run').click();
+
+    // Mock seeds 2 hits; both should render with the highlight mark.
+    const hits = page.getByTestId('memory-search-hit');
+    await expect(hits).toHaveCount(2);
+    // First hit title comes from mock.
+    await expect(hits.first()).toContainText('Docker deploy recipe');
+    // Highlighted span renders as <mark>.
+    await expect(hits.first().locator('mark')).toContainText('docker');
+  });
+
   test('edit → dirty dot appears → save clears dot and persists to mock', async ({
     page,
   }) => {

@@ -24,5 +24,6 @@ pub mod runbooks;
 pub mod sandbox;
 pub mod scheduler;
 pub mod session;
+pub mod session_search;
 pub mod skill_hub;
 pub mod skills;

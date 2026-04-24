@@ -981,6 +981,32 @@ export const tauriMockInitScript = /* js */ `
         };
       }
 
+      // T7.3b session_search — mock returns canned hits for any
+      // non-empty query so the UI can be asserted deterministically.
+      // Tests that want specific results override via .on().
+      case 'session_search': {
+        const q = (args.query || '').trim();
+        if (!q) return [];
+        return [
+          {
+            session_id: 'sess-abc123',
+            session_title: 'Docker deploy recipe',
+            session_source: 'cli',
+            role: 'assistant',
+            snippet: 'Use >>>' + q + '<<< with buildx for multi-arch images.',
+            timestamp_ms: Date.now() - 60_000,
+          },
+          {
+            session_id: 'sess-def456',
+            session_title: null,
+            session_source: 'telegram',
+            role: 'user',
+            snippet: 'Why does my >>>' + q + '<<< keep timing out?',
+            timestamp_ms: Date.now() - 3_600_000,
+          },
+        ];
+      }
+
       // T7.3 Memory — the mock treats ~/.hermes/MEMORY.md and
       // ~/.hermes/USER.md as two slots on state.memory. exists is
       // derived from whether the slot has ever been written (null ->

@@ -145,6 +145,7 @@ pub fn run() {
             ipc::sandbox::sandbox_scope_delete,
             ipc::memory::memory_read,
             ipc::memory::memory_write,
+            ipc::session_search::session_search,
             ipc::mcp::mcp_server_list,
             ipc::mcp::mcp_server_upsert,
             ipc::mcp::mcp_server_delete,

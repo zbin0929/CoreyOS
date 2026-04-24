@@ -473,7 +473,10 @@
       "body_hint": "Frontmatter + full transcript pre-filled. Trim freely before saving.",
       "save": "Save skill",
       "saved": "Saved to {{path}}",
-      "open_in_skills": "Open in Skills"
+      "open_in_skills": "Open in Skills",
+      "distill": "Distill with LLM",
+      "distill_hint": "Ask the active model to rewrite the transcript as a proper SKILL.md.",
+      "distill_empty": "The model returned an empty body. Leaving the existing draft intact."
     }
   },
   "skill_hub": {
@@ -522,6 +525,13 @@
     "subtitle": "Edit the notes Hermes injects into every prompt. Agent memory lives in ~/.hermes/MEMORY.md; user profile in ~/.hermes/USER.md.",
     "tab_agent": "Agent memory",
     "tab_user": "User profile",
+    "tab_search": "Search history",
+    "search_placeholder": "docker deployment, \"exact phrase\", term*",
+    "search_hint": "Full-text search over Hermes' session database (~/.hermes/state.db). Supports FTS5 syntax.",
+    "search_run": "Search",
+    "search_idle": "Type a query and press Enter to search past sessions.",
+    "search_no_hits": "No matches.",
+    "search_untitled": "(untitled session)",
     "save": "Save",
     "saved": "Saved",
     "saved_ago": "Saved {{seconds}}s ago",
@@ -548,6 +558,9 @@
     "hide": "Hide",
     "env_placeholder_new": "paste token…",
     "env_placeholder_overwrite": "leave blank to keep current",
+    "env_placeholder_will_clear": "will be cleared on save",
+    "env_clear": "Clear this secret on save",
+    "env_clear_undo": "Keep this secret",
     "list_placeholder": "one per line",
     "no_changes": "No changes to save.",
     "confirm_title": "Review changes",

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Eye, EyeOff, Loader2, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Loader2, Trash2, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import type { ChannelFieldKind, ChannelState } from '@/lib/ipc';
@@ -75,6 +75,12 @@ export function ChannelForm({
   const [envInputs, setEnvInputs] = useState(initial.envInputs);
   const [yamlValues, setYamlValues] = useState(initial.yamlValues);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  // T3.5 follow-up — env keys the user has marked for deletion in this
+  // session. On save we send an empty string, which `write_env_key`
+  // interprets as "remove this line from .env". Kept out of
+  // `envInputs` so flipping the trash toggle doesn't clobber a
+  // half-typed replacement value in the input.
+  const [toClear, setToClear] = useState<Record<string, boolean>>({});
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,7 +96,18 @@ export function ChannelForm({
     // keeps the T3.2 surface small.
     for (const k of channel.env_keys) {
       const typed = envInputs[k.name] ?? '';
-      if (typed.length > 0) {
+      // Explicit "clear" wins over a typed value — the trash toggle
+      // is meant to delete, so if the user somehow did both we honor
+      // the destructive intent.
+      if (toClear[k.name]) {
+        envUpdates[k.name] = '';
+        diffs.push({
+          kind: 'env',
+          label: k.name,
+          before: t('channels.diff.env_set'),
+          after: t('channels.diff.env_unset'),
+        });
+      } else if (typed.length > 0) {
         envUpdates[k.name] = typed;
         diffs.push({
           kind: 'env',
@@ -149,11 +166,17 @@ export function ChannelForm({
                   setEnvInputs((s) => ({ ...s, [k.name]: e.target.value }))
                 }
                 placeholder={
-                  channel.env_present[k.name]
+                  toClear[k.name]
+                    ? t('channels.env_placeholder_will_clear')
+                    : channel.env_present[k.name]
                     ? t('channels.env_placeholder_overwrite')
                     : t('channels.env_placeholder_new')
                 }
-                className="flex-1 rounded border border-border bg-bg-elev-1 px-2 py-1 font-mono text-xs text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
+                disabled={toClear[k.name]}
+                className={
+                  'flex-1 rounded border border-border bg-bg-elev-1 px-2 py-1 font-mono text-xs text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none' +
+                  (toClear[k.name] ? ' opacity-60 line-through' : '')
+                }
                 data-testid={`channel-env-input-${channel.id}-${k.name}`}
                 autoComplete="off"
               />
@@ -168,6 +191,27 @@ export function ChannelForm({
               >
                 <Icon icon={revealed[k.name] ? EyeOff : Eye} size="xs" />
               </Button>
+              {/* Trash / undo toggles "mark for clear". Only offered
+                  when there's actually a value on disk — clearing a
+                  never-set key would be a no-op write. */}
+              {channel.env_present[k.name] && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setToClear((s) => ({ ...s, [k.name]: !s[k.name] }))
+                  }
+                  title={
+                    toClear[k.name]
+                      ? t('channels.env_clear_undo')
+                      : t('channels.env_clear')
+                  }
+                  data-testid={`channel-env-clear-${channel.id}-${k.name}`}
+                >
+                  <Icon icon={toClear[k.name] ? Undo2 : Trash2} size="xs" />
+                </Button>
+              )}
             </div>
           )}
           {k.hint_key && (
