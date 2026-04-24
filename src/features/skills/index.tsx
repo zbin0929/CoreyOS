@@ -12,6 +12,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
@@ -134,17 +135,24 @@ export function SkillsRoute() {
         title={t('skills.title')}
         subtitle={t('skills.subtitle')}
         actions={
-          tab === 'local' ? (
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => setSel({ kind: 'new', name: '' })}
-              data-testid="skills-new"
-            >
-              <Icon icon={Plus} size="sm" />
-              {t('skills.new')}
-            </Button>
-          ) : null
+          <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('skills.title')}
+              content={t('skills.help_page')}
+              testId="skills-help"
+            />
+            {tab === 'local' ? (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => setSel({ kind: 'new', name: '' })}
+                data-testid="skills-new"
+              >
+                <Icon icon={Plus} size="sm" />
+                {t('skills.new')}
+              </Button>
+            ) : null}
+          </div>
         }
       />
 

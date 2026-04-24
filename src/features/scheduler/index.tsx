@@ -12,6 +12,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
@@ -76,17 +77,24 @@ export function SchedulerRoute() {
         title={t('scheduler_page.title')}
         subtitle={t('scheduler_page.subtitle')}
         actions={
-          mode.kind === 'list' && (
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => setMode({ kind: 'new' })}
-              data-testid="scheduler-new"
-            >
-              <Icon icon={Plus} size="sm" />
-              {t('scheduler_page.new')}
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('scheduler_page.title')}
+              content={t('scheduler_page.help_page')}
+              testId="scheduler-help"
+            />
+            {mode.kind === 'list' && (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => setMode({ kind: 'new' })}
+                data-testid="scheduler-new"
+              >
+                <Icon icon={Plus} size="sm" />
+                {t('scheduler_page.new')}
+              </Button>
+            )}
+          </div>
         }
       />
 

@@ -136,6 +136,7 @@
   },
   "skills": {
     "title": "技能",
+    "help_page": "技能是一份带 YAML 前置信息的 Markdown 文件，描述一个可复用任务 —— 比如「部署预发构建」「总结论文」「写 commit message」。Hermes 会加载 ~/.hermes/skills/ 下的每个 SKILL.md，让 agent 能按名调用。本地 tab = 你自己写的技能。技能中心 tab = 通过 `hermes skills` CLI 从 7+ 社区源（官方、skills-sh、clawhub 等）浏览安装。",
     "tabs_label": "技能来源",
     "tab_local": "本地",
     "tab_hub": "技能中心",
@@ -767,6 +768,7 @@
   "scheduler_page": {
     "title": "定时任务",
     "subtitle": "按 cron 计划自动发送提示词。每次触发会把提示词作为单次对话发给 Hermes，回复仅记录在运行历史中（不会新建聊天会话）。",
+    "help_page": "任务由 Hermes 运行 —— 我们只负责写 ~/.hermes/cron/jobs.json，Hermes 网关自动接管。Cron 语法是标准 6 字段（秒 分 时 日 月 周），比如 `0 0 9 * * *` 表示每天 9 点。每次运行的输出以 Markdown 文件写入 ~/.hermes/cron/output/{job_id}/，可通过「运行记录」抽屉查看。",
     "new": "新建任务",
     "empty_title": "暂无定时任务",
     "empty_desc": "创建一个以按计划执行提示词。支持标准 6 字段 cron 表达式——参见字段下方的提示。",

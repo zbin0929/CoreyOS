@@ -137,6 +137,7 @@
   "skills": {
     "title": "Skills",
     "subtitle": "Browse, edit, and save Hermes skill files under ~/.hermes/skills/.",
+    "help_page": "A skill is a Markdown file with YAML frontmatter that describes a repeatable task — 'deploy the staging build', 'summarise a paper', 'write a commit message'. Hermes loads every SKILL.md under ~/.hermes/skills/ and lets the agent invoke them by name. Local tab = skills you authored yourself. Hub tab = wraps the `hermes skills` CLI to browse and install from 7+ community sources (official, skills-sh, clawhub, …).",
     "tabs_label": "Skill sources",
     "tab_local": "Local",
     "tab_hub": "Hub",
@@ -770,6 +771,7 @@
   "scheduler_page": {
     "title": "Scheduled jobs",
     "subtitle": "Run a prompt on a cron schedule. Each fire hits the Hermes adapter with your prompt as a single turn; the reply is stored only in the run history (no new chat session).",
+    "help_page": "Jobs run inside Hermes — we just write ~/.hermes/cron/jobs.json and Hermes' gateway picks them up. Cron syntax is the standard 6-field format (sec min hour day month weekday) — use 0 9 * * * * for 9am daily. Each run's output lands as a Markdown file under ~/.hermes/cron/output/{job_id}/ which you can browse via the Runs drawer.",
     "new": "New job",
     "empty_title": "No scheduled jobs yet",
     "empty_desc": "Create one to run a prompt on a schedule. Use any 6-field cron expression — see the hint below the cron field.",
