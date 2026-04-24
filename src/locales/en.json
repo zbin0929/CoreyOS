@@ -228,6 +228,13 @@
     "pick_title": "Pick a skill on the left",
     "pick_desc": "Or click New skill to start one. Files are plain Markdown; Hermes reads them on the next run.",
     "empty_tree": "No skills yet. Create one with the New button in the header.",
+    "history": "History",
+    "history_title": "Edit history",
+    "history_desc": "Every save snapshots the prior body. Up to 50 versions are kept per skill; older ones are evicted automatically.",
+    "history_empty": "No prior versions yet. Save an edit to start building history.",
+    "history_latest": "latest",
+    "history_restore": "Restore",
+    "history_restore_title": "Overwrite the current body with this version. The current version is snapshotted first, so this is reversible.",
     "field": {
       "path": "Path",
       "path_hint": "Relative to ~/.hermes/skills/. Nested paths like work/standup.md are fine."

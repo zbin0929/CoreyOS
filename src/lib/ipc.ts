@@ -577,6 +577,38 @@ export function skillDelete(path: string): Promise<void> {
   return invoke<void>('skill_delete', { path });
 }
 
+/** v9 — one entry in the per-skill edit history. Body is NOT included
+ *  in the list to keep the IPC cheap; fetch the full row via
+ *  `skillVersionGet(id)` only when the user actually wants to preview
+ *  or restore it. */
+export interface SkillVersionSummary {
+  id: number;
+  size: number;
+  /** Unix ms at the moment the snapshot was captured (i.e. just
+   *  before the overwrite that triggered it). */
+  created_at: number;
+}
+
+/** Full snapshot row. Used by the restore / preview flow — restore
+ *  passes `body` back into `skillSave(path, body, false)` which itself
+ *  captures the current on-disk version into the history before
+ *  overwriting, so restore is reversible. */
+export interface SkillVersion {
+  id: number;
+  path: string;
+  body: string;
+  size: number;
+  created_at: number;
+}
+
+export function skillVersionList(path: string): Promise<SkillVersionSummary[]> {
+  return invoke<SkillVersionSummary[]>('skill_version_list', { path });
+}
+
+export function skillVersionGet(id: number): Promise<SkillVersion | null> {
+  return invoke<SkillVersion | null>('skill_version_get', { id });
+}
+
 // ───────────────────────── Skill hub / CLI (T7.4) ─────────────────────────
 
 /** Captured output of `hermes skills <subcmd>`. `status === -1` means

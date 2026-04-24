@@ -228,6 +228,13 @@
     "pick_title": "在左侧选一项技能",
     "pick_desc": "或点右上角「新建技能」新建。技能是普通 Markdown，Hermes 下次运行时读取。",
     "empty_tree": "还没有技能。点右上角「新建」来创建。",
+    "history": "历史",
+    "history_title": "编辑历史",
+    "history_desc": "每次保存都会快照之前的内容。每个技能最多保留 50 个版本，更早的会自动清理。",
+    "history_empty": "尚无历史版本。保存一次修改即可开始记录。",
+    "history_latest": "最新",
+    "history_restore": "恢复",
+    "history_restore_title": "用这个版本覆盖当前内容。当前版本会先被快照，所以可随时再次恢复回来。",
     "field": {
       "path": "路径",
       "path_hint": "相对 ~/.hermes/skills/ 的路径。支持嵌套，如 work/standup.md。"

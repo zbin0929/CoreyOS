@@ -5,6 +5,7 @@ import {
   Check,
   FileText,
   FolderClosed,
+  History,
   Loader2,
   Plus,
   Save,
@@ -19,6 +20,7 @@ import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { HubPanel } from './HubPanel';
 import { MarkdownEditor } from './MarkdownEditor';
+import { SkillHistoryDrawer } from './SkillHistoryDrawer';
 import './skills.css';
 import {
   ipcErrorMessage,
@@ -114,6 +116,32 @@ export function SkillsRoute() {
       setSaving(false);
     }
   }, [sel, saving, reload]);
+
+  // Restore from history: write the historical body via the normal
+  // save path so the current version gets snapshotted before
+  // overwrite (restore itself stays reversible).
+  const restoreBody = useCallback(
+    async (body: string) => {
+      if (sel.kind !== 'open') return;
+      setSaving(true);
+      try {
+        const fresh = await skillSave(sel.path, body, false);
+        setSel({ kind: 'open', path: sel.path, loaded: fresh, dirty: fresh.body });
+        await reload();
+      } catch (e) {
+        setSel((s) =>
+          s.kind === 'open'
+            ? { kind: 'error', path: s.path, message: ipcErrorMessage(e) }
+            : s,
+        );
+      } finally {
+        setSaving(false);
+      }
+    },
+    [sel, reload],
+  );
+
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const createNew = useCallback(async (rawName: string) => {
     const name = rawName.trim();
@@ -286,6 +314,7 @@ export function SkillsRoute() {
                 setSel((s) => (s.kind === 'open' ? { ...s, dirty: body } : s))
               }
               onSave={() => void save()}
+              onHistory={() => setHistoryOpen(true)}
               onDelete={async () => {
                 try {
                   await skillDelete(sel.path);
@@ -300,6 +329,13 @@ export function SkillsRoute() {
         </section>
       </div>
       )}
+
+      <SkillHistoryDrawer
+        open={historyOpen}
+        path={sel.kind === 'open' ? sel.path : null}
+        onClose={() => setHistoryOpen(false)}
+        onRestore={restoreBody}
+      />
     </div>
   );
 }
@@ -312,12 +348,14 @@ function Editor({
   onChange,
   onSave,
   onDelete,
+  onHistory,
 }: {
   sel: Extract<Selection, { kind: 'open' }>;
   saving: boolean;
   onChange: (body: string) => void;
   onSave: () => void;
   onDelete: () => void;
+  onHistory: () => void;
 }) {
   const { t } = useTranslation();
   const dirty = sel.dirty !== sel.loaded.body;
@@ -339,6 +377,17 @@ function Editor({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onHistory}
+            disabled={saving}
+            data-testid="skills-history"
+            title={t('skills.history_title')}
+          >
+            <Icon icon={History} size="sm" />
+            {t('skills.history')}
+          </Button>
           <Button
             size="sm"
             variant="ghost"
