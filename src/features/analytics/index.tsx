@@ -334,7 +334,7 @@ function ActivityChart({
               y={y}
               textAnchor="end"
               dominantBaseline="middle"
-              className="fill-[var(--color-fg-subtle)] text-[10px] tabular-nums"
+              className="fill-fg-subtle text-[10px] tabular-nums"
             >
               {formatNumber(tick)}
             </text>
@@ -343,9 +343,9 @@ function ActivityChart({
       })}
 
       {/* filled area under the line */}
-      <path d={areaPath} className="fill-[var(--color-gold-500)]/10" />
+      <path d={areaPath} className="fill-gold-500/10" />
       {/* the line itself */}
-      <path d={linePath} className="stroke-[var(--color-gold-500)]" strokeWidth={1.5} fill="none" />
+      <path d={linePath} className="stroke-gold-500" strokeWidth={1.5} fill="none" />
 
       {/* dots, with hover tooltip via <title> */}
       {pts.map((p, i) => (
@@ -354,7 +354,7 @@ function ActivityChart({
           cx={p.x}
           cy={p.y}
           r={p.d.count > 0 ? 2 : 0}
-          className="fill-[var(--color-gold-500)]"
+          className="fill-gold-500"
         >
           <title>
             {p.d.date} — {formatNumber(p.d.count)} {unit}{p.d.count === 1 ? '' : 's'}
@@ -373,7 +373,7 @@ function ActivityChart({
             x={x}
             y={ACTIVITY_H - 6}
             textAnchor="middle"
-            className="fill-[var(--color-fg-subtle)] text-[10px] tabular-nums"
+            className="fill-fg-subtle text-[10px] tabular-nums"
           >
             {label}
           </text>

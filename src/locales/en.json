@@ -24,7 +24,7 @@
   },
   "chat_page": {
     "title": "Chat",
-    "subtitle": "Hermes · streaming · Sprint 2",
+    "subtitle": "Streaming chat with Hermes",
     "stop": "Stop",
     "send": "Send",
     "delete_confirm": "Click again to confirm",
@@ -447,8 +447,8 @@
     }
   },
   "logs": {
-    "title": "Config changelog",
-    "subtitle": "Every config mutation is journaled. Revert from here.",
+    "title": "Logs",
+    "subtitle": "Agent runtime logs, gateway tail, errors, and the config-change history.",
     "refresh": "Refresh",
     "retry": "Retry",
     "error_title": "Couldn't read changelog",
@@ -797,7 +797,8 @@
     "close": "Close",
     "save": "Save",
     "cancel": "Cancel",
-    "edit": "Edit"
+    "edit": "Edit",
+    "refresh": "Refresh"
   },
   "scheduler_page": {
     "title": "Scheduled jobs",

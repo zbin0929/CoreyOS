@@ -24,7 +24,7 @@
   },
   "chat_page": {
     "title": "对话",
-    "subtitle": "Hermes · 流式输出 · Sprint 2",
+    "subtitle": "与 Hermes 的流式对话",
     "stop": "停止",
     "send": "发送",
     "delete_confirm": "再次点击确认",
@@ -444,8 +444,8 @@
     }
   },
   "logs": {
-    "title": "配置变更日志",
-    "subtitle": "每次配置改动都会留痕，可在此撤销。",
+    "title": "日志",
+    "subtitle": "Agent 运行日志、gateway tail、错误记录与配置变更历史。",
     "refresh": "刷新",
     "retry": "重试",
     "error_title": "无法读取变更日志",
@@ -794,7 +794,8 @@
     "close": "关闭",
     "save": "保存",
     "cancel": "取消",
-    "edit": "编辑"
+    "edit": "编辑",
+    "refresh": "刷新"
   },
   "scheduler_page": {
     "title": "定时任务",
