@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -7,6 +7,7 @@ import {
   Cpu,
   Loader2,
   RotateCcw,
+  Search,
   Settings2,
   Sparkles,
 } from 'lucide-react';
@@ -28,24 +29,22 @@ import { useChatStore } from '@/stores/chat';
  * different model for the current chat without touching the global
  * default.
  *
- * Semantics:
- *   - Label shows the **effective** model (override ?? global default).
- *   - A "session override" dot + "using default" vs "override" text
- *     makes the two cases distinguishable at a glance.
- *   - "Use default" row clears the override.
- *   - Link to `/models` for actually changing providers / API keys.
+ * Interaction model:
+ *   - Click the badge → dropdown opens. ↓ lands focus on the first row.
+ *   - ↑/↓ moves through rows including the "Use default" sentinel.
+ *   - Enter picks the focused row; Esc closes without committing.
+ *   - Search field auto-appears when the list has > 6 entries; types
+ *     filter the displayed options. Search is id + display_name substring,
+ *     case-insensitive.
  *
  * Model list comes from `modelList()` (the adapter's `/v1/models`),
- * NOT from the old `hermesConfigRead().model` view. That view is just
- * the default — the real list can be bigger (e.g. providers expose
- * dozens of models and the user may want to try any of them for a
- * single turn).
+ * NOT from `hermesConfigRead().model`. That view is just the default —
+ * the real list can be bigger.
  */
 export function ActiveLLMBadge() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  // Current chat session id; picker writes the override onto this.
   const sessionId = useChatStore((s) => s.currentId);
   const sessionOverride = useChatStore((s) =>
     s.currentId ? (s.sessions[s.currentId]?.model ?? null) : null,
@@ -57,11 +56,19 @@ export function ActiveLLMBadge() {
   const [open, setOpen] = useState(false);
   const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [query, setQuery] = useState('');
+  // Active row index for keyboard navigation. -1 = "Use default" sentinel,
+  // 0..N-1 = model rows in their post-filter order.
+  const [activeIdx, setActiveIdx] = useState<number>(-1);
 
-  // Fetch the model list lazily on first open. Keeps Chat-page boot cheap
-  // and a fresh list every time the user actually looks at the dropdown
-  // (after they've added providers elsewhere).
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Fetch the model list lazily on first open — keeps Chat-page boot cheap
+  // and gets a fresh list every time the user actually opens the dropdown
+  // (useful after they've added providers elsewhere).
   useEffect(() => {
     if (!open) return;
     let alive = true;
@@ -78,15 +85,64 @@ export function ActiveLLMBadge() {
     };
   }, [open]);
 
-  // Outside-click to close.
+  // Reset transient picker state every time it opens — stale query /
+  // focus from the previous interaction would surprise the user.
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      setActiveIdx(-1);
+    }
+  }, [open]);
+
+  // Outside-click + Esc to close.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
+
+  const filtered = useMemo(() => {
+    if (!models) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter(
+      (m) =>
+        m.id.toLowerCase().includes(q) ||
+        (m.display_name?.toLowerCase().includes(q) ?? false) ||
+        m.provider.toLowerCase().includes(q),
+    );
+  }, [models, query]);
+
+  const showSearch = (models?.length ?? 0) > 6;
+
+  // Focus the search box when it appears; otherwise the list itself.
+  useEffect(() => {
+    if (!open) return;
+    if (showSearch) searchRef.current?.focus();
+    else listRef.current?.focus();
+  }, [open, showSearch]);
+
+  // Scroll the active row into view as the user arrows through.
+  useEffect(() => {
+    if (!open || activeIdx < 0) return;
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-row-idx="${activeIdx}"]`,
+    );
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx, open]);
 
   const labelText = effective ?? t('chat_page.model_unknown');
   const isOverridden = sessionOverride !== null && sessionOverride !== defaultModel;
@@ -95,13 +151,44 @@ export function ActiveLLMBadge() {
     if (!sessionId) return;
     setSessionModel(sessionId, modelId);
     setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  // Keyboard handler shared by search input and list container. -1 is the
+  // "Use default" sentinel row; 0..len-1 are the filtered model rows.
+  function onNavKey(e: React.KeyboardEvent) {
+    const max = filtered.length - 1;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx((i) => (i >= max ? -1 : i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx((i) => (i <= -1 ? max : i - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIdx === -1) selectModel(null);
+      else if (filtered[activeIdx]) selectModel(filtered[activeIdx].id);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setActiveIdx(-1);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setActiveIdx(max);
+    }
   }
 
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition',
           isOverridden
@@ -131,8 +218,6 @@ export function ActiveLLMBadge() {
 
       {open && (
         <div
-          role="listbox"
-          aria-label={t('chat_page.model_picker_label')}
           className={cn(
             'absolute left-0 top-full z-40 mt-1 w-72 overflow-hidden',
             'rounded-md border border-border bg-bg-elev-1 shadow-2',
@@ -141,37 +226,80 @@ export function ActiveLLMBadge() {
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2 text-[10px] uppercase tracking-wider text-fg-subtle">
             <span>{t('chat_page.model_picker_label')}</span>
-            {models && <span className="font-mono">{models.length}</span>}
+            {models && (
+              <span className="font-mono">
+                {query ? `${filtered.length}/${models.length}` : models.length}
+              </span>
+            )}
           </div>
 
-          {/* "Use default" row — always first. Highlighted when no
-              override is active; clears the override otherwise. */}
-          <button
-            type="button"
-            onClick={() => selectModel(null)}
-            className={cn(
-              'flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-xs transition-colors',
-              sessionOverride === null
-                ? 'bg-bg-elev-2 text-fg'
-                : 'text-fg-muted hover:bg-bg-elev-2 hover:text-fg',
-            )}
-            data-testid="chat-model-picker-use-default"
-          >
-            <Icon icon={RotateCcw} size="xs" className="opacity-60" />
-            <span className="flex-1">
-              {t('chat_page.model_use_default')}
-              {defaultModel && (
-                <code className="ml-1.5 rounded bg-bg px-1 py-0.5 font-mono text-[10px] text-fg-subtle">
-                  {defaultModel}
-                </code>
-              )}
-            </span>
-            {sessionOverride === null && (
-              <Icon icon={Check} size="xs" className="text-gold-500" />
-            )}
-          </button>
+          {/* Search field — only shown when there are enough rows to justify
+              the extra visual weight. */}
+          {showSearch && (
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+              <Icon icon={Search} size="xs" className="opacity-60" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActiveIdx(-1);
+                }}
+                onKeyDown={onNavKey}
+                placeholder={t('chat_page.model_picker_search')}
+                className={cn(
+                  'flex-1 bg-transparent text-xs text-fg outline-none',
+                  'placeholder:text-fg-subtle',
+                )}
+                data-testid="chat-model-picker-search"
+                aria-controls="chat-model-picker-listbox"
+              />
+            </div>
+          )}
 
-          <ul className="max-h-64 overflow-y-auto py-1">
+          <ul
+            ref={listRef}
+            id="chat-model-picker-listbox"
+            role="listbox"
+            aria-label={t('chat_page.model_picker_label')}
+            tabIndex={showSearch ? -1 : 0}
+            onKeyDown={onNavKey}
+            className="max-h-72 overflow-y-auto focus:outline-none"
+          >
+            {/* "Use default" sentinel row — always first. */}
+            <li>
+              <button
+                type="button"
+                data-row-idx={-1}
+                role="option"
+                aria-selected={sessionOverride === null}
+                onClick={() => selectModel(null)}
+                onMouseEnter={() => setActiveIdx(-1)}
+                className={cn(
+                  'flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-xs transition-colors',
+                  activeIdx === -1 && 'bg-bg-elev-2',
+                  sessionOverride === null
+                    ? 'text-fg'
+                    : 'text-fg-muted hover:text-fg',
+                )}
+                data-testid="chat-model-picker-use-default"
+              >
+                <Icon icon={RotateCcw} size="xs" className="opacity-60" />
+                <span className="flex-1">
+                  {t('chat_page.model_use_default')}
+                  {defaultModel && (
+                    <code className="ml-1.5 rounded bg-bg px-1 py-0.5 font-mono text-[10px] text-fg-subtle">
+                      {defaultModel}
+                    </code>
+                  )}
+                </span>
+                {sessionOverride === null && (
+                  <Icon icon={Check} size="xs" className="text-gold-500" />
+                )}
+              </button>
+            </li>
+
             {error && (
               <li className="px-3 py-2 text-xs text-danger">{error}</li>
             )}
@@ -181,23 +309,28 @@ export function ActiveLLMBadge() {
                 {t('common.loading')}
               </li>
             )}
-            {models && models.length === 0 && (
+            {!error && models && filtered.length === 0 && (
               <li className="px-3 py-2 text-xs text-fg-subtle">
-                {t('chat_page.model_picker_empty')}
+                {query
+                  ? t('chat_page.model_picker_no_matches')
+                  : t('chat_page.model_picker_empty')}
               </li>
             )}
-            {models?.map((m) => {
+            {filtered.map((m, idx) => {
               const selected = sessionOverride === m.id;
+              const isActive = activeIdx === idx;
               return (
                 <li key={m.id}>
                   <button
                     type="button"
+                    data-row-idx={idx}
+                    role="option"
+                    aria-selected={selected}
                     onClick={() => selectModel(m.id)}
+                    onMouseEnter={() => setActiveIdx(idx)}
                     className={cn(
                       'flex w-full items-start gap-2 px-3 py-2 text-left transition-colors',
-                      selected
-                        ? 'bg-bg-elev-2'
-                        : 'hover:bg-bg-elev-2',
+                      isActive ? 'bg-bg-elev-2' : 'hover:bg-bg-elev-2',
                     )}
                     data-testid={`chat-model-picker-option-${m.id}`}
                   >

@@ -54,6 +54,8 @@
     "model_default_title": "Using the global default model. Click to pick a different model for this session.",
     "model_picker_label": "Model for this session",
     "model_picker_empty": "No models reported by the adapter. Configure a provider in Settings → LLMs.",
+    "model_picker_search": "Filter models…",
+    "model_picker_no_matches": "No models match that filter.",
     "model_use_default": "Use default",
     "model_default_tag": "default",
     "model_configure": "Configure providers…",

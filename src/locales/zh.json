@@ -54,6 +54,8 @@
     "model_default_title": "正在使用全局默认模型。点击可为本会话选择其他模型。",
     "model_picker_label": "本会话使用的模型",
     "model_picker_empty": "Adapter 未报告任何模型。请在 Settings → LLMs 里配置 provider。",
+    "model_picker_search": "过滤模型…",
+    "model_picker_no_matches": "没有匹配的模型。",
     "model_use_default": "使用默认",
     "model_default_tag": "默认",
     "model_configure": "配置 Provider…",

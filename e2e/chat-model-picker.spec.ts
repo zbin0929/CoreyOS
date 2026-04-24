@@ -91,4 +91,28 @@ test.describe('chat · model picker', () => {
     await expect(trigger).toHaveAttribute('data-overridden', 'false');
     await expect(trigger).toContainText('deepseek-chat');
   });
+
+  test('keyboard: ↓↓ Enter lands on the first model; Esc closes', async ({ page }) => {
+    await page.goto('/chat');
+    await expect(page.getByText('Sessions', { exact: true })).toBeVisible();
+
+    const trigger = page.getByTestId('chat-model-picker-trigger');
+    // Open via keyboard — trigger supports ↓/Enter/Space.
+    await trigger.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByTestId('chat-model-picker-list')).toBeVisible();
+
+    // Start on the "Use default" sentinel (-1). ↓ once → hermes-agent (idx 0).
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('chat-model-picker-list')).toBeHidden();
+    await expect(trigger).toContainText('hermes-agent');
+    await expect(trigger).toHaveAttribute('data-overridden', 'true');
+
+    // Re-open + Esc closes without further mutation.
+    await trigger.click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('chat-model-picker-list')).toBeHidden();
+    await expect(trigger).toContainText('hermes-agent');
+  });
 });
