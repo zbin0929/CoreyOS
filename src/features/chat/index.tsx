@@ -438,10 +438,16 @@ function ChatPane({
 
     try {
       const handle = await chatStream(
-        // Model is NOT sent — Hermes always uses its own ~/.hermes/config.yaml,
-        // ignoring any `model` field in chat requests. See LLMs page for real
-        // provider/model switching.
-        { messages: historyForIpc, adapter_id: activeAdapterId },
+        // Pass the effective model (per-session override, falling back to
+        // gateway default). `resolve_turn` in the Rust Hermes adapter
+        // honours `turn.model` — an older comment here incorrectly
+        // claimed Hermes ignored it, which is why the session-level
+        // override existed in the store but never actually took effect.
+        {
+          messages: historyForIpc,
+          adapter_id: activeAdapterId,
+          model: effectiveModel ?? undefined,
+        },
         {
           onDelta: (chunk) => {
             // Read current content from store to append — avoids stale closures.
