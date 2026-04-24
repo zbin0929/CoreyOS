@@ -427,6 +427,38 @@ function LlmProfileRow({
     }
   }
 
+  // Explicit "clear secret" — two-click for safety. Writes empty to
+  // hermesEnvSetKey which removes the line from ~/.hermes/.env. This
+  // is the only way to remove a stored key without deleting the
+  // whole profile or hand-editing the .env file.
+  const [clearArmed, setClearArmed] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  useEffect(() => {
+    if (!clearArmed) return;
+    const h = window.setTimeout(() => setClearArmed(false), 3000);
+    return () => window.clearTimeout(h);
+  }, [clearArmed]);
+
+  async function onClearSecret() {
+    const envName = draft.api_key_env?.trim() ?? '';
+    if (!envName) return;
+    if (!clearArmed) {
+      setClearArmed(true);
+      return;
+    }
+    setClearing(true);
+    setErr(null);
+    try {
+      await hermesEnvSetKey(envName, null);
+      setApiKeyValue('');
+      setClearArmed(false);
+    } catch (e) {
+      setErr(ipcErrorMessage(e));
+    } finally {
+      setClearing(false);
+    }
+  }
+
   // Two-click delete — same reasoning as HermesInstanceRow:
   // window.confirm can silently no-op inside the Tauri WebView.
   const [deleteArmed, setDeleteArmed] = useState(false);
@@ -622,6 +654,33 @@ function LlmProfileRow({
             >
               <Icon icon={showKey ? EyeOff : Eye} size="sm" />
             </Button>
+            {/* Clear-secret — explicit "remove stored env var" path.
+                Shown only when editing and the profile actually has
+                an env-var name pointed at (otherwise there's nothing
+                to clear). Two-click: first click arms (button turns
+                red), second click calls hermesEnvSetKey(name, null)
+                which drops the line from ~/.hermes/.env. */}
+            {mode === 'edit' && (draft.api_key_env?.trim() ?? '').length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant={clearArmed ? 'danger' : 'ghost'}
+                onClick={() => void onClearSecret()}
+                disabled={clearing || saving}
+                title={t('models_page.profile_clear_secret_title', {
+                  env: draft.api_key_env,
+                })}
+                aria-label={t('models_page.profile_clear_secret_title', {
+                  env: draft.api_key_env,
+                })}
+                data-testid="llm-profile-clear-secret"
+              >
+                <Icon icon={clearing ? Loader2 : Trash2} size="sm" className={clearing ? 'animate-spin' : undefined} />
+                {clearArmed
+                  ? t('models_page.profile_clear_secret_confirm')
+                  : t('models_page.profile_clear_secret')}
+              </Button>
+            )}
           </div>
         </Field>
       </div>

@@ -642,6 +642,36 @@ function ApiKeyPanel({
     }
   }
 
+  // Two-click clear — same pattern as LlmProfilesSection's clear
+  // button. First click arms (button turns red), second click calls
+  // hermesEnvSetKey(name, null) which removes the line from
+  // ~/.hermes/.env. Auto-disarm after 3s.
+  const [clearArmed, setClearArmed] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  useEffect(() => {
+    if (!clearArmed) return;
+    const h = window.setTimeout(() => setClearArmed(false), 3000);
+    return () => window.clearTimeout(h);
+  }, [clearArmed]);
+
+  async function clearKey() {
+    if (!clearArmed) {
+      setClearArmed(true);
+      return;
+    }
+    setClearing(true);
+    setError(null);
+    try {
+      const view = await hermesEnvSetKey(envKey, null);
+      setClearArmed(false);
+      onSaved(view);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setClearing(false);
+    }
+  }
+
   if (!expanded) {
     return (
       <div className="flex items-start gap-2 rounded-md border border-border bg-bg-elev-2 px-3 py-2 text-xs">
@@ -652,6 +682,20 @@ function ApiKeyPanel({
           </span>{' '}
           <span className="text-fg-muted">in ~/.hermes/.env</span>
         </div>
+        <button
+          type="button"
+          onClick={() => void clearKey()}
+          disabled={clearing}
+          className={cn(
+            'text-xs transition disabled:opacity-50',
+            clearArmed
+              ? 'font-medium text-danger'
+              : 'text-fg-subtle hover:text-danger',
+          )}
+          data-testid="models-api-key-clear"
+        >
+          {clearing ? '…' : clearArmed ? 'Confirm clear' : 'Clear'}
+        </button>
         <button
           type="button"
           onClick={() => setExpanded(true)}

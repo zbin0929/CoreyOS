@@ -422,7 +422,7 @@ function DetailsStep({
 
   return (
     <div
-      className="flex flex-col gap-4 p-4"
+      className="flex flex-col gap-3 p-4"
       data-testid="agent-wizard-details"
     >
       {/* Header strip + back link. */}
@@ -475,6 +475,11 @@ function DetailsStep({
         </div>
       )}
 
+      {/* Identity + Credentials sit side-by-side on wider screens so
+          Step 2 feels dense rather than a long vertical scroll. The
+          Model card spans full-width below (it owns a probe button
+          and model-list it benefits from breathing room). */}
+      <div className="grid gap-3 lg:grid-cols-2">
       {/* Identity card — id + display name. */}
       <FieldCard title={t('agent_wizard.card_identity')}>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -542,6 +547,7 @@ function DetailsStep({
           </label>
         </FieldCard>
       )}
+      </div>{/* end Identity+Credentials grid */}
 
       {showProviderFields && template.isLocal && (
         <div
