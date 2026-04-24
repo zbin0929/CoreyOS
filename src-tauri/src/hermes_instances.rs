@@ -62,6 +62,15 @@ pub struct HermesInstance {
     /// callers handle `UnknownScope` if the id is stale.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox_scope_id: Option<String>,
+
+    /// T8 — optional reference to an [`crate::llm_profiles::LlmProfile`]
+    /// by id. When set, `base_url` / `api_key` / `default_model` are
+    /// resolved from the profile at *registration* time rather than
+    /// stored inline. Old rows (pre-T8) leave this `None` and keep
+    /// using their inline fields, so upgrading doesn't break any
+    /// existing agent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm_profile_id: Option<String>,
 }
 
 /// Top-level wrapper so we can add fields later without a migration.
@@ -200,6 +209,7 @@ mod tests {
             HermesInstance {
                 id: "work".into(),
                 label: "Work laptop".into(),
+                llm_profile_id: None,
                 base_url: "http://10.0.0.2:8642".into(),
                 api_key: Some("sk-xxx".into()),
                 default_model: Some("deepseek-chat".into()),
@@ -208,6 +218,7 @@ mod tests {
             HermesInstance {
                 id: "home".into(),
                 label: "Home desktop".into(),
+                llm_profile_id: None,
                 base_url: "http://192.168.1.10:8642".into(),
                 api_key: None,
                 default_model: None,
@@ -252,6 +263,7 @@ mod tests {
             HermesInstance {
                 id: "a".into(),
                 label: "A".into(),
+                llm_profile_id: None,
                 base_url: "http://a".into(),
                 api_key: None,
                 default_model: None,
@@ -260,6 +272,7 @@ mod tests {
             HermesInstance {
                 id: "b".into(),
                 label: "B".into(),
+                llm_profile_id: None,
                 base_url: "http://b".into(),
                 api_key: None,
                 default_model: None,
@@ -271,6 +284,7 @@ mod tests {
             HermesInstance {
                 id: "a".into(),
                 label: "A (renamed)".into(),
+                llm_profile_id: None,
                 base_url: "http://a2".into(),
                 api_key: None,
                 default_model: None,
@@ -289,6 +303,7 @@ mod tests {
             HermesInstance {
                 id: "a".into(),
                 label: "".into(),
+                llm_profile_id: None,
                 base_url: "http://a".into(),
                 api_key: None,
                 default_model: None,
@@ -297,6 +312,7 @@ mod tests {
             HermesInstance {
                 id: "b".into(),
                 label: "".into(),
+                llm_profile_id: None,
                 base_url: "http://b".into(),
                 api_key: None,
                 default_model: None,
@@ -350,6 +366,7 @@ mod tests {
             api_key: inst.api_key.filter(|s| !s.is_empty()),
             default_model: inst.default_model.filter(|s| !s.is_empty()),
             sandbox_scope_id: inst.sandbox_scope_id.filter(|s| !s.is_empty()),
+            llm_profile_id: inst.llm_profile_id.filter(|s| !s.is_empty()),
         };
         let list = load(dir);
         let list = upsert(list, normalised.clone());

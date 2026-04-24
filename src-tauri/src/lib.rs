@@ -23,6 +23,11 @@ mod hermes_instances;
 mod hermes_logs;
 mod hermes_profiles;
 mod hermes_profiles_archive;
+// llm_profiles — T8 multi-LLM model library (reusable {provider,
+// base_url, model, api_key_env} bundles referenced by Hermes instances
+// via `llm_profile_id`). Lives next to hermes_instances; similar
+// shape, similar validation rules.
+mod llm_profiles;
 mod ipc;
 mod menu;
 mod pty;
@@ -170,6 +175,9 @@ pub fn run() {
             ipc::routing_rules::routing_rule_delete,
             ipc::preset::preset_describe,
             ipc::preset::preset_install,
+            ipc::llm_profiles::llm_profile_list,
+            ipc::llm_profiles::llm_profile_upsert,
+            ipc::llm_profiles::llm_profile_delete,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");

@@ -67,6 +67,9 @@ pub async fn hermes_instance_upsert(
         sandbox_scope_id: instance
             .sandbox_scope_id
             .filter(|s| !s.is_empty() && s != crate::sandbox::DEFAULT_SCOPE_ID),
+        // T8 — reference to an LlmProfile. Empty-string → None so the
+        // frontend can clear the link by sending `""` from a dropdown.
+        llm_profile_id: instance.llm_profile_id.filter(|s| !s.trim().is_empty()),
     };
 
     // 1. Build the adapter (fail-fast on bad URL before we touch disk).

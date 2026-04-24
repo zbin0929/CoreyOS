@@ -13,6 +13,7 @@ pub mod hermes_config;
 pub mod hermes_instances;
 pub mod hermes_logs;
 pub mod hermes_profiles;
+pub mod llm_profiles;
 pub mod mcp;
 pub mod memory;
 pub mod menu;
