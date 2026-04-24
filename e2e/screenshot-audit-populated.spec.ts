@@ -104,51 +104,67 @@ test.describe('screenshot audit — populated (not part of default run)', () => 
         },
       ];
 
-      // Sessions fixture for Chat + Trajectory.
+      // Sessions fixture for Chat + Trajectory. Shape mirrors
+      // DbSessionWithMessages in src/lib/ipc.ts exactly (position,
+      // adapter_id, tool_calls[] all required).
       const now = Date.now();
-      const sess1 = {
-        id: 'sess-rust-help',
-        title: 'Help me with async Rust',
-        adapter_id: 'hermes',
-        model: 'deepseek-chat',
-        created_at: now - 172_800_000,
-        updated_at: now - 3_600_000,
-        messages: [
-          {
-            id: 'm1',
-            role: 'user',
-            content: 'Why does my Tokio task deadlock when I hold a MutexGuard across .await?',
-            created_at: now - 172_800_000,
-          },
-          {
-            id: 'm2',
-            role: 'assistant',
-            content:
-              'Holding a sync `std::sync::MutexGuard` across an `.await` is the classic footgun — ' +
-              'the guard is `!Send`, but Tokio tasks can migrate between threads, so the compiler ' +
-              'rejects it. Use `tokio::sync::Mutex` for async-aware locking.',
-            created_at: now - 172_700_000,
-            model: 'deepseek-chat',
-          },
-        ],
-      };
-      const sess2 = {
-        id: 'sess-landing',
-        title: 'Draft landing page copy',
-        adapter_id: 'hermes',
-        model: 'deepseek-chat',
-        created_at: now - 86_400_000,
-        updated_at: now - 1_200_000,
-        messages: [
-          {
-            id: 'm1',
-            role: 'user',
-            content: 'Write a landing-page headline for a control plane for AI agents.',
-            created_at: now - 86_400_000,
-          },
-        ],
-      };
-      s.sessions = [sess1, sess2];
+      s.sessions = [
+        {
+          id: 'sess-rust-help',
+          title: 'Help me with async Rust',
+          adapter_id: 'hermes',
+          model: 'deepseek-chat',
+          created_at: now - 172_800_000,
+          updated_at: now - 3_600_000,
+          messages: [
+            {
+              id: 'm1',
+              session_id: 'sess-rust-help',
+              role: 'user',
+              content: 'Why does my Tokio task deadlock when I hold a MutexGuard across .await?',
+              error: null,
+              position: 0,
+              created_at: now - 172_800_000,
+              tool_calls: [],
+            },
+            {
+              id: 'm2',
+              session_id: 'sess-rust-help',
+              role: 'assistant',
+              content:
+                'Holding a sync std::sync::MutexGuard across an .await is the classic footgun — ' +
+                'the guard is !Send, but Tokio tasks migrate between threads. ' +
+                'Use tokio::sync::Mutex for async-aware locking.',
+              error: null,
+              position: 1,
+              created_at: now - 172_700_000,
+              prompt_tokens: 42,
+              completion_tokens: 78,
+              tool_calls: [],
+            },
+          ],
+        },
+        {
+          id: 'sess-landing',
+          title: 'Draft landing page copy',
+          adapter_id: 'hermes',
+          model: 'deepseek-chat',
+          created_at: now - 86_400_000,
+          updated_at: now - 1_200_000,
+          messages: [
+            {
+              id: 'm1',
+              session_id: 'sess-landing',
+              role: 'user',
+              content: 'Write a landing-page headline for a control plane for AI agents.',
+              error: null,
+              position: 0,
+              created_at: now - 86_400_000,
+              tool_calls: [],
+            },
+          ],
+        },
+      ];
 
       // MCP servers.
       const hc = s.hermesConfig as { mcp_servers?: unknown[] };
