@@ -79,6 +79,7 @@
     "model_picker_search": "Filter models…",
     "model_picker_no_matches": "No models match that filter.",
     "model_use_default": "Use default",
+    "model_picker_profiles_header": "LLM Profiles",
     "model_default_tag": "default",
     "model_configure": "Configure providers…",
     "hero_title": "Talk to Hermes",

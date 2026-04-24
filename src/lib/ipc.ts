@@ -1357,6 +1357,26 @@ export function llmProfileDelete(id: string): Promise<void> {
   return invoke<void>('llm_profile_delete', { id });
 }
 
+/** Info returned by `llm_profile_ensure_adapter` — enough to pin the
+ *  session to the freshly-registered adapter + model in one write. */
+export interface LlmProfileAdapterInfo {
+  /** `hermes:profile:<profile_id>`. Use this as `session.adapter_id`. */
+  adapter_id: string;
+  /** The profile's `model` — use this as `session.model`. */
+  model: string;
+  /** UI label for tooltips/toasts. */
+  label: string;
+}
+
+/** Materialise an `LlmProfile` as an in-memory Hermes adapter so the
+ *  chat can route to it directly. Idempotent — re-registers on repeat
+ *  calls so key/base_url changes take effect. */
+export function llmProfileEnsureAdapter(profileId: string): Promise<LlmProfileAdapterInfo> {
+  return invoke<LlmProfileAdapterInfo>('llm_profile_ensure_adapter', {
+    profileId,
+  });
+}
+
 export interface HermesInstancesFile {
   instances: HermesInstance[];
 }

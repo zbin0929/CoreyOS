@@ -100,6 +100,12 @@ interface ChatState {
   renameSession: (id: string, title: string) => void;
   /** Set `null` to clear the override (revert to default). */
   setSessionModel: (id: string, model: string | null) => void;
+  /** Pin the session's adapter AND its per-session model override
+   *  in one write. Used by the model picker when the user selects
+   *  an LLM Profile row — the profile was just materialised into an
+   *  adapter backend-side and we want both fields to flip atomically
+   *  so a concurrent send can't route with a mismatched pair. */
+  setSessionAgent: (id: string, adapterId: string, model: string | null) => void;
 
   /** Append a fully-formed message (user or assistant). */
   appendMessage: (sessionId: string, msg: UiMessage) => void;
@@ -376,6 +382,34 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           adapter_id: sess.adapterId,
         }),
         'setSessionModel',
+      );
+    }
+  },
+
+  setSessionAgent: (id, adapterId, model) => {
+    const now = Date.now();
+    set((s) => {
+      const sess = s.sessions[id];
+      if (!sess) return s;
+      return {
+        sessions: {
+          ...s.sessions,
+          [id]: { ...sess, adapterId, model, updatedAt: now },
+        },
+      };
+    });
+    const sess = get().sessions[id];
+    if (sess) {
+      fireWrite(
+        dbSessionUpsert({
+          id,
+          title: sess.title,
+          model,
+          created_at: sess.createdAt,
+          updated_at: now,
+          adapter_id: adapterId,
+        }),
+        'setSessionAgent',
       );
     }
   },

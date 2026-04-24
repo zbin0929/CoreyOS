@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -13,9 +13,28 @@ import {
 } from 'lucide-react';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
-import { ipcErrorMessage, modelList, type ModelInfo } from '@/lib/ipc';
+import {
+  ipcErrorMessage,
+  llmProfileEnsureAdapter,
+  llmProfileList,
+  modelList,
+  type LlmProfile,
+  type ModelInfo,
+} from '@/lib/ipc';
 import { useAppStatusStore } from '@/stores/appStatus';
 import { useChatStore } from '@/stores/chat';
+
+/**
+ * Unified picker row — we merge gateway-reported models (from the
+ * default adapter's `/v1/models`) with user-saved LLM profiles
+ * (materialised into `hermes:profile:<id>` adapters on demand) so the
+ * user never has to think about whether a given option is a "gateway
+ * model" vs a "profile". Kind stays on the row so `selectRow` can pick
+ * the right IPC path + state flip.
+ */
+type PickerRow =
+  | { kind: 'model'; m: ModelInfo }
+  | { kind: 'profile'; p: LlmProfile };
 
 /**
  * Compact model picker rendered above the composer.
@@ -49,12 +68,22 @@ export function ActiveLLMBadge() {
   const sessionOverride = useChatStore((s) =>
     s.currentId ? (s.sessions[s.currentId]?.model ?? null) : null,
   );
+  const sessionAdapterId = useChatStore((s) =>
+    s.currentId ? (s.sessions[s.currentId]?.adapterId ?? null) : null,
+  );
   const setSessionModel = useChatStore((s) => s.setSessionModel);
+  const setSessionAgent = useChatStore((s) => s.setSessionAgent);
   const defaultModel = useAppStatusStore((s) => s.currentModel);
   const effective = sessionOverride ?? defaultModel;
 
   const [open, setOpen] = useState(false);
   const [models, setModels] = useState<ModelInfo[] | null>(null);
+  // LLM Profiles (from ~/.<config>/llm_profiles.json). These were
+  // invisible in the chat picker until T-polish: the backend now
+  // auto-registers each profile as `hermes:profile:<id>` so we can
+  // route turns to it directly. Fetched in parallel with `modelList`
+  // so the dropdown opens fast even when one side is slow.
+  const [profiles, setProfiles] = useState<LlmProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   // Active row index for keyboard navigation. -1 = "Use default" sentinel,
@@ -73,13 +102,19 @@ export function ActiveLLMBadge() {
     if (!open) return;
     let alive = true;
     setError(null);
-    modelList()
-      .then((rows) => {
-        if (alive) setModels(rows);
-      })
-      .catch((e) => {
-        if (alive) setError(ipcErrorMessage(e));
-      });
+    // Fan out both fetches in parallel. Errors from either side are
+    // non-fatal individually — we only surface a picker-level error
+    // when BOTH fail (no list to render). That way a profile-file
+    // read failure doesn't hide the gateway's models and vice versa.
+    Promise.allSettled([modelList(), llmProfileList()]).then((results) => {
+      if (!alive) return;
+      const [m, p] = results;
+      if (m.status === 'fulfilled') setModels(m.value);
+      if (p.status === 'fulfilled') setProfiles(p.value.profiles);
+      if (m.status === 'rejected' && p.status === 'rejected') {
+        setError(ipcErrorMessage(m.reason));
+      }
+    });
     return () => {
       alive = false;
     };
@@ -114,19 +149,42 @@ export function ActiveLLMBadge() {
     };
   }, [open]);
 
-  const filtered = useMemo(() => {
-    if (!models) return [];
+  // Unified, optionally-filtered picker list. Models come first
+  // (preserves the pre-T-polish ordering so regular users see the
+  // familiar default gateway's models on top), then LLM Profiles
+  // get appended as a second group. Free-text filter matches against
+  // id / display name / provider (models) OR id / label / provider /
+  // model field (profiles).
+  const filtered = useMemo<PickerRow[]>(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return models;
-    return models.filter(
-      (m) =>
-        m.id.toLowerCase().includes(q) ||
-        (m.display_name?.toLowerCase().includes(q) ?? false) ||
-        m.provider.toLowerCase().includes(q),
-    );
-  }, [models, query]);
+    const modelRows: PickerRow[] = (models ?? [])
+      .filter(
+        (m) =>
+          !q ||
+          m.id.toLowerCase().includes(q) ||
+          (m.display_name?.toLowerCase().includes(q) ?? false) ||
+          m.provider.toLowerCase().includes(q),
+      )
+      .map((m) => ({ kind: 'model' as const, m }));
+    const profileRows: PickerRow[] = (profiles ?? [])
+      .filter(
+        (p) =>
+          !q ||
+          p.id.toLowerCase().includes(q) ||
+          p.label.toLowerCase().includes(q) ||
+          p.provider.toLowerCase().includes(q) ||
+          p.model.toLowerCase().includes(q),
+      )
+      .map((p) => ({ kind: 'profile' as const, p }));
+    return [...modelRows, ...profileRows];
+  }, [models, profiles, query]);
 
-  const showSearch = (models?.length ?? 0) > 6;
+  const firstProfileIdx = useMemo(
+    () => filtered.findIndex((r) => r.kind === 'profile'),
+    [filtered],
+  );
+
+  const showSearch = filtered.length > 6;
 
   // Focus the search box when it appears; otherwise the list itself.
   useEffect(() => {
@@ -145,13 +203,56 @@ export function ActiveLLMBadge() {
   }, [activeIdx, open]);
 
   const labelText = effective ?? t('chat_page.model_unknown');
-  const isOverridden = sessionOverride !== null && sessionOverride !== defaultModel;
+  // "Override" pill lights up whenever this session is pinned to
+  // anything other than the global default: a per-session model
+  // override OR a Profile-backed adapter (both diverge from the
+  // bare default gateway).
+  const isOverridden =
+    (sessionOverride !== null && sessionOverride !== defaultModel) ||
+    (sessionAdapterId !== null && sessionAdapterId?.startsWith('hermes:profile:'));
 
-  function selectModel(modelId: string | null) {
+  // Flip the session's model to a gateway-reported model id. Also
+  // clears any Profile-backed adapter pin so we route through the
+  // default gateway again — otherwise picking a gateway model after
+  // a profile would keep talking to the profile's base_url with a
+  // bogus model name.
+  function selectGatewayModel(modelId: string | null) {
     if (!sessionId) return;
-    setSessionModel(sessionId, modelId);
+    if (sessionAdapterId?.startsWith('hermes:profile:')) {
+      // Clear the profile adapter pin AND set (or clear) the model
+      // override atomically. `adapterId=null` means "use the active
+      // adapter chosen by AgentSwitcher" — the original default path.
+      setSessionAgent(sessionId, '', modelId);
+    } else {
+      setSessionModel(sessionId, modelId);
+    }
     setOpen(false);
     triggerRef.current?.focus();
+  }
+
+  // Materialise a Profile as a live adapter, then pin the session to
+  // it. Both steps run back-to-back so the UI doesn't briefly show a
+  // state where `adapter_id` points at a `hermes:profile:*` slot the
+  // backend hasn't registered yet — a racing send would 404.
+  async function selectProfile(p: LlmProfile) {
+    if (!sessionId) return;
+    try {
+      const info = await llmProfileEnsureAdapter(p.id);
+      setSessionAgent(sessionId, info.adapter_id, info.model);
+    } catch (e) {
+      // Surface in the picker instead of a silent failure — the user
+      // just clicked, they expect feedback. Keep the picker open so
+      // they can read the message and pick something else.
+      setError(ipcErrorMessage(e));
+      return;
+    }
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function selectRow(row: PickerRow) {
+    if (row.kind === 'model') selectGatewayModel(row.m.id);
+    else selectProfile(row.p);
   }
 
   // Keyboard handler shared by search input and list container. -1 is the
@@ -166,8 +267,8 @@ export function ActiveLLMBadge() {
       setActiveIdx((i) => (i <= -1 ? max : i - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (activeIdx === -1) selectModel(null);
-      else if (filtered[activeIdx]) selectModel(filtered[activeIdx].id);
+      if (activeIdx === -1) selectGatewayModel(null);
+      else if (filtered[activeIdx]) selectRow(filtered[activeIdx]);
     } else if (e.key === 'Home') {
       e.preventDefault();
       setActiveIdx(-1);
@@ -280,7 +381,7 @@ export function ActiveLLMBadge() {
                 data-row-idx={-1}
                 role="option"
                 aria-selected={sessionOverride === null}
-                onClick={() => selectModel(null)}
+                onClick={() => selectGatewayModel(null)}
                 onMouseEnter={() => setActiveIdx(-1)}
                 className={cn(
                   'flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-xs transition-colors',
@@ -309,63 +410,131 @@ export function ActiveLLMBadge() {
             {error && (
               <li className="px-3 py-2 text-xs text-danger">{error}</li>
             )}
-            {!error && models === null && (
+            {!error && models === null && profiles === null && (
               <li className="flex items-center gap-2 px-3 py-2 text-xs text-fg-muted">
                 <Icon icon={Loader2} size="xs" className="animate-spin" />
                 {t('common.loading')}
               </li>
             )}
-            {!error && models && filtered.length === 0 && (
+            {!error && (models !== null || profiles !== null) && filtered.length === 0 && (
               <li className="px-3 py-2 text-xs text-fg-subtle">
                 {query
                   ? t('chat_page.model_picker_no_matches')
                   : t('chat_page.model_picker_empty')}
               </li>
             )}
-            {filtered.map((m, idx) => {
-              const selected = sessionOverride === m.id;
+            {filtered.map((row, idx) => {
               const isActive = activeIdx === idx;
-              return (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    data-row-idx={idx}
-                    role="option"
-                    aria-selected={selected}
-                    onClick={() => selectModel(m.id)}
-                    onMouseEnter={() => setActiveIdx(idx)}
-                    className={cn(
-                      'flex w-full items-start gap-2 px-3 py-2 text-left transition-colors',
-                      isActive ? 'bg-bg-elev-2' : 'hover:bg-bg-elev-2',
-                    )}
-                    data-testid={`chat-model-picker-option-${m.id}`}
+              // Render a mini section header right BEFORE the first
+              // profile row so the two groups read as distinct — no
+              // extra array entry (preserves stable keyboard indexing).
+              const headerNode =
+                idx === firstProfileIdx ? (
+                  <li
+                    key="__profile_header__"
+                    className="border-t border-border bg-bg/60 px-3 py-1.5 text-[10px] uppercase tracking-wider text-fg-subtle"
+                    aria-hidden="true"
                   >
-                    <Icon
-                      icon={m.capabilities.reasoning ? Sparkles : Cpu}
-                      size="xs"
+                    {t('chat_page.model_picker_profiles_header')}
+                  </li>
+                ) : null;
+              if (row.kind === 'model') {
+                const m = row.m;
+                const selected =
+                  sessionOverride === m.id && !sessionAdapterId?.startsWith('hermes:profile:');
+                return (
+                  <Fragment key={`m:${m.id}`}>
+                    {headerNode}
+                    <li key={`m:${m.id}`}>
+                      <button
+                        type="button"
+                        data-row-idx={idx}
+                        role="option"
+                        aria-selected={selected}
+                        onClick={() => selectGatewayModel(m.id)}
+                        onMouseEnter={() => setActiveIdx(idx)}
+                        className={cn(
+                          'flex w-full items-start gap-2 px-3 py-2 text-left transition-colors',
+                          isActive ? 'bg-bg-elev-2' : 'hover:bg-bg-elev-2',
+                        )}
+                        data-testid={`chat-model-picker-option-${m.id}`}
+                      >
+                        <Icon
+                          icon={m.capabilities.reasoning ? Sparkles : Cpu}
+                          size="xs"
+                          className={cn(
+                            'mt-0.5 flex-none',
+                            selected ? 'text-gold-500' : 'opacity-60',
+                          )}
+                        />
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <code className="truncate font-mono text-xs text-fg">
+                            {m.id}
+                          </code>
+                          <span className="truncate text-[10px] text-fg-subtle">
+                            {m.display_name ?? m.provider}
+                            {m.is_default && ` · ${t('chat_page.model_default_tag')}`}
+                          </span>
+                        </span>
+                        {selected && (
+                          <Icon
+                            icon={Check}
+                            size="xs"
+                            className="mt-0.5 flex-none text-gold-500"
+                          />
+                        )}
+                      </button>
+                    </li>
+                  </Fragment>
+                );
+              }
+              // Profile row
+              const p = row.p;
+              const adapterId = `hermes:profile:${p.id}`;
+              const selected = sessionAdapterId === adapterId;
+              return (
+                <Fragment key={`p:${p.id}`}>
+                  {headerNode}
+                  <li key={`p:${p.id}`}>
+                    <button
+                      type="button"
+                      data-row-idx={idx}
+                      role="option"
+                      aria-selected={selected}
+                      onClick={() => void selectProfile(p)}
+                      onMouseEnter={() => setActiveIdx(idx)}
                       className={cn(
-                        'mt-0.5 flex-none',
-                        selected ? 'text-gold-500' : 'opacity-60',
+                        'flex w-full items-start gap-2 px-3 py-2 text-left transition-colors',
+                        isActive ? 'bg-bg-elev-2' : 'hover:bg-bg-elev-2',
                       )}
-                    />
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <code className="truncate font-mono text-xs text-fg">
-                        {m.id}
-                      </code>
-                      <span className="truncate text-[10px] text-fg-subtle">
-                        {m.display_name ?? m.provider}
-                        {m.is_default && ` · ${t('chat_page.model_default_tag')}`}
-                      </span>
-                    </span>
-                    {selected && (
+                      data-testid={`chat-model-picker-profile-${p.id}`}
+                    >
                       <Icon
-                        icon={Check}
+                        icon={Settings2}
                         size="xs"
-                        className="mt-0.5 flex-none text-gold-500"
+                        className={cn(
+                          'mt-0.5 flex-none',
+                          selected ? 'text-gold-500' : 'opacity-60',
+                        )}
                       />
-                    )}
-                  </button>
-                </li>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <code className="truncate font-mono text-xs text-fg">
+                          {p.model}
+                        </code>
+                        <span className="truncate text-[10px] text-fg-subtle">
+                          {p.label || p.id} · {p.provider}
+                        </span>
+                      </span>
+                      {selected && (
+                        <Icon
+                          icon={Check}
+                          size="xs"
+                          className="mt-0.5 flex-none text-gold-500"
+                        />
+                      )}
+                    </button>
+                  </li>
+                </Fragment>
               );
             })}
           </ul>

@@ -175,6 +175,7 @@ pub fn run() {
             ipc::llm_profiles::llm_profile_list,
             ipc::llm_profiles::llm_profile_upsert,
             ipc::llm_profiles::llm_profile_delete,
+            ipc::llm_profiles::llm_profile_ensure_adapter,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");
@@ -235,6 +236,49 @@ pub fn run() {
                     }
                     Err(e) => {
                         tracing::warn!(id = %inst.id, error = %e, "T6.2: skipping malformed Hermes instance");
+                    }
+                }
+            }
+
+            // Register every saved LLM Profile as a Hermes-backed adapter
+            // under `hermes:profile:<id>`. This is the "Option B" bridge
+            // that lets the Chat model picker surface profile-backed
+            // endpoints directly — without the user having to hand-craft
+            // a matching Hermes Instance row. Failures per profile are
+            // logged and swallowed (bad base_url on one profile must not
+            // block the others or the app boot).
+            for profile in llm_profiles::load(&config_dir) {
+                let api_key = match profile
+                    .api_key_env
+                    .as_deref()
+                    .filter(|k| !k.is_empty())
+                {
+                    Some(env_name) => {
+                        hermes_config::read_env_value(env_name).unwrap_or(None)
+                    }
+                    None => None,
+                };
+                match HermesAdapter::new_live(
+                    profile.base_url.clone(),
+                    api_key,
+                    Some(profile.model.clone()),
+                ) {
+                    Ok(adapter) => {
+                        let adapter_id = format!("hermes:profile:{}", profile.id);
+                        let label = if profile.label.trim().is_empty() {
+                            profile.id.clone()
+                        } else {
+                            profile.label.clone()
+                        };
+                        registry.register_with_id_and_label(
+                            adapter_id.clone(),
+                            format!("LLM · {label}"),
+                            Arc::new(adapter),
+                        );
+                        info!(profile_id = %profile.id, adapter_id = %adapter_id, "LLM profile registered as adapter");
+                    }
+                    Err(e) => {
+                        tracing::warn!(id = %profile.id, error = %e, "skipping malformed LLM profile");
                     }
                 }
             }

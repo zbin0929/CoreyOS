@@ -8,12 +8,23 @@
 //! Mutations validate id / base_url / model before persisting so
 //! a frontend bug can't land a corrupt row on disk.
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::adapters::hermes::HermesAdapter;
 use crate::error::{IpcError, IpcResult};
 use crate::llm_profiles::{self, LlmProfile};
 use crate::state::AppState;
+
+/// Adapter id under which we register a Profile-backed Hermes adapter.
+/// Namespaced with `profile:` to keep it separate from user-created
+/// Hermes Instances (`hermes:<id>`), avoiding any chance of collision
+/// between an instance id and a profile id that happen to share a slug.
+fn profile_adapter_id(profile_id: &str) -> String {
+    format!("hermes:profile:{profile_id}")
+}
 
 /// Wrapper so we can add fields (e.g. `defaults_id`) later without
 /// breaking the TS binding.
@@ -87,12 +98,13 @@ pub async fn llm_profile_delete(state: State<'_, AppState>, id: String) -> IpcRe
     llm_profiles::validate_id(&id_norm).map_err(|e| IpcError::NotConfigured { hint: e })?;
 
     let dir = state.config_dir.clone();
+    let id_for_task = id_norm.clone();
     tokio::task::spawn_blocking(move || -> IpcResult<()> {
         let list = llm_profiles::load(&dir);
-        let (list, removed) = llm_profiles::delete(list, &id_norm);
+        let (list, removed) = llm_profiles::delete(list, &id_for_task);
         if !removed {
             return Err(IpcError::NotConfigured {
-                hint: format!("no llm profile with id {id_norm:?}"),
+                hint: format!("no llm profile with id {id_for_task:?}"),
             });
         }
         llm_profiles::save(&dir, &list).map_err(|e| IpcError::Internal {
@@ -105,5 +117,105 @@ pub async fn llm_profile_delete(state: State<'_, AppState>, id: String) -> IpcRe
         message: format!("llm_profile_delete join: {e}"),
     })??;
 
+    // Also unregister any Profile-backed adapter that may have been
+    // created via `llm_profile_ensure_adapter`. Silently no-ops when
+    // nothing's registered under that id.
+    state.adapters.unregister(&profile_adapter_id(&id_norm));
+
     Ok(())
+}
+
+/// Result of materialising an `LlmProfile` as a live chat-capable
+/// adapter. Returned to the frontend so it can pin the session to the
+/// right `adapter_id` and `model` in a single round-trip.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmProfileAdapterInfo {
+    /// `hermes:profile:<profile_id>`. Stable across re-calls — the
+    /// registry performs an insert-or-replace keyed on this id.
+    pub adapter_id: String,
+    /// The profile's `model` — what the session should pin as the
+    /// default turn model so the composer ships the right field
+    /// upstream.
+    pub model: String,
+    /// UI label (profile.label, falling back to its id).
+    pub label: String,
+}
+
+/// Register the given `LlmProfile` as an in-memory Hermes adapter so
+/// the Chat page can route turns to it without the user first having
+/// to hand-create a matching Hermes Instance. Idempotent: calling
+/// twice with the same id simply hot-swaps the existing adapter with
+/// a fresh one built from the current profile contents (picks up key
+/// rotations or base_url edits).
+///
+/// The registration is NOT persisted to `hermes_instances.json` — we
+/// rebuild it on every app boot by iterating `llm_profiles.json`
+/// (see `lib.rs`), so the adapter slot stays in sync with the profile
+/// on disk and deleting the profile reliably removes the adapter.
+#[tauri::command]
+pub async fn llm_profile_ensure_adapter(
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> IpcResult<LlmProfileAdapterInfo> {
+    let id = profile_id.trim().to_string();
+    llm_profiles::validate_id(&id).map_err(|e| IpcError::NotConfigured { hint: e })?;
+
+    let dir = state.config_dir.clone();
+    let id_for_load = id.clone();
+    let profile = tokio::task::spawn_blocking(move || {
+        llm_profiles::load(&dir)
+            .into_iter()
+            .find(|p| p.id == id_for_load)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("llm_profile_ensure_adapter join: {e}"),
+    })?
+    .ok_or_else(|| IpcError::NotConfigured {
+        hint: format!("no llm profile with id {id:?}"),
+    })?;
+
+    // Resolve the API key value from ~/.hermes/.env if the profile
+    // references one. Missing env entries are NOT fatal — we register
+    // the adapter anyway and let the upstream 401 bubble up at chat
+    // time so the user sees the actual error.
+    let api_key = match profile.api_key_env.as_deref().filter(|k| !k.is_empty()) {
+        Some(env_name) => {
+            crate::hermes_config::read_env_value(env_name).map_err(|e| IpcError::Internal {
+                message: format!("read env for profile adapter: {e}"),
+            })?
+        }
+        None => None,
+    };
+
+    let adapter = HermesAdapter::new_live(
+        profile.base_url.clone(),
+        api_key,
+        Some(profile.model.clone()),
+    )?;
+
+    let adapter_id = profile_adapter_id(&profile.id);
+    let label = if profile.label.trim().is_empty() {
+        profile.id.clone()
+    } else {
+        profile.label.clone()
+    };
+    state.adapters.register_with_id_and_label(
+        adapter_id.clone(),
+        format!("LLM · {label}"),
+        Arc::new(adapter),
+    );
+
+    tracing::info!(
+        profile_id = %profile.id,
+        adapter_id = %adapter_id,
+        base_url = %profile.base_url,
+        "llm profile registered as adapter"
+    );
+
+    Ok(LlmProfileAdapterInfo {
+        adapter_id,
+        model: profile.model,
+        label,
+    })
 }
