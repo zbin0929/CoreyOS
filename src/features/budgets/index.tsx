@@ -198,8 +198,13 @@ function BudgetCard({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
-  const pct = Math.min(100, Math.round((spentCents / budget.amount_cents) * 100));
-  const breached = spentCents >= budget.amount_cents;
+  // Guard against malformed rows (e.g. cap_cents === 0 from a migration
+  // bug, or an upstream schema drift) — we'd otherwise render $NaN and
+  // NaN% which looks broken. Falls through as "0%" + safe totals.
+  const cap = budget.amount_cents || 0;
+  const rawPct = cap > 0 ? (spentCents / cap) * 100 : 0;
+  const pct = Math.min(100, Math.max(0, Math.round(Number.isFinite(rawPct) ? rawPct : 0)));
+  const breached = cap > 0 && spentCents >= cap;
   const warn = !breached && pct >= 80;
   const colorClass = breached
     ? 'bg-danger'
@@ -480,5 +485,9 @@ function scopeLabel(b: BudgetRow, t: (k: string) => string): string {
 }
 
 function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+  // Defensive: a malformed row (undefined / null / NaN) should not render
+  // "$NaN" to the user. Clamp to 0 so the bad row is visible but doesn't
+  // look like a Corey bug.
+  const v = Number.isFinite(cents) ? cents : 0;
+  return `$${(v / 100).toFixed(2)}`;
 }

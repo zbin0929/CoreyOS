@@ -393,12 +393,13 @@ export const tauriMockInitScript = /* js */ `
           },
         ];
 
-      // T6.8 — Scheduler CRUD over ~/.hermes/cron/jobs.json. Empty
-      // list + validate pass-through is enough for the page to render.
+      // T6.8 — Scheduler CRUD over ~/.hermes/cron/jobs.json.
+      // state.scheduler_jobs starts empty but tests / audits can push
+      // rows via addInitScript to render populated states.
       case 'scheduler_list_jobs':
-        return [];
+        return state.scheduler_jobs ?? [];
       case 'scheduler_list_runs':
-        return [];
+        return state.scheduler_runs ?? [];
       case 'scheduler_validate_cron':
         return { ok: true, is_cron: true, next_fires: [] };
       case 'scheduler_upsert_job':
