@@ -13,6 +13,7 @@ import { AlertTriangle, Paperclip, Send, Sparkles, Square, Wand2, X } from 'luci
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { ExportSessionMenu } from './ExportSessionMenu';
 import { SaveAsSkillDrawer } from './SaveAsSkillDrawer';
 import { cn } from '@/lib/cn';
 import {
@@ -782,7 +783,7 @@ function ChatPane({
       <PageHeader
         title={t('chat_page.title')}
         subtitle={t('chat_page.subtitle')}
-        actions={<SaveAsSkillHeaderAction messages={messages} />}
+        actions={<ChatHeaderActions sessionId={sessionId} messages={messages} />}
       />
 
       {/* T1.9 — virtualised list when we have messages; the empty-
@@ -1031,6 +1032,30 @@ function formatBytes(n: number): string {
   const kib = n / 1024;
   if (kib < 1024) return `${kib.toFixed(1)} KB`;
   return `${(kib / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * Header action cluster — the export menu + the Save-as-Skill button,
+ * side by side. Split out so the top-level `<PageHeader actions>` prop
+ * stays a single JSX node and adding future actions (share link,
+ * branch session) doesn't require edits to ChatPane's return.
+ */
+function ChatHeaderActions({
+  sessionId,
+  messages,
+}: {
+  sessionId: string;
+  messages: UiMessage[];
+}) {
+  const title = useChatStore(
+    (s) => s.sessions[sessionId]?.title ?? 'chat',
+  );
+  return (
+    <div className="flex items-center gap-2">
+      <ExportSessionMenu title={title} messages={messages} />
+      <SaveAsSkillHeaderAction messages={messages} />
+    </div>
+  );
 }
 
 /**
