@@ -305,9 +305,37 @@ export function ModelsRoute() {
                 />
               )}
 
-              <CurrentCard view={loaded} />
+              {/* The legacy single-model editor (writes
+                  ~/.hermes/config.yaml's `model:` section) now lives
+                  under a collapsed disclosure. LLM profiles above are
+                  the primary workflow; this form is for power users
+                  tuning the Hermes gateway's default fallback model —
+                  keeping it expanded was cluttering the page per
+                  user feedback 1a ("展示好多信息，很乱"). */}
+              <details className="group rounded-md border border-border bg-bg-elev-1">
+                <summary
+                  className="flex cursor-pointer items-center justify-between gap-2 p-3 text-sm text-fg-muted hover:text-fg"
+                  data-testid="models-legacy-advanced"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium">
+                      {t('models_page.legacy_title')}
+                    </span>
+                    <code className="font-mono text-[10px] text-fg-subtle">
+                      {loaded.config_path}
+                    </code>
+                  </span>
+                  <span className="text-xs text-fg-subtle group-open:hidden">
+                    {t('models_page.legacy_expand')}
+                  </span>
+                  <span className="hidden text-xs text-fg-subtle group-open:inline">
+                    {t('models_page.legacy_collapse')}
+                  </span>
+                </summary>
+                <div className="flex flex-col gap-4 border-t border-border p-4">
+                  <CurrentCard view={loaded} />
 
-              <form onSubmit={onSubmit} className="flex flex-col gap-5">
+                  <form onSubmit={onSubmit} className="flex flex-col gap-5">
                 <Section
                   title={t('models_page.change_model')}
                   description={t('models_page.change_model_desc')}
@@ -426,7 +454,9 @@ export function ModelsRoute() {
                     </Button>
                   </div>
                 </div>
-              </form>
+                  </form>
+                </div>
+              </details>
             </>
           )}
         </div>

@@ -36,9 +36,11 @@ test.describe('T6.5 — sandbox scopes', () => {
       page.getByTestId('sandbox-scope-row-worker'),
     ).toBeVisible();
 
-    // 3. Assign the worker scope to a new Hermes instance. The
-    //    scope <select> exposed a per-row testid so we can drive it
-    //    without relying on label matching.
+    // 3. Assign the worker scope to a new Hermes instance. T8 moved
+    //    HermesInstancesSection to /agents, so nav there to reach
+    //    the add button + per-row scope <select>. Client-side nav
+    //    via the sidebar link keeps mock state in memory.
+    await page.getByRole('link', { name: /Agents/ }).first().click();
     await page.getByTestId('hermes-instances-add').click();
     await page.getByTestId('hermes-instance-scope-new').selectOption('worker');
 
@@ -143,10 +145,13 @@ test.describe('T6.5 — sandbox scopes', () => {
     });
     expect(defaultOk.ok).toBe(true);
 
-    // 8. Delete the worker scope. JS confirm() is the default yes in
-    //    Playwright unless intercepted; accept it so the delete
-    //    proceeds to the IPC layer.
+    // 8. Delete the worker scope. Sandbox scopes live under /settings,
+    //    so nav back (client-side) before clicking the trash button.
+    //    JS confirm() is the default yes in Playwright unless
+    //    intercepted; accept it so the delete proceeds to the IPC
+    //    layer.
     page.on('dialog', (d) => void d.accept());
+    await page.getByRole('link', { name: /Settings|设置/ }).first().click();
     await page.getByTestId('sandbox-scope-delete-worker').click();
     await expect(
       page.getByTestId('sandbox-scope-row-worker'),

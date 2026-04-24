@@ -20,8 +20,11 @@ test.describe('logs (changelog)', () => {
     page,
   }) => {
     // Drive a real write_model from the Models page so the mock populates
-    // its changelog identically to how the Rust journal would.
+    // its changelog identically to how the Rust journal would. T8 moved
+    // the legacy config.yaml editor behind a <details> disclosure — open
+    // it before hunting for the model input.
     await page.goto('/models');
+    await page.getByTestId('models-legacy-advanced').click();
     const modelInput = page.getByPlaceholder(/deepseek-reasoner|deepseek-chat/).first();
     await modelInput.fill('deepseek-reasoner');
     // Press Enter to commit + close the Combobox dropdown that otherwise
@@ -47,7 +50,10 @@ test.describe('logs (changelog)', () => {
     });
 
     // Head back to Models (client-side) and confirm the model reverted.
+    // The <details> re-collapses across the client nav — reopen before
+    // asserting on the legacy form's content.
     await page.getByRole('link', { name: /Language models|LLMs|模型|Models/ }).first().click();
+    await page.getByTestId('models-legacy-advanced').click();
     await expect(page.getByText('deepseek-chat').first()).toBeVisible();
   });
 });

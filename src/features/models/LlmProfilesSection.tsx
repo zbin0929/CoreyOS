@@ -24,6 +24,7 @@ import {
   llmProfileUpsert,
   type LlmProfile,
 } from '@/lib/ipc';
+import { PROVIDER_TEMPLATES } from '@/features/settings/providerTemplates';
 
 /**
  * List-and-edit UI for reusable LLM profiles.
@@ -313,16 +314,48 @@ function LlmProfileRow({
       data-testid={`llm-profile-form-${mode === 'new' ? 'new' : draft.id}`}
     >
       <div className="grid gap-3 md:grid-cols-2">
+        <Field label={t('models_page.profile_field_label')}>
+          {/* Label is typed first; when creating a new profile we
+              auto-derive the id from the label on every keystroke
+              (slug-safe), so the typical user never has to think
+              about the id field. They can still override manually
+              if they want a specific slug. */}
+          <input
+            type="text"
+            className={inputCls}
+            value={draft.label}
+            onChange={(e) => {
+              const next = e.target.value;
+              setDraft((prev) => ({
+                ...prev,
+                label: next,
+                // Only auto-slug on create, and only if the user
+                // hasn't manually edited the id yet.
+                id:
+                  mode === 'new' && (prev.id === '' || prev.id === slugify(prev.label))
+                    ? slugify(next)
+                    : prev.id,
+              }));
+            }}
+            placeholder="OpenAI GPT-4o"
+            data-testid="llm-profile-label"
+          />
+        </Field>
         <Field
           label={t('models_page.profile_field_id')}
           hint={
-            idError ?? (duplicateId ? t('models_page.profile_err_id_duplicate', { id: idTrim }) : undefined)
+            idError ??
+            (duplicateId
+              ? t('models_page.profile_err_id_duplicate', { id: idTrim })
+              : mode === 'new'
+                ? t('models_page.profile_field_id_hint')
+                : undefined)
           }
           hintClass={idError || duplicateId ? 'text-danger' : undefined}
         >
           <input
             type="text"
-            className={inputCls}
+            className={cn(inputCls, 'font-mono')}
             value={draft.id}
             onChange={(e) => setDraft({ ...draft, id: e.target.value })}
             placeholder="openai-gpt4o"
@@ -330,37 +363,85 @@ function LlmProfileRow({
             spellCheck={false}
           />
         </Field>
-        <Field label={t('models_page.profile_field_label')}>
-          <input
-            type="text"
-            className={inputCls}
-            value={draft.label}
-            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-            placeholder="OpenAI GPT-4o"
-          />
-        </Field>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <Field label={t('models_page.profile_field_provider')}>
-          <input
-            type="text"
+          {/* Providers are a closed set (see providerTemplates.ts) —
+              free-text was the #1 source of typos that broke
+              base_url/api_key inference. Picking from the list now
+              auto-fills base_url + api_key_env + a suggested model
+              when any of those three are empty, so users can accept
+              the defaults without typing. */}
+          <select
             className={inputCls}
             value={draft.provider}
-            onChange={(e) => setDraft({ ...draft, provider: e.target.value })}
-            placeholder="openai"
-            spellCheck={false}
-          />
+            onChange={(e) => {
+              const next = e.target.value;
+              const tpl = PROVIDER_TEMPLATES.find((p) => p.id === next);
+              setDraft((prev) => ({
+                ...prev,
+                provider: next,
+                base_url: !prev.base_url.trim() && tpl ? tpl.baseUrl : prev.base_url,
+                api_key_env:
+                  !prev.api_key_env && tpl ? tpl.envKey : prev.api_key_env,
+                model:
+                  !prev.model.trim() && tpl && tpl.suggestedModels.length > 0
+                    ? tpl.suggestedModels[0]!
+                    : prev.model,
+              }));
+            }}
+            data-testid="llm-profile-provider"
+          >
+            <option value="">—</option>
+            {PROVIDER_TEMPLATES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
         </Field>
-        <Field label={t('models_page.profile_field_model')}>
-          <input
-            type="text"
-            className={cn(inputCls, 'font-mono')}
-            value={draft.model}
-            onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-            placeholder="gpt-4o"
-            spellCheck={false}
-          />
+        <Field
+          label={t('models_page.profile_field_model')}
+          hint={t('models_page.profile_field_model_hint')}
+        >
+          {(() => {
+            const tpl = PROVIDER_TEMPLATES.find((p) => p.id === draft.provider);
+            const suggestions = tpl?.suggestedModels ?? [];
+            if (suggestions.length === 0) {
+              return (
+                <input
+                  type="text"
+                  className={cn(inputCls, 'font-mono')}
+                  value={draft.model}
+                  onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                  placeholder="gpt-4o"
+                  spellCheck={false}
+                />
+              );
+            }
+            // Datalist pattern: dropdown of common model ids with
+            // free-text escape hatch for models not on the list
+            // (e.g. OpenAI's new releases or fine-tunes).
+            return (
+              <>
+                <input
+                  type="text"
+                  list={`llm-profile-models-${draft.id || 'new'}`}
+                  className={cn(inputCls, 'font-mono')}
+                  value={draft.model}
+                  onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                  placeholder={suggestions[0]}
+                  spellCheck={false}
+                />
+                <datalist id={`llm-profile-models-${draft.id || 'new'}`}>
+                  {suggestions.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </>
+            );
+          })()}
         </Field>
       </div>
 
@@ -475,6 +556,20 @@ const inputCls = cn(
   'placeholder:text-fg-subtle',
   'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
 );
+
+/**
+ * Best-effort slug: lowercase, replace non-alphanum with `-`, collapse
+ * runs of `-`, trim leading/trailing `-`, and cap to 32 chars so the
+ * suggested id always satisfies `validate_id` on the Rust side.
+ * Empty input → empty output (don't fabricate ids).
+ */
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+}
 
 function Field({
   label,

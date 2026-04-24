@@ -5,10 +5,11 @@ import { test, expect } from './fixtures/test';
  */
 test.describe('agent wizard', () => {
   test('provider picker → details → save', async ({ page }) => {
-    await page.goto('/settings');
+    // T8 — HermesInstancesSection was moved from /settings to its
+    // own top-level /agents route. The wizard button lives there now.
+    await page.goto('/agents');
     await page.waitForTimeout(500);
 
-    // The wizard button. Scroll to it; it's near the bottom of Settings.
     const quickAdd = page.getByTestId('hermes-instances-quick-add');
     await quickAdd.scrollIntoViewIfNeeded();
     await expect(quickAdd).toBeVisible();

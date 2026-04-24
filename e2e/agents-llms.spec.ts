@@ -50,12 +50,15 @@ test.describe('T8 · agents + llms', () => {
     const form = page.getByTestId('llm-profile-form-new');
     await expect(form).toBeVisible();
 
-    // Fill in the fields.
-    await form.locator('input').nth(0).fill('openai-gpt4o');
-    await form.locator('input').nth(1).fill('OpenAI GPT-4o');
-    await form.locator('input').nth(2).fill('openai');
-    await form.locator('input').nth(3).fill('gpt-4o');
-    await form.locator('input').nth(4).fill('https://api.openai.com/v1');
+    // Fill via stable test ids instead of .nth() — the form's field
+    // order (label-before-id) and the provider widget type
+    // (select-not-input) are both UX decisions that may drift again.
+    await form.getByTestId('llm-profile-label').fill('OpenAI GPT-4o');
+    // Label → id auto-slugs to "openai-gpt-4o"; the save-by-id test
+    // selector below uses that derived slug.
+    await form.getByTestId('llm-profile-provider').selectOption('openai');
+    // Provider select auto-fills base_url + model from the template;
+    // the form is fully valid at this point.
 
     await page.screenshot({
       path: 'e2e/screenshots/agents-llms/models-new-form.png',
@@ -64,8 +67,9 @@ test.describe('T8 · agents + llms', () => {
 
     await page.getByTestId('llm-profile-save-new').click();
 
-    // Row should appear + form should close.
-    await expect(page.getByTestId('llm-profile-row-openai-gpt4o')).toBeVisible();
+    // Row should appear + form should close. The id is derived from
+    // the label via slugify() — "OpenAI GPT-4o" → "openai-gpt-4o".
+    await expect(page.getByTestId('llm-profile-row-openai-gpt-4o')).toBeVisible();
     await expect(form).toBeHidden();
 
     await page.screenshot({
