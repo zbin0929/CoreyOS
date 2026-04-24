@@ -42,7 +42,9 @@ test.describe('T6.5 — sandbox scopes', () => {
     //    via the sidebar link keeps mock state in memory.
     await page.getByRole('link', { name: /Agents/ }).first().click();
     await page.getByTestId('hermes-instances-add').click();
-    await page.getByTestId('hermes-instance-scope-new').selectOption('worker');
+    // Custom <Select> — click trigger, then click option by label.
+    await page.getByTestId('hermes-instance-scope-new').click();
+    await page.getByRole('option', { name: /Worker/ }).click();
 
     // 4. Pre-seed the mock so the IPC actually enforces. Without
     //    this, the mock would treat the worker scope as empty-roots

@@ -56,7 +56,12 @@ test.describe('T8 · agents + llms', () => {
     await form.getByTestId('llm-profile-label').fill('OpenAI GPT-4o');
     // Label → id auto-slugs to "openai-gpt-4o"; the save-by-id test
     // selector below uses that derived slug.
-    await form.getByTestId('llm-profile-provider').selectOption('openai');
+    //
+    // Provider is our themed <Select> (button + listbox), not a
+    // native <select> — Playwright's selectOption() can't drive it.
+    // Click the trigger, then click the option labelled "OpenAI".
+    await form.getByTestId('llm-profile-provider').click();
+    await page.getByRole('option', { name: /^OpenAI/ }).click();
     // Provider select auto-fills base_url + model from the template;
     // the form is fully valid at this point.
 

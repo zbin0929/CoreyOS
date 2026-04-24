@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
   hermesEnvSetKey,
@@ -367,43 +368,40 @@ function LlmProfileRow({
 
       <div className="grid gap-3 md:grid-cols-2">
         <Field label={t('models_page.profile_field_provider')}>
-          {/* Providers are a closed set (see providerTemplates.ts) —
-              free-text was the #1 source of typos that broke
-              base_url/api_key inference. Picking from the list now
-              auto-fills base_url + api_key_env + a suggested model
-              when any of those three are empty, so users can accept
-              the defaults without typing. */}
-          <select
-            className={cn(
-              inputCls,
-              'appearance-none bg-no-repeat pr-7',
-              "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 20 20%22 stroke=%22currentColor%22><path stroke-linecap=%22round%22 stroke-linejoin=%22round%22 stroke-width=%222%22 d=%22M6 8l4 4 4-4%22/></svg>')] bg-[length:16px_16px] bg-[right_6px_center]",
-            )}
+          {/* Providers are a closed set (see providerTemplates.ts).
+              Use our themed <Select> instead of the native one so the
+              dropdown matches the rest of the form on macOS.
+              Selecting a provider REPLACES base_url + api_key_env +
+              model with that template's defaults — picking a new
+              provider and keeping the old base_url was silently
+              breaking credentials inference. */}
+          <Select
             value={draft.provider}
-            onChange={(e) => {
-              const next = e.target.value;
+            onChange={(next) => {
               const tpl = PROVIDER_TEMPLATES.find((p) => p.id === next);
               setDraft((prev) => ({
                 ...prev,
                 provider: next,
-                base_url: !prev.base_url.trim() && tpl ? tpl.baseUrl : prev.base_url,
-                api_key_env:
-                  !prev.api_key_env && tpl ? tpl.envKey : prev.api_key_env,
+                base_url: tpl ? tpl.baseUrl : prev.base_url,
+                api_key_env: tpl ? tpl.envKey : prev.api_key_env,
                 model:
-                  !prev.model.trim() && tpl && tpl.suggestedModels.length > 0
+                  tpl && tpl.suggestedModels.length > 0
                     ? tpl.suggestedModels[0]!
                     : prev.model,
               }));
             }}
+            options={[
+              { value: '', label: '—' },
+              ...PROVIDER_TEMPLATES.map((p) => ({
+                value: p.id,
+                label: p.label,
+                hint: p.envKey ?? undefined,
+              })),
+            ]}
+            placeholder="—"
             data-testid="llm-profile-provider"
-          >
-            <option value="">—</option>
-            {PROVIDER_TEMPLATES.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+            ariaLabel={t('models_page.profile_field_provider')}
+          />
         </Field>
         <Field
           label={t('models_page.profile_field_model')}

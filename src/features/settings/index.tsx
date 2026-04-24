@@ -1020,37 +1020,31 @@ function HermesInstanceRow({
         label={t('settings.hermes_instances.field_sandbox_scope')}
         hint={t('settings.hermes_instances.field_sandbox_scope_hint')}
       >
-        {/* appearance-none kills the macOS native bevel so the
-            select matches our other inputs; the chevron is painted
-            via a background SVG so keyboard + screen-reader
-            semantics stay on the <select>. */}
-        <select
-          className={cn(
-            'appearance-none rounded-md border border-border bg-bg bg-no-repeat py-1.5 pl-2 pr-7 text-sm text-fg',
-            'focus:border-accent focus:outline-none focus:ring-2 focus:ring-gold-500/40',
-            "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 20 20%22 stroke=%22currentColor%22><path stroke-linecap=%22round%22 stroke-linejoin=%22round%22 stroke-width=%222%22 d=%22M6 8l4 4 4-4%22/></svg>')] bg-[length:16px_16px] bg-[right_6px_center]",
-          )}
+        {/* Themed <Select> — matches our input styling on macOS
+            (native selects look alien in our dark chrome). Empty
+            string means "fall back to the default scope"; the row
+            translates that back to `null` on save. */}
+        <Select
           value={draft.sandbox_scope_id ?? ''}
-          onChange={(e) => {
-            const val = e.target.value;
+          onChange={(val) =>
             setDraft({
               ...draft,
               sandbox_scope_id: val === '' ? null : val,
-            });
-          }}
+            })
+          }
+          options={[
+            { value: '', label: t('settings.hermes_instances.scope_default') },
+            ...scopes
+              .filter((s) => s.id !== 'default')
+              .map((s) => ({
+                value: s.id,
+                label: s.label,
+                hint: s.id,
+              })),
+          ]}
           data-testid={`hermes-instance-scope-${initial.id || 'new'}`}
-        >
-          <option value="">
-            {t('settings.hermes_instances.scope_default')}
-          </option>
-          {scopes
-            .filter((s) => s.id !== 'default')
-            .map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label} ({s.id})
-              </option>
-            ))}
-        </select>
+          ariaLabel={t('settings.hermes_instances.field_sandbox_scope')}
+        />
       </Field>
 
       {/* Probe result */}
