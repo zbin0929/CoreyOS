@@ -94,9 +94,12 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {/* Sidebar footer intentionally minimal — just the product name +
+          version. Previous "Phase 0 · foundation" marker was a dev
+          artifact from the initial scaffold; it outlived its purpose
+          once shipped phases went into CHANGELOG.md. */}
       <div className="mt-auto p-3 text-[10px] text-fg-subtle">
-        <div>{t('app.name')} dev build</div>
-        <div className="mt-0.5 font-mono">Phase 0 · foundation</div>
+        <div className="font-mono">{t('app.name')} v{__APP_VERSION__}</div>
       </div>
     </aside>
   );

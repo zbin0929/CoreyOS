@@ -362,6 +362,50 @@ export const tauriMockInitScript = /* js */ `
       case 'home_stats':
         return state.homeStats;
 
+      // T5 — registered adapters. Without this mock the AgentSwitcher
+      // pill rendered "No agents" on every page, which in turn made the
+      // screenshot audit misleading. Single default adapter is plenty
+      // for UI-level audits.
+      case 'adapter_list':
+        return [
+          {
+            id: 'hermes',
+            name: 'Hermes',
+            is_default: true,
+            capabilities: {
+              streaming: true,
+              tool_calls: true,
+              attachments: true,
+              multiple_sessions: true,
+              session_search: true,
+              skills: true,
+              memory: true,
+              scheduler: true,
+              channels: ['telegram', 'discord', 'slack', 'matrix'],
+              logs: true,
+              terminal: true,
+              vector_search: false,
+              trajectory_export: true,
+              cost_accounting: true,
+            },
+            health: { ok: true, latency_ms: 12, endpoint: 'http://127.0.0.1:8642' },
+            health_error: null,
+          },
+        ];
+
+      // T6.8 — Scheduler CRUD over ~/.hermes/cron/jobs.json. Empty
+      // list + validate pass-through is enough for the page to render.
+      case 'scheduler_list_jobs':
+        return [];
+      case 'scheduler_list_runs':
+        return [];
+      case 'scheduler_validate_cron':
+        return { ok: true, is_cron: true, next_fires: [] };
+      case 'scheduler_upsert_job':
+        return { ...args.args, id: args.args.id ?? 'mock-' + String(Date.now()) };
+      case 'scheduler_delete_job':
+        return null;
+
       case 'app_paths':
         return state.appPaths;
 
