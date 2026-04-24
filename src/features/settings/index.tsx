@@ -966,11 +966,10 @@ function HermesInstanceRow({
           label={t('settings.hermes_instances.field_default_model')}
           hint={t('settings.hermes_instances.field_default_model_hint')}
         >
-          {/* datalist-backed input: user gets dropdown suggestions
-              from the matched provider template but can still type a
-              fine-tune / brand-new model id. We match by base_url
-              prefix (strip trailing /v1) so e.g. `https://api.openai
-              .com/v1` → the OpenAI template's suggestedModels. */}
+          {/* Themed Combobox — freeSolo so users can type a
+              fine-tune / brand-new model id the template doesn't
+              know about. We match the provider template by base_url
+              prefix (strip trailing /v1). */}
           {(() => {
             const tpl = PROVIDER_TEMPLATES.find((p) =>
               draft.base_url
@@ -978,35 +977,21 @@ function HermesInstanceRow({
                 : false,
             );
             const suggestions = tpl?.suggestedModels ?? [];
-            const listId = `hermes-instance-model-${initial.id || 'new'}-list`;
             return (
-              <>
-                <input
-                  type="text"
-                  list={listId}
-                  className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
-                  value={draft.default_model ?? ''}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      default_model: e.target.value || null,
-                    })
-                  }
-                  placeholder={
-                    suggestions[0] ??
-                    t('settings.hermes_instances.field_default_model_placeholder')
-                  }
-                  spellCheck={false}
-                  data-testid={`hermes-instance-model-${initial.id || 'new'}`}
-                />
-                {suggestions.length > 0 && (
-                  <datalist id={listId}>
-                    {suggestions.map((m) => (
-                      <option key={m} value={m} />
-                    ))}
-                  </datalist>
-                )}
-              </>
+              <Combobox
+                value={draft.default_model ?? ''}
+                onChange={(v) =>
+                  setDraft({ ...draft, default_model: v || null })
+                }
+                options={suggestions.map((m) => ({ value: m, label: m }))}
+                placeholder={
+                  suggestions[0] ??
+                  t('settings.hermes_instances.field_default_model_placeholder')
+                }
+                inputClassName="font-mono"
+                data-testid={`hermes-instance-model-${initial.id || 'new'}`}
+                ariaLabel={t('settings.hermes_instances.field_default_model')}
+              />
             );
           })()}
         </Field>

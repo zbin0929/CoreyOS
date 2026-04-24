@@ -24,6 +24,10 @@ export interface ComboboxProps {
   className?: string;
   inputClassName?: string;
   id?: string;
+  /** Forwarded to the text input so e2e tests can target this control. */
+  'data-testid'?: string;
+  /** Mirrored onto the input's `aria-label`. */
+  ariaLabel?: string;
 }
 
 /**
@@ -43,6 +47,8 @@ export function Combobox({
   className,
   inputClassName,
   id,
+  ariaLabel,
+  ...rest
 }: ComboboxProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -131,6 +137,8 @@ export function Combobox({
         spellCheck={false}
         aria-autocomplete="list"
         aria-expanded={open}
+        aria-label={ariaLabel}
+        data-testid={rest['data-testid']}
         className={cn(
           'w-full rounded-md border border-border bg-bg-elev-1 px-3 py-2 pr-9 text-sm text-fg',
           'placeholder:text-fg-subtle',

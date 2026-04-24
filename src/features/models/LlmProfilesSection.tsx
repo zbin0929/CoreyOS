@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { Select } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { cn } from '@/lib/cn';
 import {
   hermesEnvSetKey,
@@ -368,14 +368,13 @@ function LlmProfileRow({
 
       <div className="grid gap-3 md:grid-cols-2">
         <Field label={t('models_page.profile_field_provider')}>
-          {/* Providers are a closed set (see providerTemplates.ts).
-              Use our themed <Select> instead of the native one so the
-              dropdown matches the rest of the form on macOS.
-              Selecting a provider REPLACES base_url + api_key_env +
-              model with that template's defaults — picking a new
-              provider and keeping the old base_url was silently
+          {/* Combobox (freeSolo) so users can either pick a bundled
+              template or type a custom slug (e.g. a local LiteLLM
+              proxy not in our templates). When they pick a template
+              we REPLACE base_url + api_key_env + model — switching
+              providers while keeping stale URLs was silently
               breaking credentials inference. */}
-          <Select
+          <Combobox
             value={draft.provider}
             onChange={(next) => {
               const tpl = PROVIDER_TEMPLATES.find((p) => p.id === next);
@@ -390,15 +389,12 @@ function LlmProfileRow({
                     : prev.model,
               }));
             }}
-            options={[
-              { value: '', label: '—' },
-              ...PROVIDER_TEMPLATES.map((p) => ({
-                value: p.id,
-                label: p.label,
-                hint: p.envKey ?? undefined,
-              })),
-            ]}
-            placeholder="—"
+            options={PROVIDER_TEMPLATES.map((p) => ({
+              value: p.id,
+              label: p.label,
+              hint: p.envKey ?? undefined,
+            }))}
+            placeholder={t('models_page.profile_field_provider_placeholder')}
             data-testid="llm-profile-provider"
             ariaLabel={t('models_page.profile_field_provider')}
           />
@@ -407,41 +403,23 @@ function LlmProfileRow({
           label={t('models_page.profile_field_model')}
           hint={t('models_page.profile_field_model_hint')}
         >
+          {/* Themed Combobox — freeSolo so users can type a
+              fine-tune / brand-new model id the template doesn't
+              know about. suggestedModels[] comes from the matched
+              Provider template (empty list = free-text-only). */}
           {(() => {
             const tpl = PROVIDER_TEMPLATES.find((p) => p.id === draft.provider);
             const suggestions = tpl?.suggestedModels ?? [];
-            if (suggestions.length === 0) {
-              return (
-                <input
-                  type="text"
-                  className={cn(inputCls, 'font-mono')}
-                  value={draft.model}
-                  onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                  placeholder="gpt-4o"
-                  spellCheck={false}
-                />
-              );
-            }
-            // Datalist pattern: dropdown of common model ids with
-            // free-text escape hatch for models not on the list
-            // (e.g. OpenAI's new releases or fine-tunes).
             return (
-              <>
-                <input
-                  type="text"
-                  list={`llm-profile-models-${draft.id || 'new'}`}
-                  className={cn(inputCls, 'font-mono')}
-                  value={draft.model}
-                  onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                  placeholder={suggestions[0]}
-                  spellCheck={false}
-                />
-                <datalist id={`llm-profile-models-${draft.id || 'new'}`}>
-                  {suggestions.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-              </>
+              <Combobox
+                value={draft.model}
+                onChange={(v) => setDraft({ ...draft, model: v })}
+                options={suggestions.map((m) => ({ value: m, label: m }))}
+                placeholder={suggestions[0] ?? 'gpt-4o'}
+                inputClassName="font-mono"
+                data-testid="llm-profile-model"
+                ariaLabel={t('models_page.profile_field_model')}
+              />
             );
           })()}
         </Field>

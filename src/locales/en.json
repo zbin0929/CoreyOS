@@ -94,6 +94,7 @@
     "profile_field_model_hint": "Type to filter or pick from this provider's common models.",
     "profile_field_label": "Display name",
     "profile_field_provider": "Provider",
+    "profile_field_provider_placeholder": "Pick or type a provider slug",
     "profile_field_model": "Model",
     "profile_field_base_url": "Base URL",
     "profile_field_api_key_env": "API key env var",

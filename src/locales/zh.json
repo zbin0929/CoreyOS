@@ -94,6 +94,7 @@
     "profile_field_model_hint": "可输入过滤或从该 Provider 常用模型中选择。",
     "profile_field_label": "显示名",
     "profile_field_provider": "Provider",
+    "profile_field_provider_placeholder": "选择或输入 Provider 标识",
     "profile_field_model": "Model",
     "profile_field_base_url": "Base URL",
     "profile_field_api_key_env": "API key 环境变量名",
