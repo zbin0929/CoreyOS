@@ -11,6 +11,7 @@ import {
   Plus,
   Save,
   Trash2,
+  Wifi,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import {
   llmProfileDelete,
   llmProfileList,
   llmProfileUpsert,
+  modelProviderProbe,
   type LlmProfile,
 } from '@/lib/ipc';
 import { PROVIDER_TEMPLATES } from '@/features/settings/providerTemplates';
@@ -40,12 +42,38 @@ import { PROVIDER_TEMPLATES } from '@/features/settings/providerTemplates';
  * existing row opens an in-place form replacing the display row —
  * the same pattern as HermesInstancesSection for consistency.
  */
+/**
+ * Per-card reachability probe result. `null` / missing = never tested.
+ * State is section-scoped and ephemeral — we don't persist probes
+ * because stale green dots are worse than "unknown": a key can expire
+ * or a vendor can go down between app restarts. Re-click to re-test.
+ */
+type ProbeState = 'probing' | 'ok' | 'err';
+
 export function LlmProfilesSection() {
   const { t } = useTranslation();
   const [rows, setRows] = useState<LlmProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [probes, setProbes] = useState<Record<string, ProbeState>>({});
+
+  const testProfile = useCallback(async (profile: LlmProfile) => {
+    setProbes((prev) => ({ ...prev, [profile.id]: 'probing' }));
+    try {
+      await modelProviderProbe({
+        baseUrl: profile.base_url,
+        // No raw key on hand here (the profile stores only the env-var
+        // NAME, the value is in ~/.hermes/.env). Pass envKey and let
+        // the Rust side resolve it via Hermes's .env reader.
+        apiKey: null,
+        envKey: profile.api_key_env,
+      });
+      setProbes((prev) => ({ ...prev, [profile.id]: 'ok' }));
+    } catch {
+      setProbes((prev) => ({ ...prev, [profile.id]: 'err' }));
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -183,6 +211,8 @@ export function LlmProfilesSection() {
               key={p.id}
               profile={p}
               onOpen={() => setEditingId(p.id)}
+              probe={probes[p.id]}
+              onTest={() => void testProfile(p)}
             />
           ))}
         </ul>
@@ -212,17 +242,24 @@ function SectionHeader({ title, desc }: { title: string; desc: string }) {
 function LlmProfileCard({
   profile,
   onOpen,
+  probe,
+  onTest,
 }: {
   profile: LlmProfile;
   onOpen: () => void;
+  /** Last-probe result. Undefined = never tested this session. */
+  probe?: ProbeState;
+  /** Fire a fresh /v1/models probe against this profile's base_url. */
+  onTest: () => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <li>
+    <li className="relative">
       <button
         type="button"
         onClick={onOpen}
         className={cn(
-          'group flex w-full flex-col items-start gap-2 rounded-md border border-border bg-bg-elev-1 p-3 text-left',
+          'group flex w-full flex-col items-start gap-2 rounded-md border border-border bg-bg-elev-1 p-3 pr-10 text-left',
           'transition-colors hover:border-gold-500/40 hover:bg-bg-elev-2',
           'focus:outline-none focus-visible:border-gold-500/60 focus-visible:ring-2 focus-visible:ring-gold-500/30',
         )}
@@ -233,8 +270,11 @@ function LlmProfileCard({
             {profile.provider.slice(0, 2) || '?'}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-fg">
-              {profile.label || profile.id}
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-sm font-medium text-fg">
+                {profile.label || profile.id}
+              </span>
+              <ProbeDot state={probe} />
             </div>
             <code className="truncate text-[10px] text-fg-subtle">
               {profile.id}
@@ -259,7 +299,62 @@ function LlmProfileCard({
           )}
         </div>
       </button>
+      {/* Test button floats outside the card's click target so it
+          doesn't open the editor. Positioned absolute in the padding
+          reserved by `pr-10` on the card. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTest();
+        }}
+        disabled={probe === 'probing'}
+        title={t('models_page.profile_test_title')}
+        aria-label={t('models_page.profile_test_title')}
+        className={cn(
+          'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md',
+          'text-fg-subtle transition-colors hover:bg-bg-elev-3 hover:text-fg',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+        )}
+        data-testid={`llm-profile-test-${profile.id}`}
+      >
+        <Icon
+          icon={probe === 'probing' ? Loader2 : Wifi}
+          size="sm"
+          className={probe === 'probing' ? 'animate-spin' : undefined}
+        />
+      </button>
     </li>
+  );
+}
+
+/**
+ * Inline connection indicator. `undefined` = not tested yet (no dot);
+ * `'probing'` = amber pulse; `'ok'` = emerald; `'err'` = red. Tiny by
+ * design — it's a signal, not a feature.
+ */
+function ProbeDot({ state }: { state?: ProbeState }) {
+  const { t } = useTranslation();
+  if (!state) return null;
+  const cls =
+    state === 'ok'
+      ? 'bg-emerald-500'
+      : state === 'err'
+        ? 'bg-danger'
+        : 'bg-amber-500 animate-pulse';
+  const title =
+    state === 'ok'
+      ? t('models_page.profile_probe_ok')
+      : state === 'err'
+        ? t('models_page.profile_probe_err')
+        : t('models_page.profile_probe_running');
+  return (
+    <span
+      className={cn('inline-block h-2 w-2 flex-none rounded-full', cls)}
+      title={title}
+      aria-label={title}
+      role="status"
+    />
   );
 }
 

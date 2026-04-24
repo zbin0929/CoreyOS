@@ -669,6 +669,20 @@ export function HermesInstancesSection() {
   // same snapshot. Section-scoped rather than route-scoped so the
   // scope section can refresh independently.
   const [scopes, setScopes] = useState<SandboxScope[]>([]);
+  // T8 polish — ephemeral per-card reachability results. `undefined`
+  // for "never tested this session"; we deliberately don't persist
+  // (stale green dots are worse than an unknown-state dot).
+  const [probes, setProbes] = useState<Record<string, AgentProbeState>>({});
+
+  async function testInstance(inst: HermesInstance) {
+    setProbes((prev) => ({ ...prev, [inst.id]: 'probing' }));
+    try {
+      const r = await hermesInstanceTest(inst);
+      setProbes((prev) => ({ ...prev, [inst.id]: r.ok ? 'ok' : 'err' }));
+    } catch {
+      setProbes((prev) => ({ ...prev, [inst.id]: 'err' }));
+    }
+  }
 
   async function refresh() {
     setError(null);
@@ -820,6 +834,8 @@ export function HermesInstancesSection() {
               instance={r}
               scope={scopes.find((s) => s.id === r.sandbox_scope_id) ?? null}
               onOpen={() => setEditingId(r.id)}
+              probe={probes[r.id]}
+              onTest={() => void testInstance(r)}
             />
           ))}
         </ul>
@@ -837,28 +853,36 @@ export function HermesInstancesSection() {
   );
 }
 
+/** Reachability state for the `/agents` card's inline dot + test button. */
+type AgentProbeState = 'probing' | 'ok' | 'err';
+
 /**
  * Card view for one HermesInstance in the grid. Whole card is a
- * button — tapping opens the focused editor. Shows the fields that
- * let a user recognize *which* instance this is (label, base_url,
- * default_model, scope) without the editing clutter.
+ * button — tapping opens the focused editor. A floating Test button
+ * in the top-right runs `hermes_instance_test` and surfaces the
+ * result as a tiny coloured dot next to the label.
  */
 function HermesInstanceCard({
   instance,
   scope,
   onOpen,
+  probe,
+  onTest,
 }: {
   instance: HermesInstance;
   scope: SandboxScope | null;
   onOpen: () => void;
+  probe?: AgentProbeState;
+  onTest: () => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <li>
+    <li className="relative">
       <button
         type="button"
         onClick={onOpen}
         className={cn(
-          'group flex w-full flex-col items-start gap-2 rounded-md border border-border bg-bg-elev-1 p-3 text-left',
+          'group flex w-full flex-col items-start gap-2 rounded-md border border-border bg-bg-elev-1 p-3 pr-10 text-left',
           'transition-colors hover:border-gold-500/40 hover:bg-bg-elev-2',
           'focus:outline-none focus-visible:border-gold-500/60 focus-visible:ring-2 focus-visible:ring-gold-500/30',
         )}
@@ -869,8 +893,11 @@ function HermesInstanceCard({
             {instance.id.slice(0, 2)}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-fg">
-              {instance.label || instance.id}
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-sm font-medium text-fg">
+                {instance.label || instance.id}
+              </span>
+              <AgentProbeDot state={probe} />
             </div>
             <code className="truncate text-[10px] text-fg-subtle">
               {instance.id}
@@ -897,7 +924,57 @@ function HermesInstanceCard({
           )}
         </div>
       </button>
+      {/* Test button — floating over the card's top-right corner.
+          stopPropagation so the card's open-editor click doesn't also
+          fire. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTest();
+        }}
+        disabled={probe === 'probing'}
+        title={t('settings.hermes_instances.test')}
+        aria-label={t('settings.hermes_instances.test')}
+        className={cn(
+          'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md',
+          'text-fg-subtle transition-colors hover:bg-bg-elev-3 hover:text-fg',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+        )}
+        data-testid={`hermes-instance-test-${instance.id}`}
+      >
+        <Icon
+          icon={probe === 'probing' ? Loader2 : Wifi}
+          size="sm"
+          className={probe === 'probing' ? 'animate-spin' : undefined}
+        />
+      </button>
     </li>
+  );
+}
+
+function AgentProbeDot({ state }: { state?: AgentProbeState }) {
+  const { t } = useTranslation();
+  if (!state) return null;
+  const cls =
+    state === 'ok'
+      ? 'bg-emerald-500'
+      : state === 'err'
+        ? 'bg-danger'
+        : 'bg-amber-500 animate-pulse';
+  const title =
+    state === 'ok'
+      ? t('models_page.profile_probe_ok')
+      : state === 'err'
+        ? t('models_page.profile_probe_err')
+        : t('models_page.profile_probe_running');
+  return (
+    <span
+      className={cn('inline-block h-2 w-2 flex-none rounded-full', cls)}
+      title={title}
+      aria-label={title}
+      role="status"
+    />
   );
 }
 
