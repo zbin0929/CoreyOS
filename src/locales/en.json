@@ -263,7 +263,17 @@
     "preset_desc": "Drops 5 generic skills + a fetch MCP server + memory templates into ~/.hermes/. Safe to re-run; won't overwrite edits.",
     "preset_install": "Install",
     "preset_installing": "Installing…",
-    "preset_done_title": "Starter content installed ({{n}} items)"
+    "preset_done_title": "Starter content installed ({{n}} items)",
+    "install_title": "Hermes is not installed",
+    "install_desc": "Corey talks to a local Hermes gateway. Run the install command below, then click \"I've installed it\".",
+    "install_copy": "Copy",
+    "install_copied": "Copied",
+    "install_recheck": "I've installed it",
+    "install_docs": "Read the Hermes quickstart ↗",
+    "start_title": "Hermes gateway is not running",
+    "start_desc": "We found the Hermes binary but the gateway isn't listening. Click Start to launch it.",
+    "start_now": "Start gateway",
+    "start_starting": "Starting…"
   },
   "agent_wizard": {
     "title": "Add a new agent",

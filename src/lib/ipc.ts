@@ -1038,6 +1038,27 @@ export function hermesConfigRead(): Promise<HermesConfigView> {
   return invoke<HermesConfigView>('hermes_config_read');
 }
 
+/** Result of the first-run Hermes detection probe. `installed === false`
+ *  means the `hermes` CLI isn't on PATH / at the canonical install path
+ *  — the Home page renders an install CTA in that case. */
+export interface HermesDetection {
+  installed: boolean;
+  path: string | null;
+  version: string | null;
+}
+
+/** Detect whether the Hermes CLI is installed locally. Cheap — one
+ *  `hermes --version` invocation at most. */
+export function hermesDetect(): Promise<HermesDetection> {
+  return invoke<HermesDetection>('hermes_detect');
+}
+
+/** `hermes gateway start` — used by Home's "Start gateway" button
+ *  when the binary is present but the /health probe fails. */
+export function hermesGatewayStart(): Promise<string> {
+  return invoke<string>('hermes_gateway_start');
+}
+
 /**
  * Persist a new `model` section to `~/.hermes/config.yaml`. Other fields are
  * preserved. Returns the re-read view for UI reconciliation.

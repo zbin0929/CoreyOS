@@ -314,7 +314,17 @@
     "preset_desc": "把 5 个通用 skill + fetch MCP server + 记忆模板装进 ~/.hermes/。可重复运行，不会覆盖你的改动。",
     "preset_install": "安装",
     "preset_installing": "安装中…",
-    "preset_done_title": "起始内容已安装（{{n}} 项）"
+    "preset_done_title": "起始内容已安装（{{n}} 项）",
+    "install_title": "尚未安装 Hermes",
+    "install_desc": "Corey 需要本地 Hermes 网关。运行下方命令，然后点击「我已安装」。",
+    "install_copy": "复制",
+    "install_copied": "已复制",
+    "install_recheck": "我已安装",
+    "install_docs": "查看 Hermes 快速上手 ↗",
+    "start_title": "Hermes 网关未启动",
+    "start_desc": "找到了 Hermes 二进制，但网关没在监听。点击「启动」来启动它。",
+    "start_now": "启动网关",
+    "start_starting": "启动中…"
   },
   "agent_wizard": {
     "title": "新增 Agent",

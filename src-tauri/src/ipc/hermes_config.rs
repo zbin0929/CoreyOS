@@ -65,3 +65,31 @@ pub async fn hermes_gateway_restart() -> IpcResult<String> {
             message: format!("restart hermes gateway: {e}"),
         })
 }
+
+/// `hermes gateway start` — launches the gateway if it's not running.
+/// Used by Home's "Start gateway" button when the binary is present
+/// but the /health probe is failing (most commonly on a fresh install
+/// where the user hasn't started the gateway yet).
+#[tauri::command]
+pub async fn hermes_gateway_start() -> IpcResult<String> {
+    tokio::task::spawn_blocking(hermes_config::gateway_start)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("start task join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("start hermes gateway: {e}"),
+        })
+}
+
+/// First-run detection: is the Hermes binary present on PATH / at
+/// `~/.local/bin/hermes`? Non-blocking; returns a structured view
+/// the frontend can branch on without parsing error messages.
+#[tauri::command]
+pub async fn hermes_detect() -> IpcResult<hermes_config::HermesDetection> {
+    tokio::task::spawn_blocking(hermes_config::detect)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("detect task join: {e}"),
+        })
+}

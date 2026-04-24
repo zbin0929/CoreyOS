@@ -20,6 +20,7 @@ import { cn } from '@/lib/cn';
 import { memoryRead } from '@/lib/ipc';
 import { useAppStatusStore } from '@/stores/appStatus';
 import { useChatStore } from '@/stores/chat';
+import { HermesInstallCard } from './HermesInstallCard';
 import { PresetCard } from './PresetCard';
 
 /**
@@ -155,6 +156,12 @@ export function HomeRoute() {
                 : t('home.gateway_unknown')}
           </button>
         </div>
+
+        {/* Hermes-binary install / gateway-start CTA. Hidden once both
+            the binary is on PATH AND the gateway is reachable — at
+            which point the onboarding-checklist's green check is the
+            single source of truth. */}
+        <HermesInstallCard />
 
         {/* First-run / activation CTA. Renders a prominent "Install
             starter content" card when ~/.hermes/skills/ is empty;

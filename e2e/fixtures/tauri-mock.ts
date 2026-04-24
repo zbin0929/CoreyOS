@@ -770,6 +770,21 @@ export const tauriMockInitScript = /* js */ `
 
       case 'hermes_config_read':
         return state.hermesConfig;
+
+      // First-run detection + gateway start, used by Home's install
+      // card. Default fixture says "Hermes is installed and running";
+      // tests that want to exercise the missing-binary / offline flows
+      // override via state.hermesDetection / channel.on.
+      case 'hermes_detect':
+        return (
+          state.hermesDetection ?? {
+            installed: true,
+            path: '/usr/local/bin/hermes',
+            version: 'hermes 0.42.0',
+          }
+        );
+      case 'hermes_gateway_start':
+        return 'gateway started (mock)';
       case 'hermes_config_write_model': {
         // Journal the change before flipping state so the revert can replay
         // the original before-model.
