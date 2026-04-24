@@ -70,6 +70,7 @@
   "models_page": {
     "title": "Language models",
     "subtitle": "The LLM backing the Hermes agent — configured in ~/.hermes/config.yaml",
+    "help_page": "Pick which LLM Corey sends chat turns to. Any OpenAI-compatible provider works — OpenAI, Anthropic (via gateway), DeepSeek, Google, local Ollama. The provider dropdown pre-fills the base URL + API key env name; override either if your setup differs. Save writes ~/.hermes/config.yaml; Hermes needs a gateway restart to pick up the change. Individual chats can override this default from the chat composer.",
     "change_model": "Change model",
     "change_model_desc": "Pick a provider, set the model id, and save. The gateway must be restarted for changes to take effect.",
     "reload_config": "Re-read ~/.hermes/config.yaml",
@@ -169,6 +170,7 @@
   "terminal": {
     "title": "Terminal",
     "subtitle": "A native PTY-backed shell in your browser. Multi-tab, full UTF-8, resize-aware.",
+    "help_page": "A real shell (your login shell with its actual environment) running inside Corey. Uses portable-pty so pipes, job control, and curses apps all work. Multi-tab so you can have a tail -f and a REPL side by side. Common use: peek at ~/.hermes/logs/, poke at files the agent just wrote, or drive other CLIs without switching apps.",
     "open": "Open terminal",
     "new_tab": "New tab",
     "close": "Close tab",
@@ -261,6 +263,7 @@
   "analytics": {
     "title": "Analytics",
     "subtitle": "Usage rolled up from your local session history.",
+    "help_page": "Single-shot rollup of your local SQLite session history. Shows sessions / messages / tool calls / active days / tokens, per-day activity, and the model + tool + adapter breakdowns. Everything is local — no cloud sync, no telemetry. Numbers only move when you actually chat; refresh re-queries the DB.",
     "refresh": "Refresh",
     "retry": "Retry",
     "error_title": "Couldn't load analytics",
@@ -449,6 +452,7 @@
   "logs": {
     "title": "Logs",
     "subtitle": "Agent runtime logs, gateway tail, errors, and the config-change history.",
+    "help_page": "Four tabs unified under one page. Agent / Gateway / Errors tail ~/.hermes/logs/*.log with a substring filter. Changelog shows every config edit Corey journaled (model switches, API key rotations, profile changes) with a one-click Revert button. Revert is non-destructive — it writes the previous value as a new journaled change; nothing is ever lost.",
     "refresh": "Refresh",
     "retry": "Retry",
     "error_title": "Couldn't read changelog",
@@ -471,6 +475,7 @@
   "compare": {
     "title": "Compare models",
     "subtitle": "Run one prompt against up to 4 models in parallel. Each lane streams independently.",
+    "help_page": "Fire the same prompt at up to 4 models simultaneously. Each lane streams independently — you'll see tokens arrive as they come, not all at once. Lanes are cancellable individually. Export the result as Markdown or JSON to save a comparison. Good for: provider shootouts, reasoning-model vs fast-model trade-offs, prompt sensitivity checks.",
     "prompt_placeholder": "Type a prompt, then Ctrl/⌘+Enter or Run. Multi-line is fine.",
     "run": "Run",
     "stop_all": "Stop all",
@@ -692,6 +697,7 @@
   "profiles": {
     "title": "Profiles",
     "subtitle": "Each profile is a self-contained Hermes config under ~/.hermes/profiles/.",
+    "help_page": "A profile is a named bundle of Hermes config — model, API keys, channel credentials, sandbox scope. Keep separate profiles for 'prod', 'dev', 'demo', 'work', 'personal'. Switch with one click; Hermes gateway restarts automatically so the new profile takes effect. Export a profile as .tar.gz to hand off or back up.",
     "refresh": "Refresh",
     "retry": "Retry",
     "error_title": "Couldn't list profiles",

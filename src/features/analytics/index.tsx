@@ -13,6 +13,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { analyticsSummary, type AnalyticsSummaryDto, type NamedCount, ipcErrorMessage } from '@/lib/ipc';
@@ -56,10 +57,17 @@ export function AnalyticsRoute() {
         title={t('analytics.title')}
         subtitle={t('analytics.subtitle')}
         actions={
-          <Button variant="ghost" size="sm" onClick={load} disabled={state.kind === 'loading'}>
-            <Icon icon={RefreshCcw} size="sm" className={cn(state.kind === 'loading' && 'animate-spin')} />
-            <span className="ml-1.5">{t('analytics.refresh')}</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('analytics.title')}
+              content={t('analytics.help_page')}
+              testId="analytics-help"
+            />
+            <Button variant="ghost" size="sm" onClick={load} disabled={state.kind === 'loading'}>
+              <Icon icon={RefreshCcw} size="sm" className={cn(state.kind === 'loading' && 'animate-spin')} />
+              <span className="ml-1.5">{t('analytics.refresh')}</span>
+            </Button>
+          </div>
         }
       />
 

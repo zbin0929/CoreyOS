@@ -69,7 +69,8 @@
   
   "models_page": {
     "title": "语言模型",
-    "subtitle": "Hermes Agent 的 LLM 后端 — 在 ~/.hermes/config.yaml 中配置",
+    "subtitle": "Hermes 代理使用的 LLM —— 在 ~/.hermes/config.yaml 中配置",
+    "help_page": "选择 Corey 用哪个 LLM 发送对话。任何 OpenAI 兼容接口都可以——OpenAI、Anthropic、DeepSeek、Google、本地 Ollama 等。Provider 下拉自动填入 base URL + API key env 名；你的环境不同可以覆盖。保存写入 ~/.hermes/config.yaml，需 Hermes gateway 重启生效。单次对话可以在 Chat 页构图栏中临时覆盖。",
     "change_model": "更改模型",
     "change_model_desc": "选择供应商，设置模型 ID，然后保存。更改需要重启网关才能生效。",
     "reload_config": "重新读取 ~/.hermes/config.yaml",
@@ -168,7 +169,8 @@
   },
   "terminal": {
     "title": "终端",
-    "subtitle": "基于原生 PTY 的浏览器终端。多标签、UTF-8、自动 resize。",
+    "subtitle": "浏览器内的原生 PTY shell。多 tab、完整 UTF-8、自适应窗口大小。",
+    "help_page": "一个真正的 shell（带有完整环境的登录 shell）运行在 Corey 内。用 portable-pty，所以管道、作业控制、curses 应用都能用。多 tab 支持让你可以并行开 tail -f 和 REPL。常见用途：看 ~/.hermes/logs/、翻 agent 刚写的文件、不用切换应用就开 CLI。",
     "open": "打开终端",
     "new_tab": "新建标签",
     "open_hint": "点击「打开终端」开始。",
@@ -235,8 +237,9 @@
     }
   },
   "analytics": {
-    "title": "数据分析",
-    "subtitle": "基于本地会话历史的使用统计。",
+    "title": "数据看板",
+    "subtitle": "用量分析——从本地会话历史汇总。",
+    "help_page": "从本地 SQLite 会话历史一次性聚合统计。展示会话数 / 消息数 / 工具调用数 / 活跃天数 / token，以及每日活跃和模型 + 工具 + adapter 分布。所有数据本地——无云同步、无埋点。只有进行对话时数字才会动；refresh 重新查 DB。",
     "refresh": "刷新",
     "retry": "重试",
     "error_title": "无法加载分析数据",
@@ -446,6 +449,7 @@
   "logs": {
     "title": "日志",
     "subtitle": "Agent 运行日志、gateway tail、错误记录与配置变更历史。",
+    "help_page": "四个 tab 统一在一个页面下。Agent / Gateway / Errors tail ~/.hermes/logs/*.log，支持子串过滤。Changelog 展示 Corey 记录的每一次配置改动（模型切换、API key 轮换、profile 变更），带一键撤销。撤销不是破坏性的——它把之前的值写成一条新的变更日志，数据从不丢失。",
     "refresh": "刷新",
     "retry": "重试",
     "error_title": "无法读取变更日志",
@@ -467,7 +471,8 @@
   },
   "compare": {
     "title": "模型对比",
-    "subtitle": "同一 prompt 并行跑最多 4 个模型，每条泳道独立流式返回。",
+    "subtitle": "将一条 prompt 同时发给最多 4 个模型，每条 lane 独立流式输出。",
+    "help_page": "同一条 prompt 同时打给最多 4 个模型。每条 lane 独立流式输出——token 来一个显一个，不等所有模型跑完。可单独取消某条 lane。导出 Markdown 或 JSON 保存对比结果。常用场景：provider 比较、推理模型 vs 快速模型的权衡、prompt 敷感度检查。",
     "prompt_placeholder": "在此输入 prompt，Ctrl/⌘+Enter 或点击「运行」。支持多行。",
     "run": "运行",
     "stop_all": "全部停止",
@@ -688,7 +693,8 @@
   },
   "profiles": {
     "title": "配置集",
-    "subtitle": "每个配置集是一个独立的 Hermes 配置目录（~/.hermes/profiles/）。",
+    "subtitle": "每个配置集是 ~/.hermes/profiles/ 下一份独立的 Hermes 配置。",
+    "help_page": "一个 profile 是一整包 Hermes 配置——模型、API keys、渠道凭证、sandbox 作用域。保留几份：'prod' / 'dev' / 'demo' / 'work' / 'personal'。一键切换，Hermes gateway 自动重启以使新配置生效。导出 .tar.gz 以交接或备份。",
     "refresh": "刷新",
     "retry": "重试",
     "error_title": "无法列出配置集",

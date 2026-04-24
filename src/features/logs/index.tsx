@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, Cpu, ScrollText } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import type { HermesLogKind } from '@/lib/ipc';
@@ -41,7 +42,17 @@ export function LogsRoute() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <PageHeader title={t('logs.title')} subtitle={t('hermes_logs.page_subtitle')} />
+      <PageHeader
+        title={t('logs.title')}
+        subtitle={t('hermes_logs.page_subtitle')}
+        actions={
+          <InfoHint
+            title={t('logs.title')}
+            content={t('logs.help_page')}
+            testId="logs-help"
+          />
+        }
+      />
 
       {/* Tab strip. Renders just below the header, above the panel body
           so each panel scrolls independently without scrolling the tabs. */}

@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
@@ -270,6 +271,11 @@ export function CompareRoute() {
         subtitle={t('compare.subtitle')}
         actions={
           <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('compare.title')}
+              content={t('compare.help_page')}
+              testId="compare-help"
+            />
             {canExport && (
               <>
                 <Button

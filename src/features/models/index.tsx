@@ -17,6 +17,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Icon } from '@/components/ui/icon';
@@ -236,20 +237,27 @@ export function ModelsRoute() {
         title={t('models_page.title')}
         subtitle={t('models_page.subtitle')}
         actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={load}
-            disabled={state.kind === 'loading'}
-            title={t('models_page.reload_config')}
-          >
-            <Icon
-              icon={RefreshCw}
-              size="sm"
-              className={cn(state.kind === 'loading' && 'animate-spin')}
+          <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('models_page.title')}
+              content={t('models_page.help_page')}
+              testId="models-help"
             />
-            Reload
-          </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={load}
+              disabled={state.kind === 'loading'}
+              title={t('models_page.reload_config')}
+            >
+              <Icon
+                icon={RefreshCw}
+                size="sm"
+                className={cn(state.kind === 'loading' && 'animate-spin')}
+              />
+              Reload
+            </Button>
+          </div>
         }
       />
 

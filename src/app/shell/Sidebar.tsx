@@ -67,8 +67,10 @@ export function Sidebar() {
         </span>
       </div>
 
-      {/* Primary nav */}
-      <nav className="flex flex-col gap-0.5 p-2 mt-2">
+      {/* Primary nav — scrollable so the footer below always stays
+          visible even on short viewports. Without overflow here the
+          footer would be clipped off the bottom. */}
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2 mt-2">
         <SectionLabel>{t('nav.chat')} · {t('nav.compare')}</SectionLabel>
         {primary.map((entry) => (
           <NavItem
@@ -98,7 +100,7 @@ export function Sidebar() {
           version. Previous "Phase 0 · foundation" marker was a dev
           artifact from the initial scaffold; it outlived its purpose
           once shipped phases went into CHANGELOG.md. */}
-      <div className="mt-auto p-3 text-[10px] text-fg-subtle">
+      <div className="border-t border-border p-3 text-[10px] text-fg-subtle">
         <div className="font-mono">{t('app.name')} v{__APP_VERSION__}</div>
       </div>
     </aside>

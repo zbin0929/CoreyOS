@@ -13,6 +13,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import {
@@ -327,6 +328,11 @@ export function TerminalRoute() {
         subtitle={t('terminal.subtitle')}
         actions={
           <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('terminal.title')}
+              content={t('terminal.help_page')}
+              testId="terminal-help"
+            />
             {hasTabs ? (
               <>
                 <Button

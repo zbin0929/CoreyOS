@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
@@ -337,6 +338,11 @@ export function ProfilesRoute() {
         subtitle={t('profiles.subtitle')}
         actions={
           <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('profiles.title')}
+              content={t('profiles.help_page')}
+              testId="profiles-help"
+            />
             <Button
               variant="ghost"
               size="sm"
