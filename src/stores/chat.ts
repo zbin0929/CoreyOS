@@ -78,6 +78,13 @@ export interface ChatSession {
    *  per-row badge + adapter filter. Sessions created before T5.5c
    *  shipped land here as `'hermes'` (db v5 backfill). */
   adapterId: string;
+  /** v10 — per-session LLM-Profile pin. When set, chat send/retry
+   *  routes this session's turns through `hermes:profile:<id>`
+   *  (registered at boot / on-demand via `llmProfileEnsureAdapter`)
+   *  regardless of the session's owning `adapterId`. Independent from
+   *  `adapterId` so picking a profile in the chat model picker
+   *  doesn't migrate the session across agents in the sidebar. */
+  llmProfileId?: string | null;
 }
 
 interface ChatState {
@@ -100,12 +107,18 @@ interface ChatState {
   renameSession: (id: string, title: string) => void;
   /** Set `null` to clear the override (revert to default). */
   setSessionModel: (id: string, model: string | null) => void;
-  /** Pin the session's adapter AND its per-session model override
-   *  in one write. Used by the model picker when the user selects
-   *  an LLM Profile row — the profile was just materialised into an
-   *  adapter backend-side and we want both fields to flip atomically
-   *  so a concurrent send can't route with a mismatched pair. */
-  setSessionAgent: (id: string, adapterId: string, model: string | null) => void;
+  /** v10 — pin (or clear) the per-session LLM Profile routing. Passing
+   *  `null` clears the pin so the next turn routes through the
+   *  session's owning `adapterId` or the global AgentSwitcher choice.
+   *  Does NOT touch `adapterId` (sidebar grouping stays put). The
+   *  model argument, when non-null, is also stored as the session's
+   *  model override so the composer shows the profile's model in the
+   *  badge; pass `null` to leave the current model override as-is. */
+  setSessionLlmProfile: (
+    id: string,
+    profileId: string | null,
+    model: string | null,
+  ) => void;
 
   /** Append a fully-formed message (user or assistant). */
   appendMessage: (sessionId: string, msg: UiMessage) => void;
@@ -147,6 +160,7 @@ function sessionFromDb(s: DbSessionWithMessages): ChatSession {
     createdAt: s.created_at,
     updatedAt: s.updated_at,
     adapterId: s.adapter_id,
+    llmProfileId: s.llm_profile_id ?? null,
     messages: s.messages.map((m) => ({
       id: m.id,
       role: (m.role === 'user' ? 'user' : 'assistant') as UiMessage['role'],
@@ -299,6 +313,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         created_at: now,
         updated_at: now,
         adapter_id: adapterId,
+        // Fresh sessions never carry a profile pin. Must be explicit:
+        // the Rust upsert replaces this column each call, so omitting
+        // it would NULL-out any future flip until the next
+        // setSessionLlmProfile write.
+        llm_profile_id: null,
       }),
       'newSession',
     );
@@ -352,6 +371,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           created_at: sess.createdAt,
           updated_at: now,
           adapter_id: sess.adapterId,
+          // Preserve the profile pin — Rust’s upsert REPLACES this
+          // column each write, so forgetting it would silently drop the
+          // user’s profile selection on every rename.
+          llm_profile_id: sess.llmProfileId ?? null,
         }),
         'renameSession',
       );
@@ -380,21 +403,34 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           created_at: sess.createdAt,
           updated_at: now,
           adapter_id: sess.adapterId,
+          // Preserve the profile pin; see renameSession for why.
+          llm_profile_id: sess.llmProfileId ?? null,
         }),
         'setSessionModel',
       );
     }
   },
 
-  setSessionAgent: (id, adapterId, model) => {
+  setSessionLlmProfile: (id, profileId, model) => {
     const now = Date.now();
     set((s) => {
       const sess = s.sessions[id];
       if (!sess) return s;
+      // Null-coalesce on model: callers pass null to mean "leave the
+      // existing model override alone". This matters when the user is
+      // clearing a profile by picking a gateway model — they've
+      // already called setSessionModel separately for that, and this
+      // call is only meant to drop the profile pin.
+      const nextModel = model !== null ? model : (sess.model ?? null);
       return {
         sessions: {
           ...s.sessions,
-          [id]: { ...sess, adapterId, model, updatedAt: now },
+          [id]: {
+            ...sess,
+            llmProfileId: profileId,
+            model: nextModel,
+            updatedAt: now,
+          },
         },
       };
     });
@@ -404,12 +440,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         dbSessionUpsert({
           id,
           title: sess.title,
-          model,
+          model: sess.model ?? null,
           created_at: sess.createdAt,
           updated_at: now,
-          adapter_id: adapterId,
+          adapter_id: sess.adapterId,
+          llm_profile_id: profileId,
         }),
-        'setSessionAgent',
+        'setSessionLlmProfile',
       );
     }
   },
@@ -455,6 +492,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           created_at: sess.createdAt,
           updated_at: sess.updatedAt,
           adapter_id: sess.adapterId,
+          // Preserve the profile pin; see renameSession for why.
+          llm_profile_id: sess.llmProfileId ?? null,
         }),
         'appendMessage.session',
       );

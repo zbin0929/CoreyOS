@@ -229,6 +229,11 @@ export interface DbSessionRow {
    *  (see `db.rs :: upsert_session` COALESCE). Pre-T5.5c rows were
    *  backfilled to `'hermes'` by the v5 migration. */
   adapter_id: string;
+  /** v10 — per-session LLM-Profile pin. When non-null, chat turns
+   *  route through `hermes:profile:<id>` regardless of
+   *  `adapter_id` (which continues to drive sidebar grouping).
+   *  Null/absent = no profile pin. Mutable across upserts. */
+  llm_profile_id?: string | null;
 }
 
 export interface DbMessageRow {

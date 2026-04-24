@@ -68,11 +68,14 @@ export function ActiveLLMBadge() {
   const sessionOverride = useChatStore((s) =>
     s.currentId ? (s.sessions[s.currentId]?.model ?? null) : null,
   );
-  const sessionAdapterId = useChatStore((s) =>
-    s.currentId ? (s.sessions[s.currentId]?.adapterId ?? null) : null,
+  // v10 — per-session LLM Profile pin. When set, the composer picks
+  // this over the session's owning `adapterId`. Drives the selected
+  // ring on Profile rows; null when the user hasn't picked a profile.
+  const sessionLlmProfileId = useChatStore((s) =>
+    s.currentId ? (s.sessions[s.currentId]?.llmProfileId ?? null) : null,
   );
   const setSessionModel = useChatStore((s) => s.setSessionModel);
-  const setSessionAgent = useChatStore((s) => s.setSessionAgent);
+  const setSessionLlmProfile = useChatStore((s) => s.setSessionLlmProfile);
   const defaultModel = useAppStatusStore((s) => s.currentModel);
   const effective = sessionOverride ?? defaultModel;
 
@@ -203,26 +206,25 @@ export function ActiveLLMBadge() {
   }, [activeIdx, open]);
 
   const labelText = effective ?? t('chat_page.model_unknown');
-  // "Override" pill lights up whenever this session is pinned to
-  // anything other than the global default: a per-session model
-  // override OR a Profile-backed adapter (both diverge from the
-  // bare default gateway).
+  // "Override" pill lights up whenever this session diverges from
+  // the global default: a per-session model override OR a pinned
+  // LLM Profile (which routes through a non-default adapter).
   const isOverridden =
     (sessionOverride !== null && sessionOverride !== defaultModel) ||
-    (sessionAdapterId !== null && sessionAdapterId?.startsWith('hermes:profile:'));
+    sessionLlmProfileId !== null;
 
   // Flip the session's model to a gateway-reported model id. Also
-  // clears any Profile-backed adapter pin so we route through the
-  // default gateway again — otherwise picking a gateway model after
-  // a profile would keep talking to the profile's base_url with a
-  // bogus model name.
+  // clears any Profile pin so the next turn routes through the
+  // session's owning adapter — otherwise picking a gateway model
+  // after a profile would keep talking to the profile's base_url
+  // with the wrong model id.
   function selectGatewayModel(modelId: string | null) {
     if (!sessionId) return;
-    if (sessionAdapterId?.startsWith('hermes:profile:')) {
-      // Clear the profile adapter pin AND set (or clear) the model
-      // override atomically. `adapterId=null` means "use the active
-      // adapter chosen by AgentSwitcher" — the original default path.
-      setSessionAgent(sessionId, '', modelId);
+    if (sessionLlmProfileId !== null) {
+      // Clear the profile pin in the same write that sets the model
+      // override, so a concurrent send can't observe a mismatched
+      // pair (new model on old profile).
+      setSessionLlmProfile(sessionId, null, modelId);
     } else {
       setSessionModel(sessionId, modelId);
     }
@@ -231,14 +233,14 @@ export function ActiveLLMBadge() {
   }
 
   // Materialise a Profile as a live adapter, then pin the session to
-  // it. Both steps run back-to-back so the UI doesn't briefly show a
-  // state where `adapter_id` points at a `hermes:profile:*` slot the
-  // backend hasn't registered yet — a racing send would 404.
+  // it. Both steps run back-to-back so the UI doesn't briefly show
+  // a state where `llm_profile_id` names a slot the backend hasn't
+  // registered yet — a racing send would 404.
   async function selectProfile(p: LlmProfile) {
     if (!sessionId) return;
     try {
-      const info = await llmProfileEnsureAdapter(p.id);
-      setSessionAgent(sessionId, info.adapter_id, info.model);
+      await llmProfileEnsureAdapter(p.id);
+      setSessionLlmProfile(sessionId, p.id, p.model);
     } catch (e) {
       // Surface in the picker instead of a silent failure — the user
       // just clicked, they expect feedback. Keep the picker open so
@@ -440,8 +442,13 @@ export function ActiveLLMBadge() {
                 ) : null;
               if (row.kind === 'model') {
                 const m = row.m;
+                // Model row is selected only when the session is NOT
+                // pinned to any LLM Profile AND the override equals
+                // this model id. Otherwise the profile's row owns
+                // the highlight even if its `model` field happens
+                // to match a gateway model's id.
                 const selected =
-                  sessionOverride === m.id && !sessionAdapterId?.startsWith('hermes:profile:');
+                  sessionLlmProfileId === null && sessionOverride === m.id;
                 return (
                   <Fragment key={`m:${m.id}`}>
                     {headerNode}
@@ -490,8 +497,7 @@ export function ActiveLLMBadge() {
               }
               // Profile row
               const p = row.p;
-              const adapterId = `hermes:profile:${p.id}`;
-              const selected = sessionAdapterId === adapterId;
+              const selected = sessionLlmProfileId === p.id;
               return (
                 <Fragment key={`p:${p.id}`}>
                   {headerNode}

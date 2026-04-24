@@ -354,12 +354,13 @@ function ChatPane({
     // (same pattern as the chatStream call below) because the gate's
     // verdict is tied to THIS send, not a subsequent switcher change.
     // Budget-gate should scope to whichever adapter this turn will
-    // actually land on, which mirrors the send() priority order below.
-    const gateSessionPinned =
-      useChatStore.getState().sessions[sessionId]?.adapterId ?? null;
+    // actually land on, which mirrors the send() priority order
+    // below: profile pin > global active > null.
+    const gateSess = useChatStore.getState().sessions[sessionId];
+    const gateProfilePin = gateSess?.llmProfileId ?? null;
     const activeAdapterIdForGate =
-      (gateSessionPinned && gateSessionPinned.length > 0
-        ? gateSessionPinned
+      (gateProfilePin
+        ? `hermes:profile:${gateProfilePin}`
         : useAgentsStore.getState().activeId) ?? null;
     const verdict = await evaluateBudgetGate({
       effectiveModel,
@@ -474,17 +475,20 @@ function ChatPane({
     // split across adapters.
     // Priority order for the adapter we ship with this turn:
     //   1. Routing-rule match (handled below as `routedAdapterId`)
-    //   2. Session-pinned adapter — set when the user picked an LLM
+    //   2. Per-session LLM Profile pin — set when the user picked a
     //      Profile row in the model picker. Must win over the global
     //      AgentSwitcher choice, otherwise "pick profile X" silently
     //      keeps routing through whatever agent is globally active.
+    //      NOTE: this does NOT look at session.adapterId — that field
+    //      is purely for sidebar grouping and is frozen at creation
+    //      (see db.rs :: upsert_session COALESCE).
     //   3. Global AgentSwitcher choice (`useAgentsStore.activeId`).
     //   4. Default registry entry (undefined → backend picks).
-    const sessionPinned =
-      useChatStore.getState().sessions[sessionId]?.adapterId ?? null;
+    const sendSess = useChatStore.getState().sessions[sessionId];
+    const sendProfilePin = sendSess?.llmProfileId ?? null;
     const fallbackAdapterId =
-      (sessionPinned && sessionPinned.length > 0
-        ? sessionPinned
+      (sendProfilePin
+        ? `hermes:profile:${sendProfilePin}`
         : useAgentsStore.getState().activeId) ?? undefined;
     const registered = new Set(
       useAgentsStore.getState().adapters?.map((a) => a.id) ?? [],
@@ -692,14 +696,14 @@ function ChatPane({
           : { role: m.role, content: m.content },
       );
 
-    // Mirror send()'s priority: session-pinned adapter wins over the
-    // global AgentSwitcher choice, otherwise regenerating a profile
-    // reply would silently route through the default gateway.
-    const retrySessionPinned =
-      useChatStore.getState().sessions[sessionId]?.adapterId ?? null;
+    // Mirror send()'s priority: profile pin wins over the global
+    // AgentSwitcher choice, otherwise regenerating a profile reply
+    // would silently route through the default gateway.
+    const retrySess = useChatStore.getState().sessions[sessionId];
+    const retryProfilePin = retrySess?.llmProfileId ?? null;
     const activeAdapterId =
-      (retrySessionPinned && retrySessionPinned.length > 0
-        ? retrySessionPinned
+      (retryProfilePin
+        ? `hermes:profile:${retryProfilePin}`
         : useAgentsStore.getState().activeId) ?? undefined;
 
     setSending(true);

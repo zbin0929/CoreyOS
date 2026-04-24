@@ -51,8 +51,8 @@ impl Db {
     pub fn upsert_session(&self, s: &SessionRow) -> rusqlite::Result<()> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO sessions (id, title, model, created_at, updated_at, adapter_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO sessions (id, title, model, created_at, updated_at, adapter_id, llm_profile_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET
                  title = excluded.title,
                  model = excluded.model,
@@ -61,7 +61,11 @@ impl Db {
                  -- adapters. adapter_id is set at creation and frozen for
                  -- the session's lifetime; the COALESCE preserves whatever
                  -- was there even if the caller forgets to pass it.
-                 adapter_id = COALESCE(sessions.adapter_id, excluded.adapter_id)",
+                 adapter_id = COALESCE(sessions.adapter_id, excluded.adapter_id),
+                 -- v10: llm_profile_id IS mutable (user flips it from the
+                 -- chat model picker). Replace with the new value each
+                 -- upsert so clearing it (Some → None) actually sticks.
+                 llm_profile_id = excluded.llm_profile_id",
             params![
                 s.id,
                 s.title,
@@ -69,6 +73,7 @@ impl Db {
                 s.created_at,
                 s.updated_at,
                 s.adapter_id,
+                s.llm_profile_id,
             ],
         )?;
         Ok(())
@@ -227,7 +232,7 @@ impl Db {
         // written via a buggy path that left it NULL.
         let mut stmt = conn.prepare(
             "SELECT id, title, model, created_at, updated_at,
-                    COALESCE(adapter_id, 'hermes')
+                    COALESCE(adapter_id, 'hermes'), llm_profile_id
              FROM sessions ORDER BY updated_at DESC",
         )?;
         let sessions: Vec<SessionRow> = stmt
@@ -239,6 +244,7 @@ impl Db {
                     created_at: row.get(3)?,
                     updated_at: row.get(4)?,
                     adapter_id: row.get(5)?,
+                    llm_profile_id: row.get(6)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -578,6 +584,31 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v10 — per-session LLM Profile pin. Nullable TEXT: when set, the
+    // chat send layer routes this session's turns through the
+    // `hermes:profile:<value>` adapter registered at boot. Decoupled
+    // from `adapter_id` (which continues to name the session's owning
+    // agent for the sidebar grouping) so picking a profile in the
+    // model picker no longer migrates the session across agents.
+    //
+    // Also heal any pre-v10 row that was (incorrectly) moved across
+    // agents by an earlier build of the picker — such rows have
+    // `adapter_id` like `hermes:profile:<id>`. We move the suffix
+    // into the new `llm_profile_id` column and reset `adapter_id`
+    // back to `hermes` so the sidebar grouping is restored.
+    if version < 10 {
+        conn.execute_batch(
+            r#"
+            ALTER TABLE sessions ADD COLUMN llm_profile_id TEXT;
+            UPDATE sessions
+               SET llm_profile_id = substr(adapter_id, length('hermes:profile:') + 1),
+                   adapter_id     = 'hermes'
+             WHERE adapter_id LIKE 'hermes:profile:%';
+            PRAGMA user_version = 10;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -690,6 +721,13 @@ pub struct SessionRow {
     /// predate the column.
     #[serde(default = "default_adapter_id")]
     pub adapter_id: String,
+    /// v10 — optional LLM-Profile pin. When `Some(id)`, chat sends for
+    /// this session route through the `hermes:profile:<id>` adapter
+    /// instead of whatever the user has globally selected. Independent
+    /// of `adapter_id` (sidebar grouping) so picking a profile in the
+    /// chat model picker doesn't migrate the session to another agent.
+    #[serde(default)]
+    pub llm_profile_id: Option<String>,
 }
 
 fn default_adapter_id() -> String {
@@ -1245,6 +1283,7 @@ mod tests {
             created_at: ts,
             updated_at: ts,
             adapter_id: "hermes".into(),
+            llm_profile_id: None,
         }
     }
 
@@ -1348,6 +1387,7 @@ mod tests {
             created_at: 100,
             updated_at: 100,
             adapter_id: "hermes".into(),
+            llm_profile_id: None,
         })
         .unwrap();
         db.upsert_session(&SessionRow {
@@ -1357,6 +1397,7 @@ mod tests {
             created_at: 200,
             updated_at: 200,
             adapter_id: "claude_code".into(),
+            llm_profile_id: None,
         })
         .unwrap();
 
@@ -1379,6 +1420,7 @@ mod tests {
             created_at: 100,
             updated_at: 500,
             adapter_id: "aider".into(), // attempted hijack — should be ignored
+            llm_profile_id: None,
         })
         .unwrap();
         let tree = db.load_all().unwrap();
@@ -1388,6 +1430,74 @@ mod tests {
             "adapter_id must not migrate across upserts"
         );
         assert_eq!(hermes_row.session.title, "t2", "other fields DO update");
+    }
+
+    /// v10 — llm_profile_id round-trips AND is mutable (unlike
+    /// adapter_id). Covers the three flip paths the UI exercises:
+    ///   None  → Some (user picks a profile in the chat picker)
+    ///   Some → Some (user picks a different profile)
+    ///   Some → None (user clears the profile by picking a gateway model)
+    #[test]
+    fn v10_llm_profile_id_roundtrips_and_is_mutable() {
+        let db = Db::open_in_memory().unwrap();
+        // Initial insert with no profile.
+        db.upsert_session(&SessionRow {
+            id: "s".into(),
+            title: "t".into(),
+            model: None,
+            created_at: 1,
+            updated_at: 1,
+            adapter_id: "hermes".into(),
+            llm_profile_id: None,
+        })
+        .unwrap();
+        let row = db.load_all().unwrap().into_iter().next().unwrap().session;
+        assert_eq!(row.llm_profile_id, None);
+
+        // Flip to a profile.
+        db.upsert_session(&SessionRow {
+            id: "s".into(),
+            title: "t".into(),
+            model: None,
+            created_at: 1,
+            updated_at: 2,
+            adapter_id: "hermes".into(),
+            llm_profile_id: Some("glm".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            db.load_all().unwrap()[0].session.llm_profile_id.as_deref(),
+            Some("glm")
+        );
+
+        // Replace with a different profile.
+        db.upsert_session(&SessionRow {
+            id: "s".into(),
+            title: "t".into(),
+            model: None,
+            created_at: 1,
+            updated_at: 3,
+            adapter_id: "hermes".into(),
+            llm_profile_id: Some("deepseek".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            db.load_all().unwrap()[0].session.llm_profile_id.as_deref(),
+            Some("deepseek")
+        );
+
+        // Clear back to None.
+        db.upsert_session(&SessionRow {
+            id: "s".into(),
+            title: "t".into(),
+            model: None,
+            created_at: 1,
+            updated_at: 4,
+            adapter_id: "hermes".into(),
+            llm_profile_id: None,
+        })
+        .unwrap();
+        assert_eq!(db.load_all().unwrap()[0].session.llm_profile_id, None);
     }
 
     #[test]
@@ -1436,6 +1546,7 @@ mod tests {
                 created_at: (i as i64) * 1_000,
                 updated_at: (i as i64) * 1_000,
                 adapter_id: (*adapter).into(),
+                llm_profile_id: None,
             })
             .unwrap();
         }
@@ -1460,6 +1571,7 @@ mod tests {
             created_at: 1_000,
             updated_at: 1_000,
             adapter_id: "hermes".into(),
+            llm_profile_id: None,
         })
         .unwrap();
         db.upsert_session(&SessionRow {
@@ -1469,6 +1581,7 @@ mod tests {
             created_at: 2_000,
             updated_at: 2_000,
             adapter_id: "hermes".into(),
+            llm_profile_id: None,
         })
         .unwrap();
 
