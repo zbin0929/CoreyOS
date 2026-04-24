@@ -57,7 +57,7 @@ Key contrast with `hermes-web-ui`: no separate Koa BFF. Rust core owns everythin
 | Icons            | Lucide + custom glyph set                  | Consistent line weight                           |
 | Charts           | Recharts (+ D3 for trajectory tree)        | Declarative for dashboards, D3 where needed      |
 | Markdown         | react-markdown + remark-gfm + shiki        | Server-free syntax highlighting                  |
-| Virtualization   | TanStack Virtual                           | 10k-message chat, 1k-row tables                  |
+| Virtualization   | react-virtuoso (chat) / TanStack Virtual (tables) | react-virtuoso handles the chat's bottom-pin + dynamic row heights better; TanStack Virtual for fixed-height lists |
 | Command palette  | cmdk                                       | Battle-tested, a11y-correct                      |
 | Forms            | react-hook-form + zod                      | Type-safe validation                             |
 | i18n             | react-i18next                              | en / zh out of the box                           |
@@ -65,7 +65,7 @@ Key contrast with `hermes-web-ui`: no separate Koa BFF. Rust core owns everythin
 | Testing          | Vitest + Testing Library + Playwright      | Unit + e2e; Playwright drives Tauri via webdriver |
 | Rust HTTP        | reqwest + tokio + eventsource-stream       | SSE support, async-first                         |
 | Rust PTY         | portable-pty                               | Cross-platform terminal                          |
-| Rust IPC types   | specta + tauri-specta                      | TS types generated from Rust                     |
+| Rust IPC types   | hand-written mirrors in `src/lib/ipc.ts`   | Originally planned specta + tauri-specta; in practice the interface stayed stable and the hand-written mirrors are cheaper to reason about. Revisit if the IPC surface churns rapidly. |
 | Rust config      | serde_yaml, toml, dotenvy                  | Read/write Hermes configs                        |
 | Rust secrets     | keyring                                    | OS keychain for tokens when possible             |
 

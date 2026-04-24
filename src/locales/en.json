@@ -521,7 +521,9 @@
     "form_config": "Config (JSON)",
     "form_error_id_required": "Id is required.",
     "form_error_id_dots": "Id cannot contain '.' — it would be mis-interpreted as a nested YAML path.",
-    "form_error_must_be_object": "Config must be a JSON object."
+    "form_error_must_be_object": "Config must be a JSON object.",
+    "help_id": "A stable identifier used as the key under mcp_servers: in config.yaml. Hermes refers to servers by this name in logs and tool errors. Cannot be changed after creation — to rename, delete and re-add.",
+    "help_transport": "stdio: Hermes forks a local command (npm / uvx / cargo) and talks over its stdin/stdout. Use for tools that need local filesystem or OS access. url: Hermes connects via HTTP to a hosted server. Use for managed services like Stripe, GitHub, etc."
   },
   "memory": {
     "title": "Memory",
@@ -542,7 +544,8 @@
     "capacity": "{{bytes}} / {{max}}",
     "capacity_meter": "Memory file size",
     "new_file_hint": "New file — first save will create it",
-    "reveal": "Reveal in file manager"
+    "reveal": "Reveal in file manager",
+    "help_page": "Agent memory (MEMORY.md) is what Hermes remembers across conversations — agent-authored notes about running tasks, gotchas, and project context. User profile (USER.md) is your identity and stable preferences (name, tech stack, communication style). Both files are injected into every system prompt automatically. 256 KiB cap keeps them sub-budget for long context windows."
   },
   "channels": {
     "title": "Platform channels",
@@ -552,6 +555,7 @@
     "error_title": "Couldn't list channels",
     "verified": "Verified",
     "verified_title": "Shipping end-to-end smoke test covers this channel.",
+    "help_page": "Each card is one messenger platform Hermes can chat through. Fill in the platform's credentials (bot tokens, webhook URLs, etc.), save, then restart the Hermes gateway to start serving that channel. Hermes handles the protocol per platform; CoreyOS is just the configuration surface. Verified badges indicate the channel has an end-to-end smoke test in CI.",
     "optional": "optional",
     "required": "required",
     "edit": "Edit",

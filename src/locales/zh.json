@@ -518,7 +518,9 @@
     "form_config": "配置（JSON）",
     "form_error_id_required": "id 必填。",
     "form_error_id_dots": "id 不能包含 '.'，否则会被误认为嵌套 YAML 路径。",
-    "form_error_must_be_object": "配置必须是一个 JSON 对象。"
+    "form_error_must_be_object": "配置必须是一个 JSON 对象。",
+    "help_id": "稳定标识符，作为 mcp_servers: 下的 key 写入 config.yaml。Hermes 在日志和工具报错里用这个名字。创建后不能改名 —— 改名请先删再建。",
+    "help_transport": "stdio：Hermes fork 一个本地命令（npm / uvx / cargo），通过 stdin/stdout 通信。适用于需要访问本地文件系统或操作系统的工具。url：Hermes 通过 HTTP 连接托管的服务，适用于 Stripe、GitHub 这类云端服务。"
   },
   "memory": {
     "title": "记忆",
@@ -539,7 +541,8 @@
     "capacity": "{{bytes}} / {{max}}",
     "capacity_meter": "记忆文件大小",
     "new_file_hint": "新文件 — 首次保存时才会创建",
-    "reveal": "在文件管理器中打开"
+    "reveal": "在文件管理器中打开",
+    "help_page": "智能体记忆（MEMORY.md）是 Hermes 跨对话记住的东西 —— 由智能体自己写的关于任务进度、坑点、项目上下文的笔记。用户偏好（USER.md）是你的身份和稳定偏好（姓名、技术栈、沟通风格）。两个文件每次都会自动注入到系统提示里。256 KiB 上限避免占用过多上下文窗口。"
   },
   "channels": {
     "title": "平台通道",
@@ -549,6 +552,7 @@
     "error_title": "无法列出通道",
     "verified": "已验证",
     "verified_title": "该通道已有端到端冒烟测试覆盖。",
+    "help_page": "每张卡片对应一个 Hermes 可以对话的即时通讯平台。填好平台凭证（Bot Token、Webhook URL 等）并保存，然后重启 Hermes 网关即可对接该通道。协议细节由 Hermes 处理，CoreyOS 只是配置界面。带「已验证」徽章的通道在 CI 里有端到端冒烟测试覆盖。",
     "optional": "可选",
     "required": "必填",
     "edit": "编辑",

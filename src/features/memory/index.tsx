@@ -14,6 +14,7 @@ import {
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { InfoHint } from '@/components/ui/info-hint';
 import { MarkdownEditor } from '@/features/skills/MarkdownEditor';
 import { cn } from '@/lib/cn';
 import {
@@ -150,22 +151,29 @@ export function MemoryRoute() {
         title={t('memory.title')}
         subtitle={t('memory.subtitle')}
         actions={
-          isFileTab && current ? (
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => void save(active)}
-              disabled={!isDirty || current.saving}
-              data-testid="memory-save"
-            >
-              {current.saving ? (
-                <Icon icon={Loader2} size="sm" className="animate-spin" />
-              ) : (
-                <Icon icon={Save} size="sm" />
-              )}
-              {t('memory.save')}
-            </Button>
-          ) : null
+          <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('memory.title')}
+              content={t('memory.help_page')}
+              testId="memory-help"
+            />
+            {isFileTab && current ? (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => void save(active)}
+                disabled={!isDirty || current.saving}
+                data-testid="memory-save"
+              >
+                {current.saving ? (
+                  <Icon icon={Loader2} size="sm" className="animate-spin" />
+                ) : (
+                  <Icon icon={Save} size="sm" />
+                )}
+                {t('memory.save')}
+              </Button>
+            ) : null}
+          </div>
         }
       />
 

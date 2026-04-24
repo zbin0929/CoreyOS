@@ -1,5 +1,7 @@
 # 00 · Vision
 
+**Status as of 2026-04-23 pm**: Phase 0 – 7 shipped. M1 / M2 / M3 metrics (below) all hit. Phase 8 (multimodal) is conditional. Product direction is stable; next phase is polishing, documentation, and early user acquisition rather than more feature work. See `CHANGELOG.md` for dated milestone entries and `10-product-audit-2026-04-23.md` for the audit that reshaped Phase 6/7.
+
 ## One-line
 
 > The control plane AI agents deserve — beautiful, fast, keyboard-first, and not locked to a single agent.
@@ -35,7 +37,7 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Sin
 - **Visual skill editor**: edit the prompt, tools, inputs/outputs of a skill with live preview; diff + rollback.
 - **Trajectory timeline**: conversation rendered as a tree of turns + tool calls with durations, token costs, and replay.
 - **Cost budgets & alerts**: per-model / per-profile / per-channel budgets; desktop notifications.
-- **Vector recall**: semantic search across sessions (augments Hermes' FTS5).
+- ~~**Vector recall**: semantic search across sessions~~ → dropped 2026-04-23 pm per audit. Hermes ships native FTS5 + `MEMORY.md` / `USER.md`; we surface those instead (see Memory page, T7.3).
 - **Automation runbook**: named, parameterized natural-language workflows, one-click run.
 
 ### 3. Architecture
@@ -57,10 +59,11 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Sin
 
 ## Success metrics (self-imposed)
 
-- **M1**: Phase 1 ships, a user can run Hermes + Corey and never need to touch the Hermes TUI again.
-- **M2**: Phase 4 ships, at least one feature (multi-model compare, skill editor, or trajectory timeline) is demonstrably better than any alternative in the ecosystem.
-- **M3**: Phase 5 ships, Corey can drive at least two non-Hermes agents through the same UI.
-- **Perf**: lighthouse-equivalent smoothness on a $200 Chromebook-class device.
+- **M1** ✅ (Phase 1, 2026-04-22): run Hermes + CoreyOS and never touch the Hermes TUI again — chat, sessions, channels, skills all accessible from the GUI.
+- **M2** ✅ (Phase 4, 2026-04-22): at least one feature is demonstrably better than any alternative in the ecosystem. Candidates shipped: multi-model compare, trajectory timeline, cost-budget alerts.
+- **M3** ✅ (Phase 5, 2026-04-23): drive ≥ 2 non-Hermes agents through the same UI. Claude Code + Aider adapters ship as mocks; users can add any OpenAI-compatible endpoint as a "Hermes instance" (T6.2) for real usage.
+- **M4 (new, 2026-04-23 pm)**: wrap Hermes' native capabilities rather than duplicate them. MCP (T7.1), Memory (T7.3), Skill Hub (T7.4), and Scheduler (T6.8) all shipped as thin GUIs over upstream, not parallel engines.
+- **Perf**: still self-imposed, not formally measured. Cold start <1 s and idle RAM <100 MB hold on a 2020 MacBook Air; no Chromebook-class benchmarks run yet.
 
 ## Brand
 

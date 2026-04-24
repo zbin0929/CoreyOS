@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { isVerifiedChannel } from './verified';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
@@ -126,6 +127,11 @@ export function ChannelsRoute() {
         subtitle={t('channels.subtitle')}
         actions={
           <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('channels.title')}
+              content={t('channels.help_page')}
+              testId="channels-help"
+            />
             {/* T3.4 live-probe button. Distinct from the catalog
                 reload above it because the probe reads logs, not
                 config — a change on the filesystem is the only

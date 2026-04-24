@@ -16,6 +16,7 @@ import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
@@ -419,7 +420,14 @@ function ServerForm({
 
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-fg-muted">{t('mcp.form_id')}</span>
+          <span className="inline-flex items-center gap-1 text-fg-muted">
+            {t('mcp.form_id')}
+            <InfoHint
+              title={t('mcp.form_id')}
+              content={t('mcp.help_id')}
+              testId="mcp-help-id"
+            />
+          </span>
           <input
             type="text"
             value={id}
@@ -441,7 +449,14 @@ function ServerForm({
         </label>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-fg-muted">{t('mcp.form_transport')}</span>
+          <span className="inline-flex items-center gap-1 text-fg-muted">
+            {t('mcp.form_transport')}
+            <InfoHint
+              title={t('mcp.form_transport')}
+              content={t('mcp.help_transport')}
+              testId="mcp-help-transport"
+            />
+          </span>
           <Select<Transport>
             value={transport}
             onChange={onTransportChange}
