@@ -317,4 +317,168 @@ mod tests {
     fn adapter_id_for_uses_namespaced_slug() {
         assert_eq!(adapter_id_for("work"), "hermes:work");
     }
+
+    // ───────────────────────── Wizard contract ─────────────────────────
+    //
+    // The Agent Wizard on Settings posts a JSON payload shaped exactly
+    // like `HermesInstance` minus `sandbox_scope_id`. Regression-test
+    // the end-to-end path (deserialize → validate → upsert → save →
+    // load) so a future frontend tweak — say omitting a field, or
+    // capitalising the id — gets caught here instead of by a user.
+
+    /// Mirror `ipc::hermes_instance_upsert` without needing a live
+    /// Tauri `AppState`. Kept to the exact same ordering: validate id,
+    /// validate base_url, normalise, upsert, save.
+    fn wizard_save(
+        dir: &std::path::Path,
+        payload: &str,
+    ) -> Result<HermesInstance, String> {
+        let inst: HermesInstance =
+            serde_json::from_str(payload).map_err(|e| format!("deserialize: {e}"))?;
+        let id = inst.id.trim().to_string();
+        validate_id(&id)?;
+        let base_url = inst.base_url.trim_end_matches('/').to_string();
+        validate_base_url(&base_url)?;
+        let normalised = HermesInstance {
+            id: id.clone(),
+            label: if inst.label.trim().is_empty() {
+                id.clone()
+            } else {
+                inst.label.trim().to_string()
+            },
+            base_url,
+            api_key: inst.api_key.filter(|s| !s.is_empty()),
+            default_model: inst.default_model.filter(|s| !s.is_empty()),
+            sandbox_scope_id: inst.sandbox_scope_id.filter(|s| !s.is_empty()),
+        };
+        let list = load(dir);
+        let list = upsert(list, normalised.clone());
+        save(dir, &list).map_err(|e| format!("save: {e}"))?;
+        Ok(normalised)
+    }
+
+    #[test]
+    fn wizard_deepseek_payload_persists_and_roundtrips() {
+        let dir = tmpdir();
+        // Exact JSON shape the wizard's save() builds. No
+        // sandbox_scope_id — serde_default should land it as None.
+        let payload = r#"{
+            "id": "deepseek",
+            "label": "DeepSeek",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "sk-test",
+            "default_model": "deepseek-chat"
+        }"#;
+        let saved = wizard_save(&dir, payload).expect("wizard save should succeed");
+        assert_eq!(saved.id, "deepseek");
+        assert_eq!(saved.label, "DeepSeek");
+        assert_eq!(saved.base_url, "https://api.deepseek.com/v1");
+        assert_eq!(saved.api_key.as_deref(), Some("sk-test"));
+        assert_eq!(saved.default_model.as_deref(), Some("deepseek-chat"));
+        assert!(saved.sandbox_scope_id.is_none());
+
+        // Reopen — simulates a restart — and confirm the row survived.
+        let rows = load(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0], saved);
+    }
+
+    #[test]
+    fn wizard_ollama_payload_with_null_key_persists() {
+        let dir = tmpdir();
+        // Ollama template: no api_key, no env var. Frontend sends
+        // api_key as the JSON literal `null`.
+        let payload = r#"{
+            "id": "ollama",
+            "label": "Ollama (local)",
+            "base_url": "http://localhost:11434/v1",
+            "api_key": null,
+            "default_model": "llama3.2"
+        }"#;
+        let saved = wizard_save(&dir, payload).expect("ollama wizard save should succeed");
+        assert!(saved.api_key.is_none());
+        assert_eq!(saved.default_model.as_deref(), Some("llama3.2"));
+        assert_eq!(load(&dir), vec![saved]);
+    }
+
+    #[test]
+    fn wizard_rejects_uppercase_id_with_user_friendly_error() {
+        // Most-common user mistake: they edit the auto-generated id
+        // to something like "DeepSeek" with a capital D.
+        let dir = tmpdir();
+        let payload = r#"{
+            "id": "DeepSeek",
+            "label": "DeepSeek",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": null,
+            "default_model": null
+        }"#;
+        let err = wizard_save(&dir, payload).expect_err("uppercase id must fail");
+        assert!(
+            err.contains("lowercase") || err.contains("[a-z0-9_-]"),
+            "expected validate_id error, got: {err}"
+        );
+        // Nothing should have been persisted.
+        assert!(load(&dir).is_empty());
+    }
+
+    #[test]
+    fn wizard_rejects_empty_id() {
+        let dir = tmpdir();
+        let payload = r#"{
+            "id": "",
+            "label": "",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "sk-x",
+            "default_model": null
+        }"#;
+        let err = wizard_save(&dir, payload).expect_err("empty id must fail");
+        assert!(err.contains("empty"), "got: {err}");
+        assert!(load(&dir).is_empty());
+    }
+
+    #[test]
+    fn wizard_upsert_replaces_existing_id() {
+        // When a user re-runs the wizard with the same id, the
+        // existing row is overwritten rather than duplicated —
+        // critical for "I mis-typed my API key, let me fix it".
+        let dir = tmpdir();
+        let first = r#"{
+            "id": "openai",
+            "label": "OpenAI",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "sk-old",
+            "default_model": "gpt-4o"
+        }"#;
+        wizard_save(&dir, first).unwrap();
+
+        let second = r#"{
+            "id": "openai",
+            "label": "OpenAI prod",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "sk-new",
+            "default_model": "gpt-4o-mini"
+        }"#;
+        wizard_save(&dir, second).unwrap();
+
+        let rows = load(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].api_key.as_deref(), Some("sk-new"));
+        assert_eq!(rows[0].label, "OpenAI prod");
+        assert_eq!(rows[0].default_model.as_deref(), Some("gpt-4o-mini"));
+    }
+
+    #[test]
+    fn wizard_strips_trailing_slash_from_base_url() {
+        let dir = tmpdir();
+        let payload = r#"{
+            "id": "router",
+            "label": "OpenRouter",
+            "base_url": "https://openrouter.ai/api/v1/",
+            "api_key": "sk-x",
+            "default_model": null
+        }"#;
+        let saved = wizard_save(&dir, payload).unwrap();
+        assert_eq!(saved.base_url, "https://openrouter.ai/api/v1");
+    }
 }
