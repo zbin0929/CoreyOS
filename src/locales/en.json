@@ -137,6 +137,9 @@
   "skills": {
     "title": "Skills",
     "subtitle": "Browse, edit, and save Hermes skill files under ~/.hermes/skills/.",
+    "tabs_label": "Skill sources",
+    "tab_local": "Local",
+    "tab_hub": "Hub",
     "new": "New skill",
     "save": "Save",
     "delete": "Delete",
@@ -457,7 +460,35 @@
     "reasoning": {
       "thinking": "Thinking…",
       "thought": "Thought process"
+    },
+    "save_as_skill": {
+      "button": "Save as Skill",
+      "disabled_hint": "Send at least one message and wait for a reply first.",
+      "title": "Save this conversation as a Skill",
+      "subtitle": "Writes ~/.hermes/skills/<name>.md so Hermes picks the skill up on its next turn. Edit the body below to distil what should be reusable.",
+      "name": "Skill name",
+      "name_hint": "Saved as {{slug}}.md",
+      "name_required": "Name is required.",
+      "body": "SKILL.md body",
+      "body_hint": "Frontmatter + full transcript pre-filled. Trim freely before saving.",
+      "save": "Save skill",
+      "saved": "Saved to {{path}}",
+      "open_in_skills": "Open in Skills"
     }
+  },
+  "skill_hub": {
+    "cli_missing_title": "Hermes CLI not found",
+    "cli_missing_desc": "The Hermes command-line tool is required to browse and install skills from the hub. Install Hermes Agent from https://hermes-agent.nousresearch.com/ and restart Corey.",
+    "browse_title": "Browse the hub",
+    "source": "Source",
+    "query": "Search",
+    "query_placeholder": "Optional search query",
+    "browse": "Browse",
+    "search": "Search",
+    "install_title": "Install a skill",
+    "install_slug": "Skill slug",
+    "install_hint": "Full slug including source prefix, e.g. official/security/1password",
+    "install": "Install"
   },
   "mcp": {
     "title": "MCP servers",

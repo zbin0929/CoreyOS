@@ -6,6 +6,83 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — Phase 7 complete · T7.2 Save-as-Skill + T7.4 Skill Hub browser
+
+Last two T7.x tasks ship together. Phase 7 is now 4/4 done (T7.1, T7.2, T7.3, T7.4 all green).
+
+### T7.2 — Save conversation as Skill
+
+New "Save as Skill" button in the chat header. Enabled once the session has at least one completed assistant reply; disabled otherwise with a tooltip explaining why. Click opens a bottom-sheet drawer pre-filled with:
+
+- A **name field** derived from the first user message (sanitized to a filesystem-safe slug).
+- A **SKILL.md body textarea** carrying YAML frontmatter stubs (`name`, `description`, `triggers`, `required_inputs`) + the full conversation transcript formatted with `## User` / `## Assistant` section breaks.
+
+Save writes to `~/.hermes/skills/<slug>.md` via the existing `skillSave` IPC (T7.4 refactor already landed the filesystem-as-source-of-truth path). If the file already exists, we retry as an update — the user's intent on "Save" is "commit these bytes," regardless of prior state.
+
+**LLM-distillation step deliberately deferred.** The phase doc's original plan runs the transcript through `chat_once` with a distillation prompt before showing the user the draft. That adds a round-trip + a failure mode ("what if the model returns non-Markdown?") + dependency on the active adapter being configured. The graceful-degradation path (user distils manually in the pre-filled textarea) is a complete, useful MVP on its own and the distillation layer is a drop-in upgrade later.
+
+Files:
+- `@/Users/zbin/AI项目/CoreyOS/src/features/chat/SaveAsSkillDrawer.tsx` — new drawer component
+- `@/Users/zbin/AI项目/CoreyOS/src/features/chat/index.tsx` — header action + enable gating
+- `@/Users/zbin/AI项目/CoreyOS/src/locales/en.json` + `zh.json` — 12 new keys under `chat.save_as_skill.*`
+- `@/Users/zbin/AI项目/CoreyOS/e2e/save-as-skill.spec.ts` — 2 Playwright smokes (full save loop + disabled-on-blank-session)
+
+### T7.4 — Skill Hub browser
+
+Thin wrapper around the `hermes skills` CLI. The Hermes CLI already federates 7+ hub sources (official, skills-sh, well-known, github, clawhub, lobehub, claude-marketplace) — we shell out and render captured stdout. Zero upstream-format parsing: if Hermes changes its output tomorrow, this panel still works.
+
+**Rust IPC** (`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/skill_hub.rs`, new module):
+
+- `skill_hub_exec(args)` → `{stdout, stderr, status, cli_available}`. Spawns `hermes skills <args…>` via `std::process::Command`, captures output, detects NotFound → `cli_available: false`.
+- **Subcommand allowlist** (9 entries: browse/search/inspect/install/uninstall/list/check/update/audit). Anything else is rejected server-side so a compromised frontend can't reach `hermes gateway start` or similar.
+- 3 unit tests: empty-args reject, disallowed-subcommand reject, every-allowed-subcommand smoke.
+
+**Frontend** (`@/Users/zbin/AI项目/CoreyOS/src/features/skills/HubPanel.tsx` + `index.tsx`):
+
+- New **Local / Hub tabs** at the top of the Skills page. Local is the existing editor; Hub is the new surface. Clean tab switch — the local editor's state is untouched when users bounce between tabs.
+- **Browse row**: source dropdown (7 federated sources) + optional search query + Browse button. Empty query → `browse`, non-empty → `search <q>`.
+- **Install row**: full-slug input + Install button (e.g. `official/security/1password`).
+- **Output pane**: monospace `<pre>` rendering the CLI's actual stdout + stderr + exit code chip. Users see exactly what Hermes said.
+- **CLI-missing state**: single clear warning panel with a pointer to https://hermes-agent.nousresearch.com/ when the `hermes` binary isn't on PATH.
+
+i18n: 12 new keys under `skill_hub.*` + 3 under `skills.tab_*`, en + zh complete.
+
+Mock (`@/Users/zbin/AI项目/CoreyOS/e2e/fixtures/tauri-mock.ts`): `skill_hub_exec` echoes the invocation args as stdout so Playwright asserts both the UI render AND the command Corey constructed. Bug fix in the same commit: a stray `as string[]` TypeScript cast inside the `/* js */` template literal was silently breaking ALL IPC calls on test pages that loaded the mock after this block. The TS compiler accepted the outer `.ts` file but the injected JS threw at parse time → `window.__TAURI_INTERNALS__` never got set. Rule learned: never put TS syntax inside the injected template.
+
+Tests (`@/Users/zbin/AI项目/CoreyOS/e2e/skill-hub.spec.ts`): 4 Playwright smokes — browse default source, search switches subcommand, install passes slug, CLI-missing renders hint.
+
+**Deferred**:
+- Parsing browse/search output into a structured list. The CLI output is human-readable as-is; `--json` isn't documented as stable across subcommands.
+- Auto-confirm for `--force` install. Users see the scan verdict in stderr and decide.
+- "Installed from hub" separate list section. Upstream tags them in `hermes skills list` output; our existing `skill_list` walks the same directory. If a user wants to differentiate, they can filter on slug prefix — not worth a separate UI surface yet.
+
+### Test totals (Phase 7 complete)
+
+- Rust: **188 / 188 pass** (+3 from T7.4)
+- Vitest: **46 / 46 pass**
+- Playwright: **71 / 71 pass** (+6 from T7.2 + T7.4)
+- TSC clean; 5 pre-existing ESLint fast-refresh warnings.
+
+### Phase 7 final status
+
+| Task | Status |
+|------|--------|
+| T7.1 MCP server manager | ✅ Shipped 2026-04-23 pm |
+| T7.2 Save as Skill | ✅ Shipped 2026-04-23 pm |
+| T7.3 Memory page | ✅ Shipped 2026-04-23 pm |
+| T7.4 Skill Hub wrapper | ✅ Shipped 2026-04-23 pm |
+
+Phase 7 landed in a single afternoon — roughly 4 hours of wall-clock time — versus the audit's 1.5-week estimate. The delta is the audit's conservatism assuming each task would discover its own schema surprises; in practice T7.3 and T7.1 both needed < 30 min of upstream-doc reading before the Rust side was trivial. T7.4's MVP traded structured-list parsing for raw stdout — the cost of that is low and the savings are high.
+
+### Next
+
+Phase 8 (multimodal) is **conditional** per the product audit. Recommended pause-point to regroup on:
+- Polishing Phase 6 deliverables based on dogfood feedback (Memory page UX, MCP error surfacing, etc.).
+- Documentation sweep (user-facing quick-start, adapter integration guide).
+- Early user acquisition.
+
+---
+
 ## 2026-04-23 — T7.1 · MCP server manager
 
 Second T7.x task. New `/mcp` page edits the `mcp_servers:` section of `~/.hermes/config.yaml`. Hermes forks each stdio server or connects each HTTP server itself — Corey only curates the config. Replaces the original plan of a LangGraph sidecar adapter: MCP is strictly more general (LangGraph, CrewAI, AutoGen can all expose themselves over MCP), and Hermes already ships first-class MCP support upstream.

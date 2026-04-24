@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { HubPanel } from './HubPanel';
 import { MarkdownEditor } from './MarkdownEditor';
 import './skills.css';
 import {
@@ -60,8 +61,11 @@ type Selection =
   | { kind: 'open'; path: string; loaded: SkillContent; dirty: string }
   | { kind: 'error'; path: string | null; message: string };
 
+type Tab = 'local' | 'hub';
+
 export function SkillsRoute() {
   const { t } = useTranslation();
+  const [tab, setTab] = useState<Tab>('local');
   const [list, setList] = useState<SkillSummary[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [sel, setSel] = useState<Selection>({ kind: 'none' });
@@ -130,18 +134,51 @@ export function SkillsRoute() {
         title={t('skills.title')}
         subtitle={t('skills.subtitle')}
         actions={
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => setSel({ kind: 'new', name: '' })}
-            data-testid="skills-new"
-          >
-            <Icon icon={Plus} size="sm" />
-            {t('skills.new')}
-          </Button>
+          tab === 'local' ? (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setSel({ kind: 'new', name: '' })}
+              data-testid="skills-new"
+            >
+              <Icon icon={Plus} size="sm" />
+              {t('skills.new')}
+            </Button>
+          ) : null
         }
       />
 
+      {/* T7.4 — Local vs Hub tabs. The hub panel is a separate module
+          so the existing local editor logic stays untouched; swapping
+          tabs is a pure render switch. */}
+      <div
+        className="flex border-b border-border bg-bg-elev-1 px-4"
+        role="tablist"
+        aria-label={t('skills.tabs_label')}
+      >
+        {(['local', 'hub'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className={cn(
+              'px-3 py-2 text-xs font-medium transition',
+              tab === k
+                ? 'border-b-2 border-accent text-fg'
+                : 'border-b-2 border-transparent text-fg-muted hover:text-fg',
+            )}
+            data-testid={`skills-tab-${k}`}
+          >
+            {k === 'local' ? t('skills.tab_local') : t('skills.tab_hub')}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'hub' ? (
+        <HubPanel />
+      ) : (
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Tree */}
         <aside
@@ -254,6 +291,7 @@ export function SkillsRoute() {
           )}
         </section>
       </div>
+      )}
     </div>
   );
 }

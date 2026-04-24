@@ -40,7 +40,11 @@ New `/mcp` page reads/writes the `mcp_servers:` section of `~/.hermes/config.yam
 - **Tests**: 2 Rust (parse Hermes MCP config, round-trip upsert) + 1 Playwright (add a local MCP echo server, toggle enable, restart prompt appears).
 - **Explicitly NOT doing**: executing MCP servers ourselves. Hermes runs them. We just let the user configure which ones.
 
-### T7.2 — Skill-from-conversation distillation · ~3 days (kept)
+### T7.2 — Skill-from-conversation distillation · ✅ **Shipped 2026-04-23 pm**
+
+"Save as Skill" button in chat header opens a bottom-sheet drawer pre-filled with a SKILL.md template (frontmatter stubs + full transcript). Saves to `~/.hermes/skills/<slug>.md` via the existing `skillSave` IPC (T7.4's FS-as-SoT is already in place). LLM-distillation step **deferred** — graceful-degradation path (user trims manually) is complete on its own; upgrading is a drop-in swap later. 12 i18n keys en+zh, 2 Playwright smokes. See `CHANGELOG.md` dated 2026-04-23.
+
+### T7.2 — Original plan (for reference) · ~3 days (kept)
 
 This is Phase 7's one purely additive feature — Hermes has agent-initiated `skill_manage` but no user-initiated "save this chat as skill" button.
 
@@ -79,7 +83,11 @@ We don't need our own vector DB. We need a clean GUI over these files.
 - **No `AgentAdapter::recall` trait addition.** Hermes handles injection itself once MEMORY.md is written.
 - **Tests**: 2 Rust (read/write MEMORY.md with lockfile, capacity check) + 1 Playwright (edit a memory entry, verify file on disk, run session_search).
 
-### T7.4 — Skills page refactor: wrap `hermes skills` CLI · ~3 days (final scope 2026-04-23 pm)
+### T7.4 — Skills page refactor: wrap `hermes skills` CLI · ✅ **Shipped 2026-04-23 pm**
+
+New Local / Hub tabs on the Skills page. Hub tab invokes `hermes skills <browse|search|install>` via a thin `skill_hub_exec` IPC that spawns the CLI and returns captured stdout/stderr/exit. Subcommand allowlist (9 entries) gates what the UI can run. CLI-missing state shows a clear install hint instead of cryptic IO errors. Zero upstream-format parsing — we render the CLI's own output verbatim so upstream format changes can't break us. 12 i18n keys en+zh, 3 Rust unit tests, 4 Playwright smokes. Structured-list parsing + `--force` confirm + separate "installed from hub" section **deferred** (see `CHANGELOG.md`).
+
+### T7.4 — Original plan (for reference) · ~3 days (final scope 2026-04-23 pm)
 
 Our Phase 4 Skills editor stores skills in a local SQLite table. Hermes' native `hermes skills` CLI supports:
 

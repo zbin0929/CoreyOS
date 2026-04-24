@@ -136,6 +136,9 @@
   },
   "skills": {
     "title": "技能",
+    "tabs_label": "技能来源",
+    "tab_local": "本地",
+    "tab_hub": "技能中心",
     "subtitle": "浏览、编辑、保存 ~/.hermes/skills/ 下的 Hermes 技能文件。",
     "new": "新建技能",
     "save": "保存",
@@ -454,7 +457,35 @@
     "reasoning": {
       "thinking": "推理中…",
       "thought": "推理过程"
+    },
+    "save_as_skill": {
+      "button": "保存为技能",
+      "disabled_hint": "请先发送一条消息并等待回复。",
+      "title": "将此对话保存为技能",
+      "subtitle": "写入 ~/.hermes/skills/<名称>.md，Hermes 下一轮对话就会自动识别。可在下面编辑内容，提炼出可复用的部分。",
+      "name": "技能名称",
+      "name_hint": "保存为 {{slug}}.md",
+      "name_required": "名称必填。",
+      "body": "SKILL.md 正文",
+      "body_hint": "已预填前置信息 + 完整对话。保存前可随意修剪。",
+      "save": "保存技能",
+      "saved": "已保存到 {{path}}",
+      "open_in_skills": "在技能页查看"
     }
+  },
+  "skill_hub": {
+    "cli_missing_title": "未找到 Hermes CLI",
+    "cli_missing_desc": "需要安装 Hermes 命令行工具才能浏览和安装技能。请先从 https://hermes-agent.nousresearch.com/ 安装 Hermes Agent，然后重启 Corey。",
+    "browse_title": "浏览技能中心",
+    "source": "来源",
+    "query": "搜索",
+    "query_placeholder": "可选搜索关键词",
+    "browse": "浏览",
+    "search": "搜索",
+    "install_title": "安装技能",
+    "install_slug": "技能 slug",
+    "install_hint": "带来源前缀的完整 slug，例如 official/security/1password",
+    "install": "安装"
   },
   "mcp": {
     "title": "MCP 服务",

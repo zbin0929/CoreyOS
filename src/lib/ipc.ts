@@ -577,6 +577,27 @@ export function skillDelete(path: string): Promise<void> {
   return invoke<void>('skill_delete', { path });
 }
 
+// ───────────────────────── Skill hub / CLI (T7.4) ─────────────────────────
+
+/** Captured output of `hermes skills <subcmd>`. `status === -1` means
+ *  the CLI couldn't even spawn (not found, permission denied) — when
+ *  that's due to the binary being missing, `cli_available` is `false`
+ *  and the UI shows an install-Hermes hint. */
+export interface HubCommandResult {
+  stdout: string;
+  stderr: string;
+  status: number;
+  cli_available: boolean;
+}
+
+/** Invoke `hermes skills <args…>`. The first element must be one of:
+ *  browse, search, inspect, install, uninstall, list, check, update,
+ *  audit. Anything else is rejected server-side so a compromised
+ *  frontend can't reach non-skill subcommands. */
+export function skillHubExec(args: string[]): Promise<HubCommandResult> {
+  return invoke<HubCommandResult>('skill_hub_exec', { args });
+}
+
 // ───────────────────────── Memory (T7.3) ─────────────────────────
 
 /** Which of the two Markdown files under `~/.hermes/` is being edited.

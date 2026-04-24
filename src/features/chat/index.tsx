@@ -9,10 +9,11 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
+import { AlertTriangle, Paperclip, Send, Sparkles, Square, Wand2, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { SaveAsSkillDrawer } from './SaveAsSkillDrawer';
 import { cn } from '@/lib/cn';
 import {
   attachmentDelete,
@@ -588,7 +589,11 @@ function ChatPane({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <PageHeader title={t('chat_page.title')} subtitle={t('chat_page.subtitle')} />
+      <PageHeader
+        title={t('chat_page.title')}
+        subtitle={t('chat_page.subtitle')}
+        actions={<SaveAsSkillHeaderAction messages={messages} />}
+      />
 
       {/* T1.9 — virtualised list when we have messages; the empty-
        *  state hero gets its own layout so we don't pay Virtuoso's
@@ -801,6 +806,40 @@ function formatBytes(n: number): string {
   const kib = n / 1024;
   if (kib < 1024) return `${kib.toFixed(1)} KB`;
   return `${(kib / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * T7.2 — "Save as Skill" header action. Disabled until the session
+ * has at least one completed (non-pending, non-error) assistant reply
+ * — otherwise the template has nothing useful to distil. Owns the
+ * drawer state so chat/index.tsx stays focused on send/receive.
+ */
+function SaveAsSkillHeaderAction({ messages }: { messages: UiMessage[] }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const canSave = messages.some(
+    (m) => m.role === 'assistant' && !m.pending && !m.error && m.content.length > 0,
+  );
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() => setOpen(true)}
+        disabled={!canSave}
+        title={canSave ? undefined : t('chat.save_as_skill.disabled_hint')}
+        data-testid="chat-save-as-skill"
+      >
+        <Icon icon={Wand2} size="sm" />
+        {t('chat.save_as_skill.button')}
+      </Button>
+      <SaveAsSkillDrawer
+        open={open}
+        onClose={() => setOpen(false)}
+        messages={messages}
+      />
+    </>
+  );
 }
 
 function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {

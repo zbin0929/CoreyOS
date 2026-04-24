@@ -125,6 +125,7 @@ pub fn run() {
             ipc::skills::skill_get,
             ipc::skills::skill_save,
             ipc::skills::skill_delete,
+            ipc::skill_hub::skill_hub_exec,
             ipc::attachments::attachment_stage_blob,
             ipc::attachments::attachment_stage_path,
             ipc::attachments::attachment_delete,

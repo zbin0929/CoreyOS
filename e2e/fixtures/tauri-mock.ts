@@ -966,6 +966,21 @@ export const tauriMockInitScript = /* js */ `
         delete state.skills[args.path];
         return;
 
+      // T7.4 Skills hub — the mock pretends the Hermes CLI is
+      // installed and echoes a canned payload so tests can assert on
+      // the invocation args + output rendering without needing a
+      // real Hermes binary on PATH. Tests that want to simulate
+      // CLI-missing can override via .on('skill_hub_exec', ...).
+      case 'skill_hub_exec': {
+        const a = Array.isArray(args.args) ? args.args : [];
+        return {
+          stdout: 'mock hub output for: hermes skills ' + a.join(' '),
+          stderr: '',
+          status: 0,
+          cli_available: true,
+        };
+      }
+
       // T7.3 Memory — the mock treats ~/.hermes/MEMORY.md and
       // ~/.hermes/USER.md as two slots on state.memory. exists is
       // derived from whether the slot has ever been written (null ->
