@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, MessageSquarePlus, Trash2 } from 'lucide-react';
+import { Check, MessageSquarePlus, Search, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/icon';
 import { useAgentsStore } from '@/stores/agents';
@@ -49,10 +49,24 @@ export function SessionsPanel() {
   }, [adapters]);
 
   const [scope, setScope] = useState<'active' | 'all'>('active');
+  // T-polish — title search. Substring, case-insensitive, applied
+  // AFTER scope filter so a scoped view can be searched independently.
+  // Kept local to this component because the query is a transient
+  // view concern, not persisted state.
+  const [query, setQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const filteredIds = useMemo(() => {
-    if (scope === 'all' || activeAdapterId === null) return orderedIds;
-    return orderedIds.filter((id) => sessions[id]?.adapterId === activeAdapterId);
-  }, [scope, activeAdapterId, orderedIds, sessions]);
+    let ids = orderedIds;
+    if (scope !== 'all' && activeAdapterId !== null) {
+      ids = ids.filter((id) => sessions[id]?.adapterId === activeAdapterId);
+    }
+    const q = query.trim().toLowerCase();
+    if (q) {
+      ids = ids.filter((id) => sessions[id]?.title.toLowerCase().includes(q));
+    }
+    return ids;
+  }, [scope, activeAdapterId, orderedIds, sessions, query]);
 
   // Per-adapter counts for the scope toggle's hint text.
   const activeCount = useMemo(() => {
@@ -125,12 +139,56 @@ export function SessionsPanel() {
         </div>
       )}
 
+      {/* Search input — hidden when there are no sessions at all so it
+          doesn't clutter the fresh-install state. Debouncing isn't
+          needed: our filter is pure substring over an in-memory array
+          of at most a few hundred titles, so per-keystroke is fine. */}
+      {totalCount > 0 && (
+        <div className="relative mx-3 mb-2">
+          <Icon
+            icon={Search}
+            size="xs"
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-subtle"
+          />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('chat_page.search_placeholder')}
+            aria-label={t('chat_page.search_placeholder')}
+            data-testid="sessions-search"
+            className={cn(
+              'w-full rounded-md border border-border bg-bg-elev-2 py-1 pl-7 pr-6 text-xs text-fg',
+              'placeholder:text-fg-subtle',
+              'focus:border-gold-500/40 focus:outline-none focus:ring-2 focus:ring-gold-500/40',
+            )}
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                searchInputRef.current?.focus();
+              }}
+              aria-label={t('chat_page.search_clear')}
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-subtle hover:bg-bg-elev-3 hover:text-fg"
+              data-testid="sessions-search-clear"
+            >
+              <Icon icon={X} size="xs" />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto px-2 pb-3">
         {filteredIds.length === 0 ? (
           <p className="px-2 py-4 text-xs text-fg-subtle">
-            {scope === 'all' || totalCount === 0
-              ? t('chat_page.empty_sessions')
-              : t('chat_page.empty_adapter_sessions', { adapter: activeAdapterName ?? '' })}
+            {query
+              ? t('chat_page.search_no_match', { query })
+              : scope === 'all' || totalCount === 0
+                ? t('chat_page.empty_sessions')
+                : t('chat_page.empty_adapter_sessions', { adapter: activeAdapterName ?? '' })}
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5">
