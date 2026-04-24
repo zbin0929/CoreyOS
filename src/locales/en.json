@@ -651,6 +651,7 @@
     "form_template": "Start from a template",
     "form_template_placeholder": "— pick a template —",
     "form_template_hint": "Fills the id + transport + config. Edit freely afterwards.",
+    "form_nous_bundled_hint": "Nous Portal subscribers already have web search built-in via `hermes model` (Firecrawl). You may not need to add this MCP server.",
     "form_config": "Config (JSON)",
     "form_error_id_required": "Id is required.",
     "form_error_id_dots": "Id cannot contain '.' — it would be mis-interpreted as a nested YAML path.",

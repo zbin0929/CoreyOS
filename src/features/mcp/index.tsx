@@ -446,6 +446,15 @@ function ServerForm({
               {t('mcp.form_template_hint')}
             </span>
           )}
+          {pickedTemplate?.nousBundledHint && (
+            <span
+              className="mt-1 inline-flex items-start gap-1 rounded border border-accent/30 bg-accent/5 px-2 py-1 text-[11px] text-accent"
+              data-testid="mcp-form-nous-hint"
+            >
+              <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
+              <span>{t('mcp.form_nous_bundled_hint')}</span>
+            </span>
+          )}
         </label>
       )}
 
@@ -589,6 +598,11 @@ interface Template {
    *  next to the description so users can land on the API-key page
    *  in one click. */
   setupUrl?: string;
+  /** Hermes v0.10.0+ bundles web search (Firecrawl), image gen, TTS,
+   *  and browser automation for Nous Portal subscribers. When set, the
+   *  picker shows a small "you may not need this" hint so paying users
+   *  don't double-configure. */
+  nousBundledHint?: boolean;
 }
 
 const TEMPLATES: readonly Template[] = [
@@ -654,6 +668,7 @@ const TEMPLATES: readonly Template[] = [
     description:
       'Web + local search via Brave. Free tier: 2000 queries/month; API key at brave.com/search/api.',
     setupUrl: 'https://brave.com/search/api/',
+    nousBundledHint: true,
     config: {
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-brave-search'],
@@ -668,6 +683,7 @@ const TEMPLATES: readonly Template[] = [
     description:
       'AI-optimised search with citations. Free tier: 1000 queries/month; key at app.tavily.com.',
     setupUrl: 'https://app.tavily.com/',
+    nousBundledHint: true,
     config: {
       command: 'npx',
       args: ['-y', 'tavily-mcp'],
@@ -682,6 +698,7 @@ const TEMPLATES: readonly Template[] = [
     description:
       'Free unlimited search via DuckDuckGo — no API key required, but rate-limited on their side.',
     setupUrl: 'https://github.com/nickclyde/duckduckgo-mcp-server',
+    nousBundledHint: true,
     config: {
       command: 'uvx',
       args: ['duckduckgo-mcp-server'],
@@ -695,6 +712,7 @@ const TEMPLATES: readonly Template[] = [
     description:
       'Ask-and-answer combo — searches and summarises in one call. Paid only; key at perplexity.ai/settings/api.',
     setupUrl: 'https://www.perplexity.ai/settings/api',
+    nousBundledHint: true,
     config: {
       command: 'npx',
       args: ['-y', '@chatmcp/server-perplexity-ask'],
@@ -709,6 +727,7 @@ const TEMPLATES: readonly Template[] = [
     description:
       'Google search results via Serper. Free tier: 2500 queries trial; key at serper.dev.',
     setupUrl: 'https://serper.dev/',
+    nousBundledHint: true,
     config: {
       command: 'npx',
       args: ['-y', 'serper-search-scrape-mcp-server'],
