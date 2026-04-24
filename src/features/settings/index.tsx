@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Check,
   Copy,
+  Edit3,
   Eye,
   EyeOff,
   FolderOpen,
@@ -654,6 +655,10 @@ export function HermesInstancesSection() {
   const [rows, setRows] = useState<HermesInstance[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // T8 card refactor — which row is in focused-edit mode. `null` =
+  // grid view. Set to an id to render that row's full-width editor
+  // and hide the grid below it.
+  const [editingId, setEditingId] = useState<string | null>(null);
   // T8 — guided wizard. Opens a drawer with provider templates
   // (OpenAI / Anthropic / DeepSeek / Ollama / …) pre-filling base_url
   // + API-key env var so non-engineer users don't have to know any
@@ -684,49 +689,18 @@ export function HermesInstancesSection() {
     void refresh();
   }, []);
 
-  return (
-    <Section
-      title={t('settings.hermes_instances.title')}
-      description={t('settings.hermes_instances.desc')}
-    >
-      {error && (
-        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
-          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
-          <span>{error}</span>
-        </div>
-      )}
+  const editingRow = editingId
+    ? (rows ?? []).find((r) => r.id === editingId) ?? null
+    : null;
 
-      {rows === null ? (
-        <div className="flex items-center gap-2 text-xs text-fg-muted">
-          <Icon icon={Loader2} size="sm" className="animate-spin" />
-          {t('common.loading')}
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-2" data-testid="hermes-instances-list">
-          {rows.map((r) => (
-            <HermesInstanceRow
-              key={r.id}
-              initial={r}
-              scopes={scopes}
-              onSaved={async (next) => {
-                setRows((prev) =>
-                  (prev ?? []).map((p) => (p.id === next.id ? next : p)),
-                );
-              }}
-              onDeleted={async () => {
-                setRows((prev) => (prev ?? []).filter((p) => p.id !== r.id));
-              }}
-            />
-          ))}
-          {rows.length === 0 && !adding && (
-            <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-subtle">
-              {t('settings.hermes_instances.empty')}
-            </div>
-          )}
-        </ul>
-      )}
-
-      {adding ? (
+  // Advanced/manual "Add instance" — goes straight into the
+  // HermesInstanceRow form in `isNew` mode, bypassing the wizard.
+  if (adding) {
+    return (
+      <Section
+        title={t('settings.hermes_instances.new_row')}
+        description={t('settings.hermes_instances.desc')}
+      >
         <HermesInstanceRow
           initial={{
             id: '',
@@ -744,39 +718,111 @@ export function HermesInstancesSection() {
           }}
           onCancelNew={() => setAdding(false)}
         />
-      ) : (
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="primary"
-            onClick={() => setWizardOpen(true)}
-            data-testid="hermes-instances-quick-add"
-          >
-            <Icon icon={Plus} size="sm" />
-            {t('settings.hermes_instances.quick_add')}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            // Refetch the scope list on each "Add instance" click so
-            // a scope created just now in `SandboxScopesSection` is
-            // visible in the new row's dropdown without needing a
-            // full page reload.
-            onClick={() => {
-              void sandboxScopeList()
-                .then((next) => setScopes(next))
-                .catch(() => {
-                  /* leave the cached snapshot in place */
-                });
-              setAdding(true);
-            }}
-            data-testid="hermes-instances-add"
-          >
-            {t('settings.hermes_instances.add_advanced')}
-          </Button>
+      </Section>
+    );
+  }
+
+  // Card click → focused edit view for that row.
+  if (editingRow) {
+    return (
+      <Section
+        title={editingRow.label || editingRow.id}
+        description={t('settings.hermes_instances.desc')}
+      >
+        <HermesInstanceRow
+          initial={editingRow}
+          scopes={scopes}
+          onSaved={async (next) => {
+            setRows((prev) =>
+              (prev ?? []).map((p) => (p.id === next.id ? next : p)),
+            );
+            setEditingId(null);
+          }}
+          onDeleted={async () => {
+            setRows((prev) => (prev ?? []).filter((p) => p.id !== editingRow.id));
+            setEditingId(null);
+          }}
+          onCancelNew={() => setEditingId(null)}
+        />
+      </Section>
+    );
+  }
+
+  return (
+    <Section
+      title={t('settings.hermes_instances.title')}
+      description={t('settings.hermes_instances.desc')}
+    >
+      {/* Section header actions. `Section` doesn't take an `actions`
+          prop so we inline the buttons as the first child; they sit
+          above the grid and are always visible, even when the grid
+          scrolls. */}
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          onClick={() => setWizardOpen(true)}
+          data-testid="hermes-instances-quick-add"
+        >
+          <Icon icon={Plus} size="sm" />
+          {t('settings.hermes_instances.quick_add')}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            void sandboxScopeList()
+              .then((next) => setScopes(next))
+              .catch(() => {
+                /* leave the cached snapshot in place */
+              });
+            setAdding(true);
+          }}
+          data-testid="hermes-instances-add"
+        >
+          {t('settings.hermes_instances.add_advanced')}
+        </Button>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
+          <span>{error}</span>
         </div>
+      )}
+
+      {rows === null ? (
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
+          <Icon icon={Loader2} size="sm" className="animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : rows.length === 0 ? (
+        // Empty state keeps the `hermes-instances-list` testid so the
+        // smoke test for "/agents renders" still has something to wait
+        // on — the assertion is about "section mounted", not "grid
+        // non-empty".
+        <div
+          className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-8 text-center text-xs text-fg-subtle"
+          data-testid="hermes-instances-list"
+        >
+          {t('settings.hermes_instances.empty')}
+        </div>
+      ) : (
+        <ul
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+          data-testid="hermes-instances-list"
+        >
+          {rows.map((r) => (
+            <HermesInstanceCard
+              key={r.id}
+              instance={r}
+              scope={scopes.find((s) => s.id === r.sandbox_scope_id) ?? null}
+              onOpen={() => setEditingId(r.id)}
+            />
+          ))}
+        </ul>
       )}
 
       <AgentWizard
@@ -788,6 +834,70 @@ export function HermesInstancesSection() {
         }}
       />
     </Section>
+  );
+}
+
+/**
+ * Card view for one HermesInstance in the grid. Whole card is a
+ * button — tapping opens the focused editor. Shows the fields that
+ * let a user recognize *which* instance this is (label, base_url,
+ * default_model, scope) without the editing clutter.
+ */
+function HermesInstanceCard({
+  instance,
+  scope,
+  onOpen,
+}: {
+  instance: HermesInstance;
+  scope: SandboxScope | null;
+  onOpen: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className={cn(
+          'group flex w-full flex-col items-start gap-2 rounded-md border border-border bg-bg-elev-1 p-3 text-left',
+          'transition-colors hover:border-gold-500/40 hover:bg-bg-elev-2',
+          'focus:outline-none focus-visible:border-gold-500/60 focus-visible:ring-2 focus-visible:ring-gold-500/30',
+        )}
+        data-testid={`hermes-instance-card-${instance.id}`}
+      >
+        <div className="flex w-full items-center gap-2">
+          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-bg-elev-2 text-xs font-semibold uppercase text-fg-muted">
+            {instance.id.slice(0, 2)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-fg">
+              {instance.label || instance.id}
+            </div>
+            <code className="truncate text-[10px] text-fg-subtle">
+              {instance.id}
+            </code>
+          </div>
+          <Icon
+            icon={Edit3}
+            size="sm"
+            className="flex-none text-fg-subtle transition-colors group-hover:text-fg"
+          />
+        </div>
+        <div className="flex w-full flex-col gap-0.5 text-[11px] text-fg-muted">
+          {instance.default_model && (
+            <span className="truncate font-mono">{instance.default_model}</span>
+          )}
+          <code className="truncate font-mono text-fg-subtle">
+            {instance.base_url}
+          </code>
+          {scope && (
+            <span className="truncate text-fg-subtle">
+              {scope.label}
+              {scope.id !== 'default' ? ` · ${scope.id}` : ''}
+            </span>
+          )}
+        </div>
+      </button>
+    </li>
   );
 }
 

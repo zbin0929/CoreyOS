@@ -62,72 +62,22 @@ export function LlmProfilesSection() {
     void refresh();
   }, [refresh]);
 
-  return (
-    <section className="flex flex-col gap-3">
-      <header className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-fg">
-            {t('models_page.profiles_title')}
-          </h2>
-          <p className="mt-0.5 text-xs text-fg-muted">
-            {t('models_page.profiles_desc')}
-          </p>
-        </div>
-      </header>
+  // Focused edit mode: when the user clicks a card or "+ New LLM",
+  // we take over the whole section with the edit form — the grid
+  // collapses away so the form has full width and isn't competing
+  // with other cards for visual attention. Closing (cancel/save/
+  // delete) returns to the grid.
+  const editingProfile = editingId
+    ? (rows ?? []).find((r) => r.id === editingId) ?? null
+    : null;
 
-      {error && (
-        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
-          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {rows === null ? (
-        <div className="flex items-center gap-2 text-xs text-fg-muted">
-          <Icon icon={Loader2} size="sm" className="animate-spin" />
-          {t('common.loading')}
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-2" data-testid="llm-profiles-list">
-          {rows.map((p) =>
-            editingId === p.id ? (
-              <LlmProfileRow
-                key={p.id}
-                initial={p}
-                mode="edit"
-                existingIds={rows.map((r) => r.id).filter((id) => id !== p.id)}
-                onSaved={async (next) => {
-                  setRows(
-                    (prev) => prev?.map((r) => (r.id === next.id ? next : r)) ?? [next],
-                  );
-                  setEditingId(null);
-                }}
-                onCancel={() => setEditingId(null)}
-                onDeleted={async () => {
-                  setRows((prev) => prev?.filter((r) => r.id !== p.id) ?? []);
-                  setEditingId(null);
-                }}
-              />
-            ) : (
-              <LlmProfileDisplayRow
-                key={p.id}
-                profile={p}
-                onEdit={() => setEditingId(p.id)}
-              />
-            ),
-          )}
-          {rows.length === 0 && !adding && (
-            <div
-              className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-4 text-center text-xs text-fg-subtle"
-              data-testid="llm-profiles-empty"
-            >
-              {t('models_page.profiles_empty')}
-            </div>
-          )}
-        </ul>
-      )}
-
-      {adding ? (
+  if (adding) {
+    return (
+      <section className="flex flex-col gap-3" data-testid="llm-profiles-section">
+        <SectionHeader
+          title={t('models_page.profiles_add')}
+          desc={t('models_page.profiles_desc')}
+        />
         <LlmProfileRow
           mode="new"
           existingIds={(rows ?? []).map((r) => r.id)}
@@ -145,70 +95,170 @@ export function LlmProfilesSection() {
           }}
           onCancel={() => setAdding(false)}
         />
-      ) : (
+      </section>
+    );
+  }
+
+  if (editingProfile) {
+    return (
+      <section className="flex flex-col gap-3" data-testid="llm-profiles-section">
+        <SectionHeader
+          title={editingProfile.label || editingProfile.id}
+          desc={t('models_page.profiles_desc')}
+        />
+        <LlmProfileRow
+          initial={editingProfile}
+          mode="edit"
+          existingIds={(rows ?? [])
+            .map((r) => r.id)
+            .filter((id) => id !== editingProfile.id)}
+          onSaved={async (next) => {
+            setRows(
+              (prev) => prev?.map((r) => (r.id === next.id ? next : r)) ?? [next],
+            );
+            setEditingId(null);
+          }}
+          onCancel={() => setEditingId(null)}
+          onDeleted={async () => {
+            setRows((prev) => prev?.filter((r) => r.id !== editingProfile.id) ?? []);
+            setEditingId(null);
+          }}
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-3" data-testid="llm-profiles-section">
+      <header className="flex items-center justify-between gap-2">
         <div>
-          <Button
-            type="button"
-            size="sm"
-            variant="primary"
-            onClick={() => setAdding(true)}
-            data-testid="llm-profiles-add"
-          >
-            <Icon icon={Plus} size="sm" />
-            {t('models_page.profiles_add')}
-          </Button>
+          <h2 className="text-sm font-semibold text-fg">
+            {t('models_page.profiles_title')}
+          </h2>
+          <p className="mt-0.5 text-xs text-fg-muted">
+            {t('models_page.profiles_desc')}
+          </p>
         </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          onClick={() => setAdding(true)}
+          data-testid="llm-profiles-add"
+        >
+          <Icon icon={Plus} size="sm" />
+          {t('models_page.profiles_add')}
+        </Button>
+      </header>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {rows === null ? (
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
+          <Icon icon={Loader2} size="sm" className="animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : rows.length === 0 ? (
+        <div
+          className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-8 text-center text-xs text-fg-subtle"
+          data-testid="llm-profiles-empty"
+        >
+          {t('models_page.profiles_empty')}
+        </div>
+      ) : (
+        // Responsive card grid: 1 col on mobile, 2 on tablet, 3 on
+        // desktop. Whole card is clickable — tapping jumps straight
+        // to the focused edit view.
+        <ul
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+          data-testid="llm-profiles-list"
+        >
+          {rows.map((p) => (
+            <LlmProfileCard
+              key={p.id}
+              profile={p}
+              onOpen={() => setEditingId(p.id)}
+            />
+          ))}
+        </ul>
       )}
     </section>
   );
 }
 
-// ───────────────────────── Display row ─────────────────────────
+function SectionHeader({ title, desc }: { title: string; desc: string }) {
+  return (
+    <header className="flex flex-col">
+      <h2 className="text-sm font-semibold text-fg">{title}</h2>
+      <p className="mt-0.5 text-xs text-fg-muted">{desc}</p>
+    </header>
+  );
+}
 
-function LlmProfileDisplayRow({
+// ───────────────────────── Card (grid item) ─────────────────────────
+
+/**
+ * Compact card for the profile grid. The entire card is a button —
+ * clicking anywhere jumps to the focused edit view. Layout is vertical
+ * so it survives a 1-column (mobile) / 2-column / 3-column grid without
+ * re-wrapping. The two-letter provider chip in the corner gives users a
+ * visual anchor even when labels are long or the grid is dense.
+ */
+function LlmProfileCard({
   profile,
-  onEdit,
+  onOpen,
 }: {
   profile: LlmProfile;
-  onEdit: () => void;
+  onOpen: () => void;
 }) {
-  const { t } = useTranslation();
   return (
-    <li
-      className="flex items-center gap-3 rounded-md border border-border bg-bg-elev-1 p-3"
-      data-testid={`llm-profile-row-${profile.id}`}
-    >
-      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-bg-elev-2 text-xs font-semibold uppercase text-fg-muted">
-        {profile.provider.slice(0, 2) || '?'}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-fg">
-            {profile.label || profile.id}
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className={cn(
+          'group flex w-full flex-col items-start gap-2 rounded-md border border-border bg-bg-elev-1 p-3 text-left',
+          'transition-colors hover:border-gold-500/40 hover:bg-bg-elev-2',
+          'focus:outline-none focus-visible:border-gold-500/60 focus-visible:ring-2 focus-visible:ring-gold-500/30',
+        )}
+        data-testid={`llm-profile-row-${profile.id}`}
+      >
+        <div className="flex w-full items-center gap-2">
+          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-bg-elev-2 text-xs font-semibold uppercase text-fg-muted">
+            {profile.provider.slice(0, 2) || '?'}
           </span>
-          <code className="rounded bg-bg-elev-3 px-1 py-0.5 text-[10px] text-fg-muted">
-            {profile.id}
-          </code>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-fg">
+              {profile.label || profile.id}
+            </div>
+            <code className="truncate text-[10px] text-fg-subtle">
+              {profile.id}
+            </code>
+          </div>
+          <Icon
+            icon={Edit3}
+            size="sm"
+            className="flex-none text-fg-subtle transition-colors group-hover:text-fg"
+          />
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-subtle">
-          <span className="font-mono">{profile.model}</span>
-          <span className="text-fg-muted">·</span>
-          <span className="truncate font-mono">{profile.base_url}</span>
+        <div className="flex w-full flex-col gap-0.5 text-[11px] text-fg-muted">
+          <span className="truncate font-mono">{profile.model}</span>
+          <code className="truncate font-mono text-fg-subtle">
+            {profile.base_url}
+          </code>
           {profile.api_key_env && (
-            <>
-              <span className="text-fg-muted">·</span>
-              <span className="inline-flex items-center gap-1">
-                <Icon icon={Key} size="xs" />
-                <code>{profile.api_key_env}</code>
-              </span>
-            </>
+            <span className="inline-flex items-center gap-1 text-fg-subtle">
+              <Icon icon={Key} size="xs" />
+              <code>{profile.api_key_env}</code>
+            </span>
           )}
         </div>
-      </div>
-      <Button type="button" size="sm" variant="ghost" onClick={onEdit}>
-        <Icon icon={Edit3} size="sm" />
-        {t('common.edit')}
-      </Button>
+      </button>
     </li>
   );
 }
