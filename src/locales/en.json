@@ -855,7 +855,10 @@
     "no_matches": "No lines matched \"{{query}}\".",
     "error_title": "Couldn't read the log file",
     "missing_title": "No log file yet",
-    "missing_desc": "Hermes hasn't written to this log. Expected at: {{path}}"
+    "missing_desc": "Hermes hasn't written to this log. Expected at: {{path}}",
+    "follow_on": "Following",
+    "follow_off": "Follow",
+    "follow_title": "Auto-refresh every 2s while scrolled to the bottom"
   },
   "empty": {
     "chat": {

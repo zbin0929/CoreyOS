@@ -852,7 +852,10 @@
     "no_matches": "没有匹配 \"{{query}}\" 的行。",
     "error_title": "读取日志失败",
     "missing_title": "暂无日志文件",
-    "missing_desc": "Hermes 还没有写入这个日志。预期路径：{{path}}"
+    "missing_desc": "Hermes 还没有写入这个日志。预期路径：{{path}}",
+    "follow_on": "跟随中",
+    "follow_off": "跟随",
+    "follow_title": "滚到底部时每 2 秒自动刷新"
   },
   "empty": {
     "chat": {

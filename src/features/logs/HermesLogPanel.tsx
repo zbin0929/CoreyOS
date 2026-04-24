@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, FileSearch, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, FileSearch, Loader2, Pause, Play, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
@@ -19,12 +19,23 @@ type State =
 
 const DEFAULT_MAX_LINES = 500;
 
+/** Poll interval when follow mode is on. 2s balances freshness against
+ *  spamming the disk — Hermes writes append-only, so even missing a
+ *  second of lines is just "caught up on next tick". */
+const FOLLOW_POLL_MS = 2_000;
+
 /**
- * Tail one of Hermes's rolling log files. Read-on-demand (no streaming
- * / no `notify` watcher — T2.6 scope) plus a client-side substring
- * filter. Refresh is manual; we auto-fetch on mount and on tab focus
- * change. A line-level filter lives next to Refresh because debugging a
- * specific trace ID is the single most common reason to open this page.
+ * Tail one of Hermes's rolling log files. Read-on-demand plus an
+ * optional "follow" mode that polls the file every 2s — deliberately
+ * polling rather than a `notify` file watcher so the feature stays
+ * cross-platform and adds no Rust deps. Log files are tiny (tens of
+ * KB), and the Rust side already wraps the read in `spawn_blocking`,
+ * so a 2s tick is indistinguishable from push-based streaming in UX.
+ *
+ * Follow also auto-pauses when the user scrolls up (so reading a
+ * historical line doesn't get yanked back to bottom) and resumes when
+ * the user scrolls all the way down. Manual Refresh still works with
+ * follow off. Filter is pure client-side substring across the tail.
  *
  * When the file doesn't exist — Hermes never ran, or it's a profile that
  * doesn't write to this kind — we render an EmptyState showing the
@@ -34,32 +45,67 @@ export function HermesLogPanel({ kind }: { kind: HermesLogKind }) {
   const { t } = useTranslation();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [filter, setFilter] = useState('');
+  // Follow mode: interval-poll the tail and auto-scroll to bottom on
+  // each update. Starts ON for the fresh-install "show me what's
+  // happening" case; users who want to investigate a specific line
+  // hit the Pause button.
+  const [follow, setFollow] = useState(true);
+  // Pinned-to-bottom tracker. We use this rather than scrollHeight
+  // math on each render so a filter change or resize doesn't break the
+  // follow UX. Updated on scroll events.
+  const [pinnedToBottom, setPinnedToBottom] = useState(true);
   // Keep scroll pinned at the bottom on refresh — it's a tail, after all.
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    setState({ kind: 'loading' });
-    try {
-      const data = await hermesLogTail({ kind, maxLines: DEFAULT_MAX_LINES });
-      setState({ kind: 'loaded', data });
-    } catch (e) {
-      setState({ kind: 'error', message: ipcErrorMessage(e) });
-    }
-  }, [kind]);
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setState({ kind: 'loading' });
+      try {
+        const data = await hermesLogTail({ kind, maxLines: DEFAULT_MAX_LINES });
+        setState({ kind: 'loaded', data });
+      } catch (e) {
+        // In silent (follow-poll) mode, keep the last-good state visible
+        // rather than blanking to a red error banner on a transient blip.
+        if (opts?.silent) return;
+        setState({ kind: 'error', message: ipcErrorMessage(e) });
+      }
+    },
+    [kind],
+  );
 
   // Fetch on mount + whenever the selected kind changes (tab switch).
   useEffect(() => {
     void load();
   }, [load]);
 
-  // Scroll to bottom after each load so new lines are visible without
-  // a manual scroll. `scrollIntoView` on a sentinel would work too but
-  // setting scrollTop is cheaper and doesn't trigger smooth-scroll jank.
+  // Follow-mode polling. Only active when `follow` is on AND the user
+  // is pinned to the bottom — prevents yank-back when they're reading
+  // historical lines. The interval is cleared on unmount / dep change.
   useEffect(() => {
-    if (state.kind === 'loaded' && scrollRef.current) {
+    if (!follow || !pinnedToBottom) return;
+    const h = window.setInterval(() => {
+      void load({ silent: true });
+    }, FOLLOW_POLL_MS);
+    return () => window.clearInterval(h);
+  }, [follow, pinnedToBottom, load]);
+
+  // Scroll to bottom after each load so new lines are visible without
+  // a manual scroll. Only auto-scroll if the user is currently pinned
+  // — scrolling them away from a line they're reading is infuriating.
+  useEffect(() => {
+    if (state.kind === 'loaded' && pinnedToBottom && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [state]);
+  }, [state, pinnedToBottom]);
+
+  // Track pinned-to-bottom state: within 32px of bottom counts as
+  // "close enough" so small rendering jitters don't flip the flag.
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+    setPinnedToBottom(atBottom);
+  }, []);
 
   const filteredLines = useMemo(() => {
     if (state.kind !== 'loaded') return [];
@@ -98,9 +144,19 @@ export function HermesLogPanel({ kind }: { kind: HermesLogKind }) {
           )}
         />
         <Button
+          variant={follow ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={() => setFollow((v) => !v)}
+          title={t('hermes_logs.follow_title')}
+          data-testid={`hermes-log-follow-${kind}`}
+        >
+          <Icon icon={follow ? Pause : Play} size="sm" />
+          {follow ? t('hermes_logs.follow_on') : t('hermes_logs.follow_off')}
+        </Button>
+        <Button
           variant="secondary"
           size="sm"
-          onClick={load}
+          onClick={() => void load()}
           disabled={state.kind === 'loading'}
         >
           <RefreshCw
@@ -114,6 +170,7 @@ export function HermesLogPanel({ kind }: { kind: HermesLogKind }) {
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-y-auto"
         data-testid={`hermes-log-body-${kind}`}
+        onScroll={onScroll}
       >
         {state.kind === 'loading' && (
           <div className="flex items-center gap-2 px-6 py-4 text-fg-muted">
@@ -128,7 +185,7 @@ export function HermesLogPanel({ kind }: { kind: HermesLogKind }) {
             <div className="flex-1">
               <div className="font-medium">{t('hermes_logs.error_title')}</div>
               <div className="mt-1 break-all text-xs opacity-80">{state.message}</div>
-              <Button className="mt-3" size="sm" variant="secondary" onClick={load}>
+              <Button className="mt-3" size="sm" variant="secondary" onClick={() => void load()}>
                 <Icon icon={RefreshCw} size="sm" />
                 {t('logs.retry')}
               </Button>
