@@ -60,6 +60,7 @@ import {
 import { AgentWizard } from './AgentWizard';
 import { useAgentsStore } from '@/stores/agents';
 import { useRoutingStore } from '@/stores/routing';
+import { PROVIDER_TEMPLATES } from '@/features/settings/providerTemplates';
 
 type TestStatus =
   | { kind: 'idle' }
@@ -961,17 +962,53 @@ function HermesInstanceRow({
             </Button>
           </div>
         </Field>
-        <Field label={t('settings.hermes_instances.field_default_model')}>
-          <input
-            type="text"
-            className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
-            value={draft.default_model ?? ''}
-            onChange={(e) =>
-              setDraft({ ...draft, default_model: e.target.value || null })
-            }
-            placeholder={t('settings.hermes_instances.field_default_model_placeholder')}
-            spellCheck={false}
-          />
+        <Field
+          label={t('settings.hermes_instances.field_default_model')}
+          hint={t('settings.hermes_instances.field_default_model_hint')}
+        >
+          {/* datalist-backed input: user gets dropdown suggestions
+              from the matched provider template but can still type a
+              fine-tune / brand-new model id. We match by base_url
+              prefix (strip trailing /v1) so e.g. `https://api.openai
+              .com/v1` → the OpenAI template's suggestedModels. */}
+          {(() => {
+            const tpl = PROVIDER_TEMPLATES.find((p) =>
+              draft.base_url
+                ? draft.base_url.startsWith(p.baseUrl.replace(/\/v1\/?$/, ''))
+                : false,
+            );
+            const suggestions = tpl?.suggestedModels ?? [];
+            const listId = `hermes-instance-model-${initial.id || 'new'}-list`;
+            return (
+              <>
+                <input
+                  type="text"
+                  list={listId}
+                  className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+                  value={draft.default_model ?? ''}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      default_model: e.target.value || null,
+                    })
+                  }
+                  placeholder={
+                    suggestions[0] ??
+                    t('settings.hermes_instances.field_default_model_placeholder')
+                  }
+                  spellCheck={false}
+                  data-testid={`hermes-instance-model-${initial.id || 'new'}`}
+                />
+                {suggestions.length > 0 && (
+                  <datalist id={listId}>
+                    {suggestions.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
+                )}
+              </>
+            );
+          })()}
         </Field>
       </div>
 
@@ -983,8 +1020,16 @@ function HermesInstanceRow({
         label={t('settings.hermes_instances.field_sandbox_scope')}
         hint={t('settings.hermes_instances.field_sandbox_scope_hint')}
       >
+        {/* appearance-none kills the macOS native bevel so the
+            select matches our other inputs; the chevron is painted
+            via a background SVG so keyboard + screen-reader
+            semantics stay on the <select>. */}
         <select
-          className="rounded-md border border-border bg-bg px-2 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
+          className={cn(
+            'appearance-none rounded-md border border-border bg-bg bg-no-repeat py-1.5 pl-2 pr-7 text-sm text-fg',
+            'focus:border-accent focus:outline-none focus:ring-2 focus:ring-gold-500/40',
+            "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 20 20%22 stroke=%22currentColor%22><path stroke-linecap=%22round%22 stroke-linejoin=%22round%22 stroke-width=%222%22 d=%22M6 8l4 4 4-4%22/></svg>')] bg-[length:16px_16px] bg-[right_6px_center]",
+          )}
           value={draft.sandbox_scope_id ?? ''}
           onChange={(e) => {
             const val = e.target.value;

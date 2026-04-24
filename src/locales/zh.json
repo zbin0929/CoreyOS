@@ -456,6 +456,7 @@
       "field_api_key_placeholder": "（未鉴权网关可留空）",
       "field_default_model": "默认模型",
       "field_default_model_placeholder": "（可选，留空则使用网关自带默认模型）",
+      "field_default_model_hint": "为通过该实例路由的聊天指定模型。候选项由匹配到的 Provider 模板提供。",
       "field_sandbox_scope": "沙箱范围",
       "field_sandbox_scope_hint": "按 Agent 隔离文件系统。未设置则回落到默认范围。",
       "scope_default": "默认范围",
