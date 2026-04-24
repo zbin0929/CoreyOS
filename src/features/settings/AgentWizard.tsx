@@ -475,68 +475,72 @@ function DetailsStep({
         </div>
       )}
 
-      {/* ID + label */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs text-fg-muted">
-          {t('agent_wizard.field_id')}
-          <Input
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-            placeholder="hermes-openai"
-            data-testid="agent-wizard-id"
-            aria-invalid={idError !== null || duplicateId}
-          />
-          {idError ? (
-            <span className="text-[10px] text-danger" data-testid="agent-wizard-id-error">
-              {idError}
-            </span>
-          ) : duplicateId ? (
-            <span className="text-[10px] text-danger" data-testid="agent-wizard-id-dup">
-              {t('agent_wizard.err_id_duplicate', { id: idTrim })}
-            </span>
-          ) : (
-            <span className="text-[10px] text-fg-subtle">
-              {t('agent_wizard.field_id_hint')}
-            </span>
-          )}
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-fg-muted">
-          {t('agent_wizard.field_label')}
-          <Input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder={template.label}
-            data-testid="agent-wizard-label"
-          />
-        </label>
-      </div>
+      {/* Identity card — id + display name. */}
+      <FieldCard title={t('agent_wizard.card_identity')}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-xs text-fg-muted">
+            {t('agent_wizard.field_id')}
+            <Input
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              placeholder="hermes-openai"
+              data-testid="agent-wizard-id"
+              aria-invalid={idError !== null || duplicateId}
+            />
+            {idError ? (
+              <span className="text-[10px] text-danger" data-testid="agent-wizard-id-error">
+                {idError}
+              </span>
+            ) : duplicateId ? (
+              <span className="text-[10px] text-danger" data-testid="agent-wizard-id-dup">
+                {t('agent_wizard.err_id_duplicate', { id: idTrim })}
+              </span>
+            ) : (
+              <span className="text-[10px] text-fg-subtle">
+                {t('agent_wizard.field_id_hint')}
+              </span>
+            )}
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-fg-muted">
+            {t('agent_wizard.field_label')}
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={template.label}
+              data-testid="agent-wizard-label"
+            />
+          </label>
+        </div>
+      </FieldCard>
 
-      {/* API key — hidden for local providers. */}
+      {/* Credentials card — API key (hidden for local providers). */}
       {keyRequired && (
-        <label className="flex flex-col gap-1 text-xs text-fg-muted">
-          <span>
-            {t('agent_wizard.field_api_key')}
-            <span className="ml-1 text-[10px] text-fg-subtle">
-              ({template.envKey})
+        <FieldCard title={t('agent_wizard.card_credentials')}>
+          <label className="flex flex-col gap-1 text-xs text-fg-muted">
+            <span>
+              {t('agent_wizard.field_api_key')}
+              <span className="ml-1 text-[10px] text-fg-subtle">
+                ({template.envKey})
+              </span>
             </span>
-          </span>
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-…"
-            data-testid="agent-wizard-api-key"
-          />
-          <a
-            href={template.setupUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex w-fit items-center gap-1 text-[10px] text-fg-subtle hover:text-fg"
-          >
-            <Icon icon={ExternalLink} size="xs" />
-            {t('agent_wizard.api_key_docs', { provider: template.label })}
-          </a>
-        </label>
+            <Input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-…"
+              data-testid="agent-wizard-api-key"
+            />
+            <a
+              href={template.setupUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-fit items-center gap-1 text-[10px] text-fg-subtle hover:text-fg"
+            >
+              <Icon icon={ExternalLink} size="xs" />
+              {t('agent_wizard.api_key_docs', { provider: template.label })}
+            </a>
+          </label>
+        </FieldCard>
       )}
 
       {showProviderFields && template.isLocal && (
@@ -587,41 +591,43 @@ function DetailsStep({
         </div>
       )}
 
-      {/* Model picker — shortlist from template, refreshable via probe. */}
+      {/* Model picker card — shortlist from template, refreshable via probe.
+          Hidden when a linked profile owns the model field. */}
       {showProviderFields && (
-      <div className="flex flex-col gap-1 text-xs text-fg-muted">
-        <div className="flex items-center justify-between">
-          <span>{t('agent_wizard.field_model')}</span>
-          <button
-            type="button"
-            onClick={() => void probe()}
-            disabled={probing}
-            className="inline-flex items-center gap-1 text-[10px] text-fg-subtle hover:text-fg disabled:opacity-50"
-            data-testid="agent-wizard-probe"
-          >
-            <Icon
-              icon={probing ? Loader2 : RefreshCcw}
-              size="xs"
-              className={cn(probing && 'animate-spin')}
-            />
-            {t('agent_wizard.probe_models')}
-          </button>
-        </div>
-        <Combobox
-          value={model}
-          onChange={setModel}
-          options={models.map((m) => ({ value: m, label: m }))}
-          placeholder={models[0] ?? 'gpt-4o'}
-          inputClassName="font-mono"
-          data-testid="agent-wizard-model"
-          ariaLabel={t('agent_wizard.field_model')}
-        />
-        {probeError && (
-          <div className="text-[10px] text-danger" data-testid="agent-wizard-probe-error">
-            {probeError}
-          </div>
-        )}
-      </div>
+        <FieldCard
+          title={t('agent_wizard.card_model')}
+          actions={
+            <button
+              type="button"
+              onClick={() => void probe()}
+              disabled={probing}
+              className="inline-flex items-center gap-1 text-[10px] text-fg-subtle hover:text-fg disabled:opacity-50"
+              data-testid="agent-wizard-probe"
+            >
+              <Icon
+                icon={probing ? Loader2 : RefreshCcw}
+                size="xs"
+                className={cn(probing && 'animate-spin')}
+              />
+              {t('agent_wizard.probe_models')}
+            </button>
+          }
+        >
+          <Combobox
+            value={model}
+            onChange={setModel}
+            options={models.map((m) => ({ value: m, label: m }))}
+            placeholder={models[0] ?? 'gpt-4o'}
+            inputClassName="font-mono"
+            data-testid="agent-wizard-model"
+            ariaLabel={t('agent_wizard.field_model')}
+          />
+          {probeError && (
+            <div className="text-[10px] text-danger" data-testid="agent-wizard-probe-error">
+              {probeError}
+            </div>
+          )}
+        </FieldCard>
       )}
 
       {saveError && (
@@ -666,6 +672,35 @@ function DetailsStep({
 }
 
 // ───────────────────────── Helpers ─────────────────────────
+
+/**
+ * Titled group container — wraps a vertical stack of related fields
+ * with a small heading and optional right-side action slot (used for
+ * the "Refresh models" button next to the Model card's title). Keeps
+ * the DetailsStep readable when all three cards are open at once.
+ */
+function FieldCard({
+  title,
+  actions,
+  children,
+}: {
+  title: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2 rounded-md border border-border bg-bg-elev-1 p-3">
+      <header className="flex items-center justify-between gap-2">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">
+          {title}
+        </h4>
+        {actions}
+      </header>
+      {children}
+    </section>
+  );
+}
+
 
 /**
  * Generate a filesystem-safe id unique against existingIds. Starts
