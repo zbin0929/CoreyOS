@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useTranslation } from 'react-i18next';
 import {
@@ -90,6 +90,27 @@ export function LlmProfilesSection() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // T8 polish — auto-probe reachability once per row per session.
+  // Fires on first mount (after rows load) and on subsequent rows
+  // diff (e.g. a new profile saved via the drawer). Staggers ~150ms
+  // between probes so a grid of 10 cards doesn't blast 10 parallel
+  // HTTPs on page open. Manual retest via the card's Test button
+  // still overrides the result and is not blocked by this.
+  const autoProbedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!rows) return;
+    let i = 0;
+    for (const r of rows) {
+      if (autoProbedRef.current.has(r.id)) continue;
+      autoProbedRef.current.add(r.id);
+      const delay = i * 150;
+      i += 1;
+      window.setTimeout(() => {
+        void testProfile(r);
+      }, delay);
+    }
+  }, [rows, testProfile]);
 
   // Focused edit mode: when the user clicks a card or "+ New LLM",
   // we take over the whole section with the edit form — the grid

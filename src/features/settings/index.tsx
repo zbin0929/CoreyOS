@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
@@ -703,6 +703,25 @@ export function HermesInstancesSection() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  // T8 polish — auto-probe reachability once per row per session.
+  // Same logic as `/models` LlmProfilesSection: staggered 150ms so
+  // 10 agents don't blast 10 parallel /health probes on mount.
+  // Manual retest still works and overrides the cached result.
+  const autoProbedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!rows) return;
+    let i = 0;
+    for (const r of rows) {
+      if (autoProbedRef.current.has(r.id)) continue;
+      autoProbedRef.current.add(r.id);
+      const delay = i * 150;
+      i += 1;
+      window.setTimeout(() => {
+        void testInstance(r);
+      }, delay);
+    }
+  }, [rows]);
 
   const editingRow = editingId
     ? (rows ?? []).find((r) => r.id === editingId) ?? null
