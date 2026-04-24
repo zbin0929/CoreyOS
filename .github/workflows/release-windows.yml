@@ -1,0 +1,71 @@
+name: Release (Windows)
+
+# Windows is the only runner we pay for — macOS builds happen locally
+# on the maintainer's Mac (see scripts/release-local.sh). Linux is not
+# targeted. Trigger this workflow manually from the Actions tab after
+# bumping the version so the attached artifacts match the local mac
+# build.
+#
+# Cost model (private repo, pay-as-you-go):
+#   ~$0.016/min × 15min build ≈ $0.25 per run.
+#   GitHub Pro free tier: 3000 Linux-min/mo = 1500 Windows-min/mo,
+#   i.e. ~100 builds before you spend a cent.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag to attach the .msi to (e.g. v0.1.0). Must already exist.'
+        required: true
+        type: string
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: windows-msvc
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      # Builds .msi + NSIS .exe + signed updater .zip + .sig under
+      # src-tauri\target\release\bundle\. Uploaded to the existing
+      # GitHub Release matching ${{ inputs.release_tag }}.
+      - name: Build + attach to release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ inputs.release_tag }}
+          releaseName: 'Corey ${{ inputs.release_tag }}'
+          releaseDraft: true
+          prerelease: false

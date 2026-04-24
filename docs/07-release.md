@@ -76,22 +76,39 @@ If you lose the private key: rerun `release-setup.sh --force`. Anyone
 running an old build of Corey will stop auto-updating silently —
 they'll need a fresh `.dmg`. Budget accordingly once you have users.
 
-## Windows / Linux builds
+## Windows builds
 
-Skipped for v0.1.x. Options when needed:
+Linux is skipped (no target audience). Windows rides on
+`.github/workflows/release-windows.yml`, a **manually-triggered**
+CI that only spins up a Windows runner:
 
-1. **Flip repo public** → re-enable the old GitHub Actions workflow
-   (still in git history at `.github/workflows/release.yml` commit
-   `8e4dbdb`). Public repos get unlimited minutes on all runners.
-2. **Pay for private-repo CI minutes** — GitHub Billing → spending
-   limit. macOS is ~$0.08/min, Windows ~$0.016/min, Linux free below
-   2000 min/mo.
-3. **Build on a Windows / Linux box you already own** — same
-   `scripts/release-local.sh` script works cross-platform; just
-   `pnpm tauri build` produces the native bundle for whatever OS runs it.
+```
+Actions tab → Release (Windows) → Run workflow → enter tag (e.g. v0.1.0)
+```
 
-Ship macOS-only for the first few users; expand when the feedback
-loop is stable.
+The tag must already exist on GitHub (push a macOS build first, tag it,
+then trigger this). The workflow:
+
+1. Checks out that exact tag.
+2. Builds `.msi` + NSIS `.exe` + updater `.zip` + `.sig`.
+3. Attaches all four to the draft GitHub Release for that tag.
+
+Cost: private-repo Windows runner ≈ **$0.25 per run** ($0.016/min ×
+~15 min). GitHub Pro free tier covers ~100 runs/mo before billing
+kicks in.
+
+**Prereq**: `gh` billing must be healthy on the account (the first
+attempt failed because payments were on hold; fix at
+<https://github.com/settings/billing>).
+
+### Windows install notes for the user
+
+SmartScreen will show "Windows protected your PC" on first run:
+
+> Click **More info** → **Run anyway**.
+
+Same trade-off as macOS Gatekeeper — not signing saves $500+/yr on
+Authenticode certs; users click through once.
 
 ## Future: paid Apple notarization
 
