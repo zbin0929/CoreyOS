@@ -333,7 +333,13 @@ function ServerForm({
   // users don't accidentally wipe an edit-in-progress. Picking a
   // template sets both the transport AND the body; the id field is
   // left for the user to customise.
+  const [pickedTemplateKey, setPickedTemplateKey] = useState<string>('');
+  const pickedTemplate = useMemo(
+    () => TEMPLATES.find((t) => t.key === pickedTemplateKey) ?? null,
+    [pickedTemplateKey],
+  );
   const onTemplatePick = (key: string) => {
+    setPickedTemplateKey(key);
     const tpl = TEMPLATES.find((t) => t.key === key);
     if (!tpl) return;
     setTransport(tpl.transport);
@@ -398,12 +404,14 @@ function ServerForm({
 
       {/* Template quick-fill — only offered for NEW servers so an
           accidental click on an edit form can't wipe the user's
-          in-progress JSON. "—" is the no-op placeholder. */}
+          in-progress JSON. "—" is the no-op placeholder. When a
+          template with a description/setupUrl is picked, surface
+          those inline so users know what they just selected. */}
       {isNew && (
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-fg-muted">{t('mcp.form_template')}</span>
           <Select<string>
-            value=""
+            value={pickedTemplateKey}
             onChange={(v) => v && onTemplatePick(v)}
             options={[
               { value: '', label: t('mcp.form_template_placeholder') },
@@ -412,9 +420,32 @@ function ServerForm({
             ariaLabel={t('mcp.form_template')}
             data-testid="mcp-form-template"
           />
-          <span className="text-[11px] text-fg-subtle">
-            {t('mcp.form_template_hint')}
-          </span>
+          {pickedTemplate?.description ? (
+            <span
+              className="text-[11px] text-fg-subtle"
+              data-testid="mcp-form-template-description"
+            >
+              {pickedTemplate.description}
+              {pickedTemplate.setupUrl && (
+                <>
+                  {' '}
+                  <a
+                    href={pickedTemplate.setupUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-0.5 text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                    data-testid="mcp-form-template-docs"
+                  >
+                    ↗ docs
+                  </a>
+                </>
+              )}
+            </span>
+          ) : (
+            <span className="text-[11px] text-fg-subtle">
+              {t('mcp.form_template_hint')}
+            </span>
+          )}
         </label>
       )}
 
@@ -550,6 +581,14 @@ interface Template {
   transport: Transport;
   suggestedId: string;
   config: Record<string, unknown>;
+  /** Optional one-liner shown under the picker when this template
+   *  is selected. Used to explain vendor-specific quirks (API key
+   *  quota, setup steps) without bloating the main copy. */
+  description?: string;
+  /** Vendor console / docs URL. Rendered as a small "↗ docs" link
+   *  next to the description so users can land on the API-key page
+   *  in one click. */
+  setupUrl?: string;
 }
 
 const TEMPLATES: readonly Template[] = [
@@ -594,6 +633,111 @@ const TEMPLATES: readonly Template[] = [
     config: {
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-puppeteer'],
+    },
+  },
+  // ─────────── Web search providers (T9 one-click) ───────────
+  //
+  // Give the agent the ability to search the live web. All five
+  // below are first-party or well-maintained community MCP servers
+  // exposing one or two tools that return structured search results
+  // (title + url + snippet), which Hermes calls transparently when
+  // the LLM decides a query needs web context.
+  //
+  // Cost / free-tier shape is mentioned in the description so users
+  // don't sign up blind. Setup URLs point straight at the console's
+  // API-key page — no hunting through marketing copy.
+  {
+    key: 'brave-search',
+    label: 'Brave Search (web_search)',
+    transport: 'stdio',
+    suggestedId: 'brave_search',
+    description:
+      'Web + local search via Brave. Free tier: 2000 queries/month; API key at brave.com/search/api.',
+    setupUrl: 'https://brave.com/search/api/',
+    config: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-brave-search'],
+      env: { BRAVE_API_KEY: 'BSA…' },
+    },
+  },
+  {
+    key: 'tavily-search',
+    label: 'Tavily Search (AI-native)',
+    transport: 'stdio',
+    suggestedId: 'tavily',
+    description:
+      'AI-optimised search with citations. Free tier: 1000 queries/month; key at app.tavily.com.',
+    setupUrl: 'https://app.tavily.com/',
+    config: {
+      command: 'npx',
+      args: ['-y', 'tavily-mcp'],
+      env: { TAVILY_API_KEY: 'tvly-…' },
+    },
+  },
+  {
+    key: 'duckduckgo-search',
+    label: 'DuckDuckGo Search (no key)',
+    transport: 'stdio',
+    suggestedId: 'ddg',
+    description:
+      'Free unlimited search via DuckDuckGo — no API key required, but rate-limited on their side.',
+    setupUrl: 'https://github.com/nickclyde/duckduckgo-mcp-server',
+    config: {
+      command: 'uvx',
+      args: ['duckduckgo-mcp-server'],
+    },
+  },
+  {
+    key: 'perplexity-search',
+    label: 'Perplexity Sonar (search + answer)',
+    transport: 'stdio',
+    suggestedId: 'perplexity',
+    description:
+      'Ask-and-answer combo — searches and summarises in one call. Paid only; key at perplexity.ai/settings/api.',
+    setupUrl: 'https://www.perplexity.ai/settings/api',
+    config: {
+      command: 'npx',
+      args: ['-y', '@chatmcp/server-perplexity-ask'],
+      env: { PERPLEXITY_API_KEY: 'pplx-…' },
+    },
+  },
+  {
+    key: 'serper-search',
+    label: 'Serper (Google results)',
+    transport: 'stdio',
+    suggestedId: 'serper',
+    description:
+      'Google search results via Serper. Free tier: 2500 queries trial; key at serper.dev.',
+    setupUrl: 'https://serper.dev/',
+    config: {
+      command: 'npx',
+      args: ['-y', 'serper-search-scrape-mcp-server'],
+      env: { SERPER_API_KEY: '' },
+    },
+  },
+  // ─────────── Other high-value community MCP servers ───────────
+  {
+    key: 'fetch',
+    label: 'Fetch (URL → text)',
+    transport: 'stdio',
+    suggestedId: 'fetch',
+    description:
+      'Download a URL and convert to Markdown. Useful alongside a search server — the agent searches, then fetches the top link.',
+    config: {
+      command: 'uvx',
+      args: ['mcp-server-fetch'],
+    },
+  },
+  {
+    key: 'memory',
+    label: 'Memory (knowledge graph)',
+    transport: 'stdio',
+    suggestedId: 'memory',
+    description:
+      'Persistent knowledge graph the agent can write to and query across sessions — complements Hermes\u2019 MEMORY.md for structured facts.',
+    config: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-memory'],
     },
   },
 ];
