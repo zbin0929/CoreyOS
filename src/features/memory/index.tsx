@@ -5,6 +5,7 @@ import {
   Brain,
   Check,
   FileText,
+  FolderOpen,
   Loader2,
   Save,
   UserCircle2,
@@ -346,8 +347,37 @@ function CapacityMeter({
       >
         {path}
       </code>
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={() => void revealInFinder(path)}
+        aria-label={t('memory.reveal')}
+        title={t('memory.reveal')}
+        data-testid="memory-reveal"
+      >
+        <Icon icon={FolderOpen} size="xs" />
+      </Button>
     </div>
   );
+}
+
+/**
+ * "Reveal in Finder" — opens the containing directory with the
+ * system's default file manager. We intentionally open the PARENT
+ * directory rather than the file itself so `open("…/MEMORY.md")`
+ * doesn't launch Markdown in a text editor. Best-effort: falls back
+ * to a no-op when the shell plugin isn't available (tests, Storybook).
+ */
+async function revealInFinder(absPath: string): Promise<void> {
+  const dir = absPath.slice(0, absPath.lastIndexOf('/')) || absPath;
+  try {
+    const { open } = await import('@tauri-apps/plugin-shell');
+    await open(dir);
+  } catch {
+    // Plugin unavailable in non-tauri contexts; swallow so the UI
+    // doesn't toast an error for something users can work around by
+    // copying the path from the tooltip.
+  }
 }
 
 function useSavedLabel(savedAt: number | null): string | null {

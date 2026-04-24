@@ -528,7 +528,8 @@
     "unsaved": "Unsaved changes",
     "capacity": "{{bytes}} / {{max}}",
     "capacity_meter": "Memory file size",
-    "new_file_hint": "New file — first save will create it"
+    "new_file_hint": "New file — first save will create it",
+    "reveal": "Reveal in file manager"
   },
   "channels": {
     "title": "Platform channels",

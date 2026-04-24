@@ -10,7 +10,7 @@ import { useComposerStore } from '@/stores/composer';
 import { NAV } from '@/app/nav-config';
 import { Kbd } from '@/components/ui/kbd';
 import { runbookList, type RunbookRow } from '@/lib/ipc';
-import { detectParams, renderRunbook, runbookScopeApplies } from '@/features/runbooks';
+import { detectParams, renderRunbook, runbookScopeApplies } from '@/features/runbooks/utils';
 import { useAppStatusStore } from '@/stores/appStatus';
 
 export function CommandPalette() {

@@ -5,8 +5,8 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
-import { Loader2 } from 'lucide-react';
 import { AppShell } from '@/app/shell/AppShell';
+import { RouteFallback } from '@/app/shell/RouteFallback';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
 
@@ -45,19 +45,6 @@ const SkillsRoute = lazyFeature(() => import('@/features/skills'), 'SkillsRoute'
 const SchedulerRoute = lazyFeature(() => import('@/features/scheduler'), 'SchedulerRoute');
 const MemoryRoute = lazyFeature(() => import('@/features/memory'), 'MemoryRoute');
 const McpRoute = lazyFeature(() => import('@/features/mcp'), 'McpRoute');
-
-/**
- * Shared fallback for lazy routes. Kept minimal — a full skeleton per
- * page is more motion than the 100-300ms chunk-fetch warrants, and
- * every feature renders its own skeleton/empty-state once mounted.
- */
-function RouteFallback() {
-  return (
-    <div className="flex flex-1 items-center justify-center text-fg-subtle">
-      <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-    </div>
-  );
-}
 
 const rootRoute = createRootRoute({
   component: () => (

@@ -525,7 +525,8 @@
     "unsaved": "未保存的改动",
     "capacity": "{{bytes}} / {{max}}",
     "capacity_meter": "记忆文件大小",
-    "new_file_hint": "新文件 — 首次保存时才会创建"
+    "new_file_hint": "新文件 — 首次保存时才会创建",
+    "reveal": "在文件管理器中打开"
   },
   "channels": {
     "title": "平台通道",

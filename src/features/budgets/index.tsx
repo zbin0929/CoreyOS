@@ -53,19 +53,11 @@ import { useAgentsStore } from '@/stores/agents';
  * to settings.
  */
 
-// Per-1M-token prices in USD cents. These are rough; the point is to
-// make the progress bar meaningful without claiming to be accounting.
-// If a model isn't in the table we fall back to a middle estimate.
-const PRICE_PER_M_TOKENS_CENTS: Record<string, { input: number; output: number }> = {
-  'gpt-4o': { input: 500, output: 1500 },
-  'gpt-4o-mini': { input: 15, output: 60 },
-  'claude-sonnet': { input: 300, output: 1500 },
-  'claude-haiku': { input: 25, output: 125 },
-  'gemini-flash': { input: 7, output: 30 },
-  'gemini-pro': { input: 125, output: 500 },
-  'deepseek-chat': { input: 14, output: 28 },
-  'hermes-agent': { input: 100, output: 300 },
-};
+// Fallback per-1M-token price in USD cents. Used for cost-progress
+// estimation when the server doesn't return an accounted cost yet.
+// Intentionally a single flat rate: the richer per-model price table
+// was dead code as of T4.4b (when the real cost projection moved to
+// the server) and was removed to stop it going stale silently.
 const FALLBACK_PRICE = { input: 100, output: 300 };
 
 type Mode =
@@ -481,12 +473,4 @@ function scopeLabel(b: BudgetRow, t: (k: string) => string): string {
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
-}
-
-/** Exported for T4.4b frontend cost-projection refactor. Picks the price
- *  table entry for a model id; falls back to a mid-tier default when the
- *  id isn't registered. */
-export function priceForModel(id: string | null | undefined): { input: number; output: number } {
-  if (!id) return FALLBACK_PRICE;
-  return PRICE_PER_M_TOKENS_CENTS[id] ?? FALLBACK_PRICE;
 }
