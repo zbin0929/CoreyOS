@@ -333,6 +333,11 @@ export function SkillsRoute() {
       <SkillHistoryDrawer
         open={historyOpen}
         path={sel.kind === 'open' ? sel.path : null}
+        // Diff baseline is the last-saved body, not the dirty buffer.
+        // Diffing against unsaved edits would surface a change the
+        // user hasn't committed yet, which conflates two concerns
+        // ("what did this version change" vs "what's in my editor").
+        currentBody={sel.kind === 'open' ? sel.loaded.body : ''}
         onClose={() => setHistoryOpen(false)}
         onRestore={restoreBody}
       />

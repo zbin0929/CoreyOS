@@ -235,6 +235,11 @@
     "history_latest": "latest",
     "history_restore": "Restore",
     "history_restore_title": "Overwrite the current body with this version. The current version is snapshotted first, so this is reversible.",
+    "history_view_mode": "View mode",
+    "history_tab_diff": "Diff",
+    "history_tab_body": "Body",
+    "history_diff_identical": "Identical to the current version.",
+    "history_diff_skipped": "⋯ {{n}} unchanged lines",
     "field": {
       "path": "Path",
       "path_hint": "Relative to ~/.hermes/skills/. Nested paths like work/standup.md are fine."

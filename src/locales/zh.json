@@ -235,6 +235,11 @@
     "history_latest": "最新",
     "history_restore": "恢复",
     "history_restore_title": "用这个版本覆盖当前内容。当前版本会先被快照，所以可随时再次恢复回来。",
+    "history_view_mode": "查看模式",
+    "history_tab_diff": "差异",
+    "history_tab_body": "正文",
+    "history_diff_identical": "与当前版本完全一致。",
+    "history_diff_skipped": "⋯ 省略 {{n}} 行未改动",
     "field": {
       "path": "路径",
       "path_hint": "相对 ~/.hermes/skills/ 的路径。支持嵌套，如 work/standup.md。"

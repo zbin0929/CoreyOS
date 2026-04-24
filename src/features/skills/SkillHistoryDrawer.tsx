@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, History, Loader2, RotateCcw } from 'lucide-react';
+import { diffLines, type Change } from 'diff';
 import { Button } from '@/components/ui/button';
 import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
@@ -29,6 +30,7 @@ import {
 export function SkillHistoryDrawer({
   open,
   path,
+  currentBody,
   onClose,
   onRestore,
 }: {
@@ -37,6 +39,12 @@ export function SkillHistoryDrawer({
    *  selected — drawer button is disabled in that case so this
    *  wouldn't fire, but guard anyway. */
   path: string | null;
+  /** The on-disk body at drawer-open time. Used as the "after" side
+   *  of the diff view so users see "what this version changed when
+   *  it became the next save". We intentionally do NOT use the
+   *  editor's dirty buffer — diffing against unsaved edits is
+   *  confusing, and the user can save first if that's the intent. */
+  currentBody: string;
   onClose: () => void;
   /** Called with the restored body. The parent feeds it through its
    *  normal save flow so the current on-disk version is snapshotted
@@ -156,6 +164,7 @@ export function SkillHistoryDrawer({
                 isNewest={i === 0}
                 expanded={expanded === r.id}
                 preview={preview[r.id]}
+                currentBody={currentBody}
                 loading={loadingId === r.id}
                 onExpand={() => void onExpand(r.id)}
                 onRestore={() => void onRestoreClick(r.id)}
@@ -173,6 +182,7 @@ function HistoryRow({
   isNewest,
   expanded,
   preview,
+  currentBody,
   loading,
   onExpand,
   onRestore,
@@ -181,12 +191,17 @@ function HistoryRow({
   isNewest: boolean;
   expanded: boolean;
   preview: SkillVersion | undefined;
+  currentBody: string;
   loading: boolean;
   onExpand: () => void;
   onRestore: () => void;
 }) {
   const { t } = useTranslation();
   const relative = useRelativeTime(row.created_at);
+  // Default to diff view because "what changed" is almost always the
+  // decision-maker for restore, and the raw historical body is rarely
+  // interesting on its own. Users can toggle back to the full body.
+  const [view, setView] = useState<'diff' | 'body'>('diff');
   return (
     <li
       className={cn(
@@ -224,12 +239,38 @@ function HistoryRow({
             </div>
           ) : (
             <>
-              <pre
-                className="max-h-48 overflow-auto rounded border border-border bg-bg-elev-2 p-2 font-mono text-[11px] leading-relaxed text-fg"
-                data-testid={`skill-history-preview-${row.id}`}
+              <div
+                role="tablist"
+                aria-label={t('skills.history_view_mode')}
+                className="mb-2 inline-flex rounded-md border border-border bg-bg-elev-2 p-0.5 text-[10px]"
               >
-                {preview.body}
-              </pre>
+                <ViewTab
+                  label={t('skills.history_tab_diff')}
+                  active={view === 'diff'}
+                  onClick={() => setView('diff')}
+                />
+                <ViewTab
+                  label={t('skills.history_tab_body')}
+                  active={view === 'body'}
+                  onClick={() => setView('body')}
+                />
+              </div>
+
+              {view === 'diff' ? (
+                <DiffView
+                  before={preview.body}
+                  after={currentBody}
+                  testId={`skill-history-diff-${row.id}`}
+                />
+              ) : (
+                <pre
+                  className="max-h-48 overflow-auto rounded border border-border bg-bg-elev-2 p-2 font-mono text-[11px] leading-relaxed text-fg"
+                  data-testid={`skill-history-preview-${row.id}`}
+                >
+                  {preview.body}
+                </pre>
+              )}
+
               <div className="mt-2 flex justify-end">
                 <Button
                   size="sm"
@@ -248,6 +289,162 @@ function HistoryRow({
       )}
     </li>
   );
+}
+
+function ViewTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'rounded px-2 py-0.5 transition-colors',
+        active
+          ? 'bg-bg-elev-3 text-fg'
+          : 'text-fg-subtle hover:text-fg',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * Line-level diff rendered as a compact unified-ish view.
+ *
+ * We show EVERY changed line (added / removed) and ~1 line of context
+ * between hunks. Full context blocks would make the drawer unreadable
+ * for long skills; zero context makes it impossible to orient. We
+ * treat runs of unchanged lines as collapsible — shown only when
+ * they're ≤3 lines long, otherwise replaced with a "⋯ N lines" stub.
+ */
+function DiffView({
+  before,
+  after,
+  testId,
+}: {
+  before: string;
+  after: string;
+  testId: string;
+}) {
+  const { t } = useTranslation();
+  const parts = useMemo<Change[]>(() => diffLines(before, after), [before, after]);
+
+  // Pre-flatten into individual line records so we can apply the
+  // context-collapse pass below. Each part's `value` is a string that
+  // always ends with `\n` (except possibly the last chunk).
+  type DiffLine = { kind: 'add' | 'del' | 'same'; text: string };
+  const lines: DiffLine[] = [];
+  for (const p of parts) {
+    const kind: DiffLine['kind'] = p.added ? 'add' : p.removed ? 'del' : 'same';
+    for (const raw of splitKeepTrailing(p.value)) {
+      lines.push({ kind, text: raw });
+    }
+  }
+
+  // No-op case: identical files. Useful signal on its own — user
+  // restored this version once already, or saved without edits.
+  const hasChanges = lines.some((l) => l.kind !== 'same');
+  if (!hasChanges) {
+    return (
+      <div
+        className="rounded border border-border bg-bg-elev-2 p-3 text-center text-[11px] text-fg-muted"
+        data-testid={testId}
+      >
+        {t('skills.history_diff_identical')}
+      </div>
+    );
+  }
+
+  // Collapse runs of 4+ unchanged lines into a summary stub. Keep up
+  // to 2 lines of context on either side so changes don't feel
+  // disembodied.
+  const collapsed: Array<DiffLine | { kind: 'stub'; n: number }> = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i]!.kind !== 'same') {
+      collapsed.push(lines[i]!);
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < lines.length && lines[j]!.kind === 'same') j++;
+    const run = j - i;
+    const leading = i === 0 ? 0 : 2;
+    const trailing = j === lines.length ? 0 : 2;
+    if (run <= leading + trailing + 1) {
+      for (let k = i; k < j; k++) collapsed.push(lines[k]!);
+    } else {
+      for (let k = i; k < i + leading; k++) collapsed.push(lines[k]!);
+      collapsed.push({ kind: 'stub', n: run - leading - trailing });
+      for (let k = j - trailing; k < j; k++) collapsed.push(lines[k]!);
+    }
+    i = j;
+  }
+
+  return (
+    <div
+      className="max-h-64 overflow-auto rounded border border-border bg-bg-elev-2 font-mono text-[11px] leading-relaxed"
+      data-testid={testId}
+    >
+      {collapsed.map((l, idx) => {
+        if (l.kind === 'stub') {
+          return (
+            <div
+              key={idx}
+              className="border-y border-border/40 bg-bg-elev-1 px-2 py-0.5 text-[10px] text-fg-subtle"
+            >
+              {t('skills.history_diff_skipped', { n: l.n })}
+            </div>
+          );
+        }
+        const pill =
+          l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' ';
+        return (
+          <div
+            key={idx}
+            className={cn(
+              'flex items-start gap-2 px-2',
+              l.kind === 'add' && 'bg-emerald-500/10 text-emerald-500',
+              l.kind === 'del' && 'bg-rose-500/10 text-rose-500',
+              l.kind === 'same' && 'text-fg',
+            )}
+          >
+            <span className="select-none pt-0.5 text-fg-subtle">{pill}</span>
+            <span className="min-w-0 whitespace-pre-wrap break-all">
+              {l.text.endsWith('\n') ? l.text.slice(0, -1) : l.text}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Split on '\n' but keep the trailing newline on each piece. Unlike
+ *  `.split('\n')` this handles the "no trailing newline" edge case
+ *  without synthesising a fake empty last line. */
+function splitKeepTrailing(s: string): string[] {
+  if (!s) return [];
+  const out: string[] = [];
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\n') {
+      out.push(s.slice(start, i + 1));
+      start = i + 1;
+    }
+  }
+  if (start < s.length) out.push(s.slice(start));
+  return out;
 }
 
 /** Live relative-time string ("3m ago", "yesterday") that updates
