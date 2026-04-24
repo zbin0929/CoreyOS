@@ -308,6 +308,9 @@
   "agent_wizard": {
     "title": "Add a new agent",
     "pick_provider": "Pick a provider. We'll pre-fill the endpoint, API-key env var, and a starter model list.",
+    "use_existing_title": "Use an existing LLM",
+    "use_existing_desc": "Pick one of your saved LLM profiles — no need to re-enter the API key. The agent inherits the profile's provider, base URL, and model.",
+    "or_new_from_provider": "Or start fresh from a provider",
     "local_tag": "LOCAL",
     "back": "Back",
     "field_id": "Agent id",

@@ -359,6 +359,9 @@
   "agent_wizard": {
     "title": "新增 Agent",
     "pick_provider": "选一个 provider。我们会自动填好 endpoint、API key 环境变量、以及初始模型列表。",
+    "use_existing_title": "使用已有 LLM",
+    "use_existing_desc": "从已保存的 LLM 配置档中选一个，无需重新输入 API key。Agent 会继承该配置的 provider、base URL 和默认模型。",
+    "or_new_from_provider": "或者从 provider 模板新建",
     "local_tag": "本地",
     "back": "返回",
     "field_id": "Agent ID",
