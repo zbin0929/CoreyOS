@@ -32,8 +32,11 @@ test.describe('skill hub (T7.4)', () => {
     await page.goto('/skills');
     await page.getByTestId('skills-tab-hub').click();
 
-    // Pick a non-default source + query.
-    await page.getByTestId('skill-hub-source').selectOption('skills-sh');
+    // Pick a non-default source + query. The Select is a custom
+    // combobox (role=combobox) — open it, then click the option by
+    // its accessible name.
+    await page.getByTestId('skill-hub-source').click();
+    await page.getByRole('option', { name: 'skills-sh' }).click();
     await page.getByTestId('skill-hub-query').fill('react');
     await page.getByTestId('skill-hub-browse').click();
 

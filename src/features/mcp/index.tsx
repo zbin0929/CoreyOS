@@ -16,6 +16,7 @@ import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
   hermesGatewayRestart,
@@ -407,15 +408,16 @@ function ServerForm({
 
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-fg-muted">{t('mcp.form_transport')}</span>
-          <select
+          <Select<Transport>
             value={transport}
-            onChange={(e) => onTransportChange(e.target.value as Transport)}
-            className="rounded-md border border-border bg-bg px-2 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
+            onChange={onTransportChange}
+            options={[
+              { value: 'stdio', label: t('mcp.transport_stdio') },
+              { value: 'url', label: t('mcp.transport_url') },
+            ]}
+            ariaLabel={t('mcp.form_transport')}
             data-testid="mcp-form-transport"
-          >
-            <option value="stdio">{t('mcp.transport_stdio')}</option>
-            <option value="url">{t('mcp.transport_url')}</option>
-          </select>
+          />
           <span className="text-[11px] text-fg-subtle">
             {transport === 'stdio'
               ? t('mcp.transport_stdio_hint')

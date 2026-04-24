@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
   ipcErrorMessage,
@@ -108,18 +109,13 @@ export function HubPanel() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-fg-muted">{t('skill_hub.source')}</span>
-            <select
+            <Select<Source>
               value={source}
-              onChange={(e) => setSource(e.target.value as Source)}
-              className="rounded-md border border-border bg-bg px-2 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
+              onChange={setSource}
+              options={SOURCES.map((s) => ({ value: s, label: s }))}
+              ariaLabel={t('skill_hub.source')}
               data-testid="skill-hub-source"
-            >
-              {SOURCES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs">
             <span className="text-fg-muted">{t('skill_hub.query')}</span>
