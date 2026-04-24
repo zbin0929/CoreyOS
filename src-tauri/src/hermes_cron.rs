@@ -218,7 +218,7 @@ pub fn list_runs(job_id: &str) -> io::Result<Vec<RunInfo>> {
         });
     }
     // Newest first; cap.
-    out.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+    out.sort_by_key(|r| std::cmp::Reverse(r.modified_at));
     out.truncate(MAX_RUNS_PER_JOB);
     Ok(out)
 }
@@ -390,7 +390,7 @@ mod tests {
             prompt: "Summarise the latest AI news from HN and post to Telegram".into(),
             ..HermesJob::default()
         };
-        assert!(job.display_name().len() > 0);
+        assert!(!job.display_name().is_empty());
         job.name = Some("Morning digest".into());
         assert_eq!(job.display_name(), "Morning digest");
     }

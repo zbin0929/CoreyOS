@@ -9,6 +9,7 @@
     "core:window:allow-set-title",
     "core:event:default",
     "shell:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "updater:default"
   ]
 }

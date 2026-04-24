@@ -57,7 +57,7 @@ pub struct SchedulerJobView {
 
 impl SchedulerJobView {
     fn from_hermes(job: &HermesJob, latest_run: Option<i64>) -> Self {
-        let created_at = job.corey_created_at.unwrap_or_else(|| 0);
+        let created_at = job.corey_created_at.unwrap_or(0);
         let updated_at = job.corey_updated_at.unwrap_or(created_at);
         Self {
             id: job.id.clone(),

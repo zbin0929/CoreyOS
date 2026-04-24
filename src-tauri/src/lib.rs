@@ -70,6 +70,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        // Auto-update. The plugin inspects `plugins.updater` in
+        // tauri.conf.json (endpoints + pubkey) and fetches the latest
+        // manifest when the frontend calls `check()`. Wiring from the
+        // UI lives in Settings → Updates.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             ipc::agents::adapter_list,
             ipc::health::health_check,

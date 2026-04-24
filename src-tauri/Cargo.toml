@@ -1,6 +1,6 @@
 [package]
 name = "caduceus"
-version = "0.0.1"
+version = "0.1.0"
 description = "Corey — control plane for AI agents"
 authors = ["Corey Contributors"]
 edition = "2021"
@@ -28,6 +28,11 @@ tauri-plugin-shell = "2"
 # Native folder picker for Settings › Workspace. Wired into the sandbox
 # "Add root" form so users don't hand-type `/Users/…/Projects` paths.
 tauri-plugin-dialog = "2"
+# In-app auto-update via GitHub Release manifests. Wired through
+# `plugins.updater` in tauri.conf.json (endpoints + pubkey). The plugin
+# is a no-op when the app was built without TAURI_SIGNING_PRIVATE_KEY
+# — dev builds skip the updater path cleanly.
+tauri-plugin-updater = "2"
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "io-util", "process"] }
 async-trait = "0.1"

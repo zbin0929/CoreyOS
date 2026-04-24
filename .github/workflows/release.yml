@@ -1,0 +1,123 @@
+name: Release
+
+# Fires on semver tags pushed to the default branch. Use
+#   git tag v0.1.0 && git push origin v0.1.0
+# to cut a release. The job creates a DRAFT release with every platform
+# artifact attached; publishing is manual so the maintainer can edit the
+# notes before users start auto-updating.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS (Apple Silicon) — primary dev target.
+          - platform: macos-14
+            rust_target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+          # macOS (Intel) — still the majority of in-field Macs.
+          - platform: macos-14
+            rust_target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+          # Linux — AppImage + .deb + .rpm all produced by Tauri bundler.
+          - platform: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-gnu
+            args: ''
+          # Windows — MSI + NSIS.
+          - platform: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          # Separate cache per target triple so macOS arm/x64 don't stomp
+          # on each other.
+          key: ${{ matrix.rust_target }}
+
+      # Tauri 2 Linux bundler deps (webkit2gtk, libappindicator, rpm, etc.)
+      - name: Install Linux system deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            patchelf \
+            rpm
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      # The real work. `tauri-action` builds the bundle for the target
+      # triple, signs the updater artifacts with TAURI_SIGNING_PRIVATE_KEY,
+      # and uploads everything (including latest.json) to a draft release
+      # named after the tag.
+      #
+      # Secrets needed:
+      #   TAURI_SIGNING_PRIVATE_KEY          — minisign-format private key
+      #                                        produced by `tauri signer generate`.
+      #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — passphrase for that key.
+      #
+      # If either secret is missing, the build still produces unsigned
+      # bundles; the updater will simply refuse to install them. See
+      # `docs/07-release.md` for the keygen / secret-upload runbook.
+      - name: Build + publish Tauri bundle
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Corey ${{ github.ref_name }}'
+          releaseBody: |
+            Auto-generated draft. See `CHANGELOG.md` for the full change
+            list. Edit this description before publishing.
+
+            ### Install notes
+
+            - **macOS**: the `.dmg` is unsigned by Apple. Gatekeeper will
+              refuse to launch it on first open. Right-click → Open, or run
+              `xattr -dr com.apple.quarantine /Applications/Corey.app` once.
+            - **Windows**: SmartScreen may show "Windows protected your PC".
+              Click **More info → Run anyway**.
+            - **Linux**: `chmod +x Corey_*.AppImage` and run, or install the
+              `.deb` / `.rpm` with your package manager.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

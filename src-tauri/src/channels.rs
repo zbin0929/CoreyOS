@@ -21,8 +21,8 @@
 //!     `WEIXIN_TOKEN` + `WEIXIN_BASE_URL`. Hermes hits iLink directly;
 //!     there is no QR flow upstream. The slug changes `wechat` →
 //!     `weixin` to match Hermes' naming.
-//! Slack also gained the optional `SLACK_APP_TOKEN` required for
-//! Socket Mode.
+//!   - Slack also gained the optional `SLACK_APP_TOKEN` required for
+//!     Socket Mode.
 //!
 //! What this module is NOT:
 //!   - No actual write path. `write_env_key` / `write_channel_yaml`

@@ -1,134 +1,163 @@
 # 07 · Release & Distribution
 
+> **Status 2026-04-24**: `.github/workflows/release.yml` is live. Cutting
+> a release is one `git tag && git push --tags` away once the one-time
+> signing keys are in GitHub Secrets. No paid code-signing certs yet;
+> Gatekeeper / SmartScreen warnings are documented on each GitHub
+> Release page.
+
+## TL;DR — cut a release
+
+```sh
+# Bump versions (single source of truth in Cargo.toml + package.json +
+# tauri.conf.json — keep all three in sync manually; we'll script this
+# later if it becomes painful).
+vim src-tauri/Cargo.toml             # package.version
+vim src-tauri/tauri.conf.json        # version
+vim package.json                     # version
+# Write the release note in CHANGELOG.md first.
+git commit -am "release: v0.1.1"
+git tag v0.1.1
+git push origin main --tags
+```
+
+GitHub Actions (`.github/workflows/release.yml`) then:
+
+1. Builds the Tauri bundle on macOS (arm + x64), Windows, and Linux in
+   parallel.
+2. Signs the updater artifacts with the minisign-format key stored in
+   GH Secrets.
+3. Creates a **draft** GitHub Release named `Corey v0.1.1` with every
+   platform artifact + a `latest.json` manifest attached.
+4. Stops there — manually review the notes, then hit **Publish release**
+   to go live. The Tauri updater picks up the new version through
+   `https://github.com/zbin0929/CoreyOS/releases/latest/download/latest.json`
+   (see `plugins.updater.endpoints` in `tauri.conf.json`).
+
+## One-time setup: signing keys
+
+The Tauri updater refuses to install a bundle whose signature doesn't
+verify against the `plugins.updater.pubkey` baked into the running app.
+So before the first release:
+
+```sh
+# Generate a keypair. Keep the passphrase somewhere safe (1Password etc.).
+pnpm tauri signer generate -w ~/.tauri/corey.key
+
+# The command prints both halves to stdout:
+#   - ~/.tauri/corey.key         (PRIVATE — never commit)
+#   - ~/.tauri/corey.key.pub     (public)
+
+# Upload the PRIVATE key + passphrase as GitHub Action secrets:
+gh secret set TAURI_SIGNING_PRIVATE_KEY            < ~/.tauri/corey.key
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD   # paste the passphrase
+
+# Copy the PUBLIC key into src-tauri/tauri.conf.json →
+# plugins.updater.pubkey (replace the PLACEHOLDER string). Commit that.
+cat ~/.tauri/corey.key.pub
+```
+
+Re-running `signer generate` rotates the key. Anyone still on a version
+of the app built with the old pubkey will stop auto-updating — they'll
+need to download the next release manually. Budget accordingly.
+
 ## Strategy: unsigned + GitHub Release (zero cost)
 
-**Default stance**: distribute as open-source via GitHub Releases, **without paid code-signing certificates**. This is the locked decision for M1–M4. Paid signing can be layered on later without refactoring the release pipeline (see the "Future: paid signing" section at the bottom).
+**Default stance**: distribute as open-source via GitHub Releases,
+**without paid OS code-signing certificates**. Locked decision for M1–M4.
+Paid signing (Apple Developer ID / Authenticode) can be layered on later
+without reworking this pipeline — they plug in as env vars on the same
+`tauri-action` step.
 
-Consequences users need to know (documented clearly on the download page):
+User-visible consequences (documented on the download page):
 
-- **macOS**: the `.dmg` opens but Gatekeeper will refuse to run the app on first launch ("cannot be opened because Apple cannot check it for malicious software"). Users right-click → Open, or run `xattr -dr com.apple.quarantine /Applications/Corey.app` once. We provide a one-line copyable command and a short screencast on the download page.
-- **Windows**: SmartScreen will show "Windows protected your PC"; users click "More info" → "Run anyway". We provide screenshots.
-- **Linux**: no warnings; `chmod +x *.AppImage` and run. `.deb` / `.rpm` install normally with `sudo apt install ./file.deb` / `sudo rpm -i file.rpm`.
+- **macOS**: the `.dmg` opens but Gatekeeper refuses to run the app on
+  first launch ("cannot be opened because Apple cannot check it for
+  malicious software"). Users right-click → Open, or run
+  `xattr -dr com.apple.quarantine /Applications/Corey.app` once.
+- **Windows**: SmartScreen shows "Windows protected your PC"; users
+  click "More info" → "Run anyway".
+- **Linux**: no warnings; `chmod +x *.AppImage` and run. `.deb` / `.rpm`
+  install normally with `sudo apt install ./file.deb` /
+  `sudo rpm -i file.rpm`.
 
-Artifact integrity is provided via **minisign signatures** (free, self-managed key). Users can verify; most won't, and that's fine.
+Updater integrity is provided via Tauri's built-in minisign-format
+signer — each artifact has a matching `.sig` file verified by the client
+before install. No separate minisign workflow needed (the original
+Phase-0 plan had one; collapsed now that Tauri ships the same primitive
+in-band).
 
 ## Release channels
 
+Started with a single channel (`stable`) to cut scope. Multi-channel
+(nightly / beta) lands when we actually have enough users to justify
+the cadence split.
+
 | Channel   | Audience         | Cadence                | Trigger                         |
 |-----------|------------------|------------------------|---------------------------------|
-| `nightly` | Dev / dogfooding | Every merge to `main`  | GitHub Action on push           |
-| `beta`    | Public opt-in    | Weekly                 | Tag `v*.*.*-beta.N`             |
 | `stable`  | Default          | Every 2–4 weeks        | Tag `v*.*.*`                    |
-
-Channel mapped into the Tauri updater via a manifest URL per channel.
 
 ## Versioning
 
-- **SemVer**. Breaking changes to the adapter trait are tracked in `CHANGELOG.md` but do not yet bump major (no external consumers until Phase 5 closes).
-- Version is a single source of truth in `src-tauri/tauri.conf.json`; a pre-commit hook syncs `package.json`.
+- **SemVer**. Pre-1.0 breaking changes track in `CHANGELOG.md` but do
+  not bump major — no external adapter consumers yet.
+- Three-files-manual-sync for now: `src-tauri/Cargo.toml`,
+  `src-tauri/tauri.conf.json`, `package.json`. A pre-commit hook
+  sync'ing them is a backlog item.
 
 ## Artifacts per release
 
-| OS            | Artifact                       | Integrity                 |
-|---------------|--------------------------------|---------------------------|
-| macOS (arm64) | `.dmg`, `.app.tar.gz`          | minisign `.sig` + SHA256  |
-| macOS (x64)   | `.dmg`, `.app.tar.gz`          | minisign `.sig` + SHA256  |
-| Windows x64   | `.msi`, `.exe` (NSIS portable) | minisign `.sig` + SHA256  |
-| Linux x64     | `.AppImage`, `.deb`, `.rpm`    | minisign `.sig` + SHA256  |
-| Linux arm64   | `.AppImage`, `.deb`            | minisign `.sig` + SHA256  |
+| OS            | Artifact                            | Signed updater? |
+|---------------|-------------------------------------|-----------------|
+| macOS (arm64) | `.dmg`, `.app.tar.gz`               | ✅              |
+| macOS (x64)   | `.dmg`, `.app.tar.gz`               | ✅              |
+| Windows x64   | `.msi`, `.exe` (NSIS)               | ✅              |
+| Linux x64     | `.AppImage`, `.deb`, `.rpm`         | ✅ (AppImage)   |
 
-No paid OS-level code signing. **minisign** is used both for Tauri updater verification and for user-facing integrity. Public key lives in the README and is baked into the build; secret key is held in GitHub Actions secrets.
+Every platform ships a `.sig` sibling file. The `latest.json` manifest
+(auto-generated by `tauri-action`) maps platform → `url` + `signature`
+for the updater to read. `.deb` / `.rpm` don't participate in the
+updater; users on those re-download the package for upgrades.
 
 ## Auto-update
 
-- Tauri updater configured in `tauri.conf.json` with a per-channel manifest URL, **served directly from the GitHub Release**:
-  - `https://github.com/<org>/corey/releases/download/<tag>/latest-<channel>.json`
-  - This avoids any need for self-hosted infra or a domain.
-- Manifest fields: `version`, `notes`, `pub_date`, `platforms.*.signature` (minisign), `platforms.*.url` (GitHub Release asset URL).
-- Users can opt out of auto-update in Settings; opt-out still notifies when a newer version is available.
-- **Important caveat without OS signing**: auto-update works, but on macOS the updated binary re-triggers Gatekeeper's quarantine attribute for downloads. Mitigation: the installer script strips quarantine on first-run confirmation (documented in the FAQ). On Windows, the MSI updater path avoids SmartScreen on update if the original install was user-accepted; first install still shows the warning.
+- Configured in `tauri.conf.json` →
+  `plugins.updater.endpoints`.
+- Manifest lives at a GitHub Release asset URL
+  (`releases/latest/download/latest.json`) — no self-hosted infra, no
+  domain.
+- Fields: `version`, `notes`, `pub_date`, `platforms.*.signature`,
+  `platforms.*.url`.
+- **macOS caveat without OS signing**: auto-update works, but an updated
+  binary re-triggers Gatekeeper's quarantine attribute for downloads.
+  Mitigation: the in-app "Update installed" dialog should include the
+  one-liner `xattr` fix (follow-up UI task, not blocking v0.1.0).
+- **Windows**: the MSI updater path avoids SmartScreen on update if the
+  original install was user-accepted. First install still shows the
+  warning.
 
-## Download page (GitHub Releases prose)
+## Download-page copy (GitHub Release description)
 
-Each release's description must include:
+`tauri-action` pre-fills the release body with install notes (see
+`.github/workflows/release.yml` → `releaseBody`). The maintainer should
+edit the body before publishing to add:
 
-1. The four OS download links with size + SHA256.
-2. macOS Gatekeeper workaround (right-click → Open, or `xattr` one-liner).
-3. Windows SmartScreen workaround (More info → Run anyway screenshot).
-4. minisign public key + verification command example.
-5. Link to the user-facing changelog.
+1. User-facing changelog summary (1–3 bullets).
+2. Breaking changes, if any.
+3. Link to `docs/user/` (post-Polish pass) for deeper docs.
 
-A small static `docs/download.md` in the repo mirrors this content and is the target of the "Download" button on the (future) landing page.
+## Future: paid OS signing
 
-## CI/CD
+Both certs are < $400/yr combined; adding them is a pure env-var change
+in `release.yml`:
 
-`.github/workflows/release.yml` triggered on tag push:
+- **macOS (Apple Developer ID + notarization)**: set
+  `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
+  `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`. `tauri-action` reads them
+  and notarizes automatically.
+- **Windows (Authenticode)**: set `WINDOWS_CERTIFICATE`,
+  `WINDOWS_CERTIFICATE_PASSWORD` (PFX + passphrase).
 
-1. **Prepare**: checkout, install Rust + Node + pnpm, cache.
-2. **Lint + test**: the full CI suite from `06-testing.md`.
-3. **Build matrix** (per OS): `pnpm tauri build`. No OS signing env vars required.
-   - Runners: `macos-14` (arm64), `macos-13` (x64), `windows-2022`, `ubuntu-22.04` (+ `ubuntu-22.04-arm` when available).
-4. **Compute hashes**: SHA256 each artifact.
-5. **Sign with minisign**: one `.sig` per artifact + one signed `latest-<channel>.json` manifest. Secret: `MINISIGN_KEY` + `MINISIGN_KEY_PASSWORD`.
-6. **Publish**: `softprops/action-gh-release` uploads artifacts, `.sig` files, SHA256 file, and the manifest to the GitHub Release. Release notes auto-generated from `CHANGELOG.md` delta.
-7. **Distribution channels (optional, non-blocking)**: Homebrew tap, Scoop bucket, winget, AUR. Unsigned-friendly; scripts live in `scripts/dist/`.
-
-## Manual pre-release checklist
-
-Copy-paste into the Release PR:
-
-- [ ] `CHANGELOG.md` updated; breaking notes called out.
-- [ ] Bumped version in `tauri.conf.json`; `package.json` synced.
-- [ ] All phase-level e2e for shipped phases pass locally.
-- [ ] Visual baselines re-reviewed for intentional changes only.
-- [ ] Screen reader smoke on the 5 primary screens.
-- [ ] Cold start measured on reference hardware ≤ 1.0 s.
-- [ ] Installer sizes within budgets (macOS arm64 ≤ 20 MB, Windows x64 ≤ 25 MB).
-- [ ] Secrets scan green (no key-shaped strings in shipped bundle).
-- [ ] Updater test: install previous `stable`, deploy current as `beta`, verify update prompt + application.
-- [ ] Download page copy updated with current SHA256 + minisign signatures.
-- [ ] Gatekeeper / SmartScreen workaround instructions verified to still work on current OS versions (spot-check once per minor release).
-
-## Crash reports & diagnostics
-
-- Opt-in only. Never on by default.
-- "Export diagnostic bundle" in Settings gathers: last 48 h of Rust logs, redacted configs, versions, OS info → zips to user-chosen path for manual sharing.
-- No hosted crash reporter initially; consider Sentry self-hosted later if volume warrants.
-
-## Revocation / rollback
-
-- If a release ships a broken updater: push a new manifest pointing to the last good version; auto-update will "update" users to the older good one. Document the trade-off in the release post-mortem.
-- All previous artifacts remain attached to their GitHub Releases; never delete.
-
-## Web-mode distribution (future)
-
-- `corey-web` companion package: same frontend + a Node shim replacing the Rust IPC surface over HTTP.
-- Distributed as an `npm` package and a single `docker` image.
-- Out of scope for M3; plan in post-Phase-5 Phase 6.
-
-## Future: paid signing (opt-in upgrade, not on the critical path)
-
-If user feedback later shows Gatekeeper/SmartScreen friction is blocking adoption, layer these on. The release pipeline is designed so each is an additive step, not a rewrite.
-
-### macOS (Apple Developer ID + notarization)
-
-- **Cost**: USD 99/year.
-- Issue a "Developer ID Application" certificate.
-- Add CI secrets: `APPLE_CERTIFICATE` (base64 P12), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
-- Extend the macOS build step with `codesign`; add a notarize step (`xcrun notarytool submit --wait`) + `xcrun stapler staple`.
-- Result: zero Gatekeeper warnings on download and launch.
-
-### Windows (Authenticode)
-
-- **Cost**: OV cert ~USD 100–200/year (needs reputation to bypass SmartScreen); EV cert ~USD 300–500/year (instant reputation, requires HSM).
-- Sign `.msi` and `.exe` with `signtool`, timestamp via `http://timestamp.digicert.com`.
-- EV strongly recommended if we upgrade at all; OV on its own is barely worth the money.
-- Result: SmartScreen warning gone (EV) or gated by reputation (OV).
-
-### Decision trigger
-
-Revisit signing when **any** of these is true:
-
-- > 1000 downloads/month and attrition measurable on the install step.
-- Users request signed builds in issues at a rate ≥ 5/month.
-- We take on a corporate contributor willing to sponsor certificates.
+Trigger: user pain from Gatekeeper/SmartScreen warnings reaches the
+point where install abandonment is measurable. Until then: clear
+install docs > spending money.
