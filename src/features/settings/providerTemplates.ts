@@ -77,6 +77,81 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     suggestedModels: ['deepseek-chat', 'deepseek-reasoner'],
     setupUrl: 'https://platform.deepseek.com/api_keys',
   },
+  // ───────── Domestic (CN) providers ─────────
+  // All use their vendor's official OpenAI-compatible endpoint. Users
+  // sign up on the vendor console, generate an API key, paste it here.
+  // Model ids are the vendor's current public list — the live
+  // /v1/models probe overrides these once the user hits Discover.
+  {
+    id: 'qwen',
+    label: '通义千问 (Qwen / 阿里百炼)',
+    description: 'Qwen 系列：qwen-max / qwen-plus / qwen-turbo。阿里云百炼 OpenAI 兼容接口。',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    envKey: 'DASHSCOPE_API_KEY',
+    suggestedModels: [
+      'qwen-max',
+      'qwen-plus',
+      'qwen-turbo',
+      'qwen-long',
+      'qwen2.5-72b-instruct',
+    ],
+    setupUrl: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
+  },
+  {
+    id: 'zhipu',
+    label: '智谱 GLM',
+    description: 'GLM-4 系列：plus / air / flash。智谱 AI 开放平台。',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    envKey: 'ZHIPUAI_API_KEY',
+    suggestedModels: ['glm-4-plus', 'glm-4-air', 'glm-4-flash', 'glm-4'],
+    setupUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
+  },
+  {
+    id: 'moonshot',
+    label: '月之暗面 Kimi',
+    description: 'Moonshot Kimi：8k / 32k / 128k 长上下文。',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    envKey: 'MOONSHOT_API_KEY',
+    suggestedModels: [
+      'moonshot-v1-8k',
+      'moonshot-v1-32k',
+      'moonshot-v1-128k',
+      'kimi-k2-0905-preview',
+    ],
+    setupUrl: 'https://platform.moonshot.cn/console/api-keys',
+  },
+  {
+    id: 'yi',
+    label: '零一万物 Yi',
+    description: '01.AI Yi 系列：large / medium / spark / vision。',
+    baseUrl: 'https://api.lingyiwanwu.com/v1',
+    envKey: 'YI_API_KEY',
+    suggestedModels: ['yi-large', 'yi-medium', 'yi-spark', 'yi-vision'],
+    setupUrl: 'https://platform.lingyiwanwu.com/apikeys',
+  },
+  {
+    id: 'baichuan',
+    label: '百川 Baichuan',
+    description: 'Baichuan4 / Baichuan3-Turbo 系列。',
+    baseUrl: 'https://api.baichuan-ai.com/v1',
+    envKey: 'BAICHUAN_API_KEY',
+    suggestedModels: ['Baichuan4', 'Baichuan3-Turbo', 'Baichuan2-Turbo'],
+    setupUrl: 'https://platform.baichuan-ai.com/console/apikey',
+  },
+  {
+    id: 'hunyuan',
+    label: '腾讯混元',
+    description: 'Hunyuan turbo / standard / lite。腾讯云 OpenAI 兼容接口。',
+    baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
+    envKey: 'HUNYUAN_API_KEY',
+    suggestedModels: [
+      'hunyuan-turbo',
+      'hunyuan-standard',
+      'hunyuan-lite',
+      'hunyuan-pro',
+    ],
+    setupUrl: 'https://console.cloud.tencent.com/hunyuan/api-key',
+  },
   {
     id: 'google',
     label: 'Google (Gemini)',
