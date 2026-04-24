@@ -328,6 +328,18 @@ function ServerForm({
     if (isNew) setRaw(JSON.stringify(defaultConfig(next), null, 2));
   };
 
+  // "Start from a common server" quick-fill. Only shown on NEW so
+  // users don't accidentally wipe an edit-in-progress. Picking a
+  // template sets both the transport AND the body; the id field is
+  // left for the user to customise.
+  const onTemplatePick = (key: string) => {
+    const tpl = TEMPLATES.find((t) => t.key === key);
+    if (!tpl) return;
+    setTransport(tpl.transport);
+    setRaw(JSON.stringify(tpl.config, null, 2));
+    if (!id.trim()) setId(tpl.suggestedId);
+  };
+
   const parseError = useMemo(() => {
     try {
       const v = JSON.parse(raw);
@@ -382,6 +394,28 @@ function ServerForm({
           <Icon icon={X} size="xs" />
         </Button>
       </div>
+
+      {/* Template quick-fill — only offered for NEW servers so an
+          accidental click on an edit form can't wipe the user's
+          in-progress JSON. "—" is the no-op placeholder. */}
+      {isNew && (
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-fg-muted">{t('mcp.form_template')}</span>
+          <Select<string>
+            value=""
+            onChange={(v) => v && onTemplatePick(v)}
+            options={[
+              { value: '', label: t('mcp.form_template_placeholder') },
+              ...TEMPLATES.map((tpl) => ({ value: tpl.key, label: tpl.label })),
+            ]}
+            ariaLabel={t('mcp.form_template')}
+            data-testid="mcp-form-template"
+          />
+          <span className="text-[11px] text-fg-subtle">
+            {t('mcp.form_template_hint')}
+          </span>
+        </label>
+      )}
 
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <label className="flex flex-col gap-1 text-xs">
@@ -487,3 +521,64 @@ function defaultConfig(transport: Transport): Record<string, unknown> {
     args: [],
   };
 }
+
+/**
+ * Ready-to-tweak templates for common MCP servers. Picking one fills
+ * transport + config + (if the id field is empty) suggests an id;
+ * the user still has to fill in tokens / paths before saving.
+ * Sources are the ones documented at
+ * hermes-agent.nousresearch.com/docs/guides/use-mcp-with-hermes.
+ */
+interface Template {
+  key: string;
+  label: string;
+  transport: Transport;
+  suggestedId: string;
+  config: Record<string, unknown>;
+}
+
+const TEMPLATES: readonly Template[] = [
+  {
+    key: 'filesystem',
+    label: 'Filesystem (project-local)',
+    transport: 'stdio',
+    suggestedId: 'project_fs',
+    config: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/path/to/project'],
+    },
+  },
+  {
+    key: 'github',
+    label: 'GitHub',
+    transport: 'stdio',
+    suggestedId: 'github',
+    config: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_…' },
+      tools: { include: ['list_issues', 'create_issue', 'search_code'] },
+    },
+  },
+  {
+    key: 'stripe',
+    label: 'Stripe (URL + read-only)',
+    transport: 'url',
+    suggestedId: 'stripe',
+    config: {
+      url: 'https://mcp.stripe.com',
+      headers: { Authorization: 'Bearer sk_…' },
+      tools: { exclude: ['delete_customer', 'refund_payment'] },
+    },
+  },
+  {
+    key: 'puppeteer',
+    label: 'Puppeteer (headless browser)',
+    transport: 'stdio',
+    suggestedId: 'browser',
+    config: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-puppeteer'],
+    },
+  },
+];

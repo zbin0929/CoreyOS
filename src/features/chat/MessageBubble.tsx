@@ -215,15 +215,17 @@ function CopyButton({ text }: { text: string }) {
  * Collapsible "thinking" panel shown above reasoning-model answers.
  *
  * Behavior:
- *   - While streaming (no content yet), the panel defaults to OPEN so
- *     the user can watch the chain-of-thought land in real time.
- *   - Once the final content starts flowing, the panel stays open if
- *     the user hasn't toggled it; a caller that wants the opposite
- *     can just close it manually. We don't auto-close on streaming
- *     finish because that would yank closing motion into the user's
- *     reading focus right as the answer appears.
- *   - Uses `<details>` instead of a state hook so browser-native
- *     expansion works without a re-render on every token.
+ *   - While streaming the reasoning (no `content` yet), the panel is
+ *     OPEN so the user can watch the chain-of-thought arrive in real
+ *     time.
+ *   - The moment final content starts flowing, we flip to CLOSED so
+ *     the chain-of-thought doesn't compete with the answer for reading
+ *     focus. The user can still click the summary to re-expand —
+ *     `userOpened` pins it open once they do, so the final content
+ *     doesn't yank it shut mid-read.
+ *   - Uses `<details>` with a controlled `open` attribute so the
+ *     open/close transition is browser-native and doesn't re-render
+ *     the whole subtree on every delta.
  */
 function ReasoningPanel({
   reasoning,
@@ -233,10 +235,22 @@ function ReasoningPanel({
   streaming: boolean;
 }) {
   const { t } = useTranslation();
+  // Pinned-open state: once the user manually opens the summary, we
+  // stop auto-closing it even when `streaming === false`.
+  const [userOpened, setUserOpened] = useState(false);
+  const open = streaming || userOpened;
   return (
     <details
       className="mb-2 rounded-md border border-border/60 bg-bg-elev-2/50 text-[12px]"
-      open={streaming}
+      open={open}
+      onToggle={(e) => {
+        // `onToggle` fires for both user clicks AND our controlled
+        // attribute flips. The attribute flip always leaves
+        // `e.currentTarget.open` matching `open`; only a user-click
+        // shifts them out of sync.
+        const next = e.currentTarget.open;
+        if (next !== open) setUserOpened(next);
+      }}
       data-testid="reasoning-panel"
     >
       <summary className="flex cursor-pointer items-center gap-1.5 px-2 py-1.5 text-fg-muted select-none">

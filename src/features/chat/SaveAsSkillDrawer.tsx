@@ -222,7 +222,7 @@ export function SaveAsSkillDrawer({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="saved-conversation"
+                placeholder="work/deploy-steps"
                 className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
                 spellCheck={false}
                 data-testid="save-as-skill-name"
@@ -368,14 +368,29 @@ function stripCodeFences(s: string): string {
   return s;
 }
 
-/** Normalise a free-form name to a filesystem-safe slug:
- *  lowercase ASCII alphanumerics + dashes. Collapses runs of
- *  separators and trims leading/trailing dashes. Matches the
- *  convention used by `~/.hermes/skills/` upstream. */
+/** Normalise a free-form name to a filesystem-safe skill path.
+ *  Supports optional subfolder segments so users can organise by
+ *  topic (`work/deploy`, `personal/todos`). Each segment is
+ *  independently slugified to lowercase ASCII alphanumerics + dashes.
+ *  `/` survives as the separator; runs of dashes or empty segments
+ *  collapse away so `work//foo` and `work / foo` both map to
+ *  `work/foo`.
+ *
+ *  Depth is capped at 3 levels — Hermes' native skill tree convention
+ *  is a flat-or-one-level layout; anything deeper makes the Skills
+ *  page tree view unwieldy.
+ */
 function sanitizeSlug(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
+  const segs = s
+    .split('/')
+    .map((seg) =>
+      seg
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 64),
+    )
+    .filter((seg) => seg.length > 0)
+    .slice(0, 3);
+  return segs.join('/');
 }
