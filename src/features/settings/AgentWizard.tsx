@@ -11,9 +11,11 @@ import {
   Server,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
   hermesInstanceUpsert,
@@ -450,19 +452,20 @@ function DetailsStep({
             <span className="font-medium text-fg">
               {t('agent_wizard.use_profile_title')}
             </span>
-            <select
+            <Select
               value={selectedProfileId ?? ''}
-              onChange={(e) => setSelectedProfileId(e.target.value || null)}
-              className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 text-sm text-fg"
+              onChange={(v) => setSelectedProfileId(v || null)}
+              options={[
+                { value: '', label: t('agent_wizard.use_profile_new') },
+                ...matchingProfiles.map((p) => ({
+                  value: p.id,
+                  label: p.label || p.id,
+                  hint: p.model,
+                })),
+              ]}
               data-testid="agent-wizard-profile-select"
-            >
-              <option value="">{t('agent_wizard.use_profile_new')}</option>
-              {matchingProfiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label || p.id} · {p.model}
-                </option>
-              ))}
-            </select>
+              ariaLabel={t('agent_wizard.use_profile_title')}
+            />
             <span className="text-[10px] text-fg-subtle">
               {selectedProfile
                 ? t('agent_wizard.use_profile_linked_hint')
@@ -602,18 +605,15 @@ function DetailsStep({
             {t('agent_wizard.probe_models')}
           </button>
         </div>
-        <select
+        <Combobox
           value={model}
-          onChange={(e) => setModel(e.target.value)}
-          className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 text-sm text-fg"
+          onChange={setModel}
+          options={models.map((m) => ({ value: m, label: m }))}
+          placeholder={models[0] ?? 'gpt-4o'}
+          inputClassName="font-mono"
           data-testid="agent-wizard-model"
-        >
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+          ariaLabel={t('agent_wizard.field_model')}
+        />
         {probeError && (
           <div className="text-[10px] text-danger" data-testid="agent-wizard-probe-error">
             {probeError}

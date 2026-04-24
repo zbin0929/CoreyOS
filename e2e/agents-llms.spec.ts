@@ -147,8 +147,17 @@ test.describe('T8 · agents + llms', () => {
 
     // Picker shows up, listing the seeded profile.
     await expect(page.getByTestId('agent-wizard-profile-picker')).toBeVisible();
-    const select = page.getByTestId('agent-wizard-profile-select');
-    await select.selectOption('openai-fast');
+    // Themed <Select> — click trigger, wait for listbox, click option
+    // that matches our seeded "Fast" profile.
+    const profileSelect = page.getByTestId('agent-wizard-profile-select');
+    await profileSelect.click();
+    // The Select component renders options as role="option" inside a
+    // role="listbox". Strict-mode-safe selector via .filter().
+    await page
+      .getByRole('option')
+      .filter({ hasText: 'Fast' })
+      .first()
+      .click();
 
     // Model picker collapses into the profile summary.
     await expect(page.getByTestId('agent-wizard-profile-summary')).toBeVisible();
