@@ -1,6 +1,19 @@
 import type { RunbookRow } from '@/lib/ipc';
 
 /**
+ * Minimum shape the importer accepts per entry. `id`, `created_at`,
+ * `updated_at` are intentionally NOT part of the contract — the
+ * importer assigns fresh ones so round-tripping the same file twice
+ * makes two copies rather than mutating the originals by id.
+ */
+export interface RunbookImportEntry {
+  name: string;
+  description?: string | null;
+  template: string;
+  scope_profile?: string | null;
+}
+
+/**
  * Pure runbook helpers shared by the Runbooks page, the command
  * palette, and anywhere else that wants to render or filter
  * templates. Extracted from `features/runbooks/index.tsx` so that
@@ -52,4 +65,48 @@ export function runbookScopeApplies(
   if (rb.scope_profile === null) return true;
   if (activeProfile === null) return false;
   return rb.scope_profile === activeProfile;
+}
+
+/**
+ * Parse the JSON envelope produced by the `/runbooks` Export button.
+ * Accepts either the canonical shape
+ *   `{ version: 1, runbooks: RunbookImportEntry[] }`
+ * or a bare array `RunbookImportEntry[]` so hand-written lists work too.
+ * Silently drops entries missing required fields (`name`, `template`)
+ * rather than failing the whole import — partial wins are more useful
+ * than a cliff-edge error.
+ */
+export function parseImportPayload(parsed: unknown): RunbookImportEntry[] {
+  const arr: unknown = Array.isArray(parsed)
+    ? parsed
+    : isObject(parsed) && Array.isArray(parsed.runbooks)
+      ? parsed.runbooks
+      : null;
+  if (!Array.isArray(arr)) return [];
+  const out: RunbookImportEntry[] = [];
+  for (const raw of arr) {
+    if (!isObject(raw)) continue;
+    if (typeof raw.name !== 'string' || !raw.name.trim()) continue;
+    if (typeof raw.template !== 'string' || !raw.template) continue;
+    const entry: RunbookImportEntry = {
+      name: raw.name.trim(),
+      template: raw.template,
+    };
+    if (typeof raw.description === 'string' && raw.description.trim()) {
+      entry.description = raw.description;
+    } else if (raw.description === null) {
+      entry.description = null;
+    }
+    if (typeof raw.scope_profile === 'string' && raw.scope_profile.trim()) {
+      entry.scope_profile = raw.scope_profile;
+    } else if (raw.scope_profile === null) {
+      entry.scope_profile = null;
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
