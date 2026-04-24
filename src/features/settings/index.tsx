@@ -30,6 +30,7 @@ import { PageHeader } from '@/app/shell/PageHeader';
 import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
+import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
@@ -707,61 +708,6 @@ export function HermesInstancesSection() {
     ? (rows ?? []).find((r) => r.id === editingId) ?? null
     : null;
 
-  // Advanced/manual "Add instance" — goes straight into the
-  // HermesInstanceRow form in `isNew` mode, bypassing the wizard.
-  if (adding) {
-    return (
-      <Section
-        title={t('settings.hermes_instances.new_row')}
-        description={t('settings.hermes_instances.desc')}
-      >
-        <HermesInstanceRow
-          initial={{
-            id: '',
-            label: '',
-            base_url: 'http://127.0.0.1:8642',
-            api_key: null,
-            default_model: null,
-            sandbox_scope_id: null,
-          }}
-          isNew
-          scopes={scopes}
-          onSaved={async (next) => {
-            setRows((prev) => [...(prev ?? []), next]);
-            setAdding(false);
-          }}
-          onCancelNew={() => setAdding(false)}
-        />
-      </Section>
-    );
-  }
-
-  // Card click → focused edit view for that row.
-  if (editingRow) {
-    return (
-      <Section
-        title={editingRow.label || editingRow.id}
-        description={t('settings.hermes_instances.desc')}
-      >
-        <HermesInstanceRow
-          initial={editingRow}
-          scopes={scopes}
-          onSaved={async (next) => {
-            setRows((prev) =>
-              (prev ?? []).map((p) => (p.id === next.id ? next : p)),
-            );
-            setEditingId(null);
-          }}
-          onDeleted={async () => {
-            setRows((prev) => (prev ?? []).filter((p) => p.id !== editingRow.id));
-            setEditingId(null);
-          }}
-          onCancelNew={() => setEditingId(null)}
-        />
-      </Section>
-    );
-  }
-
   return (
     <Section
       title={t('settings.hermes_instances.title')}
@@ -824,21 +770,26 @@ export function HermesInstancesSection() {
           {t('settings.hermes_instances.empty')}
         </div>
       ) : (
-        <ul
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+        // T8 polish — CSS masonry via `columns` so cards with different
+        // heights (default_model shown vs hidden, scope badge vs none)
+        // pack tightly. Grid stays visible while the editor Drawer is
+        // open, so users don't lose their place.
+        <div
+          className="columns-1 gap-3 sm:columns-2 xl:columns-3"
           data-testid="hermes-instances-list"
         >
           {rows.map((r) => (
-            <HermesInstanceCard
-              key={r.id}
-              instance={r}
-              scope={scopes.find((s) => s.id === r.sandbox_scope_id) ?? null}
-              onOpen={() => setEditingId(r.id)}
-              probe={probes[r.id]}
-              onTest={() => void testInstance(r)}
-            />
+            <div key={r.id} className="mb-3 break-inside-avoid">
+              <HermesInstanceCard
+                instance={r}
+                scope={scopes.find((s) => s.id === r.sandbox_scope_id) ?? null}
+                onOpen={() => setEditingId(r.id)}
+                probe={probes[r.id]}
+                onTest={() => void testInstance(r)}
+              />
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
       <AgentWizard
@@ -849,6 +800,63 @@ export function HermesInstancesSection() {
           setRows((prev) => [...(prev ?? []), next]);
         }}
       />
+
+      {/* Advanced/manual "Add instance" Drawer — bypasses the wizard. */}
+      <Drawer
+        open={adding}
+        onClose={() => setAdding(false)}
+        side="right"
+        title={t('settings.hermes_instances.new_row')}
+        testId="hermes-instance-new-drawer"
+      >
+        <HermesInstanceRow
+          initial={{
+            id: '',
+            label: '',
+            base_url: 'http://127.0.0.1:8642',
+            api_key: null,
+            default_model: null,
+            sandbox_scope_id: null,
+          }}
+          isNew
+          scopes={scopes}
+          onSaved={async (next) => {
+            setRows((prev) => [...(prev ?? []), next]);
+            setAdding(false);
+          }}
+          onCancelNew={() => setAdding(false)}
+        />
+      </Drawer>
+
+      {/* Per-card edit Drawer — opens on card click, grid stays visible
+          beneath. Keyed by id so switching cards without closing
+          re-mounts clean form state. */}
+      <Drawer
+        open={editingRow !== null}
+        onClose={() => setEditingId(null)}
+        side="right"
+        title={editingRow?.label || editingRow?.id}
+        testId="hermes-instance-edit-drawer"
+      >
+        {editingRow && (
+          <HermesInstanceRow
+            key={editingRow.id}
+            initial={editingRow}
+            scopes={scopes}
+            onSaved={async (next) => {
+              setRows((prev) =>
+                (prev ?? []).map((p) => (p.id === next.id ? next : p)),
+              );
+              setEditingId(null);
+            }}
+            onDeleted={async () => {
+              setRows((prev) => (prev ?? []).filter((p) => p.id !== editingRow.id));
+              setEditingId(null);
+            }}
+            onCancelNew={() => setEditingId(null)}
+          />
+        )}
+      </Drawer>
     </Section>
   );
 }
@@ -877,7 +885,7 @@ function HermesInstanceCard({
 }) {
   const { t } = useTranslation();
   return (
-    <li className="relative">
+    <div className="relative">
       <button
         type="button"
         onClick={onOpen}
@@ -949,7 +957,7 @@ function HermesInstanceCard({
           className={probe === 'probing' ? 'animate-spin' : undefined}
         />
       </button>
-    </li>
+    </div>
   );
 }
 

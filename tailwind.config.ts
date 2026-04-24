@@ -85,6 +85,12 @@ export default {
           '0%': { transform: 'translateY(100%)' },
           '100%': { transform: 'translateY(0%)' },
         },
+        // T8 polish — side drawer used by `/models` and `/agents` for
+        // focused card edit without losing the grid visually.
+        drawerRight: {
+          '0%': { transform: 'translateX(100%)' },
+          '100%': { transform: 'translateX(0%)' },
+        },
       },
     },
   },

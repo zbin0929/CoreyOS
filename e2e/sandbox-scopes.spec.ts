@@ -45,6 +45,10 @@ test.describe('T6.5 — sandbox scopes', () => {
     // Custom <Select> — click trigger, then click option by label.
     await page.getByTestId('hermes-instance-scope-new').click();
     await page.getByRole('option', { name: /Worker/ }).click();
+    // T8 polish — the "Add instance" form now lives in a right-side
+    // Drawer overlay. Dismiss it before nav so the backdrop doesn't
+    // intercept the subsequent Settings link click.
+    await page.keyboard.press('Escape');
 
     // 4. Pre-seed the mock so the IPC actually enforces. Without
     //    this, the mock would treat the worker scope as empty-roots

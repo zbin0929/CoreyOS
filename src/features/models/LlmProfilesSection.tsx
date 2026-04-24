@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Combobox } from '@/components/ui/combobox';
+import { Drawer } from '@/components/ui/drawer';
 import { cn } from '@/lib/cn';
 import {
   hermesEnvSetKey,
@@ -99,63 +100,6 @@ export function LlmProfilesSection() {
     ? (rows ?? []).find((r) => r.id === editingId) ?? null
     : null;
 
-  if (adding) {
-    return (
-      <section className="flex flex-col gap-3" data-testid="llm-profiles-section">
-        <SectionHeader
-          title={t('models_page.profiles_add')}
-          desc={t('models_page.profiles_desc')}
-        />
-        <LlmProfileRow
-          mode="new"
-          existingIds={(rows ?? []).map((r) => r.id)}
-          initial={{
-            id: '',
-            label: '',
-            provider: '',
-            base_url: '',
-            model: '',
-            api_key_env: null,
-          }}
-          onSaved={async (next) => {
-            setRows((prev) => [...(prev ?? []), next]);
-            setAdding(false);
-          }}
-          onCancel={() => setAdding(false)}
-        />
-      </section>
-    );
-  }
-
-  if (editingProfile) {
-    return (
-      <section className="flex flex-col gap-3" data-testid="llm-profiles-section">
-        <SectionHeader
-          title={editingProfile.label || editingProfile.id}
-          desc={t('models_page.profiles_desc')}
-        />
-        <LlmProfileRow
-          initial={editingProfile}
-          mode="edit"
-          existingIds={(rows ?? [])
-            .map((r) => r.id)
-            .filter((id) => id !== editingProfile.id)}
-          onSaved={async (next) => {
-            setRows(
-              (prev) => prev?.map((r) => (r.id === next.id ? next : r)) ?? [next],
-            );
-            setEditingId(null);
-          }}
-          onCancel={() => setEditingId(null)}
-          onDeleted={async () => {
-            setRows((prev) => prev?.filter((r) => r.id !== editingProfile.id) ?? []);
-            setEditingId(null);
-          }}
-        />
-      </section>
-    );
-  }
-
   return (
     <section className="flex flex-col gap-3" data-testid="llm-profiles-section">
       <header className="flex items-center justify-between gap-2">
@@ -199,34 +143,89 @@ export function LlmProfilesSection() {
           {t('models_page.profiles_empty')}
         </div>
       ) : (
-        // Responsive card grid: 1 col on mobile, 2 on tablet, 3 on
-        // desktop. Whole card is clickable — tapping jumps straight
-        // to the focused edit view.
-        <ul
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+        // T8 polish — masonic/pinterest-style grid via CSS columns.
+        // Cards break naturally based on content height; `break-inside-
+        // avoid` keeps each card intact. Falls back to a single
+        // column on mobile. Grid is always visible — the editor
+        // lives in a right-side Drawer that slides over it.
+        <div
+          className="columns-1 gap-3 sm:columns-2 xl:columns-3"
           data-testid="llm-profiles-list"
         >
           {rows.map((p) => (
-            <LlmProfileCard
-              key={p.id}
-              profile={p}
-              onOpen={() => setEditingId(p.id)}
-              probe={probes[p.id]}
-              onTest={() => void testProfile(p)}
-            />
+            <div key={p.id} className="mb-3 break-inside-avoid">
+              <LlmProfileCard
+                profile={p}
+                onOpen={() => setEditingId(p.id)}
+                probe={probes[p.id]}
+                onTest={() => void testProfile(p)}
+              />
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </section>
-  );
-}
 
-function SectionHeader({ title, desc }: { title: string; desc: string }) {
-  return (
-    <header className="flex flex-col">
-      <h2 className="text-sm font-semibold text-fg">{title}</h2>
-      <p className="mt-0.5 text-xs text-fg-muted">{desc}</p>
-    </header>
+      {/* New-profile drawer — opens from the right, card grid stays
+          visible beneath so users don't lose their bearings. */}
+      <Drawer
+        open={adding}
+        onClose={() => setAdding(false)}
+        side="right"
+        title={t('models_page.profiles_add')}
+        testId="llm-profile-new-drawer"
+      >
+        <LlmProfileRow
+          mode="new"
+          existingIds={(rows ?? []).map((r) => r.id)}
+          initial={{
+            id: '',
+            label: '',
+            provider: '',
+            base_url: '',
+            model: '',
+            api_key_env: null,
+          }}
+          onSaved={async (next) => {
+            setRows((prev) => [...(prev ?? []), next]);
+            setAdding(false);
+          }}
+          onCancel={() => setAdding(false)}
+        />
+      </Drawer>
+
+      {/* Edit-profile drawer — same shape, pre-populated. Keyed by
+          id so switching cards without closing re-mounts clean form
+          state instead of bleeding the previous card's draft. */}
+      <Drawer
+        open={editingProfile !== null}
+        onClose={() => setEditingId(null)}
+        side="right"
+        title={editingProfile?.label || editingProfile?.id}
+        testId="llm-profile-edit-drawer"
+      >
+        {editingProfile && (
+          <LlmProfileRow
+            key={editingProfile.id}
+            initial={editingProfile}
+            mode="edit"
+            existingIds={(rows ?? [])
+              .map((r) => r.id)
+              .filter((id) => id !== editingProfile.id)}
+            onSaved={async (next) => {
+              setRows(
+                (prev) => prev?.map((r) => (r.id === next.id ? next : r)) ?? [next],
+              );
+              setEditingId(null);
+            }}
+            onCancel={() => setEditingId(null)}
+            onDeleted={async () => {
+              setRows((prev) => prev?.filter((r) => r.id !== editingProfile.id) ?? []);
+              setEditingId(null);
+            }}
+          />
+        )}
+      </Drawer>
+    </section>
   );
 }
 
@@ -254,7 +253,7 @@ function LlmProfileCard({
 }) {
   const { t } = useTranslation();
   return (
-    <li className="relative">
+    <div className="relative">
       <button
         type="button"
         onClick={onOpen}
@@ -324,7 +323,7 @@ function LlmProfileCard({
           className={probe === 'probing' ? 'animate-spin' : undefined}
         />
       </button>
-    </li>
+    </div>
   );
 }
 
@@ -487,8 +486,8 @@ function LlmProfileRow({
   }
 
   return (
-    <li
-      className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-3"
+    <div
+      className="flex flex-col gap-3"
       data-testid={`llm-profile-form-${mode === 'new' ? 'new' : draft.id}`}
     >
       <div className="grid gap-3 md:grid-cols-2">
@@ -731,7 +730,7 @@ function LlmProfileRow({
           {mode === 'new' ? t('common.create') : t('common.save')}
         </Button>
       </div>
-    </li>
+    </div>
   );
 }
 

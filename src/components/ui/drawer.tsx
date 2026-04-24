@@ -40,6 +40,8 @@ export function Drawer({
   title,
   children,
   testId,
+  side = 'bottom',
+  widthClass,
 }: {
   open: boolean;
   onClose: () => void;
@@ -48,6 +50,14 @@ export function Drawer({
   /** data-testid on the sheet itself. Parent chooses naming so
    *  multiple drawers on one page stay distinguishable. */
   testId?: string;
+  /** 'bottom' (default) = mobile sheet; 'right' = desktop side-panel.
+   *  Used by `/models` and `/agents` to keep the card grid visible
+   *  while focused-editing a single card. */
+  side?: 'bottom' | 'right';
+  /** Tailwind width classes for right-side drawers. Defaults to
+   *  `w-full max-w-xl` which reads well on desktop without
+   *  monopolising the viewport. Ignored for bottom sheets. */
+  widthClass?: string;
 }) {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -70,12 +80,16 @@ export function Drawer({
 
   if (!open || typeof document === 'undefined') return null;
 
+  const isSide = side === 'right';
   return createPortal(
     <div
       // The backdrop. Clicking it closes; clicking the sheet itself
       // is caught by its stopPropagation so a misclick on a form
       // control doesn't nuke the user's edits.
-      className="fixed inset-0 z-50 flex items-end bg-black/50"
+      className={cn(
+        'fixed inset-0 z-50 flex bg-black/50',
+        isSide ? 'justify-end' : 'items-end',
+      )}
       onClick={onClose}
       data-testid={testId ? `${testId}-backdrop` : undefined}
     >
@@ -86,20 +100,31 @@ export function Drawer({
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'flex w-full max-h-[88vh] flex-col overflow-hidden',
-          'rounded-t-lg border-t border-border bg-bg-elev-1 shadow-2',
-          // Tiny slide-up animation on mount. No exit transition —
-          // a brief flicker on close is the accepted cost of keeping
-          // the drawer unmount-safe (no lingering async state).
-          'animate-[drawerUp_180ms_cubic-bezier(0.2,0.8,0.2,1)]',
+          'flex flex-col overflow-hidden border-border bg-bg-elev-1 shadow-2',
+          isSide
+            ? cn(
+                // Side drawer = full-height right panel; width picked
+                // by the caller (defaults to w-full max-w-xl).
+                'h-full border-l',
+                widthClass ?? 'w-full max-w-xl',
+                // Slide-in from the right.
+                'animate-[drawerRight_180ms_cubic-bezier(0.2,0.8,0.2,1)]',
+              )
+            : cn(
+                // Bottom sheet = capped at 88vh with top rounding.
+                'w-full max-h-[88vh] rounded-t-lg border-t',
+                'animate-[drawerUp_180ms_cubic-bezier(0.2,0.8,0.2,1)]',
+              ),
         )}
         data-testid={testId}
       >
-        {/* Grab handle — purely decorative cue that this is a sheet. */}
-        <div className="flex justify-center py-2">
-          <span className="h-1 w-10 rounded-full bg-border-strong/60" />
-        </div>
-        <div className="flex items-center justify-between border-b border-border px-4 pb-2">
+        {/* Grab handle — only on bottom sheets where it cues "slide". */}
+        {!isSide && (
+          <div className="flex justify-center py-2">
+            <span className="h-1 w-10 rounded-full bg-border-strong/60" />
+          </div>
+        )}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           {title ? (
             <h2 className="truncate text-sm font-medium text-fg">{title}</h2>
           ) : (
