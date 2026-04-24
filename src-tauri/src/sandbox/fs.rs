@@ -15,6 +15,14 @@ use std::path::Path;
 use super::{AccessOp, PathAuthority, SandboxResult};
 
 /// Read a file into a String, gated by the sandbox.
+///
+/// Kept as part of the sandbox-FS API surface even though no
+/// production caller uses it today (most IPC handlers run inside
+/// `spawn_blocking` and prefer `read_to_string_blocking`). Deleting
+/// it would force future async callers back to raw `tokio::fs`,
+/// which the CI grep check would then flag. `allow(dead_code)` is
+/// cheaper than that round-trip.
+#[allow(dead_code)]
 pub async fn read_to_string(authority: &PathAuthority, path: &Path) -> SandboxResult<String> {
     let canonical = authority.check(path, AccessOp::Read)?;
     tokio::fs::read_to_string(&canonical)
@@ -51,6 +59,8 @@ pub async fn read_dir_count(authority: &PathAuthority, path: &Path) -> SandboxRe
 }
 
 /// Write bytes to a file, gated by the sandbox.
+/// Part of the sandbox-FS API surface; see `read_to_string` above.
+#[allow(dead_code)]
 pub async fn write(authority: &PathAuthority, path: &Path, bytes: &[u8]) -> SandboxResult<()> {
     let canonical = authority.check(path, AccessOp::Write)?;
     tokio::fs::write(&canonical, bytes)
@@ -83,6 +93,11 @@ pub fn read_to_string_blocking(authority: &PathAuthority, path: &Path) -> io::Re
 }
 
 /// Blocking write, gated by the sandbox.
+/// Part of the sandbox-FS API surface; see `read_to_string` above.
+/// Callers today route writes through `fs_atomic::atomic_write`
+/// (which is rename-safe), but this helper remains the canonical
+/// gateway for any non-atomic write that may land later.
+#[allow(dead_code)]
 pub fn write_blocking(authority: &PathAuthority, path: &Path, bytes: &[u8]) -> io::Result<()> {
     let canonical = authority.check(path, AccessOp::Write).map_err(sandbox_err_to_io)?;
     std::fs::write(&canonical, bytes)

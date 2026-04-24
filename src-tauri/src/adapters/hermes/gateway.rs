@@ -444,6 +444,13 @@ pub struct HealthProbe {
     pub body: String,
 }
 
+/// Full response from a non-streaming `chat_once`. Today only
+/// `content` is read by the `chat_send` IPC — the other fields mirror
+/// the upstream schema so this struct stays an accurate record of what
+/// the gateway returns. Keeping the extra fields named (rather than
+/// stripping them) makes it a trivial one-line change to start
+/// surfacing token / latency stats on non-streaming calls.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ChatOnceResponse {
     pub content: String,
@@ -472,13 +479,6 @@ pub struct ChatMessage {
 pub enum ChatMessageContent {
     Text(String),
     Parts(Vec<ChatContentPart>),
-}
-
-impl ChatMessageContent {
-    /// Convenience for plain text turns.
-    pub fn text(s: impl Into<String>) -> Self {
-        Self::Text(s.into())
-    }
 }
 
 /// A single part of a multimodal `content` array. Mirrors OpenAI's

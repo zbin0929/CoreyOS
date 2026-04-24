@@ -7,7 +7,6 @@
 // error taxonomy) but only a subset is wired to IPC. The remaining items
 // are consumed starting Phase 1. TODO(phase-1-end): remove this allow
 // once every symbol has at least one production call site.
-#![allow(dead_code)]
 
 mod adapters;
 mod attachments;

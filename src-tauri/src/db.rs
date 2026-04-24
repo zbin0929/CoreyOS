@@ -339,13 +339,6 @@ impl Db {
             .collect())
     }
 
-    pub fn path_for_diagnostics(&self) -> String {
-        self.conn
-            .lock()
-            .path()
-            .map(|p| p.to_owned())
-            .unwrap_or_else(|| ":memory:".to_string())
-    }
 }
 
 /// Resolve the on-disk DB path (`<app_data_dir>/caduceus.db`). Must be

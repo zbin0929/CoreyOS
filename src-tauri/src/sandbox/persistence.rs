@@ -61,20 +61,12 @@ struct LegacyV1 {
 }
 
 impl SandboxConfig {
-    /// Build a v2 config seeded with an empty default scope. Used by
-    /// callers (tests, first-launch) that need a well-formed struct before
-    /// populating it.
-    pub fn empty_v2() -> Self {
-        Self {
-            version: CURRENT_VERSION,
-            mode: SandboxMode::DevAllow,
-            scopes: vec![SandboxScope::default_empty()],
-        }
-    }
-
     /// Return a reference to the default scope, panicking if it's
-    /// somehow missing — upstream code maintains the invariant that the
-    /// `"default"` scope is always present.
+    /// somehow missing — upstream code maintains the invariant that
+    /// the `"default"` scope is always present. Only tests construct
+    /// configs directly enough to use this; production paths always
+    /// look up scopes by id through `PathAuthority`.
+    #[cfg(test)]
     pub fn default_scope(&self) -> &SandboxScope {
         self.scopes
             .iter()

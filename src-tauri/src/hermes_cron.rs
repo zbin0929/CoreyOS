@@ -171,18 +171,6 @@ pub fn save_jobs(jobs: &[HermesJob]) -> io::Result<()> {
     fs_atomic::atomic_write(&path, body.as_bytes(), Some(0o644))
 }
 
-/// Insert or update a single job. Idempotent on `job.id`; creates the
-/// file if absent.
-pub fn upsert_job(job: HermesJob) -> io::Result<()> {
-    let mut jobs = load_jobs()?;
-    if let Some(slot) = jobs.iter_mut().find(|j| j.id == job.id) {
-        *slot = job;
-    } else {
-        jobs.push(job);
-    }
-    save_jobs(&jobs)
-}
-
 /// Remove a job by id. No-op if not found (idempotent for UI double-clicks).
 pub fn delete_job(id: &str) -> io::Result<()> {
     let mut jobs = load_jobs()?;

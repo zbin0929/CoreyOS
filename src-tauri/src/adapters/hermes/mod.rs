@@ -81,10 +81,6 @@ impl HermesAdapter {
         })
     }
 
-    fn is_stub(&self) -> bool {
-        matches!(self.mode, Mode::Stub)
-    }
-
     fn uptime_ms(&self) -> u64 {
         self.started_at.elapsed().as_millis() as u64
     }

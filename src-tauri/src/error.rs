@@ -35,12 +35,6 @@ pub enum AdapterError {
     },
 }
 
-impl AdapterError {
-    pub fn internal(e: impl Into<anyhow::Error>) -> Self {
-        Self::Internal { source: e.into() }
-    }
-}
-
 /// Frontend-friendly serialized error envelope.
 #[derive(Debug, Serialize, Clone)]
 #[serde(tag = "kind", rename_all = "snake_case")]

@@ -75,6 +75,12 @@ impl SchedulerJobView {
     }
 }
 
+/// Wire shape for the scheduler upsert IPC. `adapter_id` is kept
+/// in the struct for forward compat — Hermes is the only cron runner
+/// in T6.8 so we ignore it today, but the field lets the frontend
+/// keep sending its current payload without breaking deserialization
+/// if we ever start routing cron through non-Hermes adapters.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct SchedulerJobUpsert {
     #[serde(default)]
@@ -82,7 +88,6 @@ pub struct SchedulerJobUpsert {
     pub name: String,
     pub cron_expression: String,
     pub prompt: String,
-    /// Kept for forward-compat; ignored in T6.8 (only `hermes` runs cron).
     #[serde(default)]
     pub adapter_id: Option<String>,
     #[serde(default = "default_enabled")]
