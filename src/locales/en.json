@@ -265,6 +265,23 @@
     "preset_installing": "Installing…",
     "preset_done_title": "Starter content installed ({{n}} items)"
   },
+  "agent_wizard": {
+    "title": "Add a new agent",
+    "pick_provider": "Pick a provider. We'll pre-fill the endpoint, API-key env var, and a starter model list.",
+    "local_tag": "LOCAL",
+    "back": "Back",
+    "field_id": "Agent id",
+    "field_id_hint": "Lowercase letters / digits / '-' '_'. Auto-generated; edit if you want.",
+    "field_label": "Display name",
+    "field_api_key": "API key",
+    "api_key_docs": "Where to get an {{provider}} API key ↗",
+    "local_hint": "No API key needed. Start the local backend first —",
+    "local_install_link": "install {{provider}}",
+    "field_model": "Default model",
+    "probe_models": "Refresh from /v1/models",
+    "create": "Create agent",
+    "saving": "Creating…"
+  },
   "analytics": {
     "title": "Analytics",
     "subtitle": "Usage rolled up from your local session history.",
@@ -380,6 +397,8 @@
       "desc": "Register additional Hermes gateways so you can switch between them in the AgentSwitcher. Each entry is registered as 'hermes:<id>' alongside the primary gateway above.",
       "empty": "No extra instances yet. Click \"Add instance\" to register one.",
       "add": "Add instance",
+      "add_advanced": "Advanced · manual fields",
+      "quick_add": "New agent",
       "new_row": "New instance",
       "field_id": "Id",
       "field_id_hint": "1–32 chars: lowercase letters, digits, '-' or '_'. Frozen after save (used as the adapter id).",

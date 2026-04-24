@@ -57,6 +57,7 @@ import {
   type RoutingRule,
   type SandboxScope,
 } from '@/lib/ipc';
+import { AgentWizard } from './AgentWizard';
 import { useAgentsStore } from '@/stores/agents';
 import { useRoutingStore } from '@/stores/routing';
 
@@ -649,6 +650,12 @@ function HermesInstancesSection() {
   const [rows, setRows] = useState<HermesInstance[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // T8 — guided wizard. Opens a drawer with provider templates
+  // (OpenAI / Anthropic / DeepSeek / Ollama / …) pre-filling base_url
+  // + API-key env var so non-engineer users don't have to know any
+  // of those by heart. The "Add instance" button below still works
+  // as the power-user escape hatch.
+  const [wizardOpen, setWizardOpen] = useState(false);
   // T6.5 — scopes are loaded here so every row's dropdown sees the
   // same snapshot. Section-scoped rather than route-scoped so the
   // scope section can refresh independently.
@@ -734,11 +741,21 @@ function HermesInstancesSection() {
           onCancelNew={() => setAdding(false)}
         />
       ) : (
-        <div>
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             size="sm"
-            variant="secondary"
+            variant="primary"
+            onClick={() => setWizardOpen(true)}
+            data-testid="hermes-instances-quick-add"
+          >
+            <Icon icon={Plus} size="sm" />
+            {t('settings.hermes_instances.quick_add')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
             // Refetch the scope list on each "Add instance" click so
             // a scope created just now in `SandboxScopesSection` is
             // visible in the new row's dropdown without needing a
@@ -753,11 +770,19 @@ function HermesInstancesSection() {
             }}
             data-testid="hermes-instances-add"
           >
-            <Icon icon={Plus} size="sm" />
-            {t('settings.hermes_instances.add')}
+            {t('settings.hermes_instances.add_advanced')}
           </Button>
         </div>
       )}
+
+      <AgentWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        existingIds={(rows ?? []).map((r) => r.id)}
+        onCreated={async (next) => {
+          setRows((prev) => [...(prev ?? []), next]);
+        }}
+      />
     </Section>
   );
 }
