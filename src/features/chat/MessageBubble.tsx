@@ -20,7 +20,16 @@ import { cn } from '@/lib/cn';
 import { attachmentPreview } from '@/lib/ipc';
 import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from '@/stores/chat';
 
-export function MessageBubble({ msg }: { msg: UiMessage }) {
+export function MessageBubble({
+  msg,
+  highlight = false,
+}: {
+  msg: UiMessage;
+  /** T-polish — renders a gold ring around the bubble when this
+   *  message is the active in-chat-search match. Purely visual; the
+   *  scroll to the row is owned by `MessageList` + Virtuoso. */
+  highlight?: boolean;
+}) {
   const isUser = msg.role === 'user';
   const canCopy = !msg.pending && !msg.error && msg.content.length > 0;
   // T6.1 — feedback buttons are offered only on completed, non-error
@@ -60,7 +69,13 @@ export function MessageBubble({ msg }: { msg: UiMessage }) {
               ? 'bg-gold-500 text-[hsl(225_30%_10%)]'
               : 'border border-border bg-bg-elev-1 text-fg',
             msg.error && 'border-danger/40 bg-danger/5 text-danger',
+            // Active in-chat-search match — ring is theme-independent
+            // and doesn't change the border/background chrome the
+            // user has learned to associate with user vs assistant.
+            highlight &&
+              'ring-2 ring-gold-500 ring-offset-2 ring-offset-bg',
           )}
+          data-active-search-match={highlight || undefined}
         >
           {/* Reasoning / chain-of-thought panel — shown for
               reasoning-capable models (deepseek-reasoner, o1). Open by

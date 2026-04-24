@@ -43,10 +43,14 @@ interface MessageListProps {
   /** Forwarded to `Virtuoso.ref`; exposes `.scrollToIndex(...)` and
    *  the other imperative handles for callers that want to jump to a
    *  specific message (none today, but cheap to forward). */
+  /** T-polish — id of the message currently highlighted by the
+   *  in-chat search. The matching bubble renders a gold ring so the
+   *  user can see exactly which one Virtuoso just scrolled to. */
+  activeMatchId?: string | null;
 }
 
 export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
-  function MessageList({ messages }, ref) {
+  function MessageList({ messages, activeMatchId }, ref) {
     // Memoised so `<Virtuoso itemContent={…}>` keeps the same fn
     // reference across renders; otherwise Virtuoso treats every
     // parent render as a row-renderer change and re-mounts rows.
@@ -60,11 +64,11 @@ export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
         // children.
         return (
           <div className="mx-auto max-w-3xl px-6 pb-4 pt-0 first:pt-6 last:pb-6">
-            <MessageBubble msg={m} />
+            <MessageBubble msg={m} highlight={activeMatchId === m.id} />
           </div>
         );
       },
-      [messages],
+      [messages, activeMatchId],
     );
 
     return (

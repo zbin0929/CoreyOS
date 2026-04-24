@@ -41,8 +41,11 @@ import { useComposerStore } from '@/stores/composer';
 import { useRoutingStore } from '@/stores/routing';
 import { resolveRoutedRule } from './routing';
 import { ActiveLLMBadge } from './ActiveLLMBadge';
+import { ChatSearch } from './ChatSearch';
+import { computeActiveMatchIndex } from './chatSearchMatch';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
+import type { VirtuosoHandle } from 'react-virtuoso';
 
 /**
  * Module-level empty array so the `sessionMessages` selector returns a
@@ -155,6 +158,39 @@ function ChatPane({
   // Re-populated (or cleared) every time send() runs so the list reflects
   // the current turn, not stale state from minutes ago.
   const [budgetWarnings, setBudgetWarnings] = useState<string[]>([]);
+
+  // T-polish — in-chat message search state. Query survives a close so
+  // re-opening with Cmd+F jumps right back to where the user was. Reset
+  // explicitly on session switch (effect below) because match indices
+  // across two different sessions are semantically meaningless.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchActiveIdx, setSearchActiveIdx] = useState(0);
+  const listRef = useRef<VirtuosoHandle | null>(null);
+
+  // Cmd+F / Ctrl+F inside the chat route opens the search bar. We
+  // register the handler on the ChatPane's root (below) rather than
+  // globally so other routes keep the browser's native find-in-page
+  // behaviour. The Tauri webview also respects the preventDefault.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Reset search state on session switch — matches jump between
+  // conversations, stale index on a different message array is
+  // confusing.
+  useEffect(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchActiveIdx(0);
+  }, [sessionId]);
 
   // T1.5c — resolve the effective model: per-session override wins over
   // the gateway-wide default. Subscribed so the composer reacts live to
@@ -611,7 +647,41 @@ function ChatPane({
           </div>
         </div>
       ) : (
-        <MessageList messages={messages} />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {/* Floating-ish search bar: absolutely positioned INSIDE the
+              scroll container so it doesn't steal layout height from
+              the message list (no "bar pushes list down" jank). Kept
+              above the list via z-10. */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center px-6">
+            <ChatSearch
+              open={searchOpen}
+              query={searchQuery}
+              onQueryChange={setSearchQuery}
+              onClose={() => setSearchOpen(false)}
+              messages={messages}
+              activeMatchIdx={searchActiveIdx}
+              onActiveMatchChange={setSearchActiveIdx}
+              onScrollToIndex={(index) =>
+                listRef.current?.scrollToIndex({
+                  index,
+                  align: 'center',
+                  behavior: 'smooth',
+                })
+              }
+            />
+          </div>
+          <MessageList
+            ref={listRef}
+            messages={messages}
+            activeMatchId={
+              searchOpen && searchQuery.trim()
+                ? (messages[
+                    computeActiveMatchIndex(messages, searchQuery, searchActiveIdx)
+                  ]?.id ?? null)
+                : null
+            }
+          />
+        </div>
       )}
 
       <div className="border-t border-border bg-bg/80 backdrop-blur">
