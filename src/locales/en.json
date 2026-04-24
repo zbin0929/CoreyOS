@@ -290,7 +290,12 @@
     "field_model": "Default model",
     "probe_models": "Refresh from /v1/models",
     "create": "Create agent",
-    "saving": "Creating…"
+    "saving": "Creating…",
+    "save_failed": "Couldn't create agent",
+    "err_id_empty": "Agent id is required.",
+    "err_id_long": "Agent id must be 32 characters or fewer.",
+    "err_id_chars": "Only lowercase letters, digits, '-' and '_' are allowed.",
+    "err_id_duplicate": "An agent with id \"{{id}}\" already exists."
   },
   "analytics": {
     "title": "Analytics",

@@ -341,7 +341,12 @@
     "field_model": "默认模型",
     "probe_models": "从 /v1/models 刷新",
     "create": "创建 Agent",
-    "saving": "创建中…"
+    "saving": "创建中…",
+    "save_failed": "创建 Agent 失败",
+    "err_id_empty": "Agent ID 不能为空。",
+    "err_id_long": "Agent ID 不能超过 32 个字符。",
+    "err_id_chars": "只允许小写字母、数字、'-' 和 '_'。",
+    "err_id_duplicate": "已存在 ID 为「{{id}}」的 Agent。"
   },
   "settings": {
     "title": "设置",

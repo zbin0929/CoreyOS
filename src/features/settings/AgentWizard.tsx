@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  AlertCircle,
   ArrowRight,
   Check,
   ExternalLink,
@@ -204,23 +205,43 @@ function DetailsStep({
   async function save() {
     setSaving(true);
     setSaveError(null);
+    const payload = {
+      id: id.trim(),
+      label: label.trim() || id.trim(),
+      base_url: template.baseUrl,
+      api_key: apiKey.trim() || null,
+      default_model: model.trim() || null,
+    };
+    // Console-log for user-side debugging: the red inline banner was
+    // proving too easy to miss for non-English users. The payload +
+    // raw error land in DevTools where we can ask the user to paste.
+    console.log('[AgentWizard] save →', payload);
     try {
-      const inst = await hermesInstanceUpsert({
-        id: id.trim(),
-        label: label.trim() || id.trim(),
-        base_url: template.baseUrl,
-        api_key: apiKey.trim() || null,
-        default_model: model.trim() || null,
-      });
+      const inst = await hermesInstanceUpsert(payload);
+      console.log('[AgentWizard] save ok →', inst);
       await onCreated(inst);
     } catch (e) {
+      console.error('[AgentWizard] save failed →', e);
       setSaveError(ipcErrorMessage(e));
     } finally {
       setSaving(false);
     }
   }
 
-  const canSave = id.trim().length > 0 && !saving;
+  // Id validation mirrors the Rust-side `validate_id`: 1..32 chars,
+  // lowercase letters / digits / `-` / `_`. Surfaces the exact reason
+  // the Save button is disabled so users aren't left guessing.
+  const idTrim = id.trim();
+  const idError: string | null =
+    idTrim.length === 0
+      ? t('agent_wizard.err_id_empty')
+      : idTrim.length > 32
+        ? t('agent_wizard.err_id_long')
+        : /^[a-z0-9_-]+$/.test(idTrim)
+          ? null
+          : t('agent_wizard.err_id_chars');
+  const duplicateId = existingIds.includes(idTrim);
+  const canSave = idError === null && !duplicateId && !saving;
   const keyRequired = template.envKey !== null && !template.isLocal;
 
   return (
@@ -251,10 +272,21 @@ function DetailsStep({
             onChange={(e) => setId(e.target.value)}
             placeholder="hermes-openai"
             data-testid="agent-wizard-id"
+            aria-invalid={idError !== null || duplicateId}
           />
-          <span className="text-[10px] text-fg-subtle">
-            {t('agent_wizard.field_id_hint')}
-          </span>
+          {idError ? (
+            <span className="text-[10px] text-danger" data-testid="agent-wizard-id-error">
+              {idError}
+            </span>
+          ) : duplicateId ? (
+            <span className="text-[10px] text-danger" data-testid="agent-wizard-id-dup">
+              {t('agent_wizard.err_id_duplicate', { id: idTrim })}
+            </span>
+          ) : (
+            <span className="text-[10px] text-fg-subtle">
+              {t('agent_wizard.field_id_hint')}
+            </span>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-xs text-fg-muted">
           {t('agent_wizard.field_label')}
@@ -356,8 +388,15 @@ function DetailsStep({
       </div>
 
       {saveError && (
-        <div className="text-xs text-danger" data-testid="agent-wizard-save-error">
-          {saveError}
+        <div
+          className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/10 p-2.5 text-xs text-danger"
+          data-testid="agent-wizard-save-error"
+        >
+          <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
+          <div className="min-w-0 flex-1">
+            <div className="font-medium">{t('agent_wizard.save_failed')}</div>
+            <div className="mt-0.5 break-words text-fg-muted">{saveError}</div>
+          </div>
         </div>
       )}
 
