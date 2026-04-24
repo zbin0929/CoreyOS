@@ -101,6 +101,7 @@
   "runbooks": {
     "title": "Runbooks",
     "subtitle": "Named prompt templates with placeholders. Invoke from the command palette or this page.",
+    "help_page": "A runbook is a reusable prompt with {{param}} placeholders. Good for anything you say often — 'summarize this URL', 'write a commit message from diff', 'translate to zh'. Click Use on a runbook, fill in the placeholders, and it drops into the chat composer ready to send. Scope a runbook to a specific Hermes profile to keep it out of the palette when you're working in a different context.",
     "new": "New runbook",
     "use": "Use",
     "edit": "Edit",
@@ -167,6 +168,7 @@
   "trajectory": {
     "title": "Trajectory",
     "subtitle": "Visualise a past session as a timeline of messages and tool calls.",
+    "help_page": "Inspector view for one session. Each row is a message or tool call with timing, tokens, and a preview. Click a row to open the full payload. When the agent delegates a subtask (via Hermes' delegate_task tool), the subagent's tool calls are grouped as children of the delegation — use this to debug planner/executor chains.",
     "pick_session": "Pick a session",
     "empty_title": "No sessions yet",
     "empty_desc": "Send a chat turn and come back — each session renders here with a tool-call timeline.",
@@ -188,6 +190,7 @@
   },
   "budgets": {
     "title": "Budgets",
+    "help_page": "Set spend caps per model / per Hermes profile / per adapter. CoreyOS tracks per-message tokens and estimates cost from a flat pricing table (100c / 300c per 1M tokens in/out). At 80% you get a warning badge; at 100%, send is blocked until the period rolls over. Windows are rolling — daily / weekly / monthly from the budget creation date, not calendar boundaries.",
     "subtitle": "Cap spend per scope, period, and breach action. Projection uses local usage history and a built-in price table.",
     "new": "New budget",
     "edit": "Edit",
@@ -281,6 +284,7 @@
   },
   "settings": {
     "title": "Settings",
+    "help_page": "Global preferences + Hermes connection. Language, theme, and shortcuts are local to this install. Gateway URL + API key + default model connect CoreyOS to your local Hermes gateway (usually http://127.0.0.1:8642). Hermes Instances section below lets you register additional OpenAI-compatible endpoints (self-hosted LLMs, remote Hermes, etc.). Sandbox Scopes let you partition which folders each agent can read/write to.",
     "subtitle": "Preferences · gateway · storage",
     "loading": "Loading current configuration…",
     "appearance": {

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { groupToolCallsBySubagent, hasDelegation, type SubagentNode } from './subagents';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
@@ -86,16 +87,23 @@ export function TrajectoryRoute() {
         title={t('trajectory.title')}
         subtitle={t('trajectory.subtitle')}
         actions={
-          state.kind === 'loaded' && state.sessions.length > 0 && (
-            <SessionPicker
-              sessions={state.sessions}
-              value={selectedId}
-              onChange={(id) => {
-                setSelectedId(id);
-                setInspectorId(null);
-              }}
+          <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('trajectory.title')}
+              content={t('trajectory.help_page')}
+              testId="trajectory-help"
             />
-          )
+            {state.kind === 'loaded' && state.sessions.length > 0 && (
+              <SessionPicker
+                sessions={state.sessions}
+                value={selectedId}
+                onChange={(id) => {
+                  setSelectedId(id);
+                  setInspectorId(null);
+                }}
+              />
+            )}
+          </div>
         }
       />
 

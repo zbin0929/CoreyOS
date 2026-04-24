@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
@@ -86,17 +87,24 @@ export function RunbooksRoute() {
         title={t('runbooks.title')}
         subtitle={t('runbooks.subtitle')}
         actions={
-          mode.kind === 'list' && (
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => setMode({ kind: 'new' })}
-              data-testid="runbooks-new"
-            >
-              <Icon icon={Plus} size="sm" />
-              {t('runbooks.new')}
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            <InfoHint
+              title={t('runbooks.title')}
+              content={t('runbooks.help_page')}
+              testId="runbooks-help"
+            />
+            {mode.kind === 'list' && (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => setMode({ kind: 'new' })}
+                data-testid="runbooks-new"
+              >
+                <Icon icon={Plus} size="sm" />
+                {t('runbooks.new')}
+              </Button>
+            )}
+          </div>
         }
       />
 

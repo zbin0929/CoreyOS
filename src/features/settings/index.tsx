@@ -26,6 +26,7 @@ import {
 import { useSandboxStore } from '@/stores/sandbox';
 import { type SandboxAccessMode, ipcErrorMessage as ipcErrorMessageFn } from '@/lib/ipc';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Icon } from '@/components/ui/icon';
@@ -173,7 +174,17 @@ export function SettingsRoute() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
+      <PageHeader
+        title={t('settings.title')}
+        subtitle={t('settings.subtitle')}
+        actions={
+          <InfoHint
+            title={t('settings.title')}
+            content={t('settings.help_page')}
+            testId="settings-help"
+          />
+        }
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8">
