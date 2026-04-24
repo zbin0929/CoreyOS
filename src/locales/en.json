@@ -871,6 +871,9 @@
     "save": "Save",
     "cancel": "Cancel",
     "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "confirm_delete": "Click again to delete \"{{name}}\"",
     "refresh": "Refresh"
   },
   "scheduler_page": {

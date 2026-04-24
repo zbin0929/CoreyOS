@@ -848,12 +848,24 @@ function HermesInstanceRow({
     }
   }
 
+  // Two-click delete: `window.confirm` is unreliable inside the Tauri
+  // WebView on some platforms (user reports the dialog never appears
+  // and the row is gone), so we arm-then-fire in the UI instead. The
+  // armed state auto-expires after 3s so a stray click doesn't leave
+  // the button in a destructive mode.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const h = window.setTimeout(() => setDeleteArmed(false), 3000);
+    return () => window.clearTimeout(h);
+  }, [deleteArmed]);
+
   async function onDelete() {
     if (!onDeleted) return;
-    if (
-      !window.confirm(t('settings.hermes_instances.confirm_delete', { id: draft.id }))
-    )
+    if (!deleteArmed) {
+      setDeleteArmed(true);
       return;
+    }
     setSaving(true);
     setErr(null);
     try {
@@ -1055,12 +1067,15 @@ function HermesInstanceRow({
             <Button
               type="button"
               size="sm"
-              variant="ghost"
+              variant={deleteArmed ? 'danger' : 'ghost'}
               onClick={onDelete}
               disabled={saving}
+              title={deleteArmed ? undefined : draft.label || draft.id}
             >
-              <Icon icon={Trash2} size="sm" className="text-danger" />
-              {t('common.delete')}
+              <Icon icon={Trash2} size="sm" className={deleteArmed ? undefined : 'text-danger'} />
+              {deleteArmed
+                ? t('common.confirm_delete', { name: draft.label || draft.id })
+                : t('common.delete')}
             </Button>
           )
         )}

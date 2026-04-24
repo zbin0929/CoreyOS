@@ -16,7 +16,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::adapters::hermes::gateway::HealthProbe;
 use crate::adapters::hermes::HermesAdapter;
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_instances::{
@@ -148,30 +147,58 @@ pub struct InstanceProbeResult {
     pub body: String,
 }
 
-/// Dry-run a proposed instance config against `/health`. Does NOT
-/// persist or register. Used by the "Test" button in Settings so
-/// users can validate credentials before saving.
+/// Dry-run a proposed instance config. Does NOT persist or register.
+/// Used by the "Test" button in the instance editor so users can
+/// validate credentials before saving.
+///
+/// We hit `GET /v1/models` with `Authorization: Bearer <api_key>`
+/// (when one is present). This is the single endpoint shared by:
+///   - a local Hermes gateway (mounts the OpenAI-compatible shim);
+///   - every upstream OpenAI-compatible provider we ship a template
+///     for (OpenAI, Anthropic, DeepSeek, Gemini OpenAI-shim, Ollama,
+///     OpenRouter).
+///
+/// Earlier versions hit `/health` — that's Hermes-specific and
+/// upstream providers respond 401 / 404 (e.g. DeepSeek's governor
+/// emits "Authentication Fails" for unknown paths), making the test
+/// button lie about valid credentials.
 #[tauri::command]
 pub async fn hermes_instance_test(instance: HermesInstance) -> IpcResult<InstanceProbeResult> {
     hermes_instances::validate_base_url(&instance.base_url)
         .map_err(|e| IpcError::NotConfigured { hint: e })?;
 
     let id = instance.id.clone();
-    let gateway = crate::adapters::hermes::gateway::HermesGateway::new(
-        instance.base_url.clone(),
-        instance.api_key.filter(|s| !s.is_empty()),
-    )?;
-    match gateway.health().await {
-        Ok(HealthProbe { latency_ms, body }) => Ok(InstanceProbeResult {
-            id,
-            ok: true,
-            latency_ms,
-            body,
-        }),
+    let api_key = instance.api_key.filter(|s| !s.is_empty());
+
+    let started = std::time::Instant::now();
+    let report = crate::adapters::hermes::probe::probe_models(
+        &instance.base_url,
+        api_key.as_deref(),
+    )
+    .await;
+    let latency_ms = started.elapsed().as_millis() as u32;
+
+    match report {
+        Ok(r) => {
+            // Body = a short preview so users can sanity-check the
+            // endpoint actually speaks OpenAI.
+            let preview: Vec<String> = r.models.iter().take(5).map(|m| m.id.clone()).collect();
+            let body = if preview.is_empty() {
+                "Reachable, but /v1/models returned no entries.".to_string()
+            } else {
+                format!("OK · {} model(s): {}", r.models.len(), preview.join(", "))
+            };
+            Ok(InstanceProbeResult {
+                id,
+                ok: true,
+                latency_ms: r.latency_ms,
+                body,
+            })
+        }
         Err(e) => Ok(InstanceProbeResult {
             id,
             ok: false,
-            latency_ms: 0,
+            latency_ms,
             body: e.to_string(),
         }),
     }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
@@ -279,13 +280,19 @@ function LlmProfileRow({
     }
   }
 
+  // Two-click delete — same reasoning as HermesInstanceRow:
+  // window.confirm can silently no-op inside the Tauri WebView.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const h = window.setTimeout(() => setDeleteArmed(false), 3000);
+    return () => window.clearTimeout(h);
+  }, [deleteArmed]);
+
   async function onDelete() {
     if (!onDeleted) return;
-    if (
-      !window.confirm(
-        t('models_page.profile_confirm_delete', { id: draft.id }),
-      )
-    ) {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
       return;
     }
     setSaving(true);
@@ -423,12 +430,18 @@ function LlmProfileRow({
           <Button
             type="button"
             size="sm"
-            variant="ghost"
+            variant={deleteArmed ? 'danger' : 'ghost'}
             onClick={onDelete}
             disabled={saving}
           >
-            <Icon icon={Trash2} size="sm" className="text-danger" />
-            {t('common.delete')}
+            <Icon
+              icon={Trash2}
+              size="sm"
+              className={deleteArmed ? undefined : 'text-danger'}
+            />
+            {deleteArmed
+              ? t('common.confirm_delete', { name: draft.label || draft.id })
+              : t('common.delete')}
           </Button>
         )}
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
