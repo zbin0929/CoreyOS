@@ -6,6 +6,117 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-24 — Polish pass: onboarding · model picker · release infra · v0.1.0
+
+Post-Phase-7 polish day. No new feature phases — the goal was to make
+the app packageable and the first-run experience intentional. Five
+clusters of work:
+
+### Shipped
+
+**InfoHint help system.** A new `InfoHint` component (inline `?` icon →
+popover with help copy) slots next to page titles. Wired across
+Settings, Budgets, Trajectory, Runbooks, Skills, Scheduler, MCP,
+Memory, Channels. Every help string lives under `<page>.help_page`
+in the locale files, so translation is the only barrier to adding
+more help surfaces.
+
+**Home onboarding.** Rewrote the Phase-0 welcome page into an
+auto-detecting checklist. Home now polls for `gateway healthy`,
+`currentModel set`, `sessions > 0`, `USER.md bytes > 0`, and shows
+a numbered checklist with "Go configure" / "Open chat" jump buttons
+per step. README pivoted product-first to match: the app is meant
+to be opened, not `pnpm tauri:dev`'d.
+
+**Per-session model picker.** Chat page's old `ActiveLLMBadge` was a
+read-only status chip that linked to `/models`. It's now a proper
+dropdown (`ActiveLLMBadge.tsx`, 250 lines) that:
+
+- Lists every model returned by `modelList()`.
+- "Use default" sentinel row clears the session override.
+- Golden dot + golden border when the session has an override.
+- Keyboard nav: ↓/Enter/Space on trigger opens; ↑↓ Home/End move
+  between rows; Enter commits; Esc closes; outside-click closes.
+- Auto-shows a search field when models > 6 (filters id /
+  display_name / provider, case-insensitive).
+- Focus returns to the trigger after close.
+- Link to `/models` at the bottom for provider config.
+
+**Also a real bug fix**: the old code path explicitly dropped the
+`model` field on the wire — a stale comment claimed Hermes ignored
+it, but `resolve_turn()` in `src-tauri/src/adapters/hermes/mod.rs`
+honours `turn.model` with fallback to `default_model`. So
+`setSessionModel` was writing into the store and the DB with no
+effect. Now it actually takes effect.
+
+**Release infra.** v0.1.0 bumped across `Cargo.toml`,
+`tauri.conf.json`, `package.json`. Two scripts added:
+
+- `scripts/release-setup.sh` — one-shot: `tauri signer generate`,
+  uploads `TAURI_SIGNING_PRIVATE_KEY` + passphrase to GitHub secrets,
+  patches `plugins.updater.pubkey`, commits the diff. Flags:
+  `--no-pass`, `--force`. Idempotent-ish; refuses to clobber an
+  existing key without `--force`.
+- `scripts/release-local.sh` — builds locally on macOS using the
+  same signing key. Flags: `--universal` for a fat Intel + Apple
+  Silicon binary. Outputs `.dmg` + `.app.tar.gz` + `.sig`.
+
+`.github/workflows/release-windows.yml` — manually-dispatched CI that
+only spins up a Windows runner (~$0.25/run on private repo, free tier
+covers ~60 builds/mo). Attaches `.msi` + NSIS + signed updater zip to
+the draft release for the given tag.
+
+`tauri-plugin-updater` wired into `lib.rs` + `capabilities/default.json`.
+Updater endpoint points at `releases/latest/download/latest.json`.
+Pubkey baked into `tauri.conf.json` (replaced via `release-setup.sh`).
+
+`docs/07-release.md` rewritten from strategy plan to executable
+runbook.
+
+### Fixed
+
+- `CoreyOS/src/features/chat/index.tsx`: removed the "Hermes ignores
+  `model`" comment + actually passes `effectiveModel` through
+  `chatStream`. This was a silent correctness regression from the
+  original adapter abstraction — the session-override UI had existed
+  for weeks but never took effect.
+- Clippy cleanup surfaced by newer toolchain: `channels.rs` doc-list
+  indent, `hermes_cron.rs` → `sort_by_key` + `!is_empty()`,
+  `ipc/scheduler.rs` → `Option::unwrap_or(0)`. `-D warnings` green
+  again.
+
+### Deferred
+
+- `.github/workflows/release.yml` (original all-platform matrix) was
+  removed after the first run failed with a GitHub billing error.
+  Pivot to local-mac + Windows-only CI. The all-platform version is
+  still in git history at commit `8e4dbdb`; flip it back on when the
+  repo goes public or the maintainer has appetite for macOS runner
+  minutes.
+- LandingREADME / promo screenshots — decided to ship the packaged
+  app with built-in onboarding and a short product README instead.
+- Paid code signing (Apple Developer ID, Windows Authenticode) —
+  re-evaluated when install friction becomes measurable.
+
+### Test totals
+
+- Rust: **192 / 192 pass** (+4 from clippy refactors).
+- Playwright: **74 / 74 pass** (+3: per-session picker, keyboard nav,
+  plus the existing regression suite).
+- TSC clean. ESLint clean.
+
+### Commits (this day)
+
+`8c2cedd` Home onboarding · `fd2e6c7` InfoHint + 3 pages ·
+`69f875a` + `cdf838b` InfoHint on the remaining 6 pages ·
+`77f08b8` per-session model picker + wire fix · `2df9c43` picker e2e
+regression guard · `3b223b4` picker keyboard + search ·
+`8e4dbdb` release pipeline v1 · `9d91d80` release-setup.sh ·
+`46edb17` pubkey pin · `2d07752` pivot to local-only · `60ed428`
+Windows-only CI.
+
+---
+
 ## 2026-04-23 — Phase 7 complete · T7.2 Save-as-Skill + T7.4 Skill Hub browser
 
 Last two T7.x tasks ship together. Phase 7 is now 4/4 done (T7.1, T7.2, T7.3, T7.4 all green).
