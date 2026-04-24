@@ -309,7 +309,12 @@
     "step_profile": "设置个人资料",
     "step_profile_desc": "在用户记忆里写一两行自我介绍，让 agent 知道怎么称呼你、默认用什么技术栈。",
     "step_channel": "接入一个即时通讯平台（可选）",
-    "step_channel_desc": "Telegram、Discord、Slack、企业微信、微信、飞书 —— 从手机就能对话。"
+    "step_channel_desc": "Telegram、Discord、Slack、企业微信、微信、飞书 —— 从手机就能对话。",
+    "preset_title": "安装起始内容",
+    "preset_desc": "把 5 个通用 skill + fetch MCP server + 记忆模板装进 ~/.hermes/。可重复运行，不会覆盖你的改动。",
+    "preset_install": "安装",
+    "preset_installing": "安装中…",
+    "preset_done_title": "起始内容已安装（{{n}} 项）"
   },
   "settings": {
     "title": "设置",

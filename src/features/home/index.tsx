@@ -20,6 +20,7 @@ import { cn } from '@/lib/cn';
 import { memoryRead } from '@/lib/ipc';
 import { useAppStatusStore } from '@/stores/appStatus';
 import { useChatStore } from '@/stores/chat';
+import { PresetCard } from './PresetCard';
 
 /**
  * Home is the post-install landing page. Users who just opened the
@@ -154,6 +155,12 @@ export function HomeRoute() {
                 : t('home.gateway_unknown')}
           </button>
         </div>
+
+        {/* First-run / activation CTA. Renders a prominent "Install
+            starter content" card when ~/.hermes/skills/ is empty;
+            collapses to a success confirmation right after install,
+            then stays hidden on subsequent visits. */}
+        <PresetCard />
 
         {/* Onboarding checklist */}
         <section

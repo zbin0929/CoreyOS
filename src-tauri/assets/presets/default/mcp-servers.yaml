@@ -1,0 +1,27 @@
+# MCP servers to merge into ~/.hermes/config.yaml → mcp_servers:
+#
+# On preset install, each entry here is upserted into the Hermes config:
+#   - If the user already has an entry with the same id, it's left alone
+#     (we never clobber user edits).
+#   - If the id is new, it's appended.
+#
+# Picked to work out of the box:
+#   - `fetch` — HTTP GET for any URL. No API key, no installed deps
+#     beyond npx. Lets the agent read docs / web pages on request.
+#
+# Deliberately NOT included by default (users can add from Skill Hub
+# or MCP page once they decide):
+#   - `filesystem` — needs a concrete path argument; presenting it
+#     pointing at "your home dir" feels invasive on first launch.
+#   - `firecrawl` / `brave-search` — require API keys.
+#   - `github` / `postgres` — require tokens / connection strings.
+
+servers:
+  - id: fetch
+    type: stdio
+    command: npx
+    args: ['-y', '@modelcontextprotocol/server-fetch']
+    env: {}
+    description: >
+      Fetch the raw body of a URL the user references in chat. Useful
+      for "summarize this article", "what's on this page", and similar.

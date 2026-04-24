@@ -91,6 +91,11 @@ flate2 = "1"
 # we don't need since we persist to SQLite ourselves).
 cron = "0.12"
 
+[dev-dependencies]
+# Scratch-dir fixtures for preset install tests (ipc::preset). Keeps
+# unit tests hermetic; nothing touches a real ~/.hermes.
+tempfile = "3"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

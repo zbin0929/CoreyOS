@@ -42,10 +42,13 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "Control plane for AI agents",
-    "longDescription": "Corey is a desktop control plane for AI agents. Chat with Hermes, route messages across adapters, manage MCP servers, budgets, skills, and scheduled jobs \u2014 all locally, no cloud sync.",
+    "longDescription": "Corey is a desktop control plane for AI agents. Chat with Hermes, route messages across adapters, manage MCP servers, budgets, skills, and scheduled jobs — all locally, no cloud sync.",
     "publisher": "Corey Contributors",
     "homepage": "https://github.com/zbin0929/CoreyOS",
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "resources": [
+      "assets/presets/**/*"
+    ]
   },
   "plugins": {
     "updater": {

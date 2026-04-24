@@ -362,6 +362,38 @@ export const tauriMockInitScript = /* js */ `
       case 'home_stats':
         return state.homeStats;
 
+      // Bundled preset installation. In the real app, Tauri resolves
+      // the preset from Contents/Resources/assets/presets/<id>/ and
+      // copies the files into ~/.hermes/. The mock just replays a
+      // plausible success payload so the UI can be exercised.
+      case 'preset_describe':
+        return {
+          id: args.id,
+          name: 'Default starter',
+          description: 'Generic skills + a fetch MCP server.',
+          version: 1,
+        };
+      case 'preset_install':
+        return {
+          installed: [
+            'skills/summarize.md',
+            'skills/explain.md',
+            'skills/write-commit.md',
+            'skills/rubber-duck.md',
+            'skills/translate-zh.md',
+            'USER.md',
+            'MEMORY.md',
+            'mcp/fetch',
+          ],
+          skipped: [],
+          manifest: {
+            id: args.id,
+            name: 'Default starter',
+            description: 'Generic skills + a fetch MCP server.',
+            version: 1,
+          },
+        };
+
       // T5 — registered adapters. Without this mock the AgentSwitcher
       // pill rendered "No agents" on every page, which in turn made the
       // screenshot audit misleading. Single default adapter is plenty

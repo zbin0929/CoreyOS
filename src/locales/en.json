@@ -258,7 +258,12 @@
     "step_profile": "Set up your profile",
     "step_profile_desc": "Add a line or two to your user memory so the agent knows how to address you and which tech stack to default to.",
     "step_channel": "Connect a messenger (optional)",
-    "step_channel_desc": "Telegram, Discord, Slack, WeCom, WeiXin, Feishu — talk to the agent from your phone."
+    "step_channel_desc": "Telegram, Discord, Slack, WeCom, WeiXin, Feishu — talk to the agent from your phone.",
+    "preset_title": "Install starter content",
+    "preset_desc": "Drops 5 generic skills + a fetch MCP server + memory templates into ~/.hermes/. Safe to re-run; won't overwrite edits.",
+    "preset_install": "Install",
+    "preset_installing": "Installing…",
+    "preset_done_title": "Starter content installed ({{n}} items)"
   },
   "analytics": {
     "title": "Analytics",

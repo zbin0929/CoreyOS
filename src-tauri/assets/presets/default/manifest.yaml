@@ -1,0 +1,16 @@
+# Corey default preset — generic starter content.
+#
+# Shipped with every Corey build via tauri.conf.json → bundle.resources.
+# On first launch (or via Home → "Install preset" button), the contents
+# below get copied to ~/.hermes/ — only if the targets don't already
+# exist, so re-running is idempotent and never clobbers user edits.
+#
+# Vendor-specific presets (corey-ecommerce, corey-legal, etc.) will
+# live in sibling directories with the same shape.
+
+id: default
+name: Default starter
+description: >
+  Generic skills + a filesystem MCP for basic file access. Good enough
+  to start chatting with; swap or extend once you know what you need.
+version: 1

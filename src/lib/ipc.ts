@@ -979,6 +979,42 @@ export function appPaths(): Promise<AppPaths> {
   return invoke<AppPaths>('app_paths');
 }
 
+// ───────────────────────── Presets ─────────────────────────
+
+/** Bundled starter content shipped inside the app (skills + MCP +
+ *  memory templates). Installed into `~/.hermes/` on demand; never
+ *  overwrites existing user files. Vendor-customised builds swap the
+ *  default preset for an industry-specific one (e-commerce, legal, …)
+ *  — that's the product's main differentiation lever. */
+export interface PresetManifest {
+  id: string;
+  name: string;
+  description: string;
+  version: number;
+}
+
+export interface PresetInstallResult {
+  /** Relative labels of files / mcp ids newly written. */
+  installed: string[];
+  /** Labels of files skipped because the user already had them. */
+  skipped: string[];
+  manifest: PresetManifest | null;
+}
+
+/** Read a preset's manifest without installing. Useful for showing the
+ *  preset's name + description in a confirm dialog before the user hits
+ *  "Install". */
+export function presetDescribe(id: string): Promise<PresetManifest> {
+  return invoke<PresetManifest>('preset_describe', { id });
+}
+
+/** Install a named preset into `~/.hermes/`. Idempotent — existing
+ *  user files are never clobbered, so re-running is safe. Returns a
+ *  summary the UI can display as a toast. */
+export function presetInstall(id: string): Promise<PresetInstallResult> {
+  return invoke<PresetInstallResult>('preset_install', { id });
+}
+
 // ───────────────────────── Hermes's own config.yaml ─────────────────────────
 
 export interface HermesModelSection {

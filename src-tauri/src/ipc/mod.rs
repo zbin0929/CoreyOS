@@ -18,6 +18,7 @@ pub mod memory;
 pub mod menu;
 pub mod model;
 pub mod paths;
+pub mod preset;
 pub mod pty;
 pub mod routing_rules;
 pub mod runbooks;

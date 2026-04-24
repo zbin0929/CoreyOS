@@ -166,6 +166,8 @@ pub fn run() {
             ipc::routing_rules::routing_rule_list,
             ipc::routing_rules::routing_rule_upsert,
             ipc::routing_rules::routing_rule_delete,
+            ipc::preset::preset_describe,
+            ipc::preset::preset_install,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");
