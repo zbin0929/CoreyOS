@@ -163,6 +163,11 @@ export const tauriMockInitScript = /* js */ `
       agent: null,
       user: null,
     }),
+    // T7.1 MCP — mirror of the mcp_servers: section of config.yaml.
+    // Keyed by id, values are the opaque config blob (command/args/
+    // env or url/headers + tools filter). Ordered-ness isn't faithful
+    // to serde_yaml insertion order but tests don't assert order.
+    mcpServers: /** @type {Record<string, Record<string, unknown>>} */ ({}),
     // T4.5 PTY ids currently alive in the mock. Tests can count or
     // assert; the real backend's pty state isn't reachable from JS.
     ptyIds: /** @type {string[]} */ ([]),
@@ -978,6 +983,38 @@ export const tauriMockInitScript = /* js */ `
           exists: slot !== null,
         };
       }
+      // T7.1 MCP server manager.
+      case 'mcp_server_list': {
+        return Object.entries(state.mcpServers).map(([id, config]) => ({
+          id,
+          config,
+        }));
+      }
+      case 'mcp_server_upsert': {
+        const s = args.server;
+        if (!s || typeof s.id !== 'string' || !s.id.trim()) {
+          throw { kind: 'internal', message: 'mcp server id cannot be empty' };
+        }
+        if (s.id.includes('.')) {
+          throw {
+            kind: 'internal',
+            message: 'mcp server id cannot contain .: ' + s.id,
+          };
+        }
+        state.mcpServers[s.id] = s.config || {};
+        return;
+      }
+      case 'mcp_server_delete': {
+        if (!args.id || args.id.includes('.')) {
+          throw {
+            kind: 'internal',
+            message: 'mcp server id cannot be empty or contain .',
+          };
+        }
+        delete state.mcpServers[args.id];
+        return;
+      }
+
       case 'memory_write': {
         const kind = args.kind === 'user' ? 'user' : 'agent';
         const body = typeof args.content === 'string' ? args.content : '';

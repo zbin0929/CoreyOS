@@ -1,0 +1,487 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  AlertCircle,
+  Globe,
+  Loader2,
+  Plus,
+  Plug,
+  RefreshCw,
+  Save,
+  Terminal,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { PageHeader } from '@/app/shell/PageHeader';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Icon } from '@/components/ui/icon';
+import { cn } from '@/lib/cn';
+import {
+  hermesGatewayRestart,
+  ipcErrorMessage,
+  mcpServerDelete,
+  mcpServerList,
+  mcpServerUpsert,
+  type McpServer,
+} from '@/lib/ipc';
+
+/**
+ * Phase 7 · T7.1 — MCP server manager.
+ *
+ * GUI over the `mcp_servers:` section of `~/.hermes/config.yaml`.
+ * Hermes forks each server (stdio) or connects over HTTP itself; we
+ * ONLY edit the config. No sidecar process, no reachability probe
+ * (doing it well means speaking the MCP handshake; doing it poorly
+ * is worse than nothing). Users verify via the existing Trajectory
+ * pane once Hermes reloads.
+ *
+ * Schema is intentionally pass-through: `config` is the full opaque
+ * JSON blob under `mcp_servers.<id>`. The form surfaces the common
+ * fields (transport selector + command/args/env OR url/headers, plus
+ * optional tools.include/exclude filters), and stashes anything
+ * non-standard under a "raw JSON" textarea so rare/new upstream
+ * fields aren't lost on round-trip.
+ */
+export function McpRoute() {
+  const { t } = useTranslation();
+  const [servers, setServers] = useState<McpServer[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [restarting, setRestarting] = useState(false);
+  const [restartHint, setRestartHint] = useState(false);
+
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      setServers(await mcpServerList());
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+      setServers([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const onSave = useCallback(
+    async (server: McpServer, wasNew: boolean) => {
+      // Let the form keep the exception — it renders the error
+      // inline next to the save button. The page-level banner is
+      // reserved for list/delete/restart errors where the form
+      // isn't mounted. `wasNew` is threaded through so future
+      // telemetry can differ between create and update; today
+      // both paths behave identically.
+      void wasNew;
+      await mcpServerUpsert(server);
+      setEditing(null);
+      setRestartHint(true);
+      await reload();
+    },
+    [reload],
+  );
+
+  const onDelete = useCallback(
+    async (id: string) => {
+      if (!window.confirm(t('mcp.confirm_delete', { id }))) return;
+      try {
+        await mcpServerDelete(id);
+        setRestartHint(true);
+        await reload();
+      } catch (e) {
+        setError(ipcErrorMessage(e));
+      }
+    },
+    [reload, t],
+  );
+
+  const onRestart = useCallback(async () => {
+    setRestarting(true);
+    try {
+      await hermesGatewayRestart();
+      setRestartHint(false);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setRestarting(false);
+    }
+  }, []);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader
+        title={t('mcp.title')}
+        subtitle={t('mcp.subtitle')}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void reload()}
+              data-testid="mcp-refresh"
+            >
+              <Icon icon={RefreshCw} size="sm" />
+              {t('common.refresh')}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setEditing({ mode: 'new' })}
+              data-testid="mcp-add"
+              disabled={editing?.mode === 'new'}
+            >
+              <Icon icon={Plus} size="sm" />
+              {t('mcp.add')}
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Restart-nudge banner. Appears after a save/delete until the
+          user hits "Restart now" — identical visual vocabulary to the
+          Channels page so users don't learn two different patterns. */}
+      {restartHint && (
+        <div
+          className="flex items-start gap-2 border-b border-amber-500/40 bg-amber-500/5 px-4 py-2 text-xs text-amber-500"
+          data-testid="mcp-restart-hint"
+        >
+          <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
+          <div className="flex-1">{t('mcp.restart_hint')}</div>
+          <Button
+            size="xs"
+            variant="secondary"
+            onClick={() => void onRestart()}
+            disabled={restarting}
+            data-testid="mcp-restart-now"
+          >
+            {restarting ? (
+              <Icon icon={Loader2} size="xs" className="animate-spin" />
+            ) : (
+              <Icon icon={RefreshCw} size="xs" />
+            )}
+            {t('mcp.restart_now')}
+          </Button>
+        </div>
+      )}
+
+      {error && (
+        <div className="m-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+        {servers === null ? (
+          <div className="flex flex-1 items-center justify-center text-fg-subtle">
+            <Icon icon={Loader2} size="md" className="animate-spin" />
+          </div>
+        ) : servers.length === 0 && editing?.mode !== 'new' ? (
+          <EmptyState
+            icon={Plug}
+            title={t('mcp.empty_title')}
+            description={t('mcp.empty_desc')}
+          />
+        ) : (
+          <ul className="flex flex-col gap-2" data-testid="mcp-server-list">
+            {servers.map((s) =>
+              editing?.mode === 'edit' && editing.id === s.id ? (
+                <li key={s.id}>
+                  <ServerForm
+                    initial={s}
+                    onSave={(next) => onSave(next, false)}
+                    onCancel={() => setEditing(null)}
+                  />
+                </li>
+              ) : (
+                <ServerRow
+                  key={s.id}
+                  server={s}
+                  onEdit={() => setEditing({ mode: 'edit', id: s.id })}
+                  onDelete={() => void onDelete(s.id)}
+                />
+              ),
+            )}
+          </ul>
+        )}
+
+        {editing?.mode === 'new' && (
+          <ServerForm
+            initial={null}
+            onSave={(next) => onSave(next, true)}
+            onCancel={() => setEditing(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+type Editing =
+  | { mode: 'new' }
+  | { mode: 'edit'; id: string };
+
+function ServerRow({
+  server,
+  onEdit,
+  onDelete,
+}: {
+  server: McpServer;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const transport = detectTransport(server.config);
+  const summary =
+    transport === 'stdio'
+      ? [server.config.command, ...(Array.isArray(server.config.args) ? server.config.args : [])]
+          .filter(Boolean)
+          .join(' ')
+      : String(server.config.url ?? '');
+  return (
+    <li
+      className="flex items-center gap-3 rounded-lg border border-border bg-bg-elev-1 p-3"
+      data-testid={`mcp-server-row-${server.id}`}
+    >
+      <Icon
+        icon={transport === 'stdio' ? Terminal : Globe}
+        size="sm"
+        className="flex-none text-fg-muted"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <code className="rounded bg-bg-elev-2 px-1.5 py-0.5 font-mono text-xs text-fg">
+            {server.id}
+          </code>
+          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+            {transport}
+          </span>
+        </div>
+        <div
+          className="mt-1 truncate font-mono text-[11px] text-fg-muted"
+          title={summary}
+        >
+          {summary || t('mcp.no_command')}
+        </div>
+      </div>
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={onEdit}
+        data-testid={`mcp-server-edit-${server.id}`}
+      >
+        {t('mcp.edit')}
+      </Button>
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={onDelete}
+        aria-label={t('mcp.delete')}
+        data-testid={`mcp-server-delete-${server.id}`}
+      >
+        <Icon icon={Trash2} size="xs" />
+      </Button>
+    </li>
+  );
+}
+
+type Transport = 'stdio' | 'url';
+
+function detectTransport(config: Record<string, unknown>): Transport {
+  if (typeof config.url === 'string') return 'url';
+  return 'stdio';
+}
+
+function ServerForm({
+  initial,
+  onSave,
+  onCancel,
+}: {
+  initial: McpServer | null;
+  onSave: (server: McpServer) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const isNew = initial === null;
+  const [id, setId] = useState(initial?.id ?? '');
+  const [transport, setTransport] = useState<Transport>(
+    initial ? detectTransport(initial.config) : 'stdio',
+  );
+  // Serialise the config as prettified JSON for a free-form edit
+  // surface. Advanced users get precise control; beginners pick the
+  // transport and only fill in the two or three obvious fields.
+  const [raw, setRaw] = useState<string>(
+    initial
+      ? JSON.stringify(initial.config, null, 2)
+      : JSON.stringify(defaultConfig(transport), null, 2),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // When the user toggles transport on a NEW entry, swap the starter
+  // JSON. On an EDIT we keep whatever the user was editing — toggling
+  // transport shouldn't silently destroy field values they'd typed.
+  const onTransportChange = (next: Transport) => {
+    setTransport(next);
+    if (isNew) setRaw(JSON.stringify(defaultConfig(next), null, 2));
+  };
+
+  const parseError = useMemo(() => {
+    try {
+      const v = JSON.parse(raw);
+      if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+        return t('mcp.form_error_must_be_object');
+      }
+      return null;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }, [raw, t]);
+
+  const idError = useMemo(() => {
+    const trimmed = id.trim();
+    if (!trimmed) return t('mcp.form_error_id_required');
+    if (trimmed.includes('.')) return t('mcp.form_error_id_dots');
+    return null;
+  }, [id, t]);
+
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (parseError || idError || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const config = JSON.parse(raw) as Record<string, unknown>;
+      await onSave({ id: id.trim(), config });
+    } catch (err) {
+      setError(ipcErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="flex flex-col gap-3 rounded-lg border border-accent/40 bg-accent/5 p-4"
+      data-testid="mcp-server-form"
+    >
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-fg">
+          {isNew ? t('mcp.form_title_new') : t('mcp.form_title_edit', { id: initial!.id })}
+        </h3>
+        <Button
+          size="xs"
+          variant="ghost"
+          type="button"
+          onClick={onCancel}
+          aria-label={t('common.cancel')}
+        >
+          <Icon icon={X} size="xs" />
+        </Button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-fg-muted">{t('mcp.form_id')}</span>
+          <input
+            type="text"
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+            placeholder="project_fs"
+            readOnly={!isNew}
+            className={cn(
+              'rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none',
+              !isNew && 'cursor-not-allowed opacity-60',
+            )}
+            spellCheck={false}
+            data-testid="mcp-form-id"
+          />
+          {isNew ? (
+            idError && <span className="text-[11px] text-danger">{idError}</span>
+          ) : (
+            <span className="text-[11px] text-fg-subtle">{t('mcp.form_id_locked')}</span>
+          )}
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-fg-muted">{t('mcp.form_transport')}</span>
+          <select
+            value={transport}
+            onChange={(e) => onTransportChange(e.target.value as Transport)}
+            className="rounded-md border border-border bg-bg px-2 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
+            data-testid="mcp-form-transport"
+          >
+            <option value="stdio">{t('mcp.transport_stdio')}</option>
+            <option value="url">{t('mcp.transport_url')}</option>
+          </select>
+          <span className="text-[11px] text-fg-subtle">
+            {transport === 'stdio'
+              ? t('mcp.transport_stdio_hint')
+              : t('mcp.transport_url_hint')}
+          </span>
+        </label>
+      </div>
+
+      <label className="flex flex-col gap-1 text-xs">
+        <span className="text-fg-muted">{t('mcp.form_config')}</span>
+        <textarea
+          value={raw}
+          onChange={(e) => setRaw(e.target.value)}
+          rows={12}
+          spellCheck={false}
+          className="resize-y rounded-md border border-border bg-bg p-2 font-mono text-[11px] text-fg focus:border-accent focus:outline-none"
+          data-testid="mcp-form-config"
+        />
+        {parseError && (
+          <span className="text-[11px] text-danger">{parseError}</span>
+        )}
+      </label>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+          <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+          {t('common.cancel')}
+        </Button>
+        <Button
+          type="submit"
+          size="sm"
+          variant="primary"
+          disabled={!!parseError || !!idError || saving}
+          data-testid="mcp-form-save"
+        >
+          {saving ? (
+            <Icon icon={Loader2} size="sm" className="animate-spin" />
+          ) : (
+            <Icon icon={Save} size="sm" />
+          )}
+          {t('mcp.save')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Starter JSON for a fresh server. Kept intentionally skeletal so
+ *  the user sees an obvious "fill me in" shape rather than a long
+ *  commented template. Real examples live in the upstream Hermes MCP
+ *  docs the subtitle links to. */
+function defaultConfig(transport: Transport): Record<string, unknown> {
+  if (transport === 'url') {
+    return {
+      url: 'https://mcp.example.com',
+      headers: {},
+    };
+  }
+  return {
+    command: 'npx',
+    args: [],
+  };
+}

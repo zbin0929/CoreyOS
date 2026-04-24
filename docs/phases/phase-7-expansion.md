@@ -23,7 +23,11 @@
 
 ## Task breakdown
 
-### T7.1 — MCP server manager UI · ~3 days (replaced LangGraph adapter 2026-04-23 pm)
+### T7.1 — MCP server manager UI · ✅ **Shipped 2026-04-23 pm**
+
+New `/mcp` page reads/writes the `mcp_servers:` section of `~/.hermes/config.yaml`. Schema verified against upstream docs (hermes-agent.nousresearch.com/docs/guides/use-mcp-with-hermes) before coding: no invented fields; config is an opaque JSON blob per server so new upstream keys ride through. Stdio + URL transports, inline JSON edit textarea, restart-gateway nudge banner, id frozen post-create. 3 Rust unit tests + 2 Playwright smokes green. Reachability probe + enabled toggle **deferred** (upstream has no enabled concept; probing requires a full MCP client). See `CHANGELOG.md` under the T7.1 heading.
+
+### T7.1 — Original plan (for reference) · ~3 days (replaced LangGraph adapter 2026-04-23 pm)
 
 **Re-scoped from ~6 days LangGraph adapter to ~3 days MCP manager.** Hermes natively supports MCP servers (see upstream `docs/user-guide/features/mcp`). LangGraph, CrewAI, AutoGen can all be invoked via MCP. Building a parallel sidecar-Python adapter for one specific framework is worse than letting the user wire any MCP server they want.
 

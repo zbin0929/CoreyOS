@@ -615,6 +615,33 @@ export function memoryWrite(kind: MemoryKind, content: string): Promise<MemoryFi
   return invoke<MemoryFile>('memory_write', { kind, content });
 }
 
+// ───────────────────────── MCP servers (T7.1) ─────────────────────────
+
+/** One MCP server entry. `config` is the OPAQUE blob that maps 1:1
+ *  to the nested YAML under `mcp_servers.<id>` in
+ *  `~/.hermes/config.yaml` — `command/args/env` for stdio, `url/
+ *  headers` for http, plus any `tools.{include,exclude,prompts,
+ *  resources}` filter. Kept opaque so future upstream fields ride
+ *  through without a Corey-side schema bump. */
+export interface McpServer {
+  id: string;
+  config: Record<string, unknown>;
+}
+
+export function mcpServerList(): Promise<McpServer[]> {
+  return invoke<McpServer[]>('mcp_server_list');
+}
+
+/** Upsert one server. The backend rejects empty ids and ids
+ *  containing '.' (which would mis-write into nested YAML). */
+export function mcpServerUpsert(server: McpServer): Promise<void> {
+  return invoke<void>('mcp_server_upsert', { server });
+}
+
+export function mcpServerDelete(id: string): Promise<void> {
+  return invoke<void>('mcp_server_delete', { id });
+}
+
 // ───────────────────────── PTY (T4.5) ─────────────────────────
 
 /**

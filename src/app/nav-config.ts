@@ -14,6 +14,7 @@ import {
   BookMarked,
   PiggyBank,
   Brain,
+  Plug,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -64,5 +65,8 @@ export const NAV: NavEntry[] = [
   // unset so the tab is always visible (no adapter-side gating — the
   // files are independent of which adapter is active).
   { id: 'memory', path: '/memory', labelKey: 'nav.memory', icon: Brain, group: 'ops', phase: 7 },
+  // T7.1 — MCP server manager. Always visible; works with any Hermes
+  // instance (MCP is a Hermes-native capability, not adapter-gated).
+  { id: 'mcp', path: '/mcp', labelKey: 'nav.mcp', icon: Plug, group: 'ops', phase: 7 },
   { id: 'settings', path: '/settings', labelKey: 'nav.settings', icon: Settings, group: 'ops', phase: 2, shortcut: ['mod', ','] },
 ];

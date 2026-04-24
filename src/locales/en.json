@@ -19,6 +19,7 @@
     "runbooks": "Runbooks",
     "budgets": "Budgets",
     "memory": "Memory",
+    "mcp": "MCP",
     "settings": "Settings"
   },
   "chat_page": {
@@ -457,6 +458,33 @@
       "thinking": "Thinking…",
       "thought": "Thought process"
     }
+  },
+  "mcp": {
+    "title": "MCP servers",
+    "subtitle": "Model Context Protocol servers Hermes can talk to. Entries live under mcp_servers: in ~/.hermes/config.yaml — Hermes forks stdio commands and connects HTTP URLs itself.",
+    "add": "Add server",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "no_command": "(no command or URL configured)",
+    "confirm_delete": "Delete MCP server \"{{id}}\"? Hermes will stop loading its tools on next reload.",
+    "restart_hint": "MCP config changed. Hermes needs a reload before the new tools show up.",
+    "restart_now": "Restart gateway",
+    "empty_title": "No MCP servers configured",
+    "empty_desc": "Add an MCP server to expose its tools to Hermes. Try the filesystem server first: npx -y @modelcontextprotocol/server-filesystem /path/to/project.",
+    "form_title_new": "New MCP server",
+    "form_title_edit": "Edit {{id}}",
+    "form_id": "Server id",
+    "form_id_locked": "Ids are frozen after creation — rename by deleting and re-adding.",
+    "form_transport": "Transport",
+    "transport_stdio": "Local command (stdio)",
+    "transport_url": "Remote URL (HTTP)",
+    "transport_stdio_hint": "Hermes forks the command. Use for npm / uvx / cargo MCP servers.",
+    "transport_url_hint": "Hermes connects over HTTP. Use for hosted MCP servers.",
+    "form_config": "Config (JSON)",
+    "form_error_id_required": "Id is required.",
+    "form_error_id_dots": "Id cannot contain '.' — it would be mis-interpreted as a nested YAML path.",
+    "form_error_must_be_object": "Config must be a JSON object."
   },
   "memory": {
     "title": "Memory",

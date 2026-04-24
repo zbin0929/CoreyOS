@@ -19,6 +19,7 @@
     "runbooks": "运行手册",
     "budgets": "预算",
     "memory": "记忆",
+    "mcp": "MCP",
     "settings": "设置"
   },
   "chat_page": {
@@ -454,6 +455,33 @@
       "thinking": "推理中…",
       "thought": "推理过程"
     }
+  },
+  "mcp": {
+    "title": "MCP 服务",
+    "subtitle": "Hermes 可接入的 Model Context Protocol 服务。配置写入 ~/.hermes/config.yaml 的 mcp_servers: 段；Hermes 自己 fork 本地命令、连接 HTTP 服务。",
+    "add": "添加服务",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存",
+    "no_command": "（未配置命令或 URL）",
+    "confirm_delete": "确定删除 MCP 服务 \"{{id}}\" 吗？Hermes 下次重载时将不再加载其工具。",
+    "restart_hint": "MCP 配置已改。Hermes 需要重载一下，新工具才会生效。",
+    "restart_now": "重启网关",
+    "empty_title": "还没有 MCP 服务",
+    "empty_desc": "添加 MCP 服务以向 Hermes 暴露工具。推荐从文件系统服务开始：npx -y @modelcontextprotocol/server-filesystem /你的项目路径。",
+    "form_title_new": "新建 MCP 服务",
+    "form_title_edit": "编辑 {{id}}",
+    "form_id": "服务 id",
+    "form_id_locked": "创建后不能改名。要改名请先删再建。",
+    "form_transport": "通信方式",
+    "transport_stdio": "本地命令（stdio）",
+    "transport_url": "远程 URL（HTTP）",
+    "transport_stdio_hint": "Hermes fork 该命令。适用于 npm / uvx / cargo 的 MCP 服务。",
+    "transport_url_hint": "Hermes 走 HTTP 连接。适用于托管的 MCP 服务。",
+    "form_config": "配置（JSON）",
+    "form_error_id_required": "id 必填。",
+    "form_error_id_dots": "id 不能包含 '.'，否则会被误认为嵌套 YAML 路径。",
+    "form_error_must_be_object": "配置必须是一个 JSON 对象。"
   },
   "memory": {
     "title": "记忆",

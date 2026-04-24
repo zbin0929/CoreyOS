@@ -6,6 +6,61 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T7.1 · MCP server manager
+
+Second T7.x task. New `/mcp` page edits the `mcp_servers:` section of `~/.hermes/config.yaml`. Hermes forks each stdio server or connects each HTTP server itself — Corey only curates the config. Replaces the original plan of a LangGraph sidecar adapter: MCP is strictly more general (LangGraph, CrewAI, AutoGen can all expose themselves over MCP), and Hermes already ships first-class MCP support upstream.
+
+### Context
+
+Upstream config format verified against `hermes-agent.nousresearch.com/docs/guides/use-mcp-with-hermes` before writing a single line of code. Schema is a top-level `mcp_servers:` map; each entry has either `command/args/env` (stdio) or `url/headers` (HTTP), plus an optional `tools.{include,exclude,prompts,resources}` filter. There is NO `enabled: true/false` field — presence means enabled. We preserve that convention verbatim instead of inventing corey-only metadata.
+
+### Shipped
+
+**Rust IPC** (`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/mcp.rs`, new module):
+
+- `mcp_server_list()` → `Vec<{id, config}>`. Reads the `mcp_servers:` section; returns empty on missing file / missing section / non-mapping nodes instead of erroring.
+- `mcp_server_upsert(server)` — reuses `hermes_config::write_channel_yaml_fields` with `root="mcp_servers"` (the helper is misnamed from T3.2 but is the generic YAML patch routine). Atomic write + journaled.
+- `mcp_server_delete(id)` — same write helper, JSON null deletes.
+- Validation: `id` is non-empty and contains no `.` (a dotted id would mis-nest as YAML path segments). Everything else rides through unchanged — including any future upstream field Hermes adds tomorrow.
+- 3 unit tests: empty/missing section returns empty vec; stdio + url transports round-trip verbatim; id validation rejects empty + dotted.
+
+**Frontend** (`@/Users/zbin/AI项目/CoreyOS/src/features/mcp/index.tsx`, new page):
+
+- List with a per-row transport chip (`stdio` / `url`), truncated command-or-URL summary, Edit / Delete actions.
+- Inline form for new + edit: id + transport selector + a prettified-JSON textarea for the full config blob. The transport selector swaps the starter JSON on NEW entries only — on EDIT it leaves the user's in-progress JSON alone to avoid destroying typed values.
+- Inline validation: empty-id and dotted-id block the save button before any IPC round-trip; JSON parse errors show under the textarea.
+- Restart-nudge banner appears after any save/delete. "Restart gateway" button reuses the existing `hermesGatewayRestart` IPC from Phase 3. Same visual vocabulary the Channels page already taught users.
+- Id is frozen post-create (the map key is the identity) — matching the Hermes instances convention.
+
+**Route + nav + i18n** (`@/Users/zbin/AI项目/CoreyOS/src/app/routes.tsx`, `nav-config.ts`, `locales/en.json`, `locales/zh.json`):
+
+- Lazy `/mcp` route, `Plug` icon, ops group, phase 7.
+- 17 new i18n keys under `mcp.*` + `nav.mcp`. Full zh translations.
+
+**Tests**:
+
+- **Playwright** (`@/Users/zbin/AI项目/CoreyOS/e2e/mcp.spec.ts`): empty → add stdio → verify mock state → restart nudge → click restart → delete → verify mock state. Second test covers the inline dotted-id validation guard.
+- **Mock** (`@/Users/zbin/AI项目/CoreyOS/e2e/fixtures/tauri-mock.ts`): `state.mcpServers` keyed by id, plus `mcp_server_{list,upsert,delete}` handlers mirroring the Rust validation.
+
+### Deferred
+
+- **Reachability probe** ("Test" button that connects and lists tools). Doing it well means speaking the MCP handshake (stdio: fork the command, negotiate protocol, read tool schemas; HTTP: tool-list endpoint). Doing it poorly is worse than nothing. Users verify via the existing Trajectory pane once Hermes reloads — the agent will list the new tools in its next response, and invocations show up as `ToolProgress` events.
+- **"Enabled" toggle**. Upstream has no such concept. Adding it would either invent a corey-only sentinel (polluting config.yaml) or maintain parallel state (sync headaches). Delete-and-re-add is the upstream answer.
+
+### Test totals
+
+- Rust: **185 / 185 pass** (+3)
+- Vitest: **46 / 46 pass**
+- Playwright: **65 / 65 pass** (+2)
+- TSC clean; 5 pre-existing ESLint fast-refresh warnings.
+
+### Next
+
+- T7.2 skill-from-conversation distillation.
+- T7.4 Skills CLI wrapper (browse / install / audit across 7 hub sources).
+
+---
+
 ## 2026-04-23 — T7.3 · Memory page (GUI over Hermes' native MEMORY.md / USER.md)
 
 First T7.x task lands. A new `/memory` route edits the two Markdown files Hermes already injects into every prompt — `~/.hermes/MEMORY.md` (agent notes) and `~/.hermes/USER.md` (user profile). No RAG, no embeddings, no SQLite schema — audit called out that Hermes owns retrieval + injection already, so our job is GUI only.
