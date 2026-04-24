@@ -128,6 +128,14 @@
     "profile_err_id_chars": "Only lowercase letters, digits, '-' and '_' are allowed.",
     "profile_err_id_duplicate": "A profile with id \"{{id}}\" already exists."
   },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "group_navigation": "Navigation",
+    "group_actions": "Actions",
+    "palette": "Open command palette",
+    "theme": "Toggle light / dark theme",
+    "help": "Show this cheat sheet"
+  },
   "widgets": {
     "close": "Close",
     "toggle_options": "Toggle options",

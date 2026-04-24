@@ -128,6 +128,14 @@
     "profile_err_id_chars": "只允许小写字母、数字、'-' 和 '_'。",
     "profile_err_id_duplicate": "已存在 ID 为「{{id}}」的配置。"
   },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "group_navigation": "导航",
+    "group_actions": "操作",
+    "palette": "打开命令面板",
+    "theme": "切换浅色 / 深色主题",
+    "help": "显示此快捷键列表"
+  },
   "widgets": {
     "close": "关闭",
     "toggle_options": "切换选项",
