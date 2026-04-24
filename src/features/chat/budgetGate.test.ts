@@ -191,10 +191,13 @@ describe('classifyBudgets — scope matching', () => {
 
 // ───────────────────────── Period windowing ─────────────────────────
 
-describe('classifyBudgets — period windowing', () => {
-  // 500k tokens/day over 10 days. `day` should pick 500k (= 100¢ blended),
-  // `week` should pick 3.5M (= 700¢), `month` should pick 5M (= 1000¢).
-  const series = Array.from({ length: 10 }, (_, i) => {
+describe('classifyBudgets — calendar-anchored period windowing', () => {
+  // 500k tokens/day for every day of the last 20 days ending on
+  // NOW_MS = Thu 2026-04-23. Picked so the series straddles Apr 1
+  // (month cutoff) AND a prior Monday (week cutoff), letting us
+  // verify each window clips the series at a calendar boundary
+  // rather than a trailing-N-days slide.
+  const series = Array.from({ length: 20 }, (_, i) => {
     const ms = NOW_MS - i * 86_400_000;
     return { date: new Date(ms).toISOString().slice(0, 10), count: 500_000 };
   });
@@ -211,31 +214,69 @@ describe('classifyBudgets — period windowing', () => {
     expect(v.warns).toHaveLength(1);
   });
 
-  it('week window = trailing 7 days', () => {
-    // 7 days * 500k = 3.5M tokens * 200¢/M = 700¢.
-    // Cap 700¢ → 100% breach; cap 1000¢ → 70% (under warn, silent).
+  it('week window = this ISO week (Monday → today)', () => {
+    // Thu 2026-04-23: ISO week starts Mon 2026-04-20. Inclusive
+    // Mon, Tue, Wed, Thu = 4 days * 500k = 2M tokens * 200¢/M =
+    // 400¢. Cap 400¢ → 100% breach; cap 800¢ → 50% (silent).
     const atCap = classifyBudgets(
-      [mkBudget({ period: 'week', amount_cents: 700, action_on_breach: 'notify' })],
+      [mkBudget({ period: 'week', amount_cents: 400, action_on_breach: 'notify' })],
       summary,
       CTX,
     );
     const under = classifyBudgets(
-      [mkBudget({ period: 'week', amount_cents: 1000, action_on_breach: 'notify' })],
+      [mkBudget({ period: 'week', amount_cents: 800, action_on_breach: 'notify' })],
       summary,
       CTX,
     );
     expect(atCap.warns).toHaveLength(1);
+    expect(atCap.warns[0]!.fraction).toBeCloseTo(1);
     expect(under.warns).toHaveLength(0);
   });
 
-  it('month window = full tokens_per_day series', () => {
-    // 10 days * 500k = 5M tokens * 200¢/M = 1000¢.
+  it('week window does NOT include days before this Monday', () => {
+    // Sanity: a daily 500k tick 7 days ago (Thu 2026-04-16, last
+    // week) must be excluded. If we were using a trailing-7 window
+    // the same fraction would be ~175% (7*500k); calendar says
+    // ~100%.
     const v = classifyBudgets(
-      [mkBudget({ period: 'month', amount_cents: 1000, action_on_breach: 'notify' })],
+      [mkBudget({ period: 'week', amount_cents: 400, action_on_breach: 'notify' })],
+      summary,
+      CTX,
+    );
+    expect(v.warns[0]!.fraction).toBeLessThan(1.5);
+  });
+
+  it('month window = this calendar month (1st → today)', () => {
+    // Apr 1 → Apr 23 = 23 days. Series only carries Apr 4–Apr 23 =
+    // 20 days * 500k = 10M tokens * 200¢/M = 2000¢. Cap 2000¢ →
+    // 100% breach.
+    const v = classifyBudgets(
+      [mkBudget({ period: 'month', amount_cents: 2000, action_on_breach: 'notify' })],
       summary,
       CTX,
     );
     expect(v.warns).toHaveLength(1);
+    expect(v.warns[0]!.fraction).toBeCloseTo(1);
+  });
+
+  it('month window does NOT include days from previous month', () => {
+    // Prepend a 9M-token entry dated 2026-03-31 (yesterday of Mar).
+    // If we were using a trailing-30 window the March tick would be
+    // counted (blowing the cap). Calendar-anchored month must clip
+    // it at Apr 1.
+    const withMarchTail = mkSummary({
+      tokens_per_day: [
+        { date: '2026-03-31', count: 9_000_000 },
+        ...series,
+      ],
+    });
+    const v = classifyBudgets(
+      [mkBudget({ period: 'month', amount_cents: 2000, action_on_breach: 'notify' })],
+      withMarchTail,
+      CTX,
+    );
+    // Same 20 days in April → same 100% fraction as above, not
+    // ~550% that the March tail would have produced.
     expect(v.warns[0]!.fraction).toBeCloseTo(1);
   });
 });

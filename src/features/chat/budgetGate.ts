@@ -15,13 +15,17 @@
  *   at both thresholds; block budgets stay silent until breach (by
  *   design — a strict block shouldn't leak a pre-breach signal);
  *   `notify_block` fires notify at 80% and both notify+block at 100%.
- * - **Windowing** (T4.4b-r2): `day` / `week` / `month` sum the
- *   relevant tail of `analytics.tokens_per_day` (UTC days). `day` =
- *   today, `week` = trailing 7 days incl. today, `month` = trailing
- *   30 days. `global` (no period constraint per se — still respects
- *   its `period` field, so a "global monthly cap" works). Per-day
- *   tokens are `prompt + completion` (the DTO doesn't split), so we
- *   use a **blended** per-token rate for windowed projections; the
+ * - **Windowing** (T4.4b-r3): `day` / `week` / `month` sum the
+ *   relevant tail of `analytics.tokens_per_day` using **calendar-
+ *   anchored** cutoffs (UTC-aligned to match the DB's day bucketing):
+ *   - `day` = today (one bucket)
+ *   - `week` = this week, Monday → today (ISO-8601 week start)
+ *   - `month` = the 1st of this month → today
+ *   Rolls over at midnight (UTC) so a monthly cap genuinely resets
+ *   on the 1st rather than floating on a trailing 30-day window —
+ *   the semantic most users expect. Per-day tokens are
+ *   `prompt + completion` (the DTO doesn't split), so we use a
+ *   **blended** per-token rate for windowed projections; the
  *   lifetime path keeps the split (input vs. output) cheap and
  *   accurate. Blended rate = (input + output) / 2.
  * - **Scope matching**: `global` always matches. `model` matches when
@@ -179,15 +183,12 @@ function lifetimeSpendCents(summary: AnalyticsSummaryDto): number {
 }
 
 /**
- * Sum `tokens_per_day` entries inside the budget's window and convert
- * to cents via the blended rate. Windows are UTC-anchored to match the
- * `date(created_at/1000, 'unixepoch')` bucketing SQLite does in
- * `analytics_summary`. `day` counts today's bucket; `week` counts 7
- * buckets incl. today; `month` falls back to `lifetimeCents` because
- * our `tokens_per_day` series is exactly the trailing 30 days — so
- * summing the series == projected monthly spend (close enough; the
- * difference only matters when the DB has <30 days of history, in
- * which case it's conservative).
+ * Sum `tokens_per_day` entries inside the budget's calendar-anchored
+ * window and convert to cents via the blended rate. Windows are UTC-
+ * anchored to match the `date(created_at/1000, 'unixepoch')` bucketing
+ * SQLite does in `analytics_summary`. See `calendarCutoff` below for
+ * day/week/month boundaries. Degrades to `lifetimeCents` if the series
+ * is empty (e.g. seed DBs with NULL usage rows).
  */
 function periodSpendCents(
   period: BudgetPeriod,
@@ -195,16 +196,7 @@ function periodSpendCents(
   nowMs: number,
   lifetimeCents: number,
 ): number {
-  if (period === 'month') {
-    // `tokens_per_day` already covers the trailing 30 days. Sum the
-    // whole series — same as the Budgets page's current projection
-    // modulo rounding, but windowed rather than lifetime.
-    const tokens = summary.tokens_per_day.reduce((acc, d) => acc + d.count, 0);
-    return tokensToCentsBlended(tokens);
-  }
-
-  const windowDays = period === 'day' ? 1 : 7;
-  const cutoff = isoDateUtc(nowMs - (windowDays - 1) * 86_400_000);
+  const cutoff = calendarCutoff(period, nowMs);
   const tokens = summary.tokens_per_day
     .filter((d) => d.date >= cutoff)
     .reduce((acc, d) => acc + d.count, 0);
@@ -217,6 +209,33 @@ function periodSpendCents(
     return lifetimeCents;
   }
   return tokensToCentsBlended(tokens);
+}
+
+/**
+ * Calendar-anchored cutoff date (inclusive) for a budget period.
+ * Returns a `YYYY-MM-DD` string matching the UTC day buckets in
+ * `analytics.tokens_per_day`. Used by the gate to pick which tail of
+ * the series to sum — a monthly cap should reset ON THE 1ST, not
+ * drift on a trailing 30-day window.
+ *
+ * - `day`: today (UTC)
+ * - `week`: Monday of this ISO week (getUTCDay() → 0=Sun..6=Sat;
+ *   shift to 0=Mon..6=Sun by `(d+6)%7`)
+ * - `month`: the 1st of this UTC month
+ */
+function calendarCutoff(period: BudgetPeriod, nowMs: number): string {
+  const now = new Date(nowMs);
+  if (period === 'day') return isoDateUtc(nowMs);
+  if (period === 'week') {
+    const dayIdxMonFirst = (now.getUTCDay() + 6) % 7;
+    const mondayMs = nowMs - dayIdxMonFirst * 86_400_000;
+    return isoDateUtc(mondayMs);
+  }
+  // month — first day of the current UTC month.
+  const first = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  return isoDateUtc(first.getTime());
 }
 
 function tokensToCentsBlended(tokens: number): number {
