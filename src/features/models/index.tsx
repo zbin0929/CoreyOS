@@ -17,6 +17,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
+import { LlmProfilesSection } from './LlmProfilesSection';
 import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
@@ -286,6 +287,11 @@ export function ModelsRoute() {
               </div>
             </div>
           )}
+
+          {/* T8 — reusable LLM profile library (the list users came
+              here for). Lives above the legacy single-model form so
+              profiles are the primary affordance on this page. */}
+          <LlmProfilesSection />
 
           {loaded && (
             <>
