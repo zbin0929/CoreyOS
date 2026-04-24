@@ -106,17 +106,27 @@ pub async fn probe_models(base_url: &str, api_key: Option<&str>) -> AdapterResul
 
 /// Accept: `https://api.openai.com`, `https://api.openai.com/v1`,
 /// `https://api.openai.com/v1/`, `https://api.openai.com/v1/models`. Return
-/// the canonical `.../v1/models` form.
+/// the canonical `.../{version}/models` form.
+///
+/// Note on non-v1 providers: some vendors publish under a different version
+/// segment — e.g. 智谱 GLM uses `https://open.bigmodel.cn/api/paas/v4`. If
+/// we blindly append `/v1/models` to those we end up hitting a bogus
+/// `/v4/v1/models` path that 404s. We therefore treat ANY trailing
+/// `/v<digits>` segment as "already versioned" and just append `/models`.
 fn normalize_models_url(base_url: &str) -> String {
     let trimmed = base_url.trim().trim_end_matches('/');
-    if trimmed.ends_with("/v1/models") {
-        return trimmed.to_string();
-    }
     if trimmed.ends_with("/models") {
         return trimmed.to_string();
     }
-    if trimmed.ends_with("/v1") {
-        return format!("{trimmed}/models");
+    // Already versioned: `.../v1`, `.../v4`, `.../v2beta`, etc. Append
+    // `/models` directly instead of force-injecting a `/v1/` segment.
+    if let Some(last) = trimmed.rsplit('/').next() {
+        if last.starts_with('v')
+            && last.len() >= 2
+            && last.as_bytes()[1].is_ascii_digit()
+        {
+            return format!("{trimmed}/models");
+        }
     }
     format!("{trimmed}/v1/models")
 }
@@ -177,6 +187,25 @@ mod tests {
         assert_eq!(
             normalize_models_url("http://localhost:8080/models"),
             "http://localhost:8080/models"
+        );
+    }
+
+    #[test]
+    fn normalize_handles_non_v1_versioned_endpoints() {
+        // 智谱 GLM — versions under `/api/paas/v4`. We must NOT blindly
+        // append `/v1/models` or we hit `/v4/v1/models` which 404s.
+        assert_eq!(
+            normalize_models_url("https://open.bigmodel.cn/api/paas/v4"),
+            "https://open.bigmodel.cn/api/paas/v4/models"
+        );
+        assert_eq!(
+            normalize_models_url("https://open.bigmodel.cn/api/paas/v4/"),
+            "https://open.bigmodel.cn/api/paas/v4/models"
+        );
+        // Anthropic-style `/v2` or hypothetical `/v3`.
+        assert_eq!(
+            normalize_models_url("https://example.com/api/v3"),
+            "https://example.com/api/v3/models"
         );
     }
 
