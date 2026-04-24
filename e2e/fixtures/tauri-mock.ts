@@ -154,6 +154,15 @@ export const tauriMockInitScript = /* js */ `
     runbooks: /** @type {any[]} */ ([]),
     // T4.2 Skills — in-memory file tree. Keyed by relative posix path.
     skills: /** @type {Record<string, { body: string; updated_at_ms: number }>} */ ({}),
+    // T7.3 Memory — two named slots standing in for the two Markdown
+    // files under ~/.hermes/. A null slot means the file has not been
+    // written yet (the first read returns exists:false + empty body);
+    // after a write it becomes a string. Tests can pre-seed either
+    // slot via page.evaluate() before navigating.
+    memory: /** @type {Record<string, string | null>} */ ({
+      agent: null,
+      user: null,
+    }),
     // T4.5 PTY ids currently alive in the mock. Tests can count or
     // assert; the real backend's pty state isn't reachable from JS.
     ptyIds: /** @type {string[]} */ ([]),
@@ -951,6 +960,45 @@ export const tauriMockInitScript = /* js */ `
       case 'skill_delete':
         delete state.skills[args.path];
         return;
+
+      // T7.3 Memory — the mock treats ~/.hermes/MEMORY.md and
+      // ~/.hermes/USER.md as two slots on state.memory. exists is
+      // derived from whether the slot has ever been written (null ->
+      // no file; "" -> empty-but-saved). Max matches Rust's 256 KiB.
+      case 'memory_read': {
+        const kind = args.kind === 'user' ? 'user' : 'agent';
+        const slot = state.memory[kind];
+        const file = kind === 'agent' ? 'MEMORY.md' : 'USER.md';
+        return {
+          kind,
+          path: '/Users/mock/.hermes/' + file,
+          content: slot == null ? '' : slot,
+          bytes: slot == null ? 0 : new TextEncoder().encode(slot).length,
+          max_bytes: 256 * 1024,
+          exists: slot !== null,
+        };
+      }
+      case 'memory_write': {
+        const kind = args.kind === 'user' ? 'user' : 'agent';
+        const body = typeof args.content === 'string' ? args.content : '';
+        const bytes = new TextEncoder().encode(body).length;
+        if (bytes > 256 * 1024) {
+          throw {
+            kind: 'internal',
+            message: 'memory too large: ' + bytes + ' bytes > 262144 cap',
+          };
+        }
+        state.memory[kind] = body;
+        const file = kind === 'agent' ? 'MEMORY.md' : 'USER.md';
+        return {
+          kind,
+          path: '/Users/mock/.hermes/' + file,
+          content: body,
+          bytes,
+          max_bytes: 256 * 1024,
+          exists: true,
+        };
+      }
 
       // T4.5 PTY — echoes a canned banner + parrot-on-write. The
       // backend's real behaviour (interactive shell bytes) isn't

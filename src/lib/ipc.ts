@@ -577,6 +577,44 @@ export function skillDelete(path: string): Promise<void> {
   return invoke<void>('skill_delete', { path });
 }
 
+// ───────────────────────── Memory (T7.3) ─────────────────────────
+
+/** Which of the two Markdown files under `~/.hermes/` is being edited.
+ *  Server-side this is an enum; on the wire it's the literal string
+ *  `'agent'` (→ `MEMORY.md`) or `'user'` (→ `USER.md`). */
+export type MemoryKind = 'agent' | 'user';
+
+export interface MemoryFile {
+  kind: MemoryKind;
+  /** Absolute path — useful for "Reveal in Finder" + for the capacity
+   *  meter tooltip so power users can see where their notes actually
+   *  live. */
+  path: string;
+  content: string;
+  /** On-disk byte length (metadata-derived, not `content.length`). */
+  bytes: number;
+  /** Backend-enforced upper bound. Saves over this reject before the
+   *  file is ever touched. UI surfaces this in the capacity meter. */
+  max_bytes: number;
+  /** `false` on the very first read — lets the UI offer a starter
+   *  template instead of a blank page. */
+  exists: boolean;
+}
+
+/** Read the agent or user memory file. Missing files return an empty
+ *  body (NOT an error) — the UI treats "no file yet" as "no notes
+ *  yet". Backend caches nothing; each call hits disk. */
+export function memoryRead(kind: MemoryKind): Promise<MemoryFile> {
+  return invoke<MemoryFile>('memory_read', { kind });
+}
+
+/** Atomically replace the file body. Rejects payloads over
+ *  `max_bytes` before touching disk. Returns the post-write state so
+ *  the UI can refresh the capacity meter without a second round-trip. */
+export function memoryWrite(kind: MemoryKind, content: string): Promise<MemoryFile> {
+  return invoke<MemoryFile>('memory_write', { kind, content });
+}
+
 // ───────────────────────── PTY (T4.5) ─────────────────────────
 
 /**

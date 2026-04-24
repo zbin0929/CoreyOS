@@ -18,6 +18,7 @@
     "profiles": "配置集",
     "runbooks": "运行手册",
     "budgets": "预算",
+    "memory": "记忆",
     "settings": "设置"
   },
   "chat_page": {
@@ -453,6 +454,19 @@
       "thinking": "推理中…",
       "thought": "推理过程"
     }
+  },
+  "memory": {
+    "title": "记忆",
+    "subtitle": "编辑 Hermes 每次对话都会注入的笔记。智能体记忆存放在 ~/.hermes/MEMORY.md；用户偏好存放在 ~/.hermes/USER.md。",
+    "tab_agent": "智能体记忆",
+    "tab_user": "用户偏好",
+    "save": "保存",
+    "saved": "已保存",
+    "saved_ago": "{{seconds}} 秒前已保存",
+    "unsaved": "未保存的改动",
+    "capacity": "{{bytes}} / {{max}}",
+    "capacity_meter": "记忆文件大小",
+    "new_file_hint": "新文件 — 首次保存时才会创建"
   },
   "channels": {
     "title": "平台通道",

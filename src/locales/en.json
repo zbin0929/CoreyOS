@@ -18,6 +18,7 @@
     "profiles": "Profiles",
     "runbooks": "Runbooks",
     "budgets": "Budgets",
+    "memory": "Memory",
     "settings": "Settings"
   },
   "chat_page": {
@@ -456,6 +457,19 @@
       "thinking": "Thinking…",
       "thought": "Thought process"
     }
+  },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "Edit the notes Hermes injects into every prompt. Agent memory lives in ~/.hermes/MEMORY.md; user profile in ~/.hermes/USER.md.",
+    "tab_agent": "Agent memory",
+    "tab_user": "User profile",
+    "save": "Save",
+    "saved": "Saved",
+    "saved_ago": "Saved {{seconds}}s ago",
+    "unsaved": "Unsaved changes",
+    "capacity": "{{bytes}} / {{max}}",
+    "capacity_meter": "Memory file size",
+    "new_file_hint": "New file — first save will create it"
   },
   "channels": {
     "title": "Platform channels",

@@ -142,6 +142,8 @@ pub fn run() {
             ipc::sandbox::sandbox_scope_list,
             ipc::sandbox::sandbox_scope_upsert,
             ipc::sandbox::sandbox_scope_delete,
+            ipc::memory::memory_read,
+            ipc::memory::memory_write,
             ipc::menu::menu_set_locale,
             ipc::scheduler::scheduler_list_jobs,
             ipc::scheduler::scheduler_upsert_job,

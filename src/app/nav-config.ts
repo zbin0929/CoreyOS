@@ -13,6 +13,7 @@ import {
   FolderTree,
   BookMarked,
   PiggyBank,
+  Brain,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -59,5 +60,9 @@ export const NAV: NavEntry[] = [
   { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree, group: 'ops', phase: 2 },
   { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked, group: 'ops', phase: 4 },
   { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank, group: 'ops', phase: 4 },
+  // T7.3 — GUI over Hermes' native MEMORY.md + USER.md. `requires` is
+  // unset so the tab is always visible (no adapter-side gating — the
+  // files are independent of which adapter is active).
+  { id: 'memory', path: '/memory', labelKey: 'nav.memory', icon: Brain, group: 'ops', phase: 7 },
   { id: 'settings', path: '/settings', labelKey: 'nav.settings', icon: Settings, group: 'ops', phase: 2, shortcut: ['mod', ','] },
 ];

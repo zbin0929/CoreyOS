@@ -43,6 +43,7 @@ const TrajectoryRoute = lazyFeature(() => import('@/features/trajectory'), 'Traj
 const TerminalRoute = lazyFeature(() => import('@/features/terminal'), 'TerminalRoute');
 const SkillsRoute = lazyFeature(() => import('@/features/skills'), 'SkillsRoute');
 const SchedulerRoute = lazyFeature(() => import('@/features/scheduler'), 'SchedulerRoute');
+const MemoryRoute = lazyFeature(() => import('@/features/memory'), 'MemoryRoute');
 
 /**
  * Shared fallback for lazy routes. Kept minimal — a full skeleton per
@@ -161,6 +162,12 @@ const budgetsRoute = createRoute({
   component: BudgetsRoute,
 });
 
+const memoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/memory',
+  component: MemoryRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   chatRoute,
@@ -176,6 +183,7 @@ const routeTree = rootRoute.addChildren([
   profilesRoute,
   runbooksRoute,
   budgetsRoute,
+  memoryRoute,
   settingsRoute,
 ]);
 

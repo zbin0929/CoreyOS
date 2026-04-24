@@ -50,7 +50,11 @@ This is Phase 7's one purely additive feature — Hermes has agent-initiated `sk
 - **Graceful degradation**: if the adapter returns unparseable output, fall back to opening the Skills editor with the conversation as free-text so the user can trim manually.
 - **i18n**: 6 new keys.
 
-### T7.3 — Memory page (GUI over Hermes' native memory) · ~3 days (re-scoped 2026-04-23 pm)
+### T7.3 — Memory page (GUI over Hermes' native memory) · ✅ **Shipped 2026-04-23 pm**
+
+Landed as a two-tab Markdown editor at `/memory`. Reuses the Skills CodeMirror 6 instance; writes through `memory_read` / `memory_write` IPC commands backed by `fs_atomic::atomic_write`. Rust-side cap of 256 KiB, UTF-8 byte-accurate capacity meter in the UI (critical for CJK note-takers). Chinese i18n complete. 2 Playwright smokes + 3 Rust unit tests green. **Session-search panel deferred to T7.3b** once the Hermes FTS5 tool name is pinned. See `CHANGELOG.md` entry dated 2026-04-23 under the T7.3 heading for details.
+
+### T7.3 — Original plan (for reference) · ~3 days (re-scoped 2026-04-23 pm)
 
 **Re-scoped from ~6 days qdrant + RAG to ~3 days GUI over Hermes' existing stack.** Hermes already ships:
 - `~/.hermes/MEMORY.md` — agent's personal notes, appears in every system prompt.

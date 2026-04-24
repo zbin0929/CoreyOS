@@ -6,6 +6,78 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-23 — T7.3 · Memory page (GUI over Hermes' native MEMORY.md / USER.md)
+
+First T7.x task lands. A new `/memory` route edits the two Markdown files Hermes already injects into every prompt — `~/.hermes/MEMORY.md` (agent notes) and `~/.hermes/USER.md` (user profile). No RAG, no embeddings, no SQLite schema — audit called out that Hermes owns retrieval + injection already, so our job is GUI only.
+
+### Context
+
+The original plan (pre-audit) was a local qdrant + embedding pipeline. The 2026-04-23 am audit reclassified this as a SURFACE task because Hermes ships `MEMORY.md` + `USER.md` + `session_search` natively. This cut ~3 days of work and removes a future-maintenance landmine (nobody wants a second vector DB to keep in sync with someone else's corpus).
+
+The editor is deliberately minimal — two tabs, one CodeMirror instance reused from Skills (T4.2b), a capacity meter, and a save button. No autosave: memory is high-trust and a stray keystroke shouldn't silently overwrite the agent's instructions.
+
+### Shipped
+
+**Rust IPC** (`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/memory.rs`, new module):
+
+- `memory_read(kind: "agent" | "user")` → `{content, path, bytes, max_bytes, exists}`. Missing file returns an empty body (NOT an error) so the first save is just a write.
+- `memory_write(kind, content)` — crash-safe via `fs_atomic::atomic_write`. Rejects payloads > 256 KiB before touching disk.
+- Serde-tagged `MemoryKind` enum so typos can't reach the filesystem.
+- 3 unit tests: path resolution + round-trip write/read + file-name invariants. Uses the crate-wide `skills::HOME_LOCK` so parallel `cargo test` doesn't race HOME mutation with the attachments/changelog suites.
+
+**Frontend** (`@/Users/zbin/AI项目/CoreyOS/src/features/memory/index.tsx`, new page):
+
+- Two-tab layout (Agent memory / User profile), reuses `@/features/skills/MarkdownEditor` for the CodeMirror 6 editor.
+- Capacity meter with red-tint at ≥ 90%. Shows UTF-8 byte count (matches Rust's `String::len()` — important for CJK users where char count ≠ byte count).
+- Status chip cycles unsaved → saved (decays "Saved Xs ago" into plain "Saved" after 1 min) → new-file hint.
+- ⌘S / Ctrl-S saves the active tab without taking focus out of the editor.
+- Per-tab dirty indicator (small accent dot) — warns before tab switch loses changes? No, we just keep both tabs mounted with independent `dirty` state.
+
+**Route + nav** (`@/Users/zbin/AI项目/CoreyOS/src/app/routes.tsx` + `@/Users/zbin/AI项目/CoreyOS/src/app/nav-config.ts`):
+
+- Lazy-loaded route `/memory` (CodeMirror stays out of the initial bundle — inherits Skills' code-split).
+- Nav entry in the `ops` group, no `requires` capability so the tab is always visible regardless of active adapter.
+
+**i18n** (`@/Users/zbin/AI项目/CoreyOS/src/locales/en.json` + `zh.json`): 11 new keys under `memory.*` + `nav.memory`. Chinese translations cover all strings — a Chinese user can configure the agent's memory without reading any English.
+
+**Tests**: 2 Playwright (`@/Users/zbin/AI项目/CoreyOS/e2e/memory.spec.ts`) — both tabs load + switch cleanly; edit → dirty indicator → save → mock slot reflects the write.
+
+**Mock** (`@/Users/zbin/AI项目/CoreyOS/e2e/fixtures/tauri-mock.ts`): `memory_read` + `memory_write` handlers keyed on `state.memory.{agent,user}` (null = file doesn't exist yet).
+
+### Deferred
+
+- **Session search panel** — T7.3 originally included a search UI on top of Hermes' `session_search` tool. Deferred to T7.3b once the FTS5 surface is confirmed (there are multiple Hermes versions in the wild with different tool names).
+- **Reveal in Finder button** — the capacity meter shows the absolute path as a tooltip, which is enough for now. Adding a button means wiring `tauri-plugin-shell`'s `reveal` API across platforms; not a blocker.
+
+### Test totals
+
+- Rust: **182 / 182 pass** (+3)
+- Vitest: **46 / 46 pass**
+- Playwright: **63 / 63 pass** (+2)
+- TSC + ESLint clean.
+
+### Next
+
+- T7.1 MCP server manager UI (the other "surface a Hermes feature" task).
+- T7.2 skill-from-conversation distillation.
+- T7.4 Skills CLI wrapper.
+
+---
+
+## 2026-04-23 — Project rename: `hermes_ui` → `CoreyOS`
+
+Pure docs + scripts rename pass. GitHub repo `zbin0929/hermes_ui` → `zbin0929/CoreyOS`; local folder moved; git remote updated. Crate name `caduceus` + Tauri identifier `com.caduceus.app` intentionally unchanged (changing them would cascade through hundreds of `use caduceus_lib::…` sites and orphan every existing install's on-disk state).
+
+---
+
+## 2026-04-23 — Three UX bugfixes (reasoning panel, channels zh-CN detection, chat scroll)
+
+1. **Reasoning-content stream now surfaces in chat bubbles** — backend parses the sibling `reasoning_content` SSE field (deepseek-reasoner + o1-style models), new `ChatStreamEvent::Reasoning` variant, new `chat:reasoning:<handle>` event. Frontend `ReasoningPanel` renders inside the assistant bubble using native `<details>` so expand/collapse doesn't cost a React render per delta.
+2. **Channels page respects Chinese browsers** — root cause: `navigator.language = 'zh-CN'` didn't literally match `supportedLngs: ['en','zh']`, so detector fell back to English. Fix: `load: 'languageOnly'` in `lib/i18n.ts`. Also added per-channel one-line descriptions (`channels.card_desc.*`) in en + zh so lesser-known integrations (WeCom vs WeiXin, Matrix, etc.) are self-explanatory.
+3. **Chat auto-scrolls to latest on session entry** — Virtuoso's `initialTopMostItemIndex` only applies on first mount; switching sessions kept `ChatPane` mounted. Fix: `<ChatPane key={currentId} />` force-remounts on switch.
+
+---
+
 ## 2026-04-23 — T6.7c · Channel smoke tests for Discord / Slack / Feishu / WeiXin / WeCom
 
 Five more channels now carry the "Verified" badge. One parameterised Playwright spec (`e2e/channels-smoke.spec.ts`) walks the full configure-save-restart-online loop per channel, mirroring `telegram-smoke.spec.ts` from T6.7b. Closes out Phase 6 channel verification.
