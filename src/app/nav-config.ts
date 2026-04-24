@@ -10,6 +10,7 @@ import {
   Clock,
   Radio,
   Boxes,
+  Bot,
   FolderTree,
   BookMarked,
   PiggyBank,
@@ -58,6 +59,11 @@ export const NAV: NavEntry[] = [
   { id: 'scheduler', path: '/scheduler', labelKey: 'nav.scheduler', icon: Clock, group: 'ops', phase: 2, shortcut: ['mod', '8'], requires: 'scheduler' },
   { id: 'channels', path: '/channels', labelKey: 'nav.channels', icon: Radio, group: 'ops', phase: 3, shortcut: ['mod', '9'], requires: 'channels' },
   { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'ops', phase: 2 },
+  // T8 — Agents (formerly "Extra Hermes instances" in Settings). Sits
+  // adjacent to Models in the sidebar so the two halves of the
+  // agent/model split (model configs ↔ running agents) are visible as
+  // siblings.
+  { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot, group: 'ops', phase: 2 },
   { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree, group: 'ops', phase: 2 },
   { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked, group: 'ops', phase: 4 },
   { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank, group: 'ops', phase: 4 },

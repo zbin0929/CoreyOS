@@ -20,7 +20,13 @@
     "budgets": "预算",
     "memory": "记忆",
     "mcp": "MCP",
+    "agents": "Agents",
     "settings": "设置"
+  },
+  "agents_page": {
+    "title": "Agents",
+    "subtitle": "已注册的 Hermes 实例。每个 agent 指向一个 base URL + model —— 可创建多个，从顶部 AgentSwitcher 切换。",
+    "help_page": "Agent = 一个已注册的 Hermes 实例，Corey 通过它路由对话。base_url 通常是本地 Hermes 网关（127.0.0.1:8642），也可以是任何 OpenAI 兼容的上游地址。点「新建 Agent」可从常见 provider 模板（OpenAI / Anthropic / DeepSeek / Ollama 等）一键生成。每个 agent 以 adapter id 'hermes:<id>' 注册，会出现在顶部切换器里。"
   },
   "chat_page": {
     "title": "对话",

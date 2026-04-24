@@ -20,7 +20,13 @@
     "budgets": "Budgets",
     "memory": "Memory",
     "mcp": "MCP",
+    "agents": "Agents",
     "settings": "Settings"
+  },
+  "agents_page": {
+    "title": "Agents",
+    "subtitle": "Registered Hermes instances. Each agent points at a base URL and model — create many, switch from the top-bar AgentSwitcher.",
+    "help_page": "An agent = a named Hermes instance that Corey routes chats through. base_url is usually a local Hermes gateway (127.0.0.1:8642) or an OpenAI-compatible provider endpoint. The 'New agent' wizard pre-fills the common provider templates so you don't have to look any of that up. Every agent here registers with adapter id 'hermes:<id>' and appears in the top-bar switcher."
   },
   "chat_page": {
     "title": "Chat",

@@ -198,7 +198,10 @@ export const tauriMockInitScript = /* js */ `
     // @tauri-apps/api/core). Use JSDoc type hints to keep
     // IntelliSense in the source without leaking type syntax into
     // the injected string.
-    hermesInstances: /** @type {Array<{id: string, label: string, base_url: string, api_key: string | null, default_model: string | null}>} */ ([]),
+    hermesInstances: /** @type {Array<{id: string, label: string, base_url: string, api_key: string | null, default_model: string | null, llm_profile_id?: string | null}>} */ ([]),
+    // T8 — reusable LLM profiles. Empty by default so tests can
+    // exercise the "no profiles yet" empty state on the LLMs page.
+    llmProfiles: /** @type {Array<{id: string, label: string, provider: string, base_url: string, model: string, api_key_env?: string | null}>} */ ([]),
     // T6.4 — routing rules. Empty by default; tests that need a
     // populated list push before navigating.
     routingRules: /** @type {Array<{id: string, name: string, enabled: boolean, match: {kind: string, value: string, case_sensitive?: boolean}, target_adapter_id: string}>} */ ([]),
@@ -598,6 +601,27 @@ export const tauriMockInitScript = /* js */ `
           latency_ms: 12,
           body: '{"status":"ok"}',
         };
+      }
+
+      // T8 — LLM profiles. In-memory CRUD so the Models page + Agent
+      // Wizard can exercise the full flow without a real backend.
+      case 'llm_profile_list': {
+        return { profiles: state.llmProfiles.map((p) => ({ ...p })) };
+      }
+      case 'llm_profile_upsert': {
+        const inc = args.profile;
+        const idx = state.llmProfiles.findIndex((p) => p.id === inc.id);
+        if (idx >= 0) state.llmProfiles[idx] = { ...inc };
+        else state.llmProfiles.push({ ...inc });
+        return { ...inc };
+      }
+      case 'llm_profile_delete': {
+        const before = state.llmProfiles.length;
+        state.llmProfiles = state.llmProfiles.filter((p) => p.id !== args.id);
+        if (state.llmProfiles.length === before) {
+          throw { kind: 'not_configured', hint: 'no llm profile with id ' + args.id };
+        }
+        return null;
       }
 
       case 'hermes_profile_list': {

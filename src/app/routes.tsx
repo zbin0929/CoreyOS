@@ -32,6 +32,7 @@ function lazyFeature<T extends string>(
 
 const CompareRoute = lazyFeature(() => import('@/features/compare'), 'CompareRoute');
 const ModelsRoute = lazyFeature(() => import('@/features/models'), 'ModelsRoute');
+const AgentsRoute = lazyFeature(() => import('@/features/agents'), 'AgentsRoute');
 const SettingsRoute = lazyFeature(() => import('@/features/settings'), 'SettingsRoute');
 const AnalyticsRoute = lazyFeature(() => import('@/features/analytics'), 'AnalyticsRoute');
 const LogsRoute = lazyFeature(() => import('@/features/logs'), 'LogsRoute');
@@ -126,6 +127,12 @@ const modelsRoute = createRoute({
   component: ModelsRoute,
 });
 
+const agentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/agents',
+  component: AgentsRoute,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -174,6 +181,7 @@ const routeTree = rootRoute.addChildren([
   schedulerRoute,
   channelsRoute,
   modelsRoute,
+  agentsRoute,
   profilesRoute,
   runbooksRoute,
   budgetsRoute,

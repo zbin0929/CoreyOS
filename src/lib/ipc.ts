@@ -1278,6 +1278,51 @@ export interface HermesInstance {
    *  filesystem ops gate through. `null` or `"default"` resolves to
    *  the always-present default scope. */
   sandbox_scope_id?: string | null;
+  /** T8 — optional reference to an `LlmProfile.id`. When set, the
+   *  agent is rendered as "uses LLM: <profile label>" and the
+   *  base_url / api_key / default_model fields above are populated
+   *  from the profile at save time. Omitted/empty on legacy agents
+   *  created before T8. */
+  llm_profile_id?: string | null;
+}
+
+/** T8 — reusable LLM profile. One profile = one `{provider,
+ *  base_url, model, api_key_env}` tuple the user has configured, which
+ *  multiple agents can point at. Stored in
+ *  `<config_dir>/llm_profiles.json` next to `hermes_instances.json`.
+ *
+ *  `api_key_env` names the `*_API_KEY` entry in `~/.hermes/.env` Hermes
+ *  will resolve at request time — the raw key never lives in this
+ *  file, keeping it safe for dotfiles commits. */
+export interface LlmProfile {
+  id: string;
+  label: string;
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key_env?: string | null;
+}
+
+export interface LlmProfilesFile {
+  profiles: LlmProfile[];
+}
+
+/** List all profiles. Empty array when the file doesn't exist yet. */
+export function llmProfileList(): Promise<LlmProfilesFile> {
+  return invoke<LlmProfilesFile>('llm_profile_list');
+}
+
+/** Create or update (by `id`). Rust-side validate_id / base_url /
+ *  model runs and surfaces violations as `IpcError::NotConfigured`. */
+export function llmProfileUpsert(profile: LlmProfile): Promise<LlmProfile> {
+  return invoke<LlmProfile>('llm_profile_upsert', { profile });
+}
+
+/** Delete by id. Rejects with `NotConfigured` if no row matches —
+ *  keeps us honest about phantom deletes. Callers should refresh
+ *  their list afterwards. */
+export function llmProfileDelete(id: string): Promise<void> {
+  return invoke<void>('llm_profile_delete', { id });
 }
 
 export interface HermesInstancesFile {

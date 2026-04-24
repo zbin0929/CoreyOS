@@ -301,10 +301,9 @@ export function SettingsRoute() {
             </form>
           )}
 
-          {/* T6.2 — extra Hermes instances. Lives between the primary
-              gateway form and the workspace roots so related network
-              settings stay adjacent. */}
-          <HermesInstancesSection />
+          {/* T8 — Hermes instances moved to a top-level /agents tab.
+              Settings keeps the primary gateway only; the Agents page
+              lists additional instances and opens the wizard. */}
 
           {/* T6.4 — routing rules. Sits next to Hermes instances since
               routing most commonly picks between them. */}
@@ -645,7 +644,11 @@ function WorkspaceSection() {
  * edited inline and saved independently, so adding a second instance
  * never risks overwriting the first.
  */
-function HermesInstancesSection() {
+// T8 — exported so the new top-level /agents route can render the
+// exact same list without duplicating logic. Note: this still uses the
+// Settings-style `Section` header so page visuals stay consistent when
+// wrapped in either context.
+export function HermesInstancesSection() {
   const { t } = useTranslation();
   const [rows, setRows] = useState<HermesInstance[] | null>(null);
   const [error, setError] = useState<string | null>(null);
