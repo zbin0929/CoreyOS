@@ -353,7 +353,14 @@ function ChatPane({
     // the user out of chatting. `activeAdapterId` is read imperatively
     // (same pattern as the chatStream call below) because the gate's
     // verdict is tied to THIS send, not a subsequent switcher change.
-    const activeAdapterIdForGate = useAgentsStore.getState().activeId;
+    // Budget-gate should scope to whichever adapter this turn will
+    // actually land on, which mirrors the send() priority order below.
+    const gateSessionPinned =
+      useChatStore.getState().sessions[sessionId]?.adapterId ?? null;
+    const activeAdapterIdForGate =
+      (gateSessionPinned && gateSessionPinned.length > 0
+        ? gateSessionPinned
+        : useAgentsStore.getState().activeId) ?? null;
     const verdict = await evaluateBudgetGate({
       effectiveModel,
       activeAdapterId: activeAdapterIdForGate,
@@ -465,7 +472,20 @@ function ChatPane({
     // so subsequent turns stay with the chosen adapter — mid-session
     // rule matches only override THIS turn so history isn't silently
     // split across adapters.
-    const fallbackAdapterId = useAgentsStore.getState().activeId ?? undefined;
+    // Priority order for the adapter we ship with this turn:
+    //   1. Routing-rule match (handled below as `routedAdapterId`)
+    //   2. Session-pinned adapter — set when the user picked an LLM
+    //      Profile row in the model picker. Must win over the global
+    //      AgentSwitcher choice, otherwise "pick profile X" silently
+    //      keeps routing through whatever agent is globally active.
+    //   3. Global AgentSwitcher choice (`useAgentsStore.activeId`).
+    //   4. Default registry entry (undefined → backend picks).
+    const sessionPinned =
+      useChatStore.getState().sessions[sessionId]?.adapterId ?? null;
+    const fallbackAdapterId =
+      (sessionPinned && sessionPinned.length > 0
+        ? sessionPinned
+        : useAgentsStore.getState().activeId) ?? undefined;
     const registered = new Set(
       useAgentsStore.getState().adapters?.map((a) => a.id) ?? [],
     );
@@ -672,7 +692,15 @@ function ChatPane({
           : { role: m.role, content: m.content },
       );
 
-    const activeAdapterId = useAgentsStore.getState().activeId ?? undefined;
+    // Mirror send()'s priority: session-pinned adapter wins over the
+    // global AgentSwitcher choice, otherwise regenerating a profile
+    // reply would silently route through the default gateway.
+    const retrySessionPinned =
+      useChatStore.getState().sessions[sessionId]?.adapterId ?? null;
+    const activeAdapterId =
+      (retrySessionPinned && retrySessionPinned.length > 0
+        ? retrySessionPinned
+        : useAgentsStore.getState().activeId) ?? undefined;
 
     setSending(true);
     pendingRef.current = targetId;
