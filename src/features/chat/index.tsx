@@ -586,6 +586,154 @@ function ChatPane({
     }
   }
 
+  /**
+   * T-polish — regenerate the last assistant response.
+   *
+   * Scoped narrowly on purpose: only the trailing assistant message
+   * is retriable. Mid-history retry would orphan subsequent messages
+   * that were conditioned on the old reply, which is confusing and
+   * hard to undo.
+   *
+   * Flow:
+   *  1. Confirm the last message is a completed assistant bubble
+   *     with an immediately-preceding user turn.
+   *  2. Patch that assistant row in place: clear content / error /
+   *     reasoning, drop its tool-call ribbon, flip pending=true. This
+   *     keeps its id (and DB row) stable — tokens, feedback, and the
+   *     title-generation trigger all key off the same id so reusing
+   *     it avoids a cascade of side-effect cleanups.
+   *  3. Re-stream into the same id with history[..target), i.e. every
+   *     message up to (but not including) the assistant being
+   *     retried, plus the preceding user turn as the tail.
+   */
+  async function retry() {
+    if (sending) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant' || last.pending || last.error) return;
+    // Walk back for the turn this assistant replied to. Guarding
+    // against an assistant-first (malformed) session so we never
+    // build a history with a dangling user-less reply.
+    let userIdx = -1;
+    for (let i = messages.length - 2; i >= 0; i--) {
+      if (messages[i]!.role === 'user') {
+        userIdx = i;
+        break;
+      }
+    }
+    if (userIdx < 0) return;
+
+    const targetId = last.id;
+    // Reset the assistant row. Undefined assignments clear those
+    // fields via the existing `patchMessage` spread (it merges a
+    // partial; undefined overwrites).
+    patchMessage(sessionId, targetId, {
+      content: '',
+      reasoning: undefined,
+      toolCalls: undefined,
+      error: undefined,
+      pending: true,
+    });
+
+    const historyForIpc: ChatMessageDto[] = messages
+      .slice(0, messages.length - 1) // exclude target assistant
+      .filter((m) => !m.error && !m.pending)
+      .map<ChatMessageDto>((m) =>
+        m.attachments && m.attachments.length > 0
+          ? {
+              role: m.role,
+              content: m.content,
+              attachments: m.attachments.map((a) => ({
+                path: a.path,
+                mime: a.mime,
+                name: a.name,
+              })),
+            }
+          : { role: m.role, content: m.content },
+      );
+
+    const activeAdapterId = useAgentsStore.getState().activeId ?? undefined;
+
+    setSending(true);
+    pendingRef.current = targetId;
+    try {
+      const handle = await chatStream(
+        {
+          messages: historyForIpc,
+          adapter_id: activeAdapterId,
+          model: effectiveModel ?? undefined,
+        },
+        {
+          onDelta: (chunk) => {
+            const sess = useChatStore.getState().sessions[sessionId];
+            const current = sess?.messages.find((m) => m.id === targetId);
+            patchMessage(sessionId, targetId, {
+              content: (current?.content ?? '') + chunk,
+              pending: false,
+            });
+          },
+          onReasoning: (chunk) => {
+            const sess = useChatStore.getState().sessions[sessionId];
+            const current = sess?.messages.find((m) => m.id === targetId);
+            patchMessage(sessionId, targetId, {
+              reasoning: (current?.reasoning ?? '') + chunk,
+              pending: false,
+            });
+          },
+          onTool: (progress) => {
+            appendToolCall(sessionId, targetId, {
+              id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+              tool: progress.tool,
+              emoji: progress.emoji,
+              label: progress.label,
+              at: Date.now(),
+            });
+            const sess = useChatStore.getState().sessions[sessionId];
+            const current = sess?.messages.find((m) => m.id === targetId);
+            if (current?.pending) {
+              patchMessage(sessionId, targetId, { pending: false });
+            }
+          },
+          onDone: (summary) => {
+            patchMessage(sessionId, targetId, { pending: false });
+            setSending(false);
+            streamRef.current = null;
+            pendingRef.current = null;
+            if (
+              summary.prompt_tokens !== null ||
+              summary.completion_tokens !== null
+            ) {
+              void dbMessageSetUsage({
+                messageId: targetId,
+                promptTokens: summary.prompt_tokens,
+                completionTokens: summary.completion_tokens,
+              }).catch(() => {});
+            }
+          },
+          onError: (err) => {
+            patchMessage(sessionId, targetId, {
+              content: '',
+              pending: false,
+              error: ipcErrorMessage(err),
+            });
+            setSending(false);
+            streamRef.current = null;
+            pendingRef.current = null;
+          },
+        },
+      );
+      streamRef.current = handle;
+    } catch (e) {
+      patchMessage(sessionId, targetId, {
+        content: '',
+        pending: false,
+        error: ipcErrorMessage(e),
+      });
+      setSending(false);
+      streamRef.current = null;
+      pendingRef.current = null;
+    }
+  }
+
   async function stop() {
     const handle = streamRef.current;
     const pendingId = pendingRef.current;
@@ -680,6 +828,7 @@ function ChatPane({
                   ]?.id ?? null)
                 : null
             }
+            onRetryLastAssistant={() => void retry()}
           />
         </div>
       )}

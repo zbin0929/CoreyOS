@@ -61,6 +61,8 @@
     "search_prev": "Previous match",
     "search_next": "Next match",
     "search_close": "Close search",
+    "retry": "Regenerate",
+    "retry_title": "Regenerate the response using the same prompt. This replaces the current reply in place.",
     "message_placeholder": "Message Hermes…  (Enter to send, Shift+Enter for newline)",
     "current_llm": "Current LLM (click to configure)",
     "model_unknown": "(no model)",

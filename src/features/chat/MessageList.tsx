@@ -47,10 +47,25 @@ interface MessageListProps {
    *  in-chat search. The matching bubble renders a gold ring so the
    *  user can see exactly which one Virtuoso just scrolled to. */
   activeMatchId?: string | null;
+  /** T-polish — invoked when the hover-reveal "regenerate" button on
+   *  the last assistant bubble is clicked. MessageList is responsible
+   *  only for deciding which bubble shows the button (the terminal
+   *  assistant row); the actual stream-replay lives in `ChatPane.retry`. */
+  onRetryLastAssistant?: () => void;
 }
 
 export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
-  function MessageList({ messages, activeMatchId }, ref) {
+  function MessageList({ messages, activeMatchId, onRetryLastAssistant }, ref) {
+    // Precompute the index of the last assistant row once per render
+    // pass so the per-row `itemContent` closure doesn't re-scan the
+    // array on every scroll event. `-1` when no such row exists.
+    const lastAssistantIdx = useMemo(() => {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]!.role === 'assistant') return i;
+      }
+      return -1;
+    }, [messages]);
+
     // Memoised so `<Virtuoso itemContent={…}>` keeps the same fn
     // reference across renders; otherwise Virtuoso treats every
     // parent render as a row-renderer change and re-mounts rows.
@@ -64,11 +79,19 @@ export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
         // children.
         return (
           <div className="mx-auto max-w-3xl px-6 pb-4 pt-0 first:pt-6 last:pb-6">
-            <MessageBubble msg={m} highlight={activeMatchId === m.id} />
+            <MessageBubble
+              msg={m}
+              highlight={activeMatchId === m.id}
+              onRetry={
+                index === lastAssistantIdx && onRetryLastAssistant
+                  ? onRetryLastAssistant
+                  : undefined
+              }
+            />
           </div>
         );
       },
-      [messages, activeMatchId],
+      [messages, activeMatchId, lastAssistantIdx, onRetryLastAssistant],
     );
 
     return (

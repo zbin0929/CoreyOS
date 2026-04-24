@@ -61,6 +61,8 @@
     "search_prev": "上一条",
     "search_next": "下一条",
     "search_close": "关闭搜索",
+    "retry": "重新生成",
+    "retry_title": "用相同的提示重新生成回复，直接替换当前的这一条。",
     "message_placeholder": "向 Hermes 发送消息…（Enter 发送，Shift+Enter 换行）",
     "current_llm": "当前 LLM（点击配置）",
     "model_unknown": "（未配置模型）",

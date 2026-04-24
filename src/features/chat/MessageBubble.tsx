@@ -6,6 +6,7 @@ import {
   Copy,
   Loader2,
   Paperclip,
+  RefreshCw,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -23,12 +24,18 @@ import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from
 export function MessageBubble({
   msg,
   highlight = false,
+  onRetry,
 }: {
   msg: UiMessage;
   /** T-polish — renders a gold ring around the bubble when this
    *  message is the active in-chat-search match. Purely visual; the
    *  scroll to the row is owned by `MessageList` + Virtuoso. */
   highlight?: boolean;
+  /** T-polish — passed only for the last assistant message. When
+   *  present a "regenerate" button is shown alongside Copy; clicking
+   *  it replays the preceding user turn and re-streams into this
+   *  message's id. Undefined ⇒ hide the button entirely. */
+  onRetry?: () => void;
 }) {
   const isUser = msg.role === 'user';
   const canCopy = !msg.pending && !msg.error && msg.content.length > 0;
@@ -36,6 +43,7 @@ export function MessageBubble({
   // assistant bubbles. User bubbles and in-flight turns have nothing
   // meaningful to rate.
   const canRate = !isUser && canCopy;
+  const canRetry = !isUser && !msg.pending && onRetry !== undefined;
   return (
     <div
       className={cn(
@@ -111,9 +119,10 @@ export function MessageBubble({
             <Markdown>{msg.content}</Markdown>
           ) : null}
         </div>
-        {(canCopy || canRate) && (
+        {(canCopy || canRate || canRetry) && (
           <div className="flex items-center gap-1">
             {canCopy && <CopyButton text={msg.content} />}
+            {canRetry && <RetryButton onClick={onRetry!} />}
             {canRate && <FeedbackButtons msg={msg} />}
           </div>
         )}
@@ -216,6 +225,33 @@ function CopyButton({ text }: { text: string }) {
           <Icon icon={Copy} size="xs" />
         </>
       )}
+    </button>
+  );
+}
+
+/**
+ * Regenerate-the-last-response affordance. Hover-revealed on the same
+ * action row as `CopyButton` so users who already know the pattern
+ * discover this automatically. Kept as a simple click (no confirm) —
+ * the current assistant body is gone the moment the new stream
+ * starts, which matches user expectation for "retry".
+ */
+function RetryButton({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]',
+        'text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg',
+        'invisible group-hover:visible focus-visible:visible',
+      )}
+      aria-label={t('chat_page.retry')}
+      title={t('chat_page.retry_title')}
+      data-testid="message-retry"
+    >
+      <Icon icon={RefreshCw} size="xs" />
     </button>
   );
 }
