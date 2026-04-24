@@ -579,7 +579,9 @@ function DetailsStep({
           </code>
           {selectedProfile.api_key_env && (
             <code className="text-[10px] text-fg-subtle">
-              env: {selectedProfile.api_key_env}
+              {t('agent_wizard.profile_summary_env', {
+                env: selectedProfile.api_key_env,
+              })}
             </code>
           )}
         </div>

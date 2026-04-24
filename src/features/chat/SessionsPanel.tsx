@@ -66,15 +66,15 @@ export function SessionsPanel() {
     <aside className="flex h-full w-60 flex-none flex-col border-r border-border bg-bg-elev-1">
       <div className="flex items-center justify-between px-3 py-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
-          Sessions
+          {t('chat_page.sessions')}
         </span>
         <button
           onClick={() => newSession()}
           className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-fg transition hover:border-gold-500/40 hover:text-gold-500"
-          aria-label="New chat"
+          aria-label={t('chat_page.new_chat')}
         >
           <Icon icon={MessageSquarePlus} size="sm" />
-          New
+          {t('chat_page.new')}
         </button>
       </div>
 

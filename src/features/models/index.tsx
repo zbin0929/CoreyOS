@@ -256,7 +256,7 @@ export function ModelsRoute() {
                 size="sm"
                 className={cn(state.kind === 'loading' && 'animate-spin')}
               />
-              Reload
+              {t('common.refresh')}
             </Button>
           </div>
         }
@@ -353,7 +353,7 @@ export function ModelsRoute() {
                     />
                     {provider && !providerMeta && (
                       <span className="text-xs text-fg-subtle">
-                        Custom provider slug. Make sure Hermes recognizes it.
+                        {t('models_page.custom_provider_warning')}
                       </span>
                     )}
                   </Field>
@@ -386,25 +386,29 @@ export function ModelsRoute() {
                         size="sm"
                         onClick={onDiscover}
                         disabled={probeState.kind === 'probing' || !baseUrl.trim()}
-                        title="GET /v1/models against this endpoint"
+                        title={t('models_page.probe_title')}
                       >
                         {probeState.kind === 'probing' ? (
                           <Icon icon={Loader2} size="sm" className="animate-spin" />
                         ) : (
                           <Icon icon={Search} size="sm" />
                         )}
-                        Discover
+                        {t('models_page.discover')}
                       </Button>
                     </div>
                     <ProbeStatus state={probeState} />
                   </Field>
 
                   <Field
-                    label="Model id"
+                    label={t('models_page.field_model_id')}
                     hint={
                       discovered
-                        ? `${discovered.length} model${discovered.length === 1 ? '' : 's'} from ${probeState.kind === 'ok' ? probeState.endpoint : 'upstream'}.`
-                        : 'The exact id the provider accepts.'
+                        ? t('models_page.model_hint_discovered', {
+                            count: discovered.length,
+                            endpoint:
+                              probeState.kind === 'ok' ? probeState.endpoint : 'upstream',
+                          })
+                        : t('models_page.model_hint_default')
                     }
                   >
                     <Combobox
@@ -413,7 +417,7 @@ export function ModelsRoute() {
                       placeholder={
                         discovered?.[0]?.id ??
                         providerMeta?.sampleModels[0] ??
-                        'e.g. deepseek-reasoner'
+                        t('models_page.model_placeholder')
                       }
                       options={(discovered
                         ? discovered.map((m) => ({
@@ -450,7 +454,7 @@ export function ModelsRoute() {
                       ) : (
                         <Icon icon={Save} size="md" />
                       )}
-                      Save to config.yaml
+                      {t('models_page.save_to_config')}
                     </Button>
                   </div>
                 </div>
@@ -544,10 +548,9 @@ function RestartBanner({
     <div className="flex items-start gap-2 rounded-md border border-gold-500/40 bg-gold-500/5 p-3 text-sm">
       <Icon icon={TerminalIcon} size="md" className="mt-0.5 flex-none text-gold-500" />
       <div className="flex-1">
-        <div className="font-medium text-fg">Restart the gateway to apply</div>
+        <div className="font-medium text-fg">{t('models_page.restart_title')}</div>
         <div className="mt-1 text-xs text-fg-muted">
-          Hermes doesn't hot-reload <code className="font-mono">config.yaml</code>. Click below,
-          or run <code className="font-mono">hermes gateway restart</code> manually.
+          {t('models_page.restart_desc')}
         </div>
 
         <div className="mt-3 flex items-center gap-2">
@@ -562,12 +565,12 @@ function RestartBanner({
             ) : (
               <Icon icon={Zap} size="sm" />
             )}
-            Restart now
+            {t('models_page.restart_now')}
           </Button>
           {status.kind === 'done' && (
             <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
               <Icon icon={CheckCircle2} size="sm" />
-              Gateway restarted.
+              {t('models_page.restart_done')}
             </span>
           )}
           {status.kind === 'err' && (

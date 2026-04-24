@@ -471,7 +471,9 @@ function LlmProfileRow({
               variant="ghost"
               size="sm"
               onClick={() => setShowKey((v) => !v)}
-              aria-label={showKey ? 'Hide' : 'Show'}
+              aria-label={
+                showKey ? t('settings.gateway.hide_key') : t('settings.gateway.show_key')
+              }
             >
               <Icon icon={showKey ? EyeOff : Eye} size="sm" />
             </Button>
