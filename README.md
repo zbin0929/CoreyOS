@@ -4,91 +4,52 @@
 
 > A premium desktop control plane for [Hermes Agent](https://github.com/NousResearch/hermes-agent) and every other AI agent in your toolbox.
 >
-> Chat across any model, route across messengers, edit skills + memory + MCP servers, all from one keyboard-first macOS / Windows / Linux app.
+> Chat across any model, route across messengers, edit skills + memory + MCP servers — all from one keyboard-first macOS / Windows / Linux app.
 
 ---
 
-## What you can do in 5 minutes
+## Screenshots
 
-1. **Chat** with any OpenAI-compatible model (OpenAI, Anthropic, DeepSeek, local Ollama, …) — streaming, multi-turn, with session history in SQLite.
-2. **Attach files** via drag-drop, paste, or file picker. Per-agent sandbox scopes keep secrets isolated.
-3. **Browse & install skills** from 7+ hubs (official, skills-sh, clawhub, lobehub, …) — wraps the `hermes skills` CLI.
-4. **Edit memory** — `~/.hermes/MEMORY.md` (what the agent remembers) and `USER.md` (your profile) — in a real editor with syntax highlighting, not `vim`.
-5. **Configure MCP servers** — give any agent access to Stripe, GitHub, Puppeteer, local filesystem, etc. via one config page.
-6. **Route platform channels** — Telegram / Discord / Slack / WeCom / WeiXin / Feishu / Matrix / WhatsApp, all from the same sidebar.
-7. **Compare models side-by-side** — one prompt, N models in parallel, winner highlights.
-8. **Save conversations as skills** — optional LLM distillation one-click.
+_TODO: drop a hero shot + 3 feature screenshots here once we have signed builds._
 
 ---
 
-## Quick start
+## What it does
 
-### Prerequisites
-
-- **Hermes Agent** installed (`hermes --version`). If you don't have it: [hermes-agent.nousresearch.com](https://hermes-agent.nousresearch.com/docs/quickstart). CoreyOS talks to Hermes over its local gateway — without Hermes the app runs in read-only stub mode.
-- Node 20 + pnpm 9 + Rust stable. See [`SETUP.md`](./SETUP.md) for platform-specific details.
-
-### Install + run
-
-```bash
-git clone git@github.com:zbin0929/CoreyOS.git
-cd CoreyOS
-pnpm install
-pnpm tauri:dev        # first build: ~1–2 min, then seconds
-```
-
-First launch shows an onboarding-light Home page. If Hermes is running on `http://127.0.0.1:8642` you'll see `Gateway online`; otherwise you can start it from the Home page (or `hermes gateway` in a terminal).
-
-### First things to try
-
-| I want to… | Where |
-|---|---|
-| Send my first prompt | **Chat** (⌘1) |
-| See which models are detected | **LLMs** (⌘⇧M) |
-| Edit what the agent remembers about me | **Memory** → `User profile` tab |
-| Connect Telegram / Slack / … | **Channels** (⌘9) |
-| Run a recurring prompt (daily standup, weekly digest) | **Scheduler** (⌘8) |
-| Add an MCP server (filesystem, GitHub, …) | **MCP** → `Add server` |
-| Find a past conversation | **Memory** → `Search history` tab |
-
-Press `⌘K` anywhere for the command palette — fuzzy search across all pages + runbooks.
+- 💬 **Chat** with any OpenAI-compatible model (OpenAI, Anthropic, DeepSeek, local Ollama, …) — streaming, multi-turn, with session history in a local SQLite DB.
+- 📎 **Attach files** via drag-drop, paste, or file picker. Per-agent sandbox scopes keep sensitive folders isolated.
+- 🧰 **Skills Hub** — browse + install from 7+ community sources (official, skills-sh, clawhub, lobehub, …) by wrapping the `hermes skills` CLI.
+- 🧠 **Memory editor** — `~/.hermes/MEMORY.md` + `USER.md` in a real editor with syntax highlighting, capacity meter, FTS5 search across past sessions.
+- 🔌 **MCP server manager** — give agents access to Stripe, GitHub, Puppeteer, local filesystem, and any other Model Context Protocol server from one config page.
+- 📡 **Platform channels** — Telegram, Discord, Slack, WeCom, WeiXin, Feishu, Matrix, WhatsApp — one sidebar, shared session store.
+- 🔄 **Compare** models side-by-side — one prompt, N models in parallel, winner highlights.
+- ⏰ **Scheduled jobs** — cron prompts, output captured as Markdown for later review.
+- 💰 **Budgets** — per-model / per-profile / per-adapter spend caps with 80% warnings.
+- 🎙️ **Keyboard-first** — ⌘K palette, every page reachable by number (⌘1..⌘9), inline `?` help on every complex screen.
+- 🌏 **中文 + English** — full zh-CN localization; auto-detects browser locale.
 
 ---
 
-## Languages
+## Install
 
-- **中文 (zh-CN)** ✅ complete — auto-detected from browser locale
-- **English** ✅ complete
+_Releases coming soon._ For now CoreyOS builds from source — see **[SETUP.md](./SETUP.md)** for the developer workflow.
 
-Switch via `View → Language` (or the menu will follow the OS locale on first boot).
+### Prerequisites (runtime)
 
----
+- **Hermes Agent** installed and reachable on its local gateway (usually `http://127.0.0.1:8642`). Install from [hermes-agent.nousresearch.com](https://hermes-agent.nousresearch.com/docs/quickstart). CoreyOS without Hermes runs in read-only stub mode — useful for tinkering but most features won't work.
+- **Operating system**: macOS 12+ / Windows 10+ / any Linux with a recent WebKit2GTK.
 
-## Architecture (one paragraph)
+### First run
 
-CoreyOS is a Tauri 2 desktop app. The **Rust** side (`src-tauri/`) owns IPC, the SQLite session/attachment store, the sandbox gate, and the thin adapter layer that speaks to Hermes' OpenAI-compatible `/v1/chat/completions` + its CLI for skills/cron. The **TypeScript** side (`src/`) is React 18 + TanStack Router, zustand stores, tailwind + shadcn-style components. No Electron, no sidecar processes, no remote server — it's one binary talking to your local `~/.hermes/`.
+Open the app → Home page. The onboarding checklist auto-detects:
 
-Full architecture details in [`docs/01-architecture.md`](./docs/01-architecture.md).
+1. **Connect to Hermes** — green chip = gateway reachable. Settings page if not.
+2. **Pick a model** — any OpenAI-compatible provider, configured in Hermes itself.
+3. **Start your first chat** — send a prompt. That's it.
+4. **Set up your profile** — write one or two lines in Memory → User profile so the agent knows who you are.
+5. **Connect a messenger** (optional) — Telegram / Discord / etc. from Channels.
 
----
-
-## Documentation map
-
-```
-docs/
-├── 00-vision.md              Product vision, positioning
-├── 01-architecture.md        Rust ↔ TypeScript split, data flow, repo layout
-├── 02-design-system.md       Design tokens, typography, motion
-├── 03-agent-adapter.md       The AgentAdapter interface — how to wire a new agent
-├── 04-hermes-integration.md  How CoreyOS talks to hermes-agent
-├── 05-roadmap.md             Phase-by-phase status (Phase 0–7 shipped, 8 conditional)
-├── 06-testing.md             Unit / e2e / visual regression strategy
-├── 07-release.md             Build, code-signing, auto-update
-├── 10-product-audit-2026-04-23.md   Upstream-overlap audit that reshaped Phase 6/7
-└── phases/phase-N-*.md       One doc per phase with task-level detail
-```
-
-For changes, see [`CHANGELOG.md`](./CHANGELOG.md) — dated entries, one per milestone.
+Press `⌘K` anywhere to fuzzy-search across every page + runbook. Click the `?` icon next to any page title for in-context help.
 
 ---
 
@@ -99,33 +60,39 @@ For changes, see [`CHANGELOG.md`](./CHANGELOG.md) — dated entries, one per mil
 | 0 – 7 | Foundation → Agent expansion | **✅ All shipped** (2026-04-23) |
 | 8 | Multimodal (voice / video) | Conditional — gated on product direction |
 
-Test totals: Rust **192** · Vitest **46** · Playwright **72** · all green. See `docs/05-roadmap.md` for the full status matrix.
+Test totals: Rust **192** · Vitest **46** · Playwright **72** · all green.
+
+Full roadmap in [`docs/05-roadmap.md`](./docs/05-roadmap.md); dated milestone entries in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ---
 
-## Development
+## Architecture
 
-```bash
-pnpm tauri:dev         # desktop app, hot-reload
-pnpm tauri:dev:clean   # kills stale cargo/vite processes first
-pnpm dev               # web-only preview (IPC calls no-op)
-pnpm typecheck         # tsc --noEmit
-pnpm lint              # eslint
-pnpm test              # vitest
-pnpm test:e2e          # playwright
-cd src-tauri && cargo test    # rust
-```
+Tauri 2 desktop app. **Rust** side (`src-tauri/`) owns IPC, the SQLite session/attachment store, the sandbox gate, and a thin adapter layer that speaks to Hermes' OpenAI-compatible `/v1/chat/completions` + CLI. **TypeScript** side (`src/`) is React 18 + TanStack Router, zustand stores, tailwind + shadcn-style components. No Electron, no sidecar processes, no remote server — one binary talking to your local `~/.hermes/`.
 
-New to the codebase? Start at [`docs/01-architecture.md`](./docs/01-architecture.md), then read whichever `phases/phase-N-*.md` covers the area you want to touch.
+More in [`docs/01-architecture.md`](./docs/01-architecture.md).
+
+---
+
+## Contributing
+
+This is a solo hobby project for now, but contributions are welcome. Start here:
+
+- **[SETUP.md](./SETUP.md)** — build from source (Node 20, pnpm 9, Rust stable).
+- **[`docs/01-architecture.md`](./docs/01-architecture.md)** — Rust ↔ TypeScript split, data flow.
+- **[`docs/03-agent-adapter.md`](./docs/03-agent-adapter.md)** — the `AgentAdapter` trait; add a new agent in ~200 lines.
+- **[`CHANGELOG.md`](./CHANGELOG.md)** — read the last few entries to get a sense of pacing + decision-making style.
+
+Run `pnpm tauri:dev:clean` and start poking.
+
+---
+
+## Name
+
+**CoreyOS** is the project. The Rust crate is still named `caduceus` (earlier placeholder; renaming it would cascade through every `use caduceus_lib::…`). The app bundle is `Corey`. These three names are intentional and not a mistake to fix.
 
 ---
 
 ## License
 
 MIT (planned — formal license file pending).
-
----
-
-## Name
-
-**CoreyOS** is the project. The Rust crate is still named `caduceus` (from an earlier placeholder — renaming it would cascade through every `use caduceus_lib::…` in the codebase). The macOS / Windows app bundle is `Corey`. These are intentional and not a mistake you'd fix.
