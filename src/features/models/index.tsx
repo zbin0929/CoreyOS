@@ -478,6 +478,7 @@ const inputCls = cn(
 );
 
 function CurrentCard({ view }: { view: HermesConfigView }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
       <div className="flex items-center gap-2 text-xs text-fg-muted">
@@ -485,11 +486,11 @@ function CurrentCard({ view }: { view: HermesConfigView }) {
         <code className="font-mono">{view.config_path}</code>
       </div>
       <div className="grid grid-cols-[110px_1fr] gap-y-1.5 text-sm">
-        <Label>Provider</Label>
+        <Label>{t('models_page.current_provider')}</Label>
         <Value value={view.model.provider} />
-        <Label>Model</Label>
+        <Label>{t('models_page.current_model')}</Label>
         <Value value={view.model.default} mono />
-        <Label>Base URL</Label>
+        <Label>{t('models_page.current_base_url')}</Label>
         <Value value={view.model.base_url} mono />
       </div>
     </div>
@@ -613,6 +614,7 @@ function ApiKeyPanel({
   present: boolean;
   onSaved: (view: HermesConfigView) => void;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(!present);
   const [value, setValue] = useState('');
   const [show, setShow] = useState(false);
@@ -728,18 +730,18 @@ function ApiKeyPanel({
         <div className="flex-1">
           {present ? (
             <>
-              <span className="font-medium text-fg">Rotate API key</span>
+              <span className="font-medium text-fg">{t('models_page.rotate_api_key')}</span>
               <span className="ml-1 text-fg-muted">
-                — new value replaces the current <code className="font-mono">{envKey}</code>.
+                {t('models_page.rotate_api_key_hint', { env: envKey })}
               </span>
             </>
           ) : (
             <>
               <span className="font-medium text-amber-600">
-                Missing <code className="font-mono">{envKey}</code>
+                {t('models_page.missing_env', { env: envKey })}
               </span>
               <span className="ml-1 text-fg-muted">
-                — add it so Hermes can talk to this provider.
+                {t('models_page.missing_env_hint')}
               </span>
             </>
           )}
@@ -853,15 +855,16 @@ function ProbeStatus({
 }
 
 function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
       <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
       <div className="flex-1">
-        <div className="font-medium">Unable to read Hermes config</div>
+        <div className="font-medium">{t('models_page.unable_to_read_config')}</div>
         <div className="mt-1 break-all text-xs opacity-80">{message}</div>
         <Button className="mt-3" size="sm" variant="secondary" onClick={onRetry}>
           <Icon icon={RefreshCw} size="sm" />
-          Try again
+          {t('models_page.try_again')}
         </Button>
       </div>
     </div>
@@ -909,6 +912,7 @@ function Field({
 }
 
 function StatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }) {
+  const { t } = useTranslation();
   if (status.kind === 'saved') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
@@ -925,6 +929,6 @@ function StatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }) {
       </span>
     );
   }
-  if (dirty) return <span className="text-xs text-fg-muted">Unsaved changes.</span>;
-  return <span className="text-xs text-fg-subtle">No changes.</span>;
+  if (dirty) return <span className="text-xs text-fg-muted">{t('models_page.unsaved_changes')}</span>;
+  return <span className="text-xs text-fg-subtle">{t('models_page.no_changes')}</span>;
 }

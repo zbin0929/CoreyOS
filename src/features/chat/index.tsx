@@ -59,6 +59,7 @@ import type { VirtuosoHandle } from 'react-virtuoso';
 const EMPTY_MESSAGES: UiMessage[] = [];
 
 export function ChatRoute() {
+  const { t } = useTranslation();
   const currentId = useChatStore((s) => s.currentId);
   const hydrated = useChatStore((s) => s.hydrated);
   const newSession = useChatStore((s) => s.newSession);
@@ -99,7 +100,7 @@ export function ChatRoute() {
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
-          {hydrated ? 'Initializing…' : 'Loading sessions…'}
+          {hydrated ? t('chat_page.initializing') : t('chat_page.loading_sessions')}
         </div>
       )}
     </div>
@@ -369,7 +370,7 @@ function ChatPane({
     if (verdict.blocks.length > 0) {
       const lines = verdict.blocks.map((b) => '  · ' + describeBreach(b)).join('\n');
       const ok = window.confirm(
-        `One or more budgets are over cap:\n\n${lines}\n\nSend anyway?`,
+        t('chat_page.budget_over_cap_confirm', { lines }),
       );
       if (!ok) return;
     }
@@ -935,7 +936,7 @@ function ChatPane({
             >
               <div className="inline-flex items-center gap-1.5">
                 <Icon icon={AlertTriangle} size="sm" />
-                <span className="font-medium">Budget over cap</span>
+                <span className="font-medium">{t('chat_page.budget_over_cap')}</span>
               </div>
               {budgetWarnings.map((line, i) => (
                 <div key={i} className="pl-5 font-mono text-[11px] opacity-90">
@@ -1017,9 +1018,9 @@ function ChatPane({
               aria-label={t('chat_page.attach_file')}
               title={
                 visionCap === 'no'
-                  ? `${t('chat_page.attach_file')} (images will be ignored — ${effectiveModel ?? 'current model'} is text-only)`
+                  ? `${t('chat_page.attach_file')} ${t('chat_page.attach_text_only', { model: effectiveModel ?? 'current model' })}`
                   : visionCap === 'unknown'
-                    ? `${t('chat_page.attach_file')} (image support for this model is unverified)`
+                    ? `${t('chat_page.attach_file')} ${t('chat_page.attach_vision_unverified')}`
                     : t('chat_page.attach_file')
               }
               data-testid="chat-attach-button"

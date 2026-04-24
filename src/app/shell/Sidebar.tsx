@@ -83,7 +83,7 @@ export function Sidebar() {
           </NavItem>
         ))}
 
-        <SectionLabel className="mt-4">Ops</SectionLabel>
+        <SectionLabel className="mt-4">{t('nav.section_ops')}</SectionLabel>
         {ops.map((entry) => (
           <NavItem
             key={entry.id}

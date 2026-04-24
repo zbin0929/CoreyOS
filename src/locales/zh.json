@@ -21,7 +21,8 @@
     "memory": "记忆",
     "mcp": "MCP",
     "agents": "Agents",
-    "settings": "设置"
+    "settings": "设置",
+    "section_ops": "运维"
   },
   "agents_page": {
     "title": "Agents",
@@ -87,7 +88,13 @@
     "hero_subtitle_suffix": " 连接。",
     "hero_suggestion_1": "用一句话解释什么是 Hermes Agent。",
     "hero_suggestion_2": "用 3 个要点总结 TRAE 的沙箱模型。",
-    "hero_suggestion_3": "帮我生成一个 Rust 的 Tokio 基础示例。"
+    "hero_suggestion_3": "帮我生成一个 Rust 的 Tokio 基础示例。",
+    "initializing": "初始化中…",
+    "loading_sessions": "加载会话中…",
+    "budget_over_cap": "预算超限",
+    "budget_over_cap_confirm": "以下预算已超上限：\n\n{{lines}}\n\n仍然发送？",
+    "attach_text_only": "（图片将被忽略 — {{model}} 不支持图片）",
+    "attach_vision_unverified": "（此模型的图片支持未验证）"
   },
   
   "models_page": {
@@ -140,7 +147,18 @@
     "profile_err_id_empty": "ID 不能为空。",
     "profile_err_id_long": "ID 不能超过 32 个字符。",
     "profile_err_id_chars": "只允许小写字母、数字、'-' 和 '_'。",
-    "profile_err_id_duplicate": "已存在 ID 为「{{id}}」的配置。"
+    "profile_err_id_duplicate": "已存在 ID 为「{{id}}」的配置。",
+    "current_provider": "供应商",
+    "current_model": "模型",
+    "current_base_url": "Base URL",
+    "rotate_api_key": "更换 API Key",
+    "rotate_api_key_hint": "— 新值会替换当前的 {{env}}。",
+    "missing_env": "缺少 {{env}}",
+    "missing_env_hint": "— 请添加，以便 Hermes 连接到此供应商。",
+    "unable_to_read_config": "无法读取 Hermes 配置",
+    "try_again": "重试",
+    "unsaved_changes": "有未保存的更改。",
+    "no_changes": "无更改。"
   },
   "shortcuts": {
     "title": "键盘快捷键",
@@ -288,7 +306,8 @@
       "tools": "工具调用"
     },
     "subagent": {
-      "step_count": "{{n}} 次子代理操作"
+      "step_count": "{{n}} 次子代理操作",
+      "step_count_plural": "{{n}} 次子代理操作"
     }
   },
   "budgets": {
@@ -546,6 +565,8 @@
       "delete": "删除",
       "default_locked": "锁定",
       "root_count": "{{count}} 个根目录",
+      "root_count_one": "{{count}} 个根目录",
+      "root_count_other": "{{count}} 个根目录",
       "confirm_delete": "删除范围“{{id}}”？所有指向它的实例会回落到默认范围。"
     },
     "model": {

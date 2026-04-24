@@ -21,7 +21,8 @@
     "memory": "Memory",
     "mcp": "MCP",
     "agents": "Agents",
-    "settings": "Settings"
+    "settings": "Settings",
+    "section_ops": "Ops"
   },
   "agents_page": {
     "title": "Agents",
@@ -87,7 +88,13 @@
     "hero_subtitle_suffix": ".",
     "hero_suggestion_1": "Explain what Hermes Agent is in one sentence.",
     "hero_suggestion_2": "Summarize the TRAE sandboxing model in 3 bullets.",
-    "hero_suggestion_3": "Generate a basic Rust Tokio example for me."
+    "hero_suggestion_3": "Generate a basic Rust Tokio example for me.",
+    "initializing": "Initializing…",
+    "loading_sessions": "Loading sessions…",
+    "budget_over_cap": "Budget over cap",
+    "budget_over_cap_confirm": "One or more budgets are over cap:\n\n{{lines}}\n\nSend anyway?",
+    "attach_text_only": "(images will be ignored — {{model}} is text-only)",
+    "attach_vision_unverified": "(image support for this model is unverified)"
   },
   
   "models_page": {
@@ -140,7 +147,18 @@
     "profile_err_id_empty": "Id is required.",
     "profile_err_id_long": "Id must be 32 characters or fewer.",
     "profile_err_id_chars": "Only lowercase letters, digits, '-' and '_' are allowed.",
-    "profile_err_id_duplicate": "A profile with id \"{{id}}\" already exists."
+    "profile_err_id_duplicate": "A profile with id \"{{id}}\" already exists.",
+    "current_provider": "Provider",
+    "current_model": "Model",
+    "current_base_url": "Base URL",
+    "rotate_api_key": "Rotate API key",
+    "rotate_api_key_hint": "— new value replaces the current {{env}}.",
+    "missing_env": "Missing {{env}}",
+    "missing_env_hint": "— add it so Hermes can talk to this provider.",
+    "unable_to_read_config": "Unable to read Hermes config",
+    "try_again": "Try again",
+    "unsaved_changes": "Unsaved changes.",
+    "no_changes": "No changes."
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
