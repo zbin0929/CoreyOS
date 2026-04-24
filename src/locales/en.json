@@ -68,6 +68,7 @@
     "export_disabled_hint": "Nothing to export yet — send a message first.",
     "export_markdown": "Markdown",
     "export_json": "JSON",
+    "vision_warning": "The current model <code>{{model}}</code> does not accept images. Switch to a vision-capable model or send text-only.",
     "message_placeholder": "Message Hermes…  (Enter to send, Shift+Enter for newline)",
     "current_llm": "Current LLM (click to configure)",
     "model_unknown": "(no model)",

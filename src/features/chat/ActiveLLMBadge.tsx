@@ -219,7 +219,13 @@ export function ActiveLLMBadge() {
       {open && (
         <div
           className={cn(
-            'absolute left-0 top-full z-40 mt-1 w-72 overflow-hidden',
+            // Open UPWARD (bottom-full + mb-1). The model pill sits
+            // at the top of the composer footer, so opening downward
+            // made the popover overlap the textarea and the send
+            // button — visually jarring and caused the composer
+            // placeholder to show through the popover gaps. There's
+            // plenty of chat scrollback above; bias the popup there.
+            'absolute left-0 bottom-full z-40 mb-1 w-72 overflow-hidden',
             'rounded-md border border-border bg-bg-elev-1 shadow-2',
           )}
           data-testid="chat-model-picker-list"

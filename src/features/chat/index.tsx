@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { AlertTriangle, Paperclip, Send, Sparkles, Square, Wand2, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -155,6 +155,13 @@ function ChatPane({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Transient error shown above the chip row when a stage fails.
   const [attachError, setAttachError] = useState<string | null>(null);
+  // T-polish — ref + auto-resize effect for the composer textarea.
+  // Default `<textarea rows={1}>` is fixed-height; users typing more
+  // than one line see their prose scroll inside a cramped box. We
+  // grow it to fit the content up to ~3× the base height (~132px)
+  // and let overflow scroll after that — the composer is not a code
+  // editor, and a bigger box starts to eat the message viewport.
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // T4.4b — breaches flagged by the budget gate on the LAST send attempt.
   // Re-populated (or cleared) every time send() runs so the list reflects
   // the current turn, not stale state from minutes ago.
@@ -183,6 +190,19 @@ function ChatPane({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Auto-resize the composer textarea to fit its content, clamped to
+  // a 3× ceiling. Reset first so SHRINKING the content also shrinks
+  // the box (otherwise `scrollHeight` stays pegged at the max once
+  // we've grown there). useLayoutEffect to avoid a one-frame flash
+  // at the wrong height when the user pastes a multi-line blob.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const MAX = 132; // ~3× the 44px min-height
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX)}px`;
+  }, [draft]);
 
   // Reset search state on session switch — matches jump between
   // conversations, stale index on a different message array is
@@ -906,10 +926,13 @@ function ChatPane({
             >
               <Icon icon={AlertTriangle} size="sm" />
               <span>
-                The current model{' '}
-                <code className="rounded bg-amber-500/10 px-1">{effectiveModel}</code>{' '}
-                does not accept images. Switch to a vision-capable model or
-                send text-only.
+                <Trans
+                  i18nKey="chat_page.vision_warning"
+                  values={{ model: effectiveModel }}
+                  components={{
+                    code: <code className="rounded bg-amber-500/10 px-1" />,
+                  }}
+                />
               </span>
             </div>
           )}
@@ -974,6 +997,7 @@ function ChatPane({
             </Button>
 
             <textarea
+              ref={textareaRef}
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value);
@@ -985,7 +1009,12 @@ function ChatPane({
               placeholder={t('chat_page.message_placeholder')}
               disabled={sending}
               className={cn(
-                'min-h-[44px] max-h-[200px] flex-1 resize-none rounded-xl border border-border',
+                // `min-h` anchors the empty state; JS auto-resize
+                // governs everything above that up to the ~132px
+                // ceiling enforced in the useLayoutEffect. `max-h`
+                // is kept as a CSS safety net in case the JS never
+                // runs (SSR, error boundaries).
+                'min-h-[44px] max-h-[132px] flex-1 resize-none rounded-xl border border-border',
                 'bg-bg-elev-1 px-4 py-3 text-sm text-fg placeholder:text-fg-subtle',
                 'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
                 'disabled:opacity-60',

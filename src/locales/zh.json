@@ -68,6 +68,7 @@
     "export_disabled_hint": "还没有内容可导出 —— 先发送一条消息。",
     "export_markdown": "Markdown",
     "export_json": "JSON",
+    "vision_warning": "当前模型 <code>{{model}}</code> 不支持图片。请切换到支持视觉的模型，或者只发送文本。",
     "message_placeholder": "向 Hermes 发送消息…（Enter 发送，Shift+Enter 换行）",
     "current_llm": "当前 LLM（点击配置）",
     "model_unknown": "（未配置模型）",
