@@ -18,8 +18,11 @@ import { cn } from '@/lib/cn';
 import {
   hermesInstanceUpsert,
   ipcErrorMessage,
+  llmProfileList,
+  llmProfileUpsert,
   modelProviderProbe,
   type HermesInstance,
+  type LlmProfile,
 } from '@/lib/ipc';
 import { PROVIDER_TEMPLATES, type ProviderTemplate } from './providerTemplates';
 
@@ -169,6 +172,27 @@ function DetailsStep({
   const [probing, setProbing] = useState(false);
   const [probeError, setProbeError] = useState<string | null>(null);
 
+  // T8 — existing LLM profiles pre-loaded so user can pick one instead
+  // of entering provider credentials again. Filter down to the same
+  // provider as the template (matching by slug) so picking is
+  // semantically safe — we don't silently attach an OpenAI agent to
+  // an Anthropic profile. `null` = "enter details inline" (default).
+  const [profiles, setProfiles] = useState<LlmProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+
+  useEffect(() => {
+    llmProfileList()
+      .then((r) => setProfiles(r.profiles))
+      .catch(() => setProfiles([]));
+  }, []);
+
+  const matchingProfiles = profiles.filter(
+    (p) => !p.provider || p.provider === template.id,
+  );
+  const selectedProfile = selectedProfileId
+    ? profiles.find((p) => p.id === selectedProfileId) ?? null
+    : null;
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -205,19 +229,54 @@ function DetailsStep({
   async function save() {
     setSaving(true);
     setSaveError(null);
-    const payload = {
-      id: id.trim(),
-      label: label.trim() || id.trim(),
-      base_url: template.baseUrl,
-      api_key: apiKey.trim() || null,
-      default_model: model.trim() || null,
-    };
-    // Console-log for user-side debugging: the red inline banner was
-    // proving too easy to miss for non-English users. The payload +
-    // raw error land in DevTools where we can ask the user to paste.
-    console.log('[AgentWizard] save →', payload);
+    const agentId = id.trim();
+    const agentLabel = label.trim() || agentId;
     try {
-      const inst = await hermesInstanceUpsert(payload);
+      // Branch: attached to an existing profile → just create the
+      // agent pointing at it, copying provider fields for the runtime
+      // adapter so the registry doesn't have to resolve at every
+      // request.
+      if (selectedProfile) {
+        const payload: HermesInstance = {
+          id: agentId,
+          label: agentLabel,
+          base_url: selectedProfile.base_url,
+          api_key: null, // value lives in Hermes's .env under api_key_env
+          default_model: selectedProfile.model,
+          llm_profile_id: selectedProfile.id,
+        };
+        console.log('[AgentWizard] save (linked) →', payload);
+        const inst = await hermesInstanceUpsert(payload);
+        console.log('[AgentWizard] save ok →', inst);
+        await onCreated(inst);
+        return;
+      }
+
+      // Fresh — persist an LlmProfile first so the agent's fields also
+      // live in the reusable library, then create the linked agent.
+      // Profile id = agent id for discoverability (unless the user
+      // manually picked a different slug later on the LLMs page).
+      const profilePayload: LlmProfile = {
+        id: agentId,
+        label: agentLabel,
+        provider: template.id,
+        base_url: template.baseUrl,
+        model: model.trim(),
+        api_key_env: template.envKey ?? null,
+      };
+      console.log('[AgentWizard] save (fresh) profile →', profilePayload);
+      const savedProfile = await llmProfileUpsert(profilePayload);
+
+      const agentPayload: HermesInstance = {
+        id: agentId,
+        label: agentLabel,
+        base_url: savedProfile.base_url,
+        api_key: apiKey.trim() || null,
+        default_model: savedProfile.model,
+        llm_profile_id: savedProfile.id,
+      };
+      console.log('[AgentWizard] save (fresh) agent →', agentPayload);
+      const inst = await hermesInstanceUpsert(agentPayload);
       console.log('[AgentWizard] save ok →', inst);
       await onCreated(inst);
     } catch (e) {
@@ -242,7 +301,12 @@ function DetailsStep({
           : t('agent_wizard.err_id_chars');
   const duplicateId = existingIds.includes(idTrim);
   const canSave = idError === null && !duplicateId && !saving;
-  const keyRequired = template.envKey !== null && !template.isLocal;
+  // Hide API key + model fields when an existing profile is
+  // selected — the profile already owns those values and the agent
+  // inherits them at save time.
+  const showProviderFields = selectedProfile === null;
+  const keyRequired =
+    showProviderFields && template.envKey !== null && !template.isLocal;
 
   return (
     <div
@@ -262,6 +326,41 @@ function DetailsStep({
         <span>/</span>
         <span className="text-fg">{template.label}</span>
       </div>
+
+      {/* T8 — "Use existing LLM profile" picker. Lets the user avoid
+          typing the same base_url + key + model combo twice when
+          creating multiple agents backed by the same provider.
+          Hidden until at least one profile matches this provider. */}
+      {matchingProfiles.length > 0 && (
+        <div
+          className="flex flex-col gap-1.5 rounded-md border border-gold-500/30 bg-gold-500/5 p-3"
+          data-testid="agent-wizard-profile-picker"
+        >
+          <label className="flex flex-col gap-1 text-xs text-fg-muted">
+            <span className="font-medium text-fg">
+              {t('agent_wizard.use_profile_title')}
+            </span>
+            <select
+              value={selectedProfileId ?? ''}
+              onChange={(e) => setSelectedProfileId(e.target.value || null)}
+              className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 text-sm text-fg"
+              data-testid="agent-wizard-profile-select"
+            >
+              <option value="">{t('agent_wizard.use_profile_new')}</option>
+              {matchingProfiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label || p.id} · {p.model}
+                </option>
+              ))}
+            </select>
+            <span className="text-[10px] text-fg-subtle">
+              {selectedProfile
+                ? t('agent_wizard.use_profile_linked_hint')
+                : t('agent_wizard.use_profile_fresh_hint')}
+            </span>
+          </label>
+        </div>
+      )}
 
       {/* ID + label */}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -327,7 +426,7 @@ function DetailsStep({
         </label>
       )}
 
-      {template.isLocal && (
+      {showProviderFields && template.isLocal && (
         <div
           className={cn(
             'flex items-start gap-2 rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-xs text-emerald-500',
@@ -349,7 +448,32 @@ function DetailsStep({
         </div>
       )}
 
+      {/* Selected-profile summary (shown instead of the model picker
+          when the user has attached to an existing profile). */}
+      {selectedProfile && (
+        <div
+          className="flex flex-col gap-1 rounded-md border border-border bg-bg-elev-1 p-3 text-xs text-fg-muted"
+          data-testid="agent-wizard-profile-summary"
+        >
+          <div className="text-fg">
+            <span className="font-medium">{selectedProfile.label || selectedProfile.id}</span>
+            <span className="ml-2 font-mono text-fg-subtle">
+              {selectedProfile.model}
+            </span>
+          </div>
+          <code className="truncate text-[10px] text-fg-subtle">
+            {selectedProfile.base_url}
+          </code>
+          {selectedProfile.api_key_env && (
+            <code className="text-[10px] text-fg-subtle">
+              env: {selectedProfile.api_key_env}
+            </code>
+          )}
+        </div>
+      )}
+
       {/* Model picker — shortlist from template, refreshable via probe. */}
+      {showProviderFields && (
       <div className="flex flex-col gap-1 text-xs text-fg-muted">
         <div className="flex items-center justify-between">
           <span>{t('agent_wizard.field_model')}</span>
@@ -386,6 +510,7 @@ function DetailsStep({
           </div>
         )}
       </div>
+      )}
 
       {saveError && (
         <div
