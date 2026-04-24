@@ -38,28 +38,29 @@ GitHub Actions (`.github/workflows/release.yml`) then:
 
 The Tauri updater refuses to install a bundle whose signature doesn't
 verify against the `plugins.updater.pubkey` baked into the running app.
-So before the first release:
+So before the first release, run:
 
 ```sh
-# Generate a keypair. Keep the passphrase somewhere safe (1Password etc.).
-pnpm tauri signer generate -w ~/.tauri/corey.key
-
-# The command prints both halves to stdout:
-#   - ~/.tauri/corey.key         (PRIVATE — never commit)
-#   - ~/.tauri/corey.key.pub     (public)
-
-# Upload the PRIVATE key + passphrase as GitHub Action secrets:
-gh secret set TAURI_SIGNING_PRIVATE_KEY            < ~/.tauri/corey.key
-gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD   # paste the passphrase
-
-# Copy the PUBLIC key into src-tauri/tauri.conf.json →
-# plugins.updater.pubkey (replace the PLACEHOLDER string). Commit that.
-cat ~/.tauri/corey.key.pub
+bash scripts/release-setup.sh
 ```
 
-Re-running `signer generate` rotates the key. Anyone still on a version
-of the app built with the old pubkey will stop auto-updating — they'll
-need to download the next release manually. Budget accordingly.
+It prompts twice for a passphrase, then:
+
+1. Generates `~/.tauri/corey.key` (+ `.pub`) via `tauri signer generate`.
+2. Uploads the private key + passphrase as `TAURI_SIGNING_PRIVATE_KEY`
+   and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` via `gh secret set`.
+3. Patches `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`
+   with the generated public key and commits that patch (push is manual
+   so you can eyeball the diff first).
+
+Flags:
+
+- `--no-pass`   skip the passphrase (dev-grade; fine for a solo repo).
+- `--force`     rotate an existing key. Invalidates auto-update for
+                anyone on the old pubkey — they'll need to download
+                the next build manually. Budget accordingly.
+
+Prereqs: `gh auth login` must be done; `pnpm` + `python3` on PATH.
 
 ## Strategy: unsigned + GitHub Release (zero cost)
 
