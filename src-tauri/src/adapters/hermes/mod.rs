@@ -182,9 +182,98 @@ fn extract_text_from_file(path: &str, mime: &str, name: &str) -> Option<String> 
         || mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     {
         extract_xlsx_text(path)
+    } else if ext == "pdf" || mime == "application/pdf" {
+        extract_pdf_text(path)
     } else {
         None
     }
+}
+
+fn decode_hex(s: &str) -> Result<Vec<u8>, ()> {
+    if s.len() % 2 != 0 {
+        return Err(());
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| ()))
+        .collect()
+}
+
+fn extract_pdf_text(path: &str) -> Option<String> {
+    use lopdf::Document;
+    let doc = Document::load(path).ok()?;
+    let mut pages_text: Vec<String> = Vec::new();
+    let page_ids = doc.get_pages();
+    let mut page_nums: Vec<u32> = page_ids.keys().copied().collect();
+    page_nums.sort();
+    for page_num in page_nums {
+        let page_id = match page_ids.get(&page_num) {
+            Some(&id) => id,
+            None => continue,
+        };
+        let mut text_parts: Vec<String> = Vec::new();
+        if let Ok(page_dict) = doc.get_dictionary(page_id) {
+            if let Ok(contents_ref) = page_dict.get(b"Contents") {
+                let content_ids: Vec<lopdf::ObjectId> = match contents_ref {
+                    lopdf::Object::Reference(id) => vec![*id],
+                    lopdf::Object::Array(arr) => arr
+                        .iter()
+                        .filter_map(|o| {
+                            if let lopdf::Object::Reference(id) = o {
+                                Some(*id)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                    _ => vec![],
+                };
+                for cid in content_ids {
+                    if let Ok(obj) = doc.get_object(cid) {
+                        if let Ok(stream) = obj.as_stream() {
+                            if let Ok(decompressed) = stream.decompressed_content() {
+                                let content_str = String::from_utf8_lossy(&decompressed);
+                                for token in content_str.split_whitespace() {
+                                    if token.starts_with('(') && token.ends_with(')') {
+                                        let inner = &token[1..token.len() - 1];
+                                        if !inner.is_empty() {
+                                            text_parts.push(inner.to_string());
+                                        }
+                                    } else if token.starts_with('<') && token.ends_with('>') {
+                                        let hex_str = &token[1..token.len() - 1];
+                                        if let Ok(bytes) = decode_hex(hex_str) {
+                                            if let Ok(s) = String::from_utf8(bytes) {
+                                                let cleaned: String =
+                                                    s.chars().filter(|c| !c.is_control()).collect();
+                                                if !cleaned.is_empty() {
+                                                    text_parts.push(cleaned);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !text_parts.is_empty() {
+            pages_text.push(text_parts.join(" "));
+        }
+    }
+    if pages_text.is_empty() {
+        return None;
+    }
+    let full = pages_text.join("\n\n");
+    let truncated = if full.len() > 50_000 {
+        let mut s = full[..50_000].to_string();
+        s.push_str("\n\n[... truncated]");
+        s
+    } else {
+        full
+    };
+    Some(truncated)
 }
 
 fn extract_docx_text(path: &str) -> Option<String> {

@@ -84,6 +84,7 @@ base64 = "0.22"
 tar = "0.4"
 flate2 = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+lopdf = "0.34"
 
 # Scheduler (2026-04-23) — cron expression parsing and next-fire
 # computation for the Scheduler page. `cron` is pure-Rust and tiny;
