@@ -986,6 +986,12 @@ export const tauriMockInitScript = /* js */ `
         return 'data:' + mime + ';base64,' + ONE_PX_PNG_B64;
       }
 
+      case 'attachment_thumbnail': {
+        const ONE_PX_PNG_B64 =
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        return 'data:image/png;base64,' + ONE_PX_PNG_B64;
+      }
+
       // T1.5e — GC: the mock has no disk state, so there's nothing to
       // sweep. Return an empty report so the caller's telemetry logs
       // cleanly in browser-mode runs.
