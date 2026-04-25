@@ -47,7 +47,8 @@
     "homepage": "https://github.com/zbin0929/CoreyOS",
     "createUpdaterArtifacts": true,
     "resources": [
-      "assets/presets/**/*"
+      "assets/presets/**/*",
+      "scripts/*"
     ],
     "macOS": {
       "infoPlist": "../src-tauri/macos.Info.plist"

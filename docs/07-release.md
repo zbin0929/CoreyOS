@@ -129,3 +129,36 @@ export APPLE_TEAM_ID="TEAMID"
 `pnpm tauri build` reads these automatically and notarizes. Trigger:
 install abandonment becomes measurable. Until then, the right-click
 workaround is fine.
+
+## Runtime dependencies
+
+Corey ships as a self-contained Tauri app, but some features require
+external tools on the user's machine:
+
+| Dependency | Required? | Feature | Install |
+|------------|-----------|---------|---------|
+| **Hermes CLI** | ✅ Core | All AI chat, skills, MCP, scheduler, workflow execution | `~/.local/bin/hermes` or `$PATH` |
+| **Node.js** | ⚠️ Optional | Browser automation (Stagehand) | system Node.js ≥ 18 |
+| **Chromium** | ⚠️ Optional | Browser automation (Playwright) | `npx playwright install chromium` |
+
+### What's bundled in the app
+
+| Component | Bundled? | Notes |
+|-----------|----------|-------|
+| Frontend (React) | ✅ Yes | `pnpm build` → `dist/` embedded |
+| Rust backend | ✅ Yes | Compiled into binary |
+| SQLite (rusqlite) | ✅ Yes | Static linked |
+| Workflow engine | ✅ Yes | Compiled into binary |
+| 6 workflow templates | ✅ Yes | `include_str!` embedded |
+| `scripts/browser-runner.cjs` | ✅ Yes | Tauri resources |
+| Browser LLM config UI | ✅ Yes | Settings page |
+| Skill version history | ✅ Yes | SQLite |
+
+### What's NOT bundled
+
+| Component | Why | Solution |
+|-----------|-----|----------|
+| Hermes CLI | External tool, separate release cycle | First-run detection + install prompt |
+| Node.js runtime | ~45MB, platform-specific | `pkg` compile to standalone binary (TODO) |
+| Chromium browser | ~150MB, platform-specific | Playwright auto-install (TODO: bundle) |
+| `@browserbasehq/stagehand` | npm dependency, needs Node.js | `pkg` bundles it (TODO) |

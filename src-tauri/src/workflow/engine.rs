@@ -86,8 +86,8 @@ pub fn create_initial_run(def: &WorkflowDef, inputs: serde_json::Value) -> (Work
 
 pub trait StepExecutor: Send + Sync {
     fn execute_agent(&self, agent_id: &str, prompt: &str) -> Result<String, String>;
-    fn execute_browser(&self, action: &str, url: &str, instruction: &str) -> Result<String, String> {
-        Ok(format!("[browser:{}] {} @ {}", action, instruction, url))
+    fn execute_browser(&self, action: &str, url: &str, instruction: &str, profile: &str) -> Result<String, String> {
+        Ok(format!("[browser:{}] {} @ {} (profile={})", action, instruction, url, profile))
     }
 }
 
@@ -199,7 +199,8 @@ fn execute_browser_step(
     let rendered = ctx.render_template(instruction);
     let url = step.tool_name.as_deref().unwrap_or("");
     let action = step.agent_id.as_deref().unwrap_or("agent");
-    let result = executor.execute_browser(action, url, &rendered)?;
+    let profile = step.browser_profile.as_deref().unwrap_or("");
+    let result = executor.execute_browser(action, url, &rendered, profile)?;
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&result);
     match parsed {
         Ok(v) => Ok(v),

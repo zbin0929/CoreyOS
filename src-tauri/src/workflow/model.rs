@@ -73,6 +73,8 @@ pub struct WorkflowStep {
     pub approval_message: Option<String>,
     #[serde(default)]
     pub output_format: Option<String>,
+    #[serde(default)]
+    pub browser_profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

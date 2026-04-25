@@ -1162,6 +1162,8 @@
     "add_condition": "添加条件",
     "approval_message": "审批提示",
     "browser_action": "操作类型",
-    "browser_instruction": "浏览器指令"
+    "browser_instruction": "浏览器指令",
+    "browser_profile": "浏览器配置文件",
+    "browser_profile_hint": "相同名称的配置文件共享 Cookie 和登录态，首次登录后自动保存。"
   }
 }

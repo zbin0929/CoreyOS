@@ -1162,6 +1162,8 @@
     "add_condition": "Add Condition",
     "approval_message": "Approval Message",
     "browser_action": "Action Type",
-    "browser_instruction": "Browser Instruction"
+    "browser_instruction": "Browser Instruction",
+    "browser_profile": "Browser Profile",
+    "browser_profile_hint": "Profiles with the same name share cookies and login state. Login once, reuse automatically."
   }
 }

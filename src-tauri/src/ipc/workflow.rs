@@ -95,6 +95,26 @@ pub async fn workflow_validate(def: WorkflowDef) -> IpcResult<ValidationResult> 
     })
 }
 
+fn find_browser_runner() -> std::path::PathBuf {
+    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let exe_dir = exe.parent().unwrap_or(std::path::Path::new("."));
+
+    let candidates: Vec<std::path::PathBuf> = vec![
+        exe_dir.join("scripts/browser-runner.cjs"),
+        exe_dir.join("../scripts/browser-runner.cjs"),
+        exe_dir.join("../../scripts/browser-runner.cjs"),
+        exe_dir.join("../../../scripts/browser-runner.cjs"),
+        exe_dir.join("../../../../scripts/browser-runner.cjs"),
+        std::path::PathBuf::from("../scripts/browser-runner.cjs"),
+    ];
+    for p in &candidates {
+        if p.exists() {
+            return p.canonicalize().unwrap_or_else(|_| p.clone());
+        }
+    }
+    exe_dir.join("scripts/browser-runner.cjs")
+}
+
 struct HermesExecutor {
     adapters: std::sync::Arc<crate::adapters::AdapterRegistry>,
 }
@@ -121,19 +141,18 @@ impl StepExecutor for HermesExecutor {
             .map_err(|e| format!("agent error: {e}"))
     }
 
-    fn execute_browser(&self, action: &str, url: &str, instruction: &str) -> Result<String, String> {
+    fn execute_browser(&self, action: &str, url: &str, instruction: &str, profile: &str) -> Result<String, String> {
         use std::process::Command;
 
         let cfg = browser_config::load();
 
-        let script_path = std::env::current_exe()
-            .map(|p| p.parent().map(|d| d.parent().map(|d2| d2.join("scripts").join("browser-runner.cjs")).unwrap_or_default()).unwrap_or_default())
-            .unwrap_or_else(|_| std::path::PathBuf::from("scripts/browser-runner.cjs"));
+        let script_path = find_browser_runner();
 
         let task = serde_json::json!({
             "action": action,
             "url": url,
             "instruction": instruction,
+            "profile": if profile.is_empty() { "" } else { profile },
         });
 
         let mut cmd = Command::new("node");

@@ -654,3 +654,117 @@ T9.8 预置模板             ──── Phase 3（~0.5 week）
 - LangGraph StateGraph: https://docs.langchain.com/oss/python/langchain/multi-agent
 - Google ADK Agent Types: https://google.github.io/adk-docs/agents/
 - React Flow: https://reactflow.dev/
+
+---
+
+## 完成状态 (2026-04-26)
+
+All 8 tasks completed:
+
+| Task | 描述 | 文件 | 状态 |
+|------|------|------|------|
+| T9.1 | 数据模型 + YAML + Store | `model.rs`, `store.rs`, `context.rs` | ✅ |
+| T9.2 | 执行引擎 (topo-sort + StepExecutor trait) | `engine.rs`, `planner.rs` | ✅ |
+| T9.3 | IPC 命令 (CRUD + run + approve) | `ipc/workflow.rs` | ✅ |
+| T9.4 | 前端列表页 (卡片 + 运行 + 审批) | `features/workflow/index.tsx` | ✅ |
+| T9.5 | React Flow 可视化编辑器 | `Editor.tsx`, `StepNode.tsx`, `PropertyPanel.tsx` | ✅ |
+| T9.6 | 实时执行状态 + 人工审批 | polling + `workflow_approve` IPC | ✅ |
+| T9.7 | Scheduler 绑定工作流 | `hermes_cron.rs` + `scheduler.rs` | ✅ |
+| T9.8 | 3 个预置模板 | `templates/*.yaml` | ✅ |
+
+7 种步骤类型: agent / tool / browser / parallel / branch / loop / approval
+
+---
+
+# Phase 10 · Browser Automation
+
+**Goal**: 让工作流能操作真实浏览器，实现网页数据抓取、表单填写、页面交互等自动化。基于 Stagehand（AI-native browser automation）+ Playwright，支持 Cookie/Session 持久化。
+
+**Est.**: ~3 days.
+
+**Depends on**: Phase 9 全部完成.
+
+## Exit criteria
+
+1. ✅ 安装 Stagehand + Playwright，创建 Node.js 桥接脚本
+2. ✅ Rust 新增 `browser` 步骤类型，通过子进程调用 Node.js
+3. ✅ 前端 Browser 节点（青色 🌐），支持 URL / 操作类型 / 指令 / Profile
+4. ✅ Cookie 持久化（browser_profile 字段，`~/.hermes/browser-profiles/`）
+5. ✅ Settings 页面浏览器 LLM 配置（模型 / API Key / Base URL）
+6. ✅ 3 个浏览器自动化预置模板
+
+## Task breakdown
+
+### T10.1 — Stagehand + Playwright 安装 + PoC
+
+- 安装 `@browserbasehq/stagehand` v3.2.1 + Playwright
+- 创建 `scripts/browser-runner.cjs`：Node.js 桥接脚本
+- 支持 4 种操作：act / extract / observe / agent
+- 本地模式 (env=LOCAL)，使用用户自己的 LLM
+
+### T10.2 — Rust browser 步骤类型
+
+- `StepExecutor` trait 新增 `execute_browser()` 方法
+- `HermesExecutor` 通过 `Command::new("node")` 调用 `browser-runner.cjs`
+- `execute_browser_step()` 在 engine.rs 中分发
+- Store 验证接受 "browser" 类型
+- `find_browser_runner()` 从可执行文件目录搜索脚本
+
+### T10.3 — 前端 Browser 节点
+
+- StepNode: 青色 🌐 Browser 节点
+- PropertyPanel: URL / 操作类型 / 指令 / 浏览器配置文件
+- Editor help panel: 新增 browser 类型说明
+- IPC types: WorkflowStep.type 包含 'browser'
+
+### T10.4 — Cookie 持久化 + Settings + 模板
+
+- `browser-runner.cjs`: `userDataDir` + `preserveUserDataDir` 参数
+- `WorkflowStep` 新增 `browser_profile` 字段
+- `browser_config.rs`: 持久化到 `~/.hermes/browser_config.json`
+- Settings 页面: Browser LLM 配置区域
+- 3 个预置模板:
+  - **抖音热门视频抓取** — 搜索关键词 + 提取视频信息
+  - **竞品价格监控** — 并行抓取京东+淘宝价格
+  - **UPS 物流追踪** — 查询物流状态，profile 持久化登录态
+
+## 文件结构
+
+```
+# 浏览器自动化
+scripts/
+  browser-runner.cjs          # Node.js 桥接脚本（Stagehand + Playwright）
+
+src-tauri/src/
+  workflow/
+    browser_config.rs          # LLM 配置持久化 (~/.hermes/browser_config.json)
+    engine.rs                  # execute_browser_step() + StepExecutor trait
+    model.rs                   # WorkflowStep.browser_profile 字段
+    store.rs                   # "browser" 合法类型
+    templates/
+      douyin-hot-videos.yaml
+      competitor-price-monitor.yaml
+      ups-tracking.yaml
+
+src/
+  features/workflow/
+    nodes/StepNode.tsx         # 🌐 青色 Browser 节点
+    PropertyPanel.tsx          # browser 字段 (URL/action/instruction/profile)
+  features/settings/
+    index.tsx                  # BrowserLLMSection
+  lib/ipc.ts                  # BrowserLLMConfig + browserConfigGet/Set
+```
+
+## 运行时依赖
+
+| 依赖 | 必须？ | 说明 |
+|------|--------|------|
+| Node.js | ⚠️ 仅浏览器自动化 | `browser-runner.cjs` 需要 |
+| Chromium | ⚠️ 仅浏览器自动化 | Playwright 安装的 Chromium |
+| LLM API | ⚠️ 仅浏览器自动化 | Settings 页面配置 |
+
+## 已知限制
+
+1. API Key 明文存储在 `~/.hermes/browser_config.json`（桌面应用，与 VS Code 行为一致）
+2. 生产打包需包含 `scripts/*` 到 Tauri resources
+3. 目标机器需有 Node.js 环境（未来可用 pkg 打包成独立二进制）

@@ -7,6 +7,7 @@ pub fn builtin_templates() -> Vec<(&'static str, &'static str)> {
         ("code-review-pipeline.yaml", include_str!("templates/code-review-pipeline.yaml")),
         ("douyin-hot-videos.yaml", include_str!("templates/douyin-hot-videos.yaml")),
         ("competitor-price-monitor.yaml", include_str!("templates/competitor-price-monitor.yaml")),
+        ("ups-tracking.yaml", include_str!("templates/ups-tracking.yaml")),
     ]
 }
 

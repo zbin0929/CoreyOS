@@ -162,6 +162,16 @@ export function PropertyPanel({ step, onUpdate, onDelete }: Props) {
               className="text-xs"
             />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">{t('workflow_page.browser_profile')}</span>
+            <Input
+              value={local.browser_profile ?? ''}
+              onChange={(e) => set('browser_profile', e.target.value || undefined)}
+              placeholder="ups-session（留空则无状态）"
+              className="text-xs"
+            />
+            <span className="text-[10px] text-fg-muted">{t('workflow_page.browser_profile_hint')}</span>
+          </label>
         </>
       )}
 

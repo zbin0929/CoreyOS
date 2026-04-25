@@ -1940,6 +1940,7 @@ export interface WorkflowStep {
   timeout_minutes?: number;
   approval_message?: string;
   output_format?: string;
+  browser_profile?: string;
 }
 
 export interface WorkflowDef {
