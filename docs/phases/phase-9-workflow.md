@@ -570,6 +570,54 @@ pub workflow_inputs: Option<serde_json::Value>,  // 工作流输入参数
 
 ---
 
+### T9.9 — 聊天内智能意图识别 · ~1 day
+
+用户在聊天中描述需求时，自动检测是否匹配已有工作流或定时意图，以**内联建议卡片**形式呈现，一键执行。不使用 `/命令`，纯自然语言触发。
+
+#### 设计
+
+```
+用户输入: "帮我追踪一下 UPS 快递 1Z999AA..."
+    ↓
+Rust workflow_extract_intent → 关键词匹配 → confidence 0.6
+    ↓
+聊天气泡下方弹出: [⚡ UPS 物流追踪 | 检测到可执行工作流 | [确认执行] [忽略]]
+    ↓
+用户点击 [确认执行] → workflowRun() → 卡片变绿 ✅
+```
+
+```
+用户输入: "每天早上9点帮我总结 issues"
+    ↓
+Rust scheduler_extract_intent → "每天早上9点" → "0 9 * * *"
+    ↓
+聊天气泡下方弹出: [⏰ 每天早上9点... | Cron: 0 9 * * * | [确认执行] [忽略]]
+    ↓
+用户点击 → schedulerUpsertJob() → 卡片变绿 ✅
+```
+
+#### 意图识别算法
+
+**工作流匹配**：双层评分
+1. 名称/描述分词匹配（权重 2:1）
+2. 每个模板的**专属关键词**加分（如 UPS 模板匹配 "物流"/"快递"/"tracking"）
+3. 加权分数 > 0.2 即触发
+
+**定时意图匹配**：预定义中英文模式表
+- 40+ 条关键词组合规则（中文："每天早上9点"→"0 9 * * *"；英文："every hour"→"0 * * * *"）
+- confidence ≥ 0.6 触发
+
+#### 交付
+
+- `src-tauri/src/ipc/workflow.rs` — `workflow_extract_intent` IPC
+- `src-tauri/src/ipc/scheduler.rs` — `scheduler_extract_intent` IPC（已有）
+- `src/features/chat/SuggestionCard.tsx` — 内联建议卡片组件
+- `src/stores/chat.ts` — `UiSuggestion` 类型
+- `src/features/chat/index.tsx` — 发送后意图检测 + 卡片注入
+- `src/features/chat/MessageBubble.tsx` — 渲染建议卡片
+
+---
+
 ## 文件结构总览
 
 ```
@@ -631,6 +679,8 @@ T9.6 执行状态展示        ──┤
 T9.7 Scheduler 集成       ──┘
                                     ↓
 T9.8 预置模板             ──── Phase 3（~0.5 week）
+                                    ↓
+T9.9 聊天智能意图识别     ──── Phase 4（~1 day）
 ```
 
 ## 和现有系统的集成
@@ -659,7 +709,7 @@ T9.8 预置模板             ──── Phase 3（~0.5 week）
 
 ## 完成状态 (2026-04-26)
 
-All 8 tasks completed:
+All 9 tasks completed:
 
 | Task | 描述 | 文件 | 状态 |
 |------|------|------|------|
@@ -670,7 +720,8 @@ All 8 tasks completed:
 | T9.5 | React Flow 可视化编辑器 | `Editor.tsx`, `StepNode.tsx`, `PropertyPanel.tsx` | ✅ |
 | T9.6 | 实时执行状态 + 人工审批 | polling + `workflow_approve` IPC | ✅ |
 | T9.7 | Scheduler 绑定工作流 | `hermes_cron.rs` + `scheduler.rs` | ✅ |
-| T9.8 | 3 个预置模板 | `templates/*.yaml` | ✅ |
+| T9.8 | 6 个预置模板 | `templates/*.yaml` | ✅ |
+| T9.9 | 聊天智能意图识别 + 建议卡片 | `SuggestionCard.tsx`, `workflow_extract_intent` | ✅ |
 
 7 种步骤类型: agent / tool / browser / parallel / branch / loop / approval
 
