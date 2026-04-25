@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/icon';
 
@@ -200,7 +200,7 @@ export function Select<V extends string = string>({
           aria-activedescendant={`${listboxId}-opt-${activeIdx}`}
           className={cn(
             'absolute left-0 z-50 mt-1 overflow-hidden',
-            'min-w-full max-w-[min(90vw,400px)]',
+            'min-w-full w-max max-w-[90vw]',
             'rounded-md border border-border bg-bg-elev-1 shadow-lg',
           )}
         >
@@ -229,18 +229,16 @@ export function Select<V extends string = string>({
                     selectedNow && !active && 'text-fg',
                   )}
                 >
-                  <Icon
-                    icon={Check}
-                    size="sm"
-                    className={cn(
-                      'flex-none',
-                      selectedNow ? 'opacity-100 text-gold-500' : 'opacity-0',
-                    )}
-                  />
+                  {selectedNow && (
+                    <span className="flex-none h-1.5 w-1.5 rounded-full bg-gold-500" />
+                  )}
+                  {!selectedNow && (
+                    <span className="flex-none h-1.5 w-1.5 rounded-full bg-transparent" />
+                  )}
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="break-all">{opt.label}</span>
+                    <span className="whitespace-nowrap">{opt.label}</span>
                     {opt.hint && (
-                      <span className="break-all text-[11px] text-fg-subtle">
+                      <span className="whitespace-nowrap text-[11px] text-fg-subtle">
                         {opt.hint}
                       </span>
                     )}
