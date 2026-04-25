@@ -65,6 +65,7 @@ them requires a product-direction pivot, not an engineering decision.
   graph runtime. See `docs/phases/phase-7-expansion.md`.
 - **Re-open trigger**: existing DAG frameworks all die / pivot, and
   no alternative exists.
+- **⚠️ RE-OPENED 2026-04-25**: Product direction pivot. These frameworks are all Python SDKs requiring code; CoreyOS targets non-technical users who need visual drag-and-drop orchestration. Dify (100k+ Stars) proved the commercial value. Phase 9 now owns this: `docs/phases/phase-9-workflow.md`.
 
 ### Desktop-side video processing (all of brainstorm item 6️⃣)
 
