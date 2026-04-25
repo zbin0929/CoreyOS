@@ -31,6 +31,7 @@ mod sandbox;
 mod skills;
 mod state;
 mod tfidf;
+mod workflow;
 
 use std::sync::Arc;
 
@@ -199,6 +200,11 @@ pub fn run() {
             ipc::llm_profiles::llm_profile_upsert,
             ipc::llm_profiles::llm_profile_delete,
             ipc::llm_profiles::llm_profile_ensure_adapter,
+            ipc::workflow::workflow_list,
+            ipc::workflow::workflow_get,
+            ipc::workflow::workflow_save,
+            ipc::workflow::workflow_delete,
+            ipc::workflow::workflow_validate,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");

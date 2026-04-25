@@ -1903,3 +1903,86 @@ export function ipcErrorMessage(e: unknown): string {
   }
   return typeof e === 'string' ? e : (e instanceof Error ? e.message : String(e));
 }
+
+// ───────────────────────── Workflow ─────────────────────────
+
+export interface WorkflowTrigger {
+  type: 'manual' | 'cron';
+  expression?: string;
+}
+
+export interface WorkflowInput {
+  name: string;
+  label: string;
+  type: string;
+  default?: string;
+  required: boolean;
+  options?: string[];
+}
+
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  type: 'agent' | 'tool' | 'parallel' | 'branch' | 'loop' | 'approval';
+  after: string[];
+  agent_id?: string;
+  prompt?: string;
+  skills?: string[];
+  model?: string;
+  tool_name?: string;
+  tool_args?: Record<string, unknown>;
+  branches?: WorkflowStep[];
+  conditions?: { expression: string; goto: string }[];
+  max_iterations?: number;
+  body?: WorkflowStep[];
+  exit_condition?: string;
+  after_done?: string;
+  timeout_minutes?: number;
+  approval_message?: string;
+  output_format?: string;
+}
+
+export interface WorkflowDef {
+  id: string;
+  name: string;
+  description: string;
+  version: number;
+  trigger: WorkflowTrigger;
+  inputs: WorkflowInput[];
+  steps: WorkflowStep[];
+}
+
+export interface WorkflowSummary {
+  id: string;
+  name: string;
+  description: string;
+  version: number;
+  trigger_type: string;
+  step_count: number;
+  updated_at_ms: number;
+}
+
+export interface WorkflowValidationResult {
+  valid: boolean;
+  errors: { field: string; message: string }[];
+}
+
+export function workflowList(): Promise<WorkflowSummary[]> {
+  return invoke('workflow_list');
+}
+
+export function workflowGet(id: string): Promise<WorkflowDef> {
+  return invoke('workflow_get', { id });
+}
+
+export function workflowSave(def: WorkflowDef): Promise<WorkflowDef> {
+  return invoke('workflow_save', { def });
+}
+
+export function workflowDelete(id: string): Promise<boolean> {
+  return invoke('workflow_delete', { id });
+}
+
+export function workflowValidate(def: WorkflowDef): Promise<WorkflowValidationResult> {
+  return invoke('workflow_validate', { def });
+}
