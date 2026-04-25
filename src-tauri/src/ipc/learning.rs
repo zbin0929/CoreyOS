@@ -125,10 +125,7 @@ pub async fn learning_extract(
     }
 
     let memory_path = resolve_memory_path()?;
-    let existing = match std::fs::read_to_string(&memory_path) {
-        Ok(s) => s,
-        Err(_) => String::new(),
-    };
+    let existing: String = std::fs::read_to_string(&memory_path).unwrap_or_default();
 
     let existing_tokens = tokenize(&existing);
     candidates.retain(|fact| {
