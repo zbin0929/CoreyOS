@@ -42,13 +42,14 @@ pub fn mark_completed(remaining: &mut HashMap<String, StepDeps>, step_id: &str) 
     find_ready(remaining)
 }
 
+#[allow(dead_code)]
 pub fn topological_order(def: &WorkflowDef) -> Result<Vec<String>, String> {
     let mut in_degree: HashMap<&str, usize> = HashMap::new();
     let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
 
     for step in &def.steps {
         in_degree.entry(&step.id).or_insert(0);
-        adj.entry(&step.id).or_insert_with(Vec::new);
+        adj.entry(&step.id).or_default();
         for after in &step.after {
             *in_degree.entry(&step.id).or_insert(0) += 1;
             adj.entry(after.as_str()).or_default().push(&step.id);
@@ -81,6 +82,7 @@ pub fn topological_order(def: &WorkflowDef) -> Result<Vec<String>, String> {
     Ok(order)
 }
 
+#[allow(dead_code)]
 pub fn collect_all_step_ids(steps: &[WorkflowStep]) -> HashSet<String> {
     let mut ids = HashSet::new();
     for step in steps {

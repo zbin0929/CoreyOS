@@ -122,11 +122,7 @@ pub fn validate(def: &WorkflowDef) -> Vec<ValidationError> {
     errors
 }
 
-fn validate_step<'a>(
-    step: &WorkflowStep,
-    known_ids: &[&'a str],
-    errors: &mut Vec<ValidationError>,
-) {
+fn validate_step(step: &WorkflowStep, known_ids: &[&str], errors: &mut Vec<ValidationError>) {
     if step.id.is_empty() {
         errors.push(ValidationError {
             field: "step.id".into(),
@@ -172,38 +168,35 @@ fn validate_step<'a>(
                 });
             }
         }
-        "tool" => {
-            if step.tool_name.is_none() {
-                errors.push(ValidationError {
-                    field: format!("steps[{}].tool_name", step.id),
-                    message: "Tool step requires tool_name".into(),
-                });
-            }
+        "tool" if step.tool_name.is_none() => {
+            errors.push(ValidationError {
+                field: format!("steps[{}].tool_name", step.id),
+                message: "Tool step requires tool_name".into(),
+            });
         }
-        "parallel" => {
-            if step.branches.is_none() || step.branches.as_ref().map_or(true, |b| b.is_empty()) {
-                errors.push(ValidationError {
-                    field: format!("steps[{}].branches", step.id),
-                    message: "Parallel step requires at least one branch".into(),
-                });
-            }
+        "parallel"
+            if (step.branches.is_none()
+                || step.branches.as_ref().map_or(true, |b| b.is_empty())) =>
+        {
+            errors.push(ValidationError {
+                field: format!("steps[{}].branches", step.id),
+                message: "Parallel step requires at least one branch".into(),
+            });
         }
-        "branch" => {
-            if step.conditions.is_none() || step.conditions.as_ref().map_or(true, |c| c.is_empty())
-            {
-                errors.push(ValidationError {
-                    field: format!("steps[{}].conditions", step.id),
-                    message: "Branch step requires at least one condition".into(),
-                });
-            }
+        "branch"
+            if (step.conditions.is_none()
+                || step.conditions.as_ref().map_or(true, |c| c.is_empty())) =>
+        {
+            errors.push(ValidationError {
+                field: format!("steps[{}].conditions", step.id),
+                message: "Branch step requires at least one condition".into(),
+            });
         }
-        "loop" => {
-            if step.body.is_none() || step.body.as_ref().map_or(true, |b| b.is_empty()) {
-                errors.push(ValidationError {
-                    field: format!("steps[{}].body", step.id),
-                    message: "Loop step requires at least one body step".into(),
-                });
-            }
+        "loop" if (step.body.is_none() || step.body.as_ref().map_or(true, |b| b.is_empty())) => {
+            errors.push(ValidationError {
+                field: format!("steps[{}].body", step.id),
+                message: "Loop step requires at least one body step".into(),
+            });
         }
         "approval" => {}
         _ => {}

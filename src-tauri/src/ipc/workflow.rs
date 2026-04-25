@@ -166,8 +166,8 @@ impl StepExecutor for HermesExecutor {
         let cfg = browser_config::load();
 
         let script_path = find_browser_runner();
-        let is_binary = script_path.extension().map_or(false, |e| e == "exe")
-            || !script_path.extension().map_or(false, |e| e == "cjs");
+        let is_binary = script_path.extension().is_some_and(|e| e == "exe")
+            || !script_path.extension().is_some_and(|e| e == "cjs");
 
         let task = serde_json::json!({
             "action": action,
@@ -230,7 +230,7 @@ pub async fn workflow_run(
             message: format!("workflow_run load: {e}"),
         })?;
 
-    let (mut run, mut ctx) = engine::create_initial_run(&def, inputs);
+    let (run, mut ctx) = engine::create_initial_run(&def, inputs);
     let run_id = run.id.clone();
     runs.lock().insert(run_id.clone(), run);
 

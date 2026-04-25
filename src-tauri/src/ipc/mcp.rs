@@ -226,7 +226,7 @@ pub async fn mcp_server_probe(state: State<'_, AppState>, id: String) -> IpcResu
                 id: rid,
                 reachable: false,
                 latency_ms: None,
-                error: Some(format!("command '{}' not found in PATH", cmd.to_string())),
+                error: Some(format!("command '{}' not found in PATH", cmd)),
             }),
         }
     } else {

@@ -182,8 +182,6 @@ fn extract_text_from_file(path: &str, mime: &str, name: &str) -> Option<String> 
         || mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     {
         extract_xlsx_text(path)
-    } else if ext == "pdf" || mime == "application/pdf" {
-        None
     } else {
         None
     }

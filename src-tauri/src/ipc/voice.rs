@@ -446,10 +446,6 @@ pub async fn voice_tts(_state: State<'_, AppState>, text: String) -> IpcResult<V
     };
     let speed = if cfg.tts_speed < 0.5 || cfg.tts_speed > 2.0 {
         1.0
-    } else if matches!(provider, VoiceProvider::Openai | VoiceProvider::Edge)
-        && (cfg.tts_speed < 0.25 || cfg.tts_speed > 4.0)
-    {
-        1.0
     } else {
         cfg.tts_speed
     };

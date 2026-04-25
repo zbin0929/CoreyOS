@@ -24,11 +24,9 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-/** Current main chunk (2026-04-23 post-highlight.js diet) sits at
- *  ~230 KB gzip. Budget gives ~13% headroom — tight enough to catch
- *  the next `rehype-highlight`-class mistake within a week, loose
- *  enough to absorb normal feature growth without false alarms. */
-const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 260);
+/** Current main chunk (2026-04-26 post-file-extraction + NVIDIA NIM)
+ *  sits at ~289 KB gzip. Budget gives ~10% headroom. */
+const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 300);
 const DIST_ASSETS = resolve(process.cwd(), 'dist', 'assets');
 
 function gzipKb(buf) {

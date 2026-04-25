@@ -58,6 +58,7 @@ impl WorkflowRun {
     }
 }
 
+#[allow(dead_code)]
 pub struct EngineResult {
     pub run: WorkflowRun,
     #[allow(dead_code)]
@@ -103,6 +104,7 @@ pub trait StepExecutor: Send + Sync {
     }
 }
 
+#[allow(dead_code)]
 pub struct SimulatedExecutor;
 
 impl StepExecutor for SimulatedExecutor {
@@ -163,6 +165,7 @@ pub fn execute_with_executor(
     }
 }
 
+#[allow(dead_code)]
 pub fn execute_sync(def: &WorkflowDef, inputs: serde_json::Value) -> EngineResult {
     let (mut run, mut ctx) = create_initial_run(def, inputs);
     let executor = SimulatedExecutor;
