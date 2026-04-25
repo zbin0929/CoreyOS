@@ -5,7 +5,7 @@ use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
 use crate::workflow::model::{WorkflowDef, WorkflowSummary};
 use crate::workflow::store::{self, ValidationError};
-use crate::workflow::engine::{self, WorkflowRun, RunStatus, StepRunStatus};
+use crate::workflow::engine::{self, WorkflowRun, StepRunStatus};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationResult {

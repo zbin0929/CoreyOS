@@ -364,10 +364,9 @@ pub fn run() {
             // already inside the Arc inside AppState.
             app_state.authority.init_from_disk(&config_dir);
 
-            if let Ok(n) = workflow::templates::ensure_templates() {
-                if n > 0 {
-                    info!(n, "workflow templates installed");
-                }
+            match workflow::templates::ensure_templates() {
+                Ok(n) => info!(n, "workflow templates checked"),
+                Err(e) => tracing::error!(error = %e, "workflow templates install failed"),
             }
 
             app.manage(app_state);

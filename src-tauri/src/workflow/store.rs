@@ -320,4 +320,19 @@ mod tests {
         let wf = sample_workflow();
         assert_eq!(wf.trigger_type_label(), "manual");
     }
+
+    #[test]
+    fn parse_builtin_templates() {
+        use crate::workflow::templates::builtin_templates;
+        for (filename, yaml_str) in builtin_templates() {
+            let result = serde_yaml::from_str::<WorkflowDef>(yaml_str);
+            match &result {
+                Ok(def) => {
+                    assert!(!def.steps.is_empty(), "{filename} has no steps");
+                    assert!(!def.id.is_empty(), "{filename} has no id");
+                }
+                Err(e) => panic!("Failed to parse {filename}: {e}"),
+            }
+        }
+    }
 }
