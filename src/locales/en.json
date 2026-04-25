@@ -804,6 +804,7 @@
     "api_key_placeholder": "Enter API key…",
     "save": "Save",
     "saving": "Saving…",
+    "saved": "Saved ✓",
     "test_asr": "Test ASR",
     "test_asr_hint": "Click to record 5 seconds of audio, then transcribe it.",
     "record_5s": "Record 5s",

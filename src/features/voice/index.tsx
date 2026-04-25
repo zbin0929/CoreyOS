@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
+  Check,
   Eye,
   Loader2,
   Mic,
@@ -35,6 +36,7 @@ export function VoiceRoute() {
   const [config, setConfig] = useState<VoiceConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [tab, setTab] = useState<'settings' | 'test' | 'audit'>('settings');
 
   const [asrProvider, setAsrProvider] = useState('openai');
@@ -72,6 +74,7 @@ export function VoiceRoute() {
   const onSave = useCallback(async () => {
     setSaving(true);
     setError(null);
+    setSaved(false);
     try {
       await voiceSetConfig({
         asr_provider: asrProvider,
@@ -85,6 +88,8 @@ export function VoiceRoute() {
         hotkey,
       });
       await load();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       setError(ipcErrorMessage(e));
     } finally {
@@ -264,13 +269,13 @@ export function VoiceRoute() {
             <div className="flex justify-end">
               <Button
                 size="sm"
-                variant="primary"
+                variant={saved ? 'secondary' : 'primary'}
                 onClick={() => void onSave()}
                 disabled={saving}
                 data-testid="voice-save"
               >
-                <Icon icon={saving ? Loader2 : Save} size="sm" className={cn(saving && 'animate-spin')} />
-                {saving ? t('voice.saving') : t('voice.save')}
+                <Icon icon={saving ? Loader2 : saved ? Check : Save} size="sm" className={cn(saving && 'animate-spin')} />
+                {saving ? t('voice.saving') : saved ? t('voice.saved') : t('voice.save')}
               </Button>
             </div>
           </div>

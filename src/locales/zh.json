@@ -804,6 +804,7 @@
     "api_key_placeholder": "输入 API Key…",
     "save": "保存",
     "saving": "保存中…",
+    "saved": "已保存 ✓",
     "test_asr": "测试 ASR",
     "test_asr_hint": "点击录制 5 秒音频，然后转写。",
     "record_5s": "录音 5 秒",
