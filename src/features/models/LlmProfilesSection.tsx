@@ -307,7 +307,14 @@ function LlmProfileCard({
           />
         </div>
         <div className="flex w-full flex-col gap-0.5 text-[11px] text-fg-muted">
-          <span className="truncate font-mono">{profile.model}</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="truncate font-mono">{profile.model}</span>
+            {profile.vision && (
+              <span className="rounded bg-purple-500/10 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-purple-500">
+                Vision
+              </span>
+            )}
+          </span>
           <code className="truncate font-mono text-fg-subtle">
             {profile.base_url}
           </code>

@@ -25,6 +25,7 @@ import {
   workflowSave,
   type WorkflowDef,
   type WorkflowStep,
+  type WorkflowTrigger,
 } from '@/lib/ipc';
 
 const nodeTypes: NodeTypes = { step: StepNode };
@@ -83,7 +84,7 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
         name: '',
         description: '',
         version: 1,
-        trigger: { type: 'manual' } as any,
+        trigger: { type: 'manual' } satisfies WorkflowTrigger,
         inputs: [],
         steps: [],
       });

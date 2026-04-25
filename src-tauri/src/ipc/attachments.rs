@@ -108,6 +108,38 @@ pub async fn attachment_preview(path: String, mime: Option<String>) -> IpcResult
         .map_err(map_anyhow)
 }
 
+#[tauri::command]
+pub async fn attachment_thumbnail(path: String) -> IpcResult<String> {
+    tokio::task::spawn_blocking(move || {
+        let home = std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .ok_or_else(|| anyhow::anyhow!("no HOME"))?;
+        let cache_dir = std::path::Path::new(&home).join(".hermes/cache/thumbnails");
+        std::fs::create_dir_all(&cache_dir)?;
+
+        let src = std::path::Path::new(&path);
+        let meta = std::fs::metadata(src)?;
+        let mtime = meta.modified().ok().map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()).unwrap_or(0);
+        let cache_key = format!("{:x}-{}", src.to_string_lossy().chars().map(|c| c as u32).fold(0u64, |a, b| a.wrapping_mul(31).wrapping_add(b as u64)), mtime);
+        let cache_path = cache_dir.join(format!("{cache_key}.b64"));
+
+        if cache_path.exists() {
+            return std::fs::read_to_string(&cache_path).map_err(|e| anyhow::anyhow!(e));
+        }
+
+        let data_url = attachments::read_as_data_url(&path, None)?;
+
+        if std::fs::write(&cache_path, &data_url).is_err() {
+            let _ = std::fs::remove_file(&cache_path);
+        }
+
+        Ok(data_url)
+    })
+    .await
+    .map_err(map_join)?
+    .map_err(map_anyhow)
+}
+
 /// T1.5e — sweep orphaned attachment files. Called at app startup from
 /// the chat-store hydrate path with the set of paths the DB still
 /// references; everything else under `attachments_dir` gets reaped.

@@ -24,8 +24,10 @@ import {
   ipcErrorMessage,
   mcpServerDelete,
   mcpServerList,
+  mcpServerProbe,
   mcpServerUpsert,
   type McpServer,
+  type McpProbeResult,
 } from '@/lib/ipc';
 
 /**
@@ -265,6 +267,8 @@ function ServerRow({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<McpProbeResult | null>(null);
   const transport = detectTransport(server.config);
   const summary =
     transport === 'stdio'
@@ -306,6 +310,30 @@ function ServerRow({
       >
         {t('mcp.edit')}
       </Button>
+      <Button
+        size="xs"
+        variant="ghost"
+        disabled={probing}
+        onClick={() => {
+          setProbing(true);
+          setProbeResult(null);
+          void mcpServerProbe(server.id)
+            .then((r) => setProbeResult(r))
+            .catch(() => setProbeResult(null))
+            .finally(() => setProbing(false));
+        }}
+        aria-label={t('mcp.probe')}
+        data-testid={`mcp-server-probe-${server.id}`}
+      >
+        {probing ? <Icon icon={Loader2} size="xs" className="animate-spin" /> : <Icon icon={Plug} size="xs" />}
+      </Button>
+      {probeResult && (
+        <span className={cn('text-[10px]', probeResult.reachable ? 'text-green-500' : 'text-red-500')}>
+          {probeResult.reachable
+            ? probeResult.latency_ms != null ? `${probeResult.latency_ms}ms` : '✓'
+            : probeResult.error ?? 'unreachable'}
+        </span>
+      )}
       <Button
         size="xs"
         variant="ghost"

@@ -333,25 +333,13 @@ them requires a product-direction pivot, not an engineering decision.
 ## Cross-cutting
 
 ### Storybook + component catalog
-- **Priority**: low
-- **Why parked**: deferred from Phase 0.5. Playwright covers our
-  actual behaviours; Storybook is documentation infrastructure.
-- **Re-open when**: a design-system overhaul warrants visual
-  regression tooling.
+- **Status**: **SHIPPED 2026-04-26 (Phase 11 T11.6)**. 8 component stories (Button, Kbd, EmptyState, Input, Select, Drawer, Card, Textarea).
 
 ### Vision-capability backfill from `/v1/models`
-- **Priority**: low
-- **Why parked**: the T1.5c client-side heuristic works. A real
-  backfill needs a per-provider capabilities table in `adapters::*`.
-- **Re-open when**: we onboard a non-Hermes adapter that exposes
-  trustworthy capability metadata.
+- **Status**: **SHIPPED 2026-04-26 (Phase 11 T11.4)**. `llm_profile_probe_vision` IPC probes `/v1/models`, detects vision-capable models, persists `vision: bool` on `LlmProfile`, renders purple "Vision" badge on profile cards.
 
 ### Attachment thumbnail caching across remounts
-- **Priority**: low
-- **Why parked**: bubble list isn't virtualised yet, so remounts are
-  rare and the IPC is cheap.
-- **Re-open when**: T1.9 virtualisation lands, OR profiling shows
-  attachment previews dominating CPU.
+- **Status**: **SHIPPED 2026-04-26 (Phase 11 T11.5)**. `attachment_thumbnail` IPC caches base64 data-URLs at `~/.hermes/cache/thumbnails/`, keyed by path+mtime. Frontend uses cached version.
 
 ### Runbook scope filter — palette-mode toggle
 - **Priority**: low

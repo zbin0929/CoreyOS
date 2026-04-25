@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Download,
   Loader2,
+  Package,
   Search,
   Terminal as TerminalIcon,
 } from 'lucide-react';
@@ -214,14 +215,56 @@ export function HubPanel() {
               exit {last.status}
             </span>
           </header>
-          {last.stdout && (
+          {last.stdout && lastCommand && /browse|search/.test(lastCommand) ? (
+            (() => {
+              const entries = parseBrowseOutput(last.stdout);
+              return entries.length > 0 ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="skill-hub-cards">
+                  {entries.map((e) => (
+                    <div
+                      key={e.slug}
+                      className="flex items-start gap-2 rounded-md border border-border bg-bg p-2.5 text-xs"
+                    >
+                      <Icon icon={Package} size="sm" className="mt-0.5 flex-none text-accent" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-mono font-semibold text-fg">{e.slug}</div>
+                        {e.description && (
+                          <div className="mt-0.5 line-clamp-2 text-fg-muted">{e.description}</div>
+                        )}
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="mt-1"
+                          onClick={() => {
+                            setInstallSlug(e.slug);
+                            void run(['install', e.slug]);
+                          }}
+                          disabled={running}
+                        >
+                          <Icon icon={Download} size="xs" />
+                          {t('skill_hub.install')}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <pre
+                  className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded border border-border/60 bg-bg p-2 font-mono text-[11px] text-fg"
+                  data-testid="skill-hub-stdout"
+                >
+                  {last.stdout}
+                </pre>
+              );
+            })()
+          ) : last.stdout ? (
             <pre
               className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded border border-border/60 bg-bg p-2 font-mono text-[11px] text-fg"
               data-testid="skill-hub-stdout"
             >
               {last.stdout}
             </pre>
-          )}
+          ) : null}
           {last.stderr && (
             <pre
               className="max-h-[200px] overflow-auto whitespace-pre-wrap rounded border border-danger/40 bg-danger/5 p-2 font-mono text-[11px] text-danger"
@@ -236,8 +279,30 @@ export function HubPanel() {
   );
 }
 
+interface HubEntry {
+  slug: string;
+  description: string;
+}
+
+function parseBrowseOutput(stdout: string): HubEntry[] {
+  const lines = stdout.split('\n').filter((l) => l.trim());
+  if (lines.length === 0) return [];
+  const entries: HubEntry[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('===') || trimmed.startsWith('---')) continue;
+    const match = trimmed.match(/^(\S+)\s{2,}(.+)$/);
+    if (match && match[1]) {
+      entries.push({ slug: match[1], description: (match[2] ?? '').trim() });
+    } else if (/^[\w.-]+\/[\w.-]+/.test(trimmed)) {
+      entries.push({ slug: trimmed.split(/\s+/)[0] ?? trimmed, description: '' });
+    }
+  }
+  return entries;
+}
+
 type Source =
-  | 'official'
+    | 'official'
   | 'skills-sh'
   | 'well-known'
   | 'github'

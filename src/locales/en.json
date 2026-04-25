@@ -743,6 +743,7 @@
     "delete": "Delete",
     "save": "Save",
     "no_command": "(no command or URL configured)",
+    "probe": "Probe",
     "confirm_delete": "Delete MCP server \"{{id}}\"? Hermes will stop loading its tools on next reload.",
     "restart_hint": "MCP config changed. Hermes needs a reload before the new tools show up.",
     "restart_now": "Restart gateway",

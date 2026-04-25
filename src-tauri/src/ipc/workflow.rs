@@ -99,34 +99,23 @@ fn find_browser_runner() -> std::path::PathBuf {
     let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let exe_dir = exe.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
 
-    let suffix = if cfg!(target_os = "windows") {
-        "browser-runner-win-x64.exe"
-    } else if cfg!(target_arch = "aarch64") {
-        "browser-runner-macos-arm64"
-    } else {
-        "browser-runner-macos-x64"
-    };
-
-    let cjs_suffix = "scripts/browser-runner.cjs";
-
     let candidates: Vec<std::path::PathBuf> = vec![
-        exe_dir.join("scripts").join(suffix),
-        exe_dir.join(suffix),
-        exe_dir.join("../scripts").join(suffix),
-        exe_dir.join("../../scripts").join(suffix),
-        exe_dir.join("scripts").join(cjs_suffix),
-        exe_dir.join("../scripts").join(cjs_suffix),
-        exe_dir.join("../../scripts").join(cjs_suffix),
-        exe_dir.join("../../../scripts").join(cjs_suffix),
-        exe_dir.join("../../../../scripts").join(cjs_suffix),
-        std::path::PathBuf::from("../scripts").join(cjs_suffix),
+        exe_dir.join("scripts/browser-runner"),
+        exe_dir.join("../scripts/browser-runner"),
+        exe_dir.join("../../scripts/browser-runner"),
+        exe_dir.join("../../../scripts/browser-runner"),
+        exe_dir.join("scripts/browser-runner.cjs"),
+        exe_dir.join("../scripts/browser-runner.cjs"),
+        exe_dir.join("../../scripts/browser-runner.cjs"),
+        exe_dir.join("../../../scripts/browser-runner.cjs"),
+        std::path::PathBuf::from("../scripts/browser-runner.cjs"),
     ];
     for p in &candidates {
         if p.exists() {
             return p.canonicalize().unwrap_or_else(|_| p.clone());
         }
     }
-    exe_dir.join("scripts").join(suffix)
+    exe_dir.join("scripts/browser-runner")
 }
 
 struct HermesExecutor {

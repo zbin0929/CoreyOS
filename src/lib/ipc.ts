@@ -403,6 +403,10 @@ export function attachmentPreview(
   });
 }
 
+export function attachmentThumbnail(path: string): Promise<string> {
+  return invoke<string>('attachment_thumbnail', { path });
+}
+
 /** Summary of a T1.5e GC pass. `failed` lists per-file error strings so
  *  the caller can surface them to devtools without swallowing silently. */
 export interface AttachmentGcReport {
@@ -795,6 +799,17 @@ export function mcpServerUpsert(server: McpServer): Promise<void> {
 
 export function mcpServerDelete(id: string): Promise<void> {
   return invoke<void>('mcp_server_delete', { id });
+}
+
+export interface McpProbeResult {
+  id: string;
+  reachable: boolean;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+export function mcpServerProbe(id: string): Promise<McpProbeResult> {
+  return invoke<McpProbeResult>('mcp_server_probe', { id });
 }
 
 // ───────────────────────── PTY (T4.5) ─────────────────────────
@@ -1415,6 +1430,7 @@ export interface LlmProfile {
   base_url: string;
   model: string;
   api_key_env?: string | null;
+  vision?: boolean | null;
 }
 
 export interface LlmProfilesFile {
@@ -1457,6 +1473,16 @@ export function llmProfileEnsureAdapter(profileId: string): Promise<LlmProfileAd
   return invoke<LlmProfileAdapterInfo>('llm_profile_ensure_adapter', {
     profileId,
   });
+}
+
+export interface VisionProbeResult {
+  profile_id: string;
+  vision: boolean;
+  model_id: string;
+}
+
+export function llmProfileProbeVision(profileId: string): Promise<VisionProbeResult> {
+  return invoke<VisionProbeResult>('llm_profile_probe_vision', { profileId });
 }
 
 export interface HermesInstancesFile {

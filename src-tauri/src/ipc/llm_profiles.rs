@@ -71,6 +71,7 @@ pub async fn llm_profile_upsert(
             .api_key_env
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty()),
+        vision: profile.vision,
     };
 
     let dir = state.config_dir.clone();
@@ -217,5 +218,88 @@ pub async fn llm_profile_ensure_adapter(
         adapter_id,
         model: profile.model,
         label,
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VisionProbeResult {
+    pub profile_id: String,
+    pub vision: bool,
+    pub model_id: String,
+}
+
+#[tauri::command]
+pub async fn llm_profile_probe_vision(
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> IpcResult<VisionProbeResult> {
+    let dir = state.config_dir.clone();
+    let id = profile_id.trim().to_string();
+    let id_for_err = id.clone();
+    let profile = tokio::task::spawn_blocking(move || {
+        llm_profiles::load(&dir).into_iter().find(|p| p.id == id)
+    })
+    .await
+    .map_err(|e| IpcError::Internal { message: format!("probe_vision join: {e}") })?
+    .ok_or_else(|| IpcError::NotConfigured { hint: format!("no llm profile {id_for_err:?}") })?;
+
+    let url = format!("{}/v1/models", profile.base_url.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| IpcError::Internal { message: format!("build client: {e}") })?;
+
+    let api_key = profile
+        .api_key_env
+        .as_deref()
+        .and_then(|k| crate::hermes_config::read_env_value(k).ok().flatten());
+    let mut req = client.get(&url);
+    if let Some(ref key) = api_key {
+        req = req.header("Authorization", format!("Bearer {key}"));
+    }
+    let resp = req.send().await;
+
+    let vision = match resp {
+        Ok(r) if r.status().is_success() => {
+            let body: serde_json::Value = r.json().await.unwrap_or_default();
+            let model_lower = profile.model.to_lowercase();
+            body.get("data")
+                .and_then(|d| d.as_array())
+                .map(|models| {
+                    let model_ids: Vec<&str> = models.iter().filter_map(|m| m.get("id").and_then(|i| i.as_str())).collect();
+                    model_ids.iter().any(|m| {
+                        let m_lower = m.to_lowercase();
+                        m_lower == model_lower
+                            && (m_lower.contains("vision")
+                                || m_lower.contains("gpt-4o")
+                                || m_lower.contains("gpt-4-turbo")
+                                || m_lower.contains("claude-3")
+                                || m_lower.contains("gemini")
+                                || m_lower.contains("qwen-vl")
+                                || m_lower.contains("glm-4v"))
+                    })
+                })
+                .unwrap_or(false)
+        }
+        _ => false,
+    };
+
+    let dir2 = state.config_dir.clone();
+    let pid = profile.id.clone();
+    let model = profile.model.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut list = llm_profiles::load(&dir2);
+        if let Some(p) = list.iter_mut().find(|p| p.id == pid) {
+            p.vision = Some(vision);
+            let _ = llm_profiles::save(&dir2, &list);
+        }
+    })
+    .await
+    .map_err(|e| IpcError::Internal { message: format!("save vision: {e}") })?;
+
+    Ok(VisionProbeResult {
+        profile_id: profile.id,
+        vision,
+        model_id: model,
     })
 }

@@ -23,7 +23,7 @@ import { highlightCode } from './highlight';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { useContextMenu } from '@/components/ui/context-menu';
-import { attachmentPreview, learningReadLearnings, learningWriteLearnings, voiceTts } from '@/lib/ipc';
+import { attachmentThumbnail, learningReadLearnings, learningWriteLearnings, voiceTts } from '@/lib/ipc';
 import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from '@/stores/chat';
 
 export function MessageBubble({
@@ -600,7 +600,7 @@ function AttachmentImageTile({ attachment }: { attachment: UiAttachment }) {
     // Already resolved from cache → no IPC.
     if (cached) return;
     let cancelled = false;
-    attachmentPreview(attachment.path, attachment.mime)
+    attachmentThumbnail(attachment.path)
       .then((data) => {
         cacheSet(attachment.path, { kind: 'ok', url: data });
         if (!cancelled) setUrl(data);

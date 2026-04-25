@@ -60,6 +60,9 @@ pub struct LlmProfile {
     /// commit to dotfiles repos.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key_env: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vision: Option<bool>,
 }
 
 /// Top-level wrapper so we can add fields later without a migration.
@@ -193,6 +196,7 @@ mod tests {
             base_url: "https://api.openai.com/v1".into(),
             model: "gpt-4o".into(),
             api_key_env: Some("OPENAI_API_KEY".into()),
+            vision: None,
         }
     }
 
@@ -214,6 +218,7 @@ mod tests {
                 base_url: "http://localhost:11434/v1".into(),
                 model: "llama3.2".into(),
                 api_key_env: None,
+                vision: None,
             },
         ];
         save(&dir, &list).unwrap();
@@ -273,6 +278,7 @@ mod tests {
             base_url: "https://api.anthropic.com/v1".into(),
             model: "claude-3-5-sonnet-latest".into(),
             api_key_env: Some("ANTHROPIC_API_KEY".into()),
+            vision: None,
         };
         let next = upsert(base, new.clone());
         assert_eq!(next.len(), 2);
