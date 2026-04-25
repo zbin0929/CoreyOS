@@ -426,6 +426,12 @@ pub async fn voice_tts(
 
     let start = std::time::Instant::now();
 
+    let voice = if provider.tts_voices().contains(&cfg.tts_voice.as_str()) {
+        cfg.tts_voice.clone()
+    } else {
+        provider.default_voice().to_owned()
+    };
+
     let body = match provider {
         VoiceProvider::Zhipu => {
             #[derive(Serialize)]
@@ -439,7 +445,7 @@ pub async fn voice_tts(
             serde_json::to_value(ZhipuTtsReq {
                 model: provider.tts_model().to_owned(),
                 input: text,
-                voice: cfg.tts_voice.clone(),
+                voice,
                 speed: cfg.tts_speed,
                 response_format: "wav".into(),
             })
@@ -458,7 +464,7 @@ pub async fn voice_tts(
             serde_json::to_value(OpenaiTtsReq {
                 model: provider.tts_model().to_owned(),
                 input: text,
-                voice: cfg.tts_voice.clone(),
+                voice,
                 speed: cfg.tts_speed,
             })
             .map_err(|e| IpcError::Internal {
@@ -533,6 +539,11 @@ pub async fn voice_get_config() -> IpcResult<VoiceConfig> {
     let cfg = load_config();
     let asr_p = parse_provider(&cfg.asr_provider, VoiceProvider::Openai);
     let tts_p = parse_provider(&cfg.tts_provider, VoiceProvider::Openai);
+    let tts_voice = if tts_p.tts_voices().contains(&cfg.tts_voice.as_str()) {
+        cfg.tts_voice.clone()
+    } else {
+        tts_p.default_voice().to_owned()
+    };
     Ok(VoiceConfig {
         asr_provider: asr_p.as_str().to_owned(),
         tts_provider: tts_p.as_str().to_owned(),
@@ -540,7 +551,7 @@ pub async fn voice_get_config() -> IpcResult<VoiceConfig> {
         asr_api_key_set: !cfg.asr_api_key.unwrap_or_default().is_empty(),
         tts_endpoint: cfg.tts_endpoint,
         tts_api_key_set: !cfg.tts_api_key.unwrap_or_default().is_empty(),
-        tts_voice: cfg.tts_voice,
+        tts_voice,
         tts_speed: cfg.tts_speed,
         hotkey: cfg.hotkey,
         available_asr_providers: VoiceProvider::all()
