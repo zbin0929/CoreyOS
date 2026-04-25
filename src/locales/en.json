@@ -796,7 +796,7 @@
     "tts_api_key": "API Key",
     "tts_voice": "Voice",
     "tts_speed": "Speed",
-    "tts_not_available": "TTS is not available for this provider. Switch to OpenAI or Zhipu.",
+    "tts_not_available": "TTS is not available for this provider. Switch to OpenAI, Zhipu, or Edge TTS.",
     "hotkey": "Hotkey",
     "hotkey_hint": "Key combination to hold for push-to-talk (e.g. Meta+Space, Ctrl+Shift+V).",
     "endpoint_auto": "Leave empty for default endpoint",

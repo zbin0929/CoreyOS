@@ -27,6 +27,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
   zhipu: 'Zhipu (智谱)',
   groq: 'Groq',
+  edge: 'Edge TTS (免费)',
 };
 
 export function VoiceRoute() {

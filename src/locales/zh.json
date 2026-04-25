@@ -796,7 +796,7 @@
     "tts_api_key": "API Key",
     "tts_voice": "音色",
     "tts_speed": "语速",
-    "tts_not_available": "当前服务商不支持 TTS。请切换到 OpenAI 或智谱。",
+    "tts_not_available": "当前服务商不支持 TTS。请切换到 OpenAI、智谱或 Edge TTS。",
     "hotkey": "快捷键",
     "hotkey_hint": "按住此组合键开始录音（如 Meta+Space、Ctrl+Shift+V）。",
     "endpoint_auto": "留空使用默认端点",

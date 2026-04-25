@@ -23,6 +23,7 @@ pub enum VoiceProvider {
     Openai,
     Zhipu,
     Groq,
+    Edge,
 }
 
 impl VoiceProvider {
@@ -31,11 +32,12 @@ impl VoiceProvider {
             Self::Openai => "openai",
             Self::Zhipu => "zhipu",
             Self::Groq => "groq",
+            Self::Edge => "edge",
         }
     }
 
     fn all() -> &'static [Self] {
-        &[Self::Openai, Self::Zhipu, Self::Groq]
+        &[Self::Openai, Self::Zhipu, Self::Groq, Self::Edge]
     }
 
     fn default_asr_endpoint(&self) -> &'static str {
@@ -43,6 +45,7 @@ impl VoiceProvider {
             Self::Openai => "https://api.openai.com/v1/audio/transcriptions",
             Self::Zhipu => "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions",
             Self::Groq => "https://api.groq.com/openai/v1/audio/transcriptions",
+            Self::Edge => "",
         }
     }
 
@@ -51,6 +54,7 @@ impl VoiceProvider {
             Self::Openai => Some("https://api.openai.com/v1/audio/speech"),
             Self::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4/audio/speech"),
             Self::Groq => None,
+            Self::Edge => Some("http://localhost:5050/v1/audio/speech"),
         }
     }
 
@@ -59,6 +63,7 @@ impl VoiceProvider {
             Self::Openai => "whisper-1",
             Self::Zhipu => "glm-asr",
             Self::Groq => "whisper-large-v3",
+            Self::Edge => "",
         }
     }
 
@@ -67,6 +72,7 @@ impl VoiceProvider {
             Self::Openai => "tts-1",
             Self::Zhipu => "glm-tts",
             Self::Groq => "",
+            Self::Edge => "tts-1",
         }
     }
 
@@ -75,6 +81,14 @@ impl VoiceProvider {
             Self::Openai => &["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
             Self::Zhipu => &["tongtong", "xiaochen", "chuichui", "jamka", "zidou", "jiluo"],
             Self::Groq => &[],
+            Self::Edge => &[
+                "zh-CN-XiaoxiaoNeural",
+                "zh-CN-YunyangNeural",
+                "zh-CN-YunxiNeural",
+                "zh-CN-XiaohanNeural",
+                "en-US-AvaNeural",
+                "en-US-AndrewNeural",
+            ],
         }
     }
 
@@ -83,7 +97,16 @@ impl VoiceProvider {
             Self::Openai => "alloy",
             Self::Zhipu => "tongtong",
             Self::Groq => "",
+            Self::Edge => "zh-CN-XiaoxiaoNeural",
         }
+    }
+
+    fn has_asr(&self) -> bool {
+        !matches!(self, Self::Edge)
+    }
+
+    fn has_tts(&self) -> bool {
+        !matches!(self, Self::Groq)
     }
 }
 
@@ -197,6 +220,7 @@ fn parse_provider(s: &Option<String>, fallback: VoiceProvider) -> VoiceProvider 
     match s.as_deref() {
         Some("zhipu") => VoiceProvider::Zhipu,
         Some("groq") => VoiceProvider::Groq,
+        Some("edge") => VoiceProvider::Edge,
         Some("openai") => VoiceProvider::Openai,
         _ => fallback,
     }
@@ -385,11 +409,16 @@ pub async fn voice_tts(
         });
     }
     let api_key = cfg.tts_api_key.unwrap_or_default();
-    if api_key.is_empty() {
+    if api_key.is_empty() && !matches!(provider, VoiceProvider::Edge) {
         return Err(IpcError::Internal {
             message: "TTS API key not configured. Open Settings › Voice to set it.".into(),
         });
     }
+    let auth_header = if api_key.is_empty() {
+        None
+    } else {
+        Some(format!("Bearer {api_key}"))
+    };
 
     let start = std::time::Instant::now();
 
@@ -435,9 +464,11 @@ pub async fn voice_tts(
     };
 
     let client = reqwest::Client::new();
-    let resp = client
-        .post(&endpoint)
-        .header("Authorization", format!("Bearer {api_key}"))
+    let mut req = client.post(&endpoint);
+    if let Some(ref h) = auth_header {
+        req = req.header("Authorization", h);
+    }
+    let resp = req
         .json(&body)
         .send()
         .await
@@ -502,11 +533,12 @@ pub async fn voice_get_config() -> IpcResult<VoiceConfig> {
         hotkey: cfg.hotkey,
         available_asr_providers: VoiceProvider::all()
             .iter()
+            .filter(|p| p.has_asr())
             .map(|p| p.as_str().to_owned())
             .collect(),
         available_tts_providers: VoiceProvider::all()
             .iter()
-            .filter(|p| p.default_tts_endpoint().is_some())
+            .filter(|p| p.has_tts())
             .map(|p| p.as_str().to_owned())
             .collect(),
         asr_voices: Vec::new(),
