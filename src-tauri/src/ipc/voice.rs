@@ -468,7 +468,7 @@ pub async fn voice_tts(
                 input: text,
                 voice,
                 speed,
-                response_format: "wav".into(),
+                response_format: "pcm".into(),
             })
             .map_err(|e| IpcError::Internal {
                 message: format!("TTS serialize: {e}"),
@@ -538,7 +538,7 @@ pub async fn voice_tts(
     })?;
 
     let audio_bytes = match provider {
-        VoiceProvider::Zhipu => reencode_wav(&audio_bytes).unwrap_or_else(|_| audio_bytes.to_vec()),
+        VoiceProvider::Zhipu => pcm_to_wav(&audio_bytes).unwrap_or_else(|_| audio_bytes.to_vec()),
         _ => audio_bytes.to_vec(),
     };
 
@@ -807,32 +807,28 @@ fn record_audio_blocking(secs: u64, active: &AtomicBool) -> Result<Vec<u8>, Stri
     Ok(wav_buf.into_inner())
 }
 
-fn reencode_wav(raw: &[u8]) -> Result<Vec<u8>, String> {
-    let reader = hound::WavReader::new(std::io::Cursor::new(raw))
-        .map_err(|e| format!("reencode read: {e}"))?;
-    let spec = reader.spec();
-    let samples: Vec<i16> = reader
-        .into_samples::<i16>()
-        .filter_map(|s| s.ok())
-        .collect();
-    let out_spec = hound::WavSpec {
-        channels: spec.channels,
-        sample_rate: spec.sample_rate,
+fn pcm_to_wav(raw: &[u8]) -> Result<Vec<u8>, String> {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 24000,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
     let mut buf = std::io::Cursor::new(Vec::new());
     {
-        let mut writer = hound::WavWriter::new(&mut buf, out_spec)
-            .map_err(|e| format!("reencode write: {e}"))?;
-        for &s in &samples {
+        let mut writer = hound::WavWriter::new(&mut buf, spec)
+            .map_err(|e| format!("pcm_to_wav write: {e}"))?;
+        for chunk in raw.chunks(2) {
+            let lo = chunk[0] as u16;
+            let hi = if chunk.len() > 1 { chunk[1] as u16 } else { 0 };
+            let sample = ((hi << 8) | lo) as i16;
             writer
-                .write_sample(s)
-                .map_err(|e| format!("reencode sample: {e}"))?;
+                .write_sample(sample)
+                .map_err(|e| format!("pcm_to_wav sample: {e}"))?;
         }
         writer
             .finalize()
-            .map_err(|e| format!("reencode finalize: {e}"))?;
+            .map_err(|e| format!("pcm_to_wav finalize: {e}"))?;
     }
     Ok(buf.into_inner())
 }
