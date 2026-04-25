@@ -138,6 +138,7 @@ impl StepExecutor for HermesExecutor {
             }],
             model: None,
             cwd: None,
+            model_supports_vision: None,
         };
 
         rt.block_on(async { adapter.chat_once(turn).await })

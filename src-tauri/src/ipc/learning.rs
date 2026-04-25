@@ -85,6 +85,7 @@ pub async fn learning_extract(
         ],
         model: None,
         cwd: None,
+        model_supports_vision: None,
     };
 
     let reply = match adapter.chat_once(turn).await {

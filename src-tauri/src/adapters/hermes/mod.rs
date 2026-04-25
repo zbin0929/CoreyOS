@@ -115,21 +115,107 @@ impl HermesAdapter {
 /// chat turn — the user's text still has a shot at being useful).
 fn resolve_turn(turn: ChatTurn, default_model: &str) -> (String, Vec<ChatMessage>) {
     let model = turn.model.unwrap_or_else(|| default_model.to_string());
+    let vision = turn.model_supports_vision.unwrap_or(true);
     let messages = turn
         .messages
         .into_iter()
         .map(|m| ChatMessage {
             role: m.role,
-            content: build_content(m.content, m.attachments),
+            content: build_content(m.content, m.attachments, vision),
         })
         .collect();
     (model, messages)
 }
 
+fn extract_text_from_file(path: &str, mime: &str, name: &str) -> Option<String> {
+    let ext = std::path::Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if matches!(mime, "text/plain" | "text/markdown" | "text/csv" | "text/html" | "text/xml"
+        | "application/json" | "application/xml" | "application/javascript")
+        || matches!(ext.as_str(), "txt" | "md" | "csv" | "json" | "xml" | "html" | "htm" | "js" | "ts" | "py" | "rs" | "go" | "java" | "c" | "cpp" | "h" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "log" | "sh" | "bat")
+    {
+        let bytes = std::fs::read(path).ok()?;
+        let text = String::from_utf8_lossy(&bytes);
+        Some(text.into_owned())
+    } else if ext == "docx" || mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+        extract_docx_text(path)
+    } else if ext == "xlsx" || mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+        extract_xlsx_text(path)
+    } else if ext == "pdf" || mime == "application/pdf" {
+        None
+    } else {
+        None
+    }
+}
+
+fn extract_docx_text(path: &str) -> Option<String> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).ok()?;
+    let mut archive = zip::ZipArchive::new(file).ok()?;
+    let mut xml = match archive.by_name("word/document.xml") {
+        Ok(f) => f,
+        Err(_) => return None,
+    };
+    let mut content = String::new();
+    let _ = xml.read_to_string(&mut content);
+    let text = content
+        .split('<')
+        .filter_map(|part| {
+            if part.starts_with('w') && part.contains('>') {
+                let end = part.find('>').unwrap_or(0);
+                let tag = &part[..end];
+                if tag.contains('t') && !tag.contains('/') {
+                    let after = &part[end + 1..];
+                    let close = after.find('<').unwrap_or(after.len());
+                    let text = &after[..close];
+                    if !text.is_empty() {
+                        return Some(text.to_string());
+                    }
+                }
+            }
+            None
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    if text.is_empty() { None } else { Some(text) }
+}
+
+fn extract_xlsx_text(path: &str) -> Option<String> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).ok()?;
+    let mut archive = zip::ZipArchive::new(file).ok()?;
+    let mut xml = match archive.by_name("xl/sharedStrings.xml") {
+        Ok(f) => f,
+        Err(_) => return None,
+    };
+    let mut content = String::new();
+    let _ = xml.read_to_string(&mut content);
+    let mut texts: Vec<String> = Vec::new();
+    let mut pos = 0;
+    while let Some(start) = content[pos..].find("<t") {
+        pos += start;
+        if let Some(gt) = content[pos..].find('>') {
+            pos += gt + 1;
+            if let Some(end) = content[pos..].find("</t>") {
+                let text = content[pos..pos + end].trim().to_string();
+                if !text.is_empty() {
+                    texts.push(text);
+                }
+                pos += end;
+            }
+        }
+    }
+    if texts.is_empty() { None } else { Some(texts.join(" | ")) }
+}
+
 /// Turn a (text, attachments) pair into the right `ChatMessageContent`.
 /// Exposed at module level so unit tests can exercise it without spinning
 /// up a whole adapter.
-fn build_content(text: String, attachments: Vec<ChatAttachmentRef>) -> ChatMessageContent {
+fn build_content(text: String, attachments: Vec<ChatAttachmentRef>, vision: bool) -> ChatMessageContent {
     if attachments.is_empty() {
         return ChatMessageContent::Text(text);
     }
@@ -142,7 +228,7 @@ fn build_content(text: String, attachments: Vec<ChatAttachmentRef>) -> ChatMessa
     // falls through to the marker branch even when the mime claims image.
     for a in attachments {
         let is_image = a.mime.starts_with("image/");
-        if is_image {
+        if is_image && vision {
             // sandbox-allow: attachment paths are already validated at
             // stage time (see `attachment_stage_path`) and live under
             // the app's attachments dir. Adapter code runs without an
@@ -172,7 +258,19 @@ fn build_content(text: String, attachments: Vec<ChatAttachmentRef>) -> ChatMessa
         if !text_with_markers.is_empty() {
             text_with_markers.push_str("\n\n");
         }
-        text_with_markers.push_str(&format!("[attached: {}]", a.name));
+        if is_image && !vision {
+            text_with_markers.push_str(&format!("[attached: {} (图片 - 当前模型不支持图片)]", a.name));
+        } else if let Some(extracted) = extract_text_from_file(&a.path, &a.mime, &a.name) {
+            let cap = 50000;
+            let truncated = if extracted.len() > cap {
+                format!("{}...(文件过长，已截断)", &extracted[..cap])
+            } else {
+                extracted
+            };
+            text_with_markers.push_str(&format!("[attached: {}]\n{}", a.name, truncated));
+        } else {
+            text_with_markers.push_str(&format!("[attached: {}]", a.name));
+        }
     }
 
     // The text part goes first — OpenAI docs recommend this ordering so
@@ -376,7 +474,7 @@ mod tests {
     /// array form when there are no image parts.
     #[test]
     fn build_content_no_attachments_stays_text() {
-        let c = build_content("hello".to_string(), vec![]);
+        let c = build_content("hello".to_string(), vec![], true);
         match c {
             ChatMessageContent::Text(s) => assert_eq!(s, "hello"),
             _ => panic!("expected Text variant for attachment-free message"),
@@ -409,6 +507,7 @@ mod tests {
                 mime: "image/png".into(),
                 name: "pixel.png".into(),
             }],
+            true,
         );
         let parts = match c {
             ChatMessageContent::Parts(p) => p,
@@ -445,11 +544,11 @@ mod tests {
         let c = build_content(
             "here's the spec".into(),
             vec![ChatAttachmentRef {
-                // Path doesn't need to exist — non-image branch never reads.
                 path: "/nonexistent/doc.pdf".into(),
                 mime: "application/pdf".into(),
                 name: "doc.pdf".into(),
             }],
+            true,
         );
         let parts = match c {
             ChatMessageContent::Parts(p) => p,
@@ -476,6 +575,7 @@ mod tests {
                 mime: "image/png".into(),
                 name: "ghost.png".into(),
             }],
+            true,
         );
         let parts = match c {
             ChatMessageContent::Parts(p) => p,
@@ -520,6 +620,7 @@ mod tests {
                     name: "a.png".into(),
                 },
             ],
+            true,
         );
         let parts = match c {
             ChatMessageContent::Parts(p) => p,

@@ -633,6 +633,7 @@ function ChatPane({
           messages: historyForIpc,
           adapter_id: activeAdapterId,
           model: effectiveModel ?? undefined,
+          model_supports_vision: visionCap !== 'no',
         },
         {
           onDelta: (chunk) => {
@@ -871,6 +872,7 @@ function ChatPane({
           messages: historyForIpc,
           adapter_id: activeAdapterId,
           model: effectiveModel ?? undefined,
+          model_supports_vision: visionCap !== 'no',
         },
         {
           onDelta: (chunk) => {

@@ -35,20 +35,15 @@ fn pick_adapter(
 
 #[derive(Debug, Deserialize)]
 pub struct ChatSendArgs {
-    /// Full conversation history so far. Frontend is source of truth for
-    /// Sprint 1; sessions + server-side history land in Sprint 2.
     pub messages: Vec<ChatMessageDto>,
-    /// Optional model override; if `None`, the adapter's default model is used.
     #[serde(default)]
     pub model: Option<String>,
-    /// T5.1 — optional working directory for code-centric adapters
-    /// (Claude Code / Aider). Hermes ignores it.
     #[serde(default)]
     pub cwd: Option<String>,
-    /// T5.5b — route this request to the named adapter. `None` means
-    /// "use the registry default" (back-compat with pre-Phase-5 callers).
     #[serde(default)]
     pub adapter_id: Option<String>,
+    #[serde(default)]
+    pub model_supports_vision: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,6 +61,7 @@ pub async fn chat_send(state: State<'_, AppState>, args: ChatSendArgs) -> IpcRes
         messages: args.messages,
         model: args.model,
         cwd: args.cwd,
+        model_supports_vision: args.model_supports_vision,
     };
     let content = adapter.chat_once(turn).await?;
     Ok(ChatSendReply { content })
@@ -78,18 +74,14 @@ pub struct ChatStreamArgs {
     pub messages: Vec<ChatMessageDto>,
     #[serde(default)]
     pub model: Option<String>,
-    /// Optional caller-supplied handle so the frontend can attach listeners
-    /// *before* this call, eliminating the "first delta before listener
-    /// registered" race. If omitted, Rust generates one.
     #[serde(default)]
     pub handle: Option<String>,
-    /// T5.1 — working directory for code-centric adapters.
     #[serde(default)]
     pub cwd: Option<String>,
-    /// T5.5b — route this stream to the named adapter (same semantics
-    /// as `ChatSendArgs.adapter_id`).
     #[serde(default)]
     pub adapter_id: Option<String>,
+    #[serde(default)]
+    pub model_supports_vision: Option<bool>,
 }
 
 /// Kick off a streaming completion. Returns the handle used to scope events:
@@ -140,6 +132,7 @@ pub async fn chat_stream_start(
         messages: args.messages,
         model: args.model,
         cwd: args.cwd,
+        model_supports_vision: args.model_supports_vision,
     };
     let done_event = format!("chat:done:{handle}");
     let err_event = format!("chat:error:{handle}");

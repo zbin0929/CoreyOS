@@ -323,6 +323,7 @@ mod tests {
                 messages: vec![user("refactor this")],
                 model: None,
                 cwd: None,
+                model_supports_vision: None,
             })
             .await
             .unwrap_err();
@@ -343,6 +344,7 @@ mod tests {
                 messages: vec![user("add type hints")],
                 model: None,
                 cwd: Some("/tmp/myrepo".into()),
+                model_supports_vision: None,
             })
             .await
             .unwrap();
@@ -361,6 +363,7 @@ mod tests {
                     messages: vec![user("hi")],
                     model: None,
                     cwd: Some("/tmp/repo".into()),
+                    model_supports_vision: None,
                 },
                 tx,
             )

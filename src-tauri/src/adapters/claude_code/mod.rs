@@ -331,6 +331,7 @@ mod tests {
                 messages: vec![user("please fix the SSE parser")],
                 model: None,
                 cwd: Some("/tmp/myrepo".into()),
+                model_supports_vision: None,
             })
             .await
             .unwrap();
@@ -352,6 +353,7 @@ mod tests {
                     messages: vec![user("hi")],
                     model: None,
                     cwd: None,
+                    model_supports_vision: None,
                 },
                 tx,
             )

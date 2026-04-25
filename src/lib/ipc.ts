@@ -39,12 +39,9 @@ export interface ChatMessageAttachment {
 export interface ChatSendArgs {
   messages: ChatMessageDto[];
   model?: string;
-  /** T5.1 — optional working directory hint for code-centric adapters. */
   cwd?: string;
-  /** T5.5b — route this request to the named adapter; `undefined` uses
-   *  the registry default. The Topbar `AgentSwitcher` populates this
-   *  from `useAgentsStore.activeId`. */
   adapter_id?: string;
+  model_supports_vision?: boolean;
 }
 
 export interface ChatSendReply {

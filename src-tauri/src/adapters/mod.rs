@@ -130,13 +130,10 @@ pub struct ChatTurn {
     pub messages: Vec<ChatMessageDto>,
     #[serde(default)]
     pub model: Option<String>,
-    /// T5.1 — optional working directory for code-centric adapters
-    /// (Claude Code, Aider, OpenHands). Hermes ignores this because
-    /// its tools run server-side with their own filesystem view.
-    /// Callers that don't care can leave it `None`; adapters that
-    /// don't support it SHOULD silently ignore rather than error.
     #[serde(default)]
     pub cwd: Option<String>,
+    #[serde(default)]
+    pub model_supports_vision: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
