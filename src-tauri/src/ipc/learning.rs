@@ -45,11 +45,12 @@ pub async fn learning_extract(
     state: State<'_, AppState>,
     args: LearningExtractArgs,
 ) -> IpcResult<LearningExtractResult> {
-    let adapter = state.adapters.default_adapter().ok_or_else(|| {
-        IpcError::NotConfigured {
+    let adapter = state
+        .adapters
+        .default_adapter()
+        .ok_or_else(|| IpcError::NotConfigured {
             hint: "no default adapter registered".into(),
-        }
-    })?;
+        })?;
 
     let system_prompt = format!(
         "You are a knowledge extraction assistant. Given a user message and an assistant reply, \
@@ -273,11 +274,10 @@ pub async fn learning_index_message(
         let df = crate::tfidf::collect_doc_freqs(&samples);
         let vec = crate::tfidf::compute_tfidf(&content, &df, total);
         let json = vec.to_json();
-        db.upsert_embedding(&message_id, &json).map_err(|e| {
-            IpcError::Internal {
+        db.upsert_embedding(&message_id, &json)
+            .map_err(|e| IpcError::Internal {
                 message: format!("upsert_embedding: {e}"),
-            }
-        })
+            })
     })
     .await
     .map_err(|e| IpcError::Internal {
@@ -466,7 +466,11 @@ pub async fn learning_suggest_routing(
                 });
             }
         }
-        suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+        suggestions.sort_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         suggestions.truncate(5);
         Ok(suggestions)
     })
@@ -528,7 +532,10 @@ pub async fn learning_compact_memory() -> IpcResult<MemoryCompactResult> {
 
     Ok(MemoryCompactResult {
         memory_entries_removed: removed,
-        learnings_entries_count: learnings_content.lines().filter(|l| l.starts_with('-')).count(),
+        learnings_entries_count: learnings_content
+            .lines()
+            .filter(|l| l.starts_with('-'))
+            .count(),
     })
 }
 

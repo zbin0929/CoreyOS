@@ -463,10 +463,7 @@ pub fn clone_profile(
 ) -> io::Result<ProfileInfo> {
     clone_profile_at(&home_dir(None), src, dst, changelog_path)
 }
-pub fn activate_profile(
-    name: &str,
-    changelog_path: Option<&Path>,
-) -> io::Result<ProfileInfo> {
+pub fn activate_profile(name: &str, changelog_path: Option<&Path>) -> io::Result<ProfileInfo> {
     activate_profile_at(&home_dir(None), name, changelog_path)
 }
 

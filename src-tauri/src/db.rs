@@ -150,11 +150,7 @@ impl Db {
         Ok(())
     }
 
-    pub fn upsert_embedding(
-        &self,
-        message_id: &str,
-        vector_json: &str,
-    ) -> rusqlite::Result<()> {
+    pub fn upsert_embedding(&self, message_id: &str, vector_json: &str) -> rusqlite::Result<()> {
         let conn = self.conn.lock();
         conn.execute(
             "INSERT INTO embeddings (message_id, vector, created_at)
@@ -165,10 +161,7 @@ impl Db {
         Ok(())
     }
 
-    pub fn sample_message_contents(
-        &self,
-        limit: usize,
-    ) -> rusqlite::Result<Vec<String>> {
+    pub fn sample_message_contents(&self, limit: usize) -> rusqlite::Result<Vec<String>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "SELECT content FROM messages WHERE role = 'user' AND content != ''
@@ -413,7 +406,6 @@ impl Db {
             })
             .collect())
     }
-
 }
 
 /// Resolve the on-disk DB path (`<app_data_dir>/caduceus.db`). Must be
@@ -1401,7 +1393,9 @@ impl Db {
         Ok(chunk_ids)
     }
 
-    pub fn list_knowledge_docs(&self) -> rusqlite::Result<Vec<super::ipc::knowledge::KnowledgeDoc>> {
+    pub fn list_knowledge_docs(
+        &self,
+    ) -> rusqlite::Result<Vec<super::ipc::knowledge::KnowledgeDoc>> {
         let conn = self.conn.lock();
         Self::ensure_knowledge_tables_inner(&conn)?;
         let mut stmt = conn.prepare(
@@ -1465,7 +1459,11 @@ impl Db {
             }
             let intersection = query_tokens.intersection(&chunk_tokens).count() as f64;
             let union = query_tokens.union(&chunk_tokens).count() as f64;
-            let jaccard = if union > 0.0 { intersection / union } else { 0.0 };
+            let jaccard = if union > 0.0 {
+                intersection / union
+            } else {
+                0.0
+            };
             if jaccard > 0.1 {
                 let snippet: String = content.chars().take(300).collect();
                 scored.push(super::ipc::knowledge::KnowledgeSearchHit {
@@ -1477,7 +1475,11 @@ impl Db {
                 });
             }
         }
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(limit);
         Ok(scored)
     }

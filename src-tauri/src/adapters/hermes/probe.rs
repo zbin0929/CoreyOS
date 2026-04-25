@@ -121,10 +121,7 @@ fn normalize_models_url(base_url: &str) -> String {
     // Already versioned: `.../v1`, `.../v4`, `.../v2beta`, etc. Append
     // `/models` directly instead of force-injecting a `/v1/` segment.
     if let Some(last) = trimmed.rsplit('/').next() {
-        if last.starts_with('v')
-            && last.len() >= 2
-            && last.as_bytes()[1].is_ascii_digit()
-        {
+        if last.starts_with('v') && last.len() >= 2 && last.as_bytes()[1].is_ascii_digit() {
             return format!("{trimmed}/models");
         }
     }

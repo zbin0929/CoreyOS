@@ -35,7 +35,10 @@ pub fn list() -> anyhow::Result<Vec<WorkflowDef>> {
 pub fn get(id: &str) -> anyhow::Result<WorkflowDef> {
     let dir = workflows_dir()?;
     let path = find_file(&dir, id).ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, format!("workflow '{id}' not found"))
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("workflow '{id}' not found"),
+        )
     })?;
     load_file(&path)
 }
@@ -131,7 +134,9 @@ fn validate_step<'a>(
         });
     }
 
-    let valid_types = ["agent", "tool", "browser", "parallel", "branch", "loop", "approval"];
+    let valid_types = [
+        "agent", "tool", "browser", "parallel", "branch", "loop", "approval",
+    ];
     if !valid_types.contains(&step.step_type.as_str()) {
         errors.push(ValidationError {
             field: format!("steps[{}].type", step.id),

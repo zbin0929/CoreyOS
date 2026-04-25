@@ -50,11 +50,7 @@ pub async fn sandbox_get_state(state: State<'_, AppState>) -> IpcResult<SandboxS
             .into_iter()
             .map(|p| p.display().to_string())
             .collect(),
-        config_path: state
-            .config_dir
-            .join("sandbox.json")
-            .display()
-            .to_string(),
+        config_path: state.config_dir.join("sandbox.json").display().to_string(),
     })
 }
 
@@ -162,9 +158,7 @@ impl From<SandboxScope> for SandboxScopeDto {
 /// Settings UI to render the scope picker + the scope-management
 /// section.
 #[tauri::command]
-pub async fn sandbox_scope_list(
-    state: State<'_, AppState>,
-) -> IpcResult<Vec<SandboxScopeDto>> {
+pub async fn sandbox_scope_list(state: State<'_, AppState>) -> IpcResult<Vec<SandboxScopeDto>> {
     Ok(state
         .authority
         .scopes()

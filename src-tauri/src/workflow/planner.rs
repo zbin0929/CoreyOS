@@ -163,10 +163,7 @@ mod tests {
             version: 1,
             trigger: WorkflowTrigger::Manual,
             inputs: vec![],
-            steps: vec![
-                make_step("a", vec!["b"]),
-                make_step("b", vec!["a"]),
-            ],
+            steps: vec![make_step("a", vec!["b"]), make_step("b", vec!["a"])],
         };
         assert!(topological_order(&def).is_err());
     }

@@ -345,10 +345,7 @@ mod tests {
     /// Mirror `ipc::hermes_instance_upsert` without needing a live
     /// Tauri `AppState`. Kept to the exact same ordering: validate id,
     /// validate base_url, normalise, upsert, save.
-    fn wizard_save(
-        dir: &std::path::Path,
-        payload: &str,
-    ) -> Result<HermesInstance, String> {
+    fn wizard_save(dir: &std::path::Path, payload: &str) -> Result<HermesInstance, String> {
         let inst: HermesInstance =
             serde_json::from_str(payload).map_err(|e| format!("deserialize: {e}"))?;
         let id = inst.id.trim().to_string();

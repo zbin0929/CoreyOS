@@ -120,14 +120,20 @@ mod tests {
         let mut ctx = RunContext::new("wf-1", "run-1", json!({ "topic": "AI" }));
         ctx.set_step_output("step1", json!({ "result": "hello" }));
         ctx.set_step_output("step2", json!("world"));
-        ctx.set_step_output("review", json!({ "approved": true, "feedback": "looks good" }));
+        ctx.set_step_output(
+            "review",
+            json!({ "approved": true, "feedback": "looks good" }),
+        );
         ctx
     }
 
     #[test]
     fn render_inputs() {
         let ctx = RunContext::new("wf", "r1", json!({ "topic": "AI" }));
-        assert_eq!(ctx.render_template("topic is {{inputs.topic}}"), "topic is AI");
+        assert_eq!(
+            ctx.render_template("topic is {{inputs.topic}}"),
+            "topic is AI"
+        );
     }
 
     #[test]

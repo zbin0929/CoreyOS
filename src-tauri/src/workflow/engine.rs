@@ -64,7 +64,10 @@ pub struct EngineResult {
     pub context: RunContext,
 }
 
-pub fn create_initial_run(def: &WorkflowDef, inputs: serde_json::Value) -> (WorkflowRun, RunContext) {
+pub fn create_initial_run(
+    def: &WorkflowDef,
+    inputs: serde_json::Value,
+) -> (WorkflowRun, RunContext) {
     let run_id = Uuid::new_v4().to_string();
     let ctx = RunContext::new(&def.id, &run_id, inputs);
     let mut run = WorkflowRun::new(&def.id, ctx.inputs.clone());
@@ -86,8 +89,17 @@ pub fn create_initial_run(def: &WorkflowDef, inputs: serde_json::Value) -> (Work
 
 pub trait StepExecutor: Send + Sync {
     fn execute_agent(&self, agent_id: &str, prompt: &str) -> Result<String, String>;
-    fn execute_browser(&self, action: &str, url: &str, instruction: &str, profile: &str) -> Result<String, String> {
-        Ok(format!("[browser:{}] {} @ {} (profile={})", action, instruction, url, profile))
+    fn execute_browser(
+        &self,
+        action: &str,
+        url: &str,
+        instruction: &str,
+        profile: &str,
+    ) -> Result<String, String> {
+        Ok(format!(
+            "[browser:{}] {} @ {} (profile={})",
+            action, instruction, url, profile
+        ))
     }
 }
 
@@ -195,7 +207,10 @@ fn execute_browser_step(
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
 ) -> Result<serde_json::Value, String> {
-    let instruction = step.prompt.as_deref().ok_or("browser step missing instruction (prompt)")?;
+    let instruction = step
+        .prompt
+        .as_deref()
+        .ok_or("browser step missing instruction (prompt)")?;
     let rendered = ctx.render_template(instruction);
     let url = step.tool_name.as_deref().unwrap_or("");
     let action = step.agent_id.as_deref().unwrap_or("agent");
@@ -213,7 +228,10 @@ fn execute_parallel_step_live(
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
 ) -> Result<serde_json::Value, String> {
-    let branches = step.branches.as_ref().ok_or("parallel step missing branches")?;
+    let branches = step
+        .branches
+        .as_ref()
+        .ok_or("parallel step missing branches")?;
     let mut results = serde_json::Map::new();
     for branch in branches {
         let output = execute_step_live(branch, ctx, executor)?;
@@ -263,14 +281,16 @@ fn execute_tool_step(
     step: &WorkflowStep,
     ctx: &mut RunContext,
 ) -> Result<serde_json::Value, String> {
-    let tool = step.tool_name.as_deref().ok_or("tool step missing tool_name")?;
+    let tool = step
+        .tool_name
+        .as_deref()
+        .ok_or("tool step missing tool_name")?;
     let args_rendered = step
         .tool_args
         .as_ref()
         .map(|a| {
             let s = serde_json::to_string(a).unwrap_or_default();
-            serde_json::from_str::<serde_json::Value>(&ctx.render_template(&s))
-                .unwrap_or(json!({}))
+            serde_json::from_str::<serde_json::Value>(&ctx.render_template(&s)).unwrap_or(json!({}))
         })
         .unwrap_or(json!({}));
     Ok(json!({
@@ -284,7 +304,10 @@ fn execute_branch_step(
     step: &WorkflowStep,
     ctx: &mut RunContext,
 ) -> Result<serde_json::Value, String> {
-    let conditions = step.conditions.as_ref().ok_or("branch step missing conditions")?;
+    let conditions = step
+        .conditions
+        .as_ref()
+        .ok_or("branch step missing conditions")?;
     for cond in conditions {
         if evaluate_condition(&cond.expression, ctx) {
             return Ok(json!({

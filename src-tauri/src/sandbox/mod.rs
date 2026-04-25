@@ -437,10 +437,7 @@ impl PathAuthority {
             // Drop any session grants held under the removed scope so we
             // don't leak memory and so a later scope re-added with the
             // same id doesn't inherit stale grants.
-            self.session_grants
-                .write()
-                .expect("poisoned")
-                .remove(id);
+            self.session_grants.write().expect("poisoned").remove(id);
             self.persist();
         }
         Ok(())
@@ -454,12 +451,13 @@ impl PathAuthority {
         f: impl FnOnce(&SandboxScope) -> R,
     ) -> SandboxResult<R> {
         let scopes = self.scopes.read().expect("poisoned");
-        let s = scopes
-            .iter()
-            .find(|s| s.id == scope_id)
-            .ok_or_else(|| SandboxError::UnknownScope {
-                id: scope_id.to_string(),
-            })?;
+        let s =
+            scopes
+                .iter()
+                .find(|s| s.id == scope_id)
+                .ok_or_else(|| SandboxError::UnknownScope {
+                    id: scope_id.to_string(),
+                })?;
         Ok(f(s))
     }
 
@@ -533,16 +531,11 @@ impl PathAuthority {
 
     /// Add a root to the given scope. Flips the mode to `Enforced` and
     /// persists. Errors with `UnknownScope` if the scope id is missing.
-    pub fn add_root_to(
-        &self,
-        scope_id: &str,
-        root: WorkspaceRoot,
-    ) -> SandboxResult<WorkspaceRoot> {
-        let canon =
-            dunce::canonicalize(&root.path).map_err(|e| SandboxError::Canonicalize {
-                path: root.path.display().to_string(),
-                source: e,
-            })?;
+    pub fn add_root_to(&self, scope_id: &str, root: WorkspaceRoot) -> SandboxResult<WorkspaceRoot> {
+        let canon = dunce::canonicalize(&root.path).map_err(|e| SandboxError::Canonicalize {
+            path: root.path.display().to_string(),
+            source: e,
+        })?;
         let stored = WorkspaceRoot {
             path: canon,
             label: root.label,
@@ -731,12 +724,13 @@ impl PathAuthority {
 
         // Load the scope. If missing, `UnknownScope`.
         let scopes = self.scopes.read().expect("poisoned");
-        let scope = scopes
-            .iter()
-            .find(|s| s.id == scope_id)
-            .ok_or_else(|| SandboxError::UnknownScope {
-                id: scope_id.to_string(),
-            })?;
+        let scope =
+            scopes
+                .iter()
+                .find(|s| s.id == scope_id)
+                .ok_or_else(|| SandboxError::UnknownScope {
+                    id: scope_id.to_string(),
+                })?;
 
         // Inside any root of this scope?
         let matched_root = scope
@@ -756,9 +750,7 @@ impl PathAuthority {
         // No roots configured in this scope AND mode is DevAllow
         // (first-launch, no sandbox.json ever written). Everything
         // outside denylist is fine.
-        if scope.roots.is_empty()
-            && *self.mode.read().expect("poisoned") == SandboxMode::DevAllow
-        {
+        if scope.roots.is_empty() && *self.mode.read().expect("poisoned") == SandboxMode::DevAllow {
             tracing::debug!(
                 scope = scope_id,
                 path = %canonical.display(),
@@ -848,7 +840,14 @@ mod tests {
     #[test]
     fn upsert_scope_rejects_invalid_ids() {
         let auth = PathAuthority::new();
-        let bad_ids = ["", "With Spaces", "UPPER", "has.dot", "has/slash", &"x".repeat(33)];
+        let bad_ids = [
+            "",
+            "With Spaces",
+            "UPPER",
+            "has.dot",
+            "has/slash",
+            &"x".repeat(33),
+        ];
         for id in bad_ids {
             let err = auth
                 .upsert_scope(SandboxScope {
@@ -955,9 +954,7 @@ mod tests {
             .unwrap();
             let ssh = home.join(".ssh");
             if ssh.exists() {
-                let err = auth
-                    .check_scoped("wide", &ssh, AccessOp::Read)
-                    .unwrap_err();
+                let err = auth.check_scoped("wide", &ssh, AccessOp::Read).unwrap_err();
                 assert!(matches!(err, SandboxError::Denied { .. }));
             }
         }

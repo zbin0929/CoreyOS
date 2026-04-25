@@ -18,17 +18,13 @@ use tauri::State;
 
 use crate::adapters::hermes::HermesAdapter;
 use crate::error::{IpcError, IpcResult};
-use crate::hermes_instances::{
-    self, adapter_id_for, HermesInstance, HermesInstancesFile,
-};
+use crate::hermes_instances::{self, adapter_id_for, HermesInstance, HermesInstancesFile};
 use crate::state::AppState;
 
 /// Return the full list in the order the file stores them. Empty when
 /// no file exists yet (the common case for first-run users).
 #[tauri::command]
-pub async fn hermes_instance_list(
-    state: State<'_, AppState>,
-) -> IpcResult<HermesInstancesFile> {
+pub async fn hermes_instance_list(state: State<'_, AppState>) -> IpcResult<HermesInstancesFile> {
     let dir = state.config_dir.clone();
     let instances = tokio::task::spawn_blocking(move || hermes_instances::load(&dir))
         .await
@@ -109,8 +105,7 @@ pub async fn hermes_instance_upsert(
 #[tauri::command]
 pub async fn hermes_instance_delete(state: State<'_, AppState>, id: String) -> IpcResult<()> {
     let id_norm = id.trim().to_string();
-    hermes_instances::validate_id(&id_norm)
-        .map_err(|e| IpcError::NotConfigured { hint: e })?;
+    hermes_instances::validate_id(&id_norm).map_err(|e| IpcError::NotConfigured { hint: e })?;
 
     let dir = state.config_dir.clone();
     let id_for_task = id_norm.clone();
@@ -171,11 +166,8 @@ pub async fn hermes_instance_test(instance: HermesInstance) -> IpcResult<Instanc
     let api_key = instance.api_key.filter(|s| !s.is_empty());
 
     let started = std::time::Instant::now();
-    let report = crate::adapters::hermes::probe::probe_models(
-        &instance.base_url,
-        api_key.as_deref(),
-    )
-    .await;
+    let report =
+        crate::adapters::hermes::probe::probe_models(&instance.base_url, api_key.as_deref()).await;
     let latency_ms = started.elapsed().as_millis() as u32;
 
     match report {

@@ -96,10 +96,7 @@ pub fn load(path: &Path) -> io::Result<Option<SandboxConfig>> {
                     format!("sandbox.json parse error: {e}"),
                 )
             })?;
-            let version = peek
-                .get("version")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(1) as u32;
+            let version = peek.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
 
             if version <= 1 {
                 let legacy: LegacyV1 = serde_json::from_value(peek).map_err(|e| {
@@ -123,13 +120,12 @@ pub fn load(path: &Path) -> io::Result<Option<SandboxConfig>> {
                     }],
                 }))
             } else {
-                let mut cfg: SandboxConfig =
-                    serde_json::from_value(peek).map_err(|e| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("sandbox.json v{version} parse error: {e}"),
-                        )
-                    })?;
+                let mut cfg: SandboxConfig = serde_json::from_value(peek).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("sandbox.json v{version} parse error: {e}"),
+                    )
+                })?;
                 // Enforce the "default scope must exist" invariant even
                 // if a hand-edited file dropped it. This keeps crash
                 // handling symmetric with `SandboxConfig::empty_v2`.
@@ -267,7 +263,10 @@ mod tests {
         // survived and no longer needs migration.
         save(&path, &cfg).unwrap();
         let reloaded = load(&path).unwrap().unwrap();
-        assert_eq!(reloaded, cfg, "save+load of a migrated config is idempotent");
+        assert_eq!(
+            reloaded, cfg,
+            "save+load of a migrated config is idempotent"
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -328,7 +328,9 @@ mod tests {
     #[test]
     fn tokenize_chinese() {
         let tokens = tokenize("我喜欢用 TypeScript 写代码");
-        assert!(tokens.iter().any(|t| t.contains("我喜") || t.contains("喜欢")));
+        assert!(tokens
+            .iter()
+            .any(|t| t.contains("我喜") || t.contains("喜欢")));
         assert!(tokens.contains(&"typescript".to_string()));
     }
 
@@ -373,10 +375,7 @@ mod tests {
 
     #[test]
     fn tfidf_serialization_roundtrip() {
-        let docs = vec![
-            "hello world test".to_string(),
-            "foo bar baz".to_string(),
-        ];
+        let docs = vec!["hello world test".to_string(), "foo bar baz".to_string()];
         let df = collect_doc_freqs(&docs);
         let v = compute_tfidf("hello world", &df, 2);
         let json = v.to_json();

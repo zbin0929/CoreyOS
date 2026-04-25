@@ -64,8 +64,7 @@ pub async fn attachment_stage_path(
     state: State<'_, AppState>,
     path: String,
     mime_hint: Option<String>,
-    #[allow(non_snake_case)]
-    sandbox_scope_id: Option<String>,
+    #[allow(non_snake_case)] sandbox_scope_id: Option<String>,
 ) -> IpcResult<StagedAttachment> {
     let p = PathBuf::from(path);
 
@@ -119,8 +118,23 @@ pub async fn attachment_thumbnail(path: String) -> IpcResult<String> {
 
         let src = std::path::Path::new(&path);
         let meta = std::fs::metadata(src)?;
-        let mtime = meta.modified().ok().map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()).unwrap_or(0);
-        let cache_key = format!("{:x}-{}", src.to_string_lossy().chars().map(|c| c as u32).fold(0u64, |a, b| a.wrapping_mul(31).wrapping_add(b as u64)), mtime);
+        let mtime = meta
+            .modified()
+            .ok()
+            .map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+            })
+            .unwrap_or(0);
+        let cache_key = format!(
+            "{:x}-{}",
+            src.to_string_lossy()
+                .chars()
+                .map(|c| c as u32)
+                .fold(0u64, |a, b| a.wrapping_mul(31).wrapping_add(b as u64)),
+            mtime
+        );
         let cache_path = cache_dir.join(format!("{cache_key}.b64"));
 
         if cache_path.exists() {

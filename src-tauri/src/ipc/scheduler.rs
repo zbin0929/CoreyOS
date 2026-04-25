@@ -257,11 +257,13 @@ pub async fn scheduler_list_runs(
     _state: State<'_, AppState>,
     job_id: String,
 ) -> IpcResult<Vec<RunInfo>> {
-    tokio::task::spawn_blocking(move || hcron::list_runs(&job_id).map_err(|e| io_err("list_runs", e)))
-        .await
-        .map_err(|e| IpcError::Internal {
-            message: format!("scheduler_list_runs join: {e}"),
-        })?
+    tokio::task::spawn_blocking(move || {
+        hcron::list_runs(&job_id).map_err(|e| io_err("list_runs", e))
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("scheduler_list_runs join: {e}"),
+    })?
 }
 
 // Suppress unused-import warning for `UNIX_EPOCH` / `SystemTime` during

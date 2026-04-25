@@ -82,7 +82,9 @@ impl VoiceProvider {
     fn tts_voices(&self) -> &'static [&'static str] {
         match self {
             Self::Openai => &["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
-            Self::Zhipu => &["tongtong", "chuichui", "xiaochen", "jam", "kazi", "douji", "luodo"],
+            Self::Zhipu => &[
+                "tongtong", "chuichui", "xiaochen", "jam", "kazi", "douji", "luodo",
+            ],
             Self::Groq => &[],
             Self::Edge => &[
                 "zh-CN-XiaoxiaoNeural",
@@ -413,10 +415,7 @@ pub async fn voice_transcribe(
 // ───────────────────────── T8.2: TTS ─────────────────────────
 
 #[tauri::command]
-pub async fn voice_tts(
-    _state: State<'_, AppState>,
-    text: String,
-) -> IpcResult<VoiceTtsResult> {
+pub async fn voice_tts(_state: State<'_, AppState>, text: String) -> IpcResult<VoiceTtsResult> {
     let cfg = load_config();
     let provider = parse_provider(&cfg.tts_provider, VoiceProvider::Openai);
     let default_ep = provider.default_tts_endpoint().map(str::to_owned);
@@ -447,7 +446,9 @@ pub async fn voice_tts(
     };
     let speed = if cfg.tts_speed < 0.5 || cfg.tts_speed > 2.0 {
         1.0
-    } else if matches!(provider, VoiceProvider::Openai | VoiceProvider::Edge) && (cfg.tts_speed < 0.25 || cfg.tts_speed > 4.0) {
+    } else if matches!(provider, VoiceProvider::Openai | VoiceProvider::Edge)
+        && (cfg.tts_speed < 0.25 || cfg.tts_speed > 4.0)
+    {
         1.0
     } else {
         cfg.tts_speed
@@ -514,7 +515,11 @@ pub async fn voice_tts(
         let err_body = resp.text().await.unwrap_or_default();
         write_audit("voice.tts", provider.as_str(), duration, false);
         return Err(IpcError::Internal {
-            message: format!("TTS API error {}: {}", status, &err_body[..err_body.len().min(500)]),
+            message: format!(
+                "TTS API error {}: {}",
+                status,
+                &err_body[..err_body.len().min(500)]
+            ),
         });
     }
 
@@ -665,7 +670,12 @@ pub async fn voice_audit_log(
         .ok()
         .map(|rd| {
             rd.filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .map(|ext| ext == "jsonl")
+                        .unwrap_or(false)
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -709,15 +719,18 @@ pub async fn voice_record(duration_secs: Option<u64>) -> IpcResult<String> {
         let _ = tx.send(result);
     });
 
-    let wav_bytes = rx.await.map_err(|e| {
-        RECORDING_ACTIVE.store(false, Ordering::SeqCst);
-        IpcError::Internal {
-            message: format!("recording thread panicked: {e}"),
-        }
-    })?.map_err(|msg| {
-        RECORDING_ACTIVE.store(false, Ordering::SeqCst);
-        IpcError::Internal { message: msg }
-    })?;
+    let wav_bytes = rx
+        .await
+        .map_err(|e| {
+            RECORDING_ACTIVE.store(false, Ordering::SeqCst);
+            IpcError::Internal {
+                message: format!("recording thread panicked: {e}"),
+            }
+        })?
+        .map_err(|msg| {
+            RECORDING_ACTIVE.store(false, Ordering::SeqCst);
+            IpcError::Internal { message: msg }
+        })?;
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&wav_bytes);
     Ok(b64)
@@ -732,7 +745,9 @@ pub async fn voice_record_stop() -> IpcResult<()> {
 fn record_audio_blocking(secs: u64, active: &AtomicBool) -> Result<Vec<u8>, String> {
     let host = cpal::default_host();
     let device = host.default_input_device().ok_or("no_input_device")?;
-    let config = device.default_input_config().map_err(|e| format!("input_config:{e}"))?;
+    let config = device
+        .default_input_config()
+        .map_err(|e| format!("input_config:{e}"))?;
 
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as u16;
@@ -766,7 +781,8 @@ fn record_audio_blocking(secs: u64, active: &AtomicBool) -> Result<Vec<u8>, Stri
             None,
         ),
         fmt => return Err(format!("unsupported_format:{fmt}")),
-    }.map_err(|e| format!("stream_build:{e}"))?;
+    }
+    .map_err(|e| format!("stream_build:{e}"))?;
 
     stream.play().map_err(|e| format!("stream_play:{e}"))?;
 
@@ -796,10 +812,13 @@ fn record_audio_blocking(secs: u64, active: &AtomicBool) -> Result<Vec<u8>, Stri
 
     let mut wav_buf = std::io::Cursor::new(Vec::new());
     {
-        let mut writer = hound::WavWriter::new(&mut wav_buf, spec).map_err(|e| format!("wav_writer:{e}"))?;
+        let mut writer =
+            hound::WavWriter::new(&mut wav_buf, spec).map_err(|e| format!("wav_writer:{e}"))?;
         for &s in &all_samples {
             let val = (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32);
-            writer.write_sample(val as i16).map_err(|e| format!("wav_write:{e}"))?;
+            writer
+                .write_sample(val as i16)
+                .map_err(|e| format!("wav_write:{e}"))?;
         }
         writer.finalize().map_err(|e| format!("wav_finalize:{e}"))?;
     }
@@ -816,8 +835,8 @@ fn pcm_to_wav(raw: &[u8]) -> Result<Vec<u8>, String> {
     };
     let mut buf = std::io::Cursor::new(Vec::new());
     {
-        let mut writer = hound::WavWriter::new(&mut buf, spec)
-            .map_err(|e| format!("pcm_to_wav write: {e}"))?;
+        let mut writer =
+            hound::WavWriter::new(&mut buf, spec).map_err(|e| format!("pcm_to_wav write: {e}"))?;
         for chunk in raw.chunks(2) {
             let lo = chunk[0] as u16;
             let hi = if chunk.len() > 1 { chunk[1] as u16 } else { 0 };

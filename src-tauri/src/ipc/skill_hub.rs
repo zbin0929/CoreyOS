@@ -43,7 +43,15 @@ use crate::error::{IpcError, IpcResult};
 /// list, and if it does we want to know why before expanding the
 /// surface.
 const ALLOWED_SUBCOMMANDS: &[&str] = &[
-    "browse", "search", "inspect", "install", "uninstall", "list", "check", "update", "audit",
+    "browse",
+    "search",
+    "inspect",
+    "install",
+    "uninstall",
+    "list",
+    "check",
+    "update",
+    "audit",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

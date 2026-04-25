@@ -52,8 +52,7 @@ pub async fn llm_profile_upsert(
     let id = profile.id.trim().to_string();
     llm_profiles::validate_id(&id).map_err(|e| IpcError::NotConfigured { hint: e })?;
     let base_url = profile.base_url.trim_end_matches('/').to_string();
-    llm_profiles::validate_base_url(&base_url)
-        .map_err(|e| IpcError::NotConfigured { hint: e })?;
+    llm_profiles::validate_base_url(&base_url).map_err(|e| IpcError::NotConfigured { hint: e })?;
     llm_profiles::validate_model(&profile.model)
         .map_err(|e| IpcError::NotConfigured { hint: e })?;
 
@@ -240,14 +239,20 @@ pub async fn llm_profile_probe_vision(
         llm_profiles::load(&dir).into_iter().find(|p| p.id == id)
     })
     .await
-    .map_err(|e| IpcError::Internal { message: format!("probe_vision join: {e}") })?
-    .ok_or_else(|| IpcError::NotConfigured { hint: format!("no llm profile {id_for_err:?}") })?;
+    .map_err(|e| IpcError::Internal {
+        message: format!("probe_vision join: {e}"),
+    })?
+    .ok_or_else(|| IpcError::NotConfigured {
+        hint: format!("no llm profile {id_for_err:?}"),
+    })?;
 
     let url = format!("{}/v1/models", profile.base_url.trim_end_matches('/'));
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
         .build()
-        .map_err(|e| IpcError::Internal { message: format!("build client: {e}") })?;
+        .map_err(|e| IpcError::Internal {
+            message: format!("build client: {e}"),
+        })?;
 
     let api_key = profile
         .api_key_env
@@ -266,7 +271,10 @@ pub async fn llm_profile_probe_vision(
             body.get("data")
                 .and_then(|d| d.as_array())
                 .map(|models| {
-                    let model_ids: Vec<&str> = models.iter().filter_map(|m| m.get("id").and_then(|i| i.as_str())).collect();
+                    let model_ids: Vec<&str> = models
+                        .iter()
+                        .filter_map(|m| m.get("id").and_then(|i| i.as_str()))
+                        .collect();
                     model_ids.iter().any(|m| {
                         let m_lower = m.to_lowercase();
                         m_lower == model_lower
@@ -295,7 +303,9 @@ pub async fn llm_profile_probe_vision(
         }
     })
     .await
-    .map_err(|e| IpcError::Internal { message: format!("save vision: {e}") })?;
+    .map_err(|e| IpcError::Internal {
+        message: format!("save vision: {e}"),
+    })?;
 
     Ok(VisionProbeResult {
         profile_id: profile.id,

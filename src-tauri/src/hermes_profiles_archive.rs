@@ -341,9 +341,8 @@ fn read_manifest(bytes: &[u8]) -> io::Result<ProfileManifest> {
         if path == Path::new(MANIFEST_FILENAME) {
             let mut buf = Vec::with_capacity(entry.size() as usize);
             entry.read_to_end(&mut buf)?;
-            let manifest: ProfileManifest = serde_json::from_slice(&buf).map_err(|e| {
-                io::Error::other(format!("invalid {MANIFEST_FILENAME}: {e}"))
-            })?;
+            let manifest: ProfileManifest = serde_json::from_slice(&buf)
+                .map_err(|e| io::Error::other(format!("invalid {MANIFEST_FILENAME}: {e}")))?;
             hp::validate_name(&manifest.name).map_err(io::Error::other)?;
             return Ok(manifest);
         }
@@ -475,8 +474,7 @@ mod tests {
         assert_eq!(preview.file_count, 3); // config.yaml, .env, nested/skill.md
 
         // Import under a NEW name so we don't clobber the original.
-        let result =
-            import_profile_at(&home, &bytes, Some("beta"), false, None).expect("import");
+        let result = import_profile_at(&home, &bytes, Some("beta"), false, None).expect("import");
         assert!(!result.overwrote);
         assert_eq!(result.file_count, 3);
 
@@ -603,4 +601,3 @@ mod tests {
         assert!(err.to_string().contains("newer than this build supports"));
     }
 }
-

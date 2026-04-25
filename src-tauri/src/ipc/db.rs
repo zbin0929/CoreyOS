@@ -105,16 +105,14 @@ pub async fn db_message_set_feedback(
     feedback: Option<String>,
 ) -> IpcResult<()> {
     let db = db_of(&state)?;
-    tokio::task::spawn_blocking(move || {
-        db.set_message_feedback(&message_id, feedback.as_deref())
-    })
-    .await
-    .map_err(|e| IpcError::Internal {
-        message: format!("db task join: {e}"),
-    })?
-    .map_err(|e| IpcError::Internal {
-        message: format!("db set_message_feedback: {e}"),
-    })
+    tokio::task::spawn_blocking(move || db.set_message_feedback(&message_id, feedback.as_deref()))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("db task join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("db set_message_feedback: {e}"),
+        })
 }
 
 #[tauri::command]

@@ -304,10 +304,7 @@ impl AdapterRegistry {
             .expect("registry poisoned")
             .remove(id)
             .is_some();
-        self.labels
-            .write()
-            .expect("registry poisoned")
-            .remove(id);
+        self.labels.write().expect("registry poisoned").remove(id);
         if removed {
             // If the victim was the default, clear the pointer so the
             // next `default_adapter()` call returns `None` rather than

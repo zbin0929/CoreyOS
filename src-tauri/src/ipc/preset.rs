@@ -68,12 +68,9 @@ fn preset_dir(app: &AppHandle, id: &str) -> IpcResult<PathBuf> {
             message: format!("unknown preset id: {id}"),
         });
     }
-    let base = app
-        .path()
-        .resource_dir()
-        .map_err(|e| IpcError::Internal {
-            message: format!("resource_dir: {e}"),
-        })?;
+    let base = app.path().resource_dir().map_err(|e| IpcError::Internal {
+        message: format!("resource_dir: {e}"),
+    })?;
     Ok(base.join("assets").join("presets").join(id))
 }
 
@@ -324,7 +321,10 @@ mod tests {
             "id: test\nname: Test\ndescription: x\nversion: 1\n",
         );
         write(&src.path().join("skills").join("one.md"), "# one");
-        write(&src.path().join("skills").join("nested").join("two.md"), "# two");
+        write(
+            &src.path().join("skills").join("nested").join("two.md"),
+            "# two",
+        );
         write(&src.path().join("USER.md"), "# user");
 
         let r = install_sync(src.path(), dst.path()).unwrap();
@@ -341,7 +341,10 @@ mod tests {
         let src = TempDir::new().unwrap();
         let dst = TempDir::new().unwrap();
         write(&src.path().join("skills").join("keeper.md"), "# new");
-        write(&dst.path().join("skills").join("keeper.md"), "# existing-user-version");
+        write(
+            &dst.path().join("skills").join("keeper.md"),
+            "# existing-user-version",
+        );
 
         let r = install_sync(src.path(), dst.path()).unwrap();
         assert!(r.skipped.iter().any(|x| x.ends_with("keeper.md")));

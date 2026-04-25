@@ -22,8 +22,8 @@ mod hermes_profiles_archive;
 // base_url, model, api_key_env} bundles referenced by Hermes instances
 // via `llm_profile_id`). Lives next to hermes_instances; similar
 // shape, similar validation rules.
-mod llm_profiles;
 mod ipc;
+mod llm_profiles;
 mod menu;
 mod pty;
 mod routing_rules;

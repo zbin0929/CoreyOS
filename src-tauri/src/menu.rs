@@ -42,20 +42,76 @@ struct NavItem {
 }
 
 const NAV_MENU: &[NavItem] = &[
-    NavItem { key: "home", path: "/", accel: Some("CmdOrCtrl+0") },
-    NavItem { key: "chat", path: "/chat", accel: Some("CmdOrCtrl+1") },
-    NavItem { key: "compare", path: "/compare", accel: Some("CmdOrCtrl+2") },
-    NavItem { key: "skills", path: "/skills", accel: Some("CmdOrCtrl+3") },
-    NavItem { key: "trajectory", path: "/trajectory", accel: Some("CmdOrCtrl+4") },
-    NavItem { key: "analytics", path: "/analytics", accel: Some("CmdOrCtrl+5") },
-    NavItem { key: "logs", path: "/logs", accel: Some("CmdOrCtrl+6") },
-    NavItem { key: "terminal", path: "/terminal", accel: Some("CmdOrCtrl+7") },
-    NavItem { key: "scheduler", path: "/scheduler", accel: Some("CmdOrCtrl+8") },
-    NavItem { key: "channels", path: "/channels", accel: Some("CmdOrCtrl+9") },
-    NavItem { key: "models", path: "/models", accel: None },
-    NavItem { key: "profiles", path: "/profiles", accel: None },
-    NavItem { key: "runbooks", path: "/runbooks", accel: None },
-    NavItem { key: "budgets", path: "/budgets", accel: None },
+    NavItem {
+        key: "home",
+        path: "/",
+        accel: Some("CmdOrCtrl+0"),
+    },
+    NavItem {
+        key: "chat",
+        path: "/chat",
+        accel: Some("CmdOrCtrl+1"),
+    },
+    NavItem {
+        key: "compare",
+        path: "/compare",
+        accel: Some("CmdOrCtrl+2"),
+    },
+    NavItem {
+        key: "skills",
+        path: "/skills",
+        accel: Some("CmdOrCtrl+3"),
+    },
+    NavItem {
+        key: "trajectory",
+        path: "/trajectory",
+        accel: Some("CmdOrCtrl+4"),
+    },
+    NavItem {
+        key: "analytics",
+        path: "/analytics",
+        accel: Some("CmdOrCtrl+5"),
+    },
+    NavItem {
+        key: "logs",
+        path: "/logs",
+        accel: Some("CmdOrCtrl+6"),
+    },
+    NavItem {
+        key: "terminal",
+        path: "/terminal",
+        accel: Some("CmdOrCtrl+7"),
+    },
+    NavItem {
+        key: "scheduler",
+        path: "/scheduler",
+        accel: Some("CmdOrCtrl+8"),
+    },
+    NavItem {
+        key: "channels",
+        path: "/channels",
+        accel: Some("CmdOrCtrl+9"),
+    },
+    NavItem {
+        key: "models",
+        path: "/models",
+        accel: None,
+    },
+    NavItem {
+        key: "profiles",
+        path: "/profiles",
+        accel: None,
+    },
+    NavItem {
+        key: "runbooks",
+        path: "/runbooks",
+        accel: None,
+    },
+    NavItem {
+        key: "budgets",
+        path: "/budgets",
+        accel: None,
+    },
 ];
 
 /// Supported menu locales. Anything unrecognized falls back to English
@@ -72,7 +128,11 @@ impl Locale {
     /// insensitive; only the primary subtag is considered so
     /// `zh-Hant-HK` still maps to `Zh` rather than an unknown fallback.
     pub fn from_tag(tag: &str) -> Self {
-        let primary = tag.split(['-', '_']).next().unwrap_or("").to_ascii_lowercase();
+        let primary = tag
+            .split(['-', '_'])
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
         match primary.as_str() {
             "zh" => Locale::Zh,
             _ => Locale::En,
@@ -307,7 +367,10 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, locale: Locale) -> tauri::Result<Me
     let file_menu = SubmenuBuilder::new(app, l.file)
         .item(&new_chat)
         .separator()
-        .item(&PredefinedMenuItem::close_window(app, Some(l.close_window))?)
+        .item(&PredefinedMenuItem::close_window(
+            app,
+            Some(l.close_window),
+        )?)
         .build()?;
 
     // ── Edit ──

@@ -27,10 +27,8 @@ static EMBEDDER: OnceLock<Mutex<TextEmbedding>> = OnceLock::new();
 
 fn get_embedder() -> &'static Mutex<TextEmbedding> {
     EMBEDDER.get_or_init(|| {
-        let model = TextEmbedding::try_new(InitOptions::new(
-            EmbeddingModel::BGESmallENV15,
-        ))
-        .expect("failed to load embedding model");
+        let model = TextEmbedding::try_new(InitOptions::new(EmbeddingModel::BGESmallENV15))
+            .expect("failed to load embedding model");
         Mutex::new(model)
     })
 }
@@ -52,7 +50,10 @@ pub fn embed(texts: &[String]) -> Vec<Vec<f32>> {
 
 pub fn embed_single(text: &str) -> Vec<f32> {
     let results = embed(&[text.to_string()]);
-    results.into_iter().next().unwrap_or_else(|| vec![0.0f32; EMBEDDING_DIM])
+    results
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| vec![0.0f32; EMBEDDING_DIM])
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -95,7 +96,14 @@ pub fn chunk_smart(text: &str, max_chars: usize, overlap: usize) -> Vec<String> 
         if current.len() + para.len() + 2 > max_chars && !current.is_empty() {
             chunks.push(current.trim().to_string());
             if overlap > 0 && current.len() > overlap {
-                let tail: String = current.chars().rev().take(overlap).collect::<Vec<_>>().into_iter().rev().collect();
+                let tail: String = current
+                    .chars()
+                    .rev()
+                    .take(overlap)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
                 current = tail;
             } else {
                 current.clear();
@@ -128,18 +136,18 @@ fn chunk_with_overlap(text: &str, max_chars: usize, overlap: usize) -> Vec<Strin
         let end = (start + max_chars).min(chars.len());
         let chunk: String = chars[start..end].iter().collect();
         chunks.push(chunk);
-        start = if end >= chars.len() { end } else { end.saturating_sub(overlap) };
+        start = if end >= chars.len() {
+            end
+        } else {
+            end.saturating_sub(overlap)
+        };
     }
     chunks
 }
 
 // ───────────────────────── Phase 2: Vector Storage ─────────────────────────
 
-pub fn store_embedding(
-    db: &Db,
-    chunk_id: i64,
-    embedding: &[f32],
-) -> rusqlite::Result<()> {
+pub fn store_embedding(db: &Db, chunk_id: i64, embedding: &[f32]) -> rusqlite::Result<()> {
     let blob: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
     let conn = db.conn_raw();
     conn.execute(
@@ -206,12 +214,16 @@ pub fn rrf_fuse(
         std::collections::HashMap::new();
 
     for (rank, (id, doc_name, content, chunk_idx, _)) in vector_results.iter().enumerate() {
-        let entry = scores.entry(*id).or_insert_with(|| (0.0, doc_name.clone(), content.clone(), *chunk_idx));
+        let entry = scores
+            .entry(*id)
+            .or_insert_with(|| (0.0, doc_name.clone(), content.clone(), *chunk_idx));
         entry.0 += 1.0 / (k + rank as f64 + 1.0);
     }
 
     for (rank, (id, doc_name, content, chunk_idx, _)) in keyword_results.iter().enumerate() {
-        let entry = scores.entry(*id).or_insert_with(|| (0.0, doc_name.clone(), content.clone(), *chunk_idx));
+        let entry = scores
+            .entry(*id)
+            .or_insert_with(|| (0.0, doc_name.clone(), content.clone(), *chunk_idx));
         entry.0 += 1.0 / (k + rank as f64 + 1.0);
     }
 
@@ -230,16 +242,46 @@ pub fn expand_query(query: &str) -> Vec<String> {
     let lower = query.to_lowercase();
 
     let synonyms: &[(&[&str], &[&str])] = &[
-        (&["删除", "移除", "去掉"], &["删除", "移除", "去掉", "清除", "erase"]),
-        (&["修改", "更改", "编辑"], &["修改", "更改", "编辑", "更新", "变更"]),
-        (&["创建", "新建", "添加"], &["创建", "新建", "添加", "建立", "生成"]),
-        (&["查询", "搜索", "查找"], &["查询", "搜索", "查找", "检索", "寻找"]),
-        (&["配置", "设置", "设定"], &["配置", "设置", "设定", "偏好", "选项"]),
-        (&["error", "bug", "问题"], &["error", "bug", "问题", "故障", "异常", "失败"]),
-        (&["delete", "remove"], &["delete", "remove", "erase", "drop", "clear"]),
-        (&["create", "new", "add"], &["create", "new", "add", "insert", "make"]),
-        (&["update", "edit", "modify"], &["update", "edit", "modify", "change", "alter"]),
-        (&["search", "find", "query"], &["search", "find", "query", "lookup", "retrieve"]),
+        (
+            &["删除", "移除", "去掉"],
+            &["删除", "移除", "去掉", "清除", "erase"],
+        ),
+        (
+            &["修改", "更改", "编辑"],
+            &["修改", "更改", "编辑", "更新", "变更"],
+        ),
+        (
+            &["创建", "新建", "添加"],
+            &["创建", "新建", "添加", "建立", "生成"],
+        ),
+        (
+            &["查询", "搜索", "查找"],
+            &["查询", "搜索", "查找", "检索", "寻找"],
+        ),
+        (
+            &["配置", "设置", "设定"],
+            &["配置", "设置", "设定", "偏好", "选项"],
+        ),
+        (
+            &["error", "bug", "问题"],
+            &["error", "bug", "问题", "故障", "异常", "失败"],
+        ),
+        (
+            &["delete", "remove"],
+            &["delete", "remove", "erase", "drop", "clear"],
+        ),
+        (
+            &["create", "new", "add"],
+            &["create", "new", "add", "insert", "make"],
+        ),
+        (
+            &["update", "edit", "modify"],
+            &["update", "edit", "modify", "change", "alter"],
+        ),
+        (
+            &["search", "find", "query"],
+            &["search", "find", "query", "lookup", "retrieve"],
+        ),
     ];
 
     for (triggers, expansions) in synonyms {
@@ -267,11 +309,7 @@ pub struct HybridSearchResult {
     pub source: String,
 }
 
-pub fn hybrid_search(
-    db: &Db,
-    query: &str,
-    limit: usize,
-) -> Vec<HybridSearchResult> {
+pub fn hybrid_search(db: &Db, query: &str, limit: usize) -> Vec<HybridSearchResult> {
     let query_embedding = embed_single(query);
 
     let vector_results = search_by_vector(db, &query_embedding, limit * 2);
@@ -290,13 +328,15 @@ pub fn hybrid_search(
     fused
         .into_iter()
         .take(limit)
-        .map(|(doc_name, content, chunk_index, score)| HybridSearchResult {
-            doc_name,
-            content,
-            chunk_index,
-            score,
-            source: "hybrid".into(),
-        })
+        .map(
+            |(doc_name, content, chunk_index, score)| HybridSearchResult {
+                doc_name,
+                content,
+                chunk_index,
+                score,
+                source: "hybrid".into(),
+            },
+        )
         .collect()
 }
 
@@ -314,7 +354,12 @@ fn search_knowledge_chunks_jaccard(
     };
 
     let rows = match stmt.query_map([], |row| {
-        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, usize>(3)?))
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, usize>(3)?,
+        ))
     }) {
         Ok(r) => r,
         Err(_) => return Vec::new(),
@@ -337,7 +382,11 @@ fn search_knowledge_chunks_jaccard(
         }
         let intersection = query_tokens.intersection(&chunk_tokens).count() as f64;
         let union = query_tokens.union(&chunk_tokens).count() as f64;
-        let jaccard = if union > 0.0 { intersection / union } else { 0.0 };
+        let jaccard = if union > 0.0 {
+            intersection / union
+        } else {
+            0.0
+        };
         if jaccard > 0.1 {
             scored.push((id, doc_name, content, chunk_index, jaccard));
         }

@@ -77,10 +77,7 @@ impl HermesGateway {
     /// e.g. `"chat/completions"` or `"models"`.
     fn api_url(&self, suffix: &str) -> String {
         if let Some(last) = self.base_url.rsplit('/').next() {
-            if last.starts_with('v')
-                && last.len() >= 2
-                && last.as_bytes()[1].is_ascii_digit()
-            {
+            if last.starts_with('v') && last.len() >= 2 && last.as_bytes()[1].is_ascii_digit() {
                 return format!("{}/{suffix}", self.base_url);
             }
         }
@@ -160,10 +157,7 @@ impl HermesGateway {
             stream: false,
         };
 
-        let mut req = self
-            .http
-            .post(self.api_url("chat/completions"))
-            .json(&body);
+        let mut req = self.http.post(self.api_url("chat/completions")).json(&body);
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
         }
@@ -687,11 +681,7 @@ mod tests {
 
         // Regression: 智谱 GLM. Previously the client appended
         // /v1/chat/completions regardless, producing /v4/v1/... → 404.
-        let glm = HermesGateway::new(
-            "https://open.bigmodel.cn/api/paas/v4",
-            None,
-        )
-        .unwrap();
+        let glm = HermesGateway::new("https://open.bigmodel.cn/api/paas/v4", None).unwrap();
         assert_eq!(
             glm.api_url("chat/completions"),
             "https://open.bigmodel.cn/api/paas/v4/chat/completions"
@@ -703,11 +693,7 @@ mod tests {
 
         // Trailing slashes are stripped at construction so we never
         // accidentally emit `.../v4//chat/completions`.
-        let glm_slash = HermesGateway::new(
-            "https://open.bigmodel.cn/api/paas/v4/",
-            None,
-        )
-        .unwrap();
+        let glm_slash = HermesGateway::new("https://open.bigmodel.cn/api/paas/v4/", None).unwrap();
         assert_eq!(
             glm_slash.api_url("chat/completions"),
             "https://open.bigmodel.cn/api/paas/v4/chat/completions"

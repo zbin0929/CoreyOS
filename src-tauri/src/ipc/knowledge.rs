@@ -153,9 +153,7 @@ pub async fn knowledge_upload(
 }
 
 #[tauri::command]
-pub async fn knowledge_list(
-    state: State<'_, AppState>,
-) -> IpcResult<Vec<KnowledgeDoc>> {
+pub async fn knowledge_list(state: State<'_, AppState>) -> IpcResult<Vec<KnowledgeDoc>> {
     let db = state.db.clone().ok_or_else(|| IpcError::Internal {
         message: "DB not initialized".into(),
     })?;
@@ -170,10 +168,7 @@ pub async fn knowledge_list(
 }
 
 #[tauri::command]
-pub async fn knowledge_delete(
-    state: State<'_, AppState>,
-    id: String,
-) -> IpcResult<()> {
+pub async fn knowledge_delete(state: State<'_, AppState>, id: String) -> IpcResult<()> {
     let db = state.db.clone().ok_or_else(|| IpcError::Internal {
         message: "DB not initialized".into(),
     })?;

@@ -88,7 +88,9 @@ fn sandbox_err_to_io(e: super::SandboxError) -> io::Error {
 /// `std::fs::read_to_string`). Sandbox denials surface as
 /// `io::ErrorKind::PermissionDenied`.
 pub fn read_to_string_blocking(authority: &PathAuthority, path: &Path) -> io::Result<String> {
-    let canonical = authority.check(path, AccessOp::Read).map_err(sandbox_err_to_io)?;
+    let canonical = authority
+        .check(path, AccessOp::Read)
+        .map_err(sandbox_err_to_io)?;
     std::fs::read_to_string(&canonical)
 }
 
@@ -99,6 +101,8 @@ pub fn read_to_string_blocking(authority: &PathAuthority, path: &Path) -> io::Re
 /// gateway for any non-atomic write that may land later.
 #[allow(dead_code)]
 pub fn write_blocking(authority: &PathAuthority, path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let canonical = authority.check(path, AccessOp::Write).map_err(sandbox_err_to_io)?;
+    let canonical = authority
+        .check(path, AccessOp::Write)
+        .map_err(sandbox_err_to_io)?;
     std::fs::write(&canonical, bytes)
 }

@@ -134,16 +134,53 @@ fn extract_text_from_file(path: &str, mime: &str, name: &str) -> Option<String> 
         .unwrap_or("")
         .to_lowercase();
 
-    if matches!(mime, "text/plain" | "text/markdown" | "text/csv" | "text/html" | "text/xml"
-        | "application/json" | "application/xml" | "application/javascript")
-        || matches!(ext.as_str(), "txt" | "md" | "csv" | "json" | "xml" | "html" | "htm" | "js" | "ts" | "py" | "rs" | "go" | "java" | "c" | "cpp" | "h" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "log" | "sh" | "bat")
-    {
+    if matches!(
+        mime,
+        "text/plain"
+            | "text/markdown"
+            | "text/csv"
+            | "text/html"
+            | "text/xml"
+            | "application/json"
+            | "application/xml"
+            | "application/javascript"
+    ) || matches!(
+        ext.as_str(),
+        "txt"
+            | "md"
+            | "csv"
+            | "json"
+            | "xml"
+            | "html"
+            | "htm"
+            | "js"
+            | "ts"
+            | "py"
+            | "rs"
+            | "go"
+            | "java"
+            | "c"
+            | "cpp"
+            | "h"
+            | "yaml"
+            | "yml"
+            | "toml"
+            | "ini"
+            | "cfg"
+            | "log"
+            | "sh"
+            | "bat"
+    ) {
         let bytes = std::fs::read(path).ok()?;
         let text = String::from_utf8_lossy(&bytes);
         Some(text.into_owned())
-    } else if ext == "docx" || mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+    } else if ext == "docx"
+        || mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    {
         extract_docx_text(path)
-    } else if ext == "xlsx" || mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+    } else if ext == "xlsx"
+        || mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    {
         extract_xlsx_text(path)
     } else if ext == "pdf" || mime == "application/pdf" {
         None
@@ -181,7 +218,11 @@ fn extract_docx_text(path: &str) -> Option<String> {
         })
         .collect::<Vec<_>>()
         .join(" ");
-    if text.is_empty() { None } else { Some(text) }
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
 }
 
 fn extract_xlsx_text(path: &str) -> Option<String> {
@@ -209,13 +250,21 @@ fn extract_xlsx_text(path: &str) -> Option<String> {
             }
         }
     }
-    if texts.is_empty() { None } else { Some(texts.join(" | ")) }
+    if texts.is_empty() {
+        None
+    } else {
+        Some(texts.join(" | "))
+    }
 }
 
 /// Turn a (text, attachments) pair into the right `ChatMessageContent`.
 /// Exposed at module level so unit tests can exercise it without spinning
 /// up a whole adapter.
-fn build_content(text: String, attachments: Vec<ChatAttachmentRef>, vision: bool) -> ChatMessageContent {
+fn build_content(
+    text: String,
+    attachments: Vec<ChatAttachmentRef>,
+    vision: bool,
+) -> ChatMessageContent {
     if attachments.is_empty() {
         return ChatMessageContent::Text(text);
     }
@@ -259,7 +308,10 @@ fn build_content(text: String, attachments: Vec<ChatAttachmentRef>, vision: bool
             text_with_markers.push_str("\n\n");
         }
         if is_image && !vision {
-            text_with_markers.push_str(&format!("[attached: {} (图片 - 当前模型不支持图片)]", a.name));
+            text_with_markers.push_str(&format!(
+                "[attached: {} (图片 - 当前模型不支持图片)]",
+                a.name
+            ));
         } else if let Some(extracted) = extract_text_from_file(&a.path, &a.mime, &a.name) {
             let cap = 50000;
             let truncated = if extracted.len() > cap {

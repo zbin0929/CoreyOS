@@ -4,10 +4,10 @@ use tauri::State;
 use crate::adapters::{ChatMessageDto, ChatTurn};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
+use crate::workflow::browser_config::{self, BrowserConfig};
 use crate::workflow::engine::{self, StepExecutor, WorkflowRun};
 use crate::workflow::model::{WorkflowDef, WorkflowSummary};
 use crate::workflow::store::{self, ValidationError};
-use crate::workflow::browser_config::{self, BrowserConfig};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationResult {
@@ -97,7 +97,10 @@ pub async fn workflow_validate(def: WorkflowDef) -> IpcResult<ValidationResult> 
 
 fn find_browser_runner() -> std::path::PathBuf {
     let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let exe_dir = exe.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+    let exe_dir = exe
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
 
     let candidates: Vec<std::path::PathBuf> = vec![
         exe_dir.join("scripts/browser-runner"),
@@ -125,8 +128,14 @@ struct HermesExecutor {
 impl StepExecutor for HermesExecutor {
     fn execute_agent(&self, agent_id: &str, prompt: &str) -> Result<String, String> {
         let rt = tokio::runtime::Handle::current();
-        let adapter_id = if agent_id.is_empty() { "hermes" } else { agent_id };
-        let adapter = self.adapters.get(adapter_id)
+        let adapter_id = if agent_id.is_empty() {
+            "hermes"
+        } else {
+            agent_id
+        };
+        let adapter = self
+            .adapters
+            .get(adapter_id)
             .or_else(|| self.adapters.default_adapter())
             .ok_or_else(|| format!("adapter '{}' not found", adapter_id))?;
 
@@ -145,7 +154,13 @@ impl StepExecutor for HermesExecutor {
             .map_err(|e| format!("agent error: {e}"))
     }
 
-    fn execute_browser(&self, action: &str, url: &str, instruction: &str, profile: &str) -> Result<String, String> {
+    fn execute_browser(
+        &self,
+        action: &str,
+        url: &str,
+        instruction: &str,
+        profile: &str,
+    ) -> Result<String, String> {
         use std::process::Command;
 
         let cfg = browser_config::load();
@@ -181,7 +196,8 @@ impl StepExecutor for HermesExecutor {
             cmd.env("BROWSER_LLM_BASE_URL", &cfg.base_url);
         }
 
-        let output = cmd.output()
+        let output = cmd
+            .output()
             .map_err(|e| format!("failed to spawn browser-runner: {e}"))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -238,13 +254,11 @@ pub async fn workflow_run_status(
     run_id: String,
 ) -> IpcResult<Option<WorkflowRun>> {
     let runs = state.workflow_runs.clone();
-    let run = tokio::task::spawn_blocking(move || {
-        runs.lock().get(&run_id).cloned()
-    })
-    .await
-    .map_err(|e| IpcError::Internal {
-        message: format!("workflow_run_status join: {e}"),
-    })?;
+    let run = tokio::task::spawn_blocking(move || runs.lock().get(&run_id).cloned())
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("workflow_run_status join: {e}"),
+        })?;
     Ok(run)
 }
 
@@ -289,7 +303,9 @@ pub async fn workflow_approve(
 pub async fn browser_config_get() -> IpcResult<BrowserConfig> {
     let cfg = tokio::task::spawn_blocking(browser_config::load)
         .await
-        .map_err(|e| IpcError::Internal { message: format!("browser_config_get join: {e}") })?;
+        .map_err(|e| IpcError::Internal {
+            message: format!("browser_config_get join: {e}"),
+        })?;
     Ok(cfg)
 }
 
@@ -297,6 +313,10 @@ pub async fn browser_config_get() -> IpcResult<BrowserConfig> {
 pub async fn browser_config_set(config: BrowserConfig) -> IpcResult<()> {
     tokio::task::spawn_blocking(move || browser_config::save(&config))
         .await
-        .map_err(|e| IpcError::Internal { message: format!("browser_config_set join: {e}") })?
-        .map_err(|e| IpcError::Internal { message: format!("browser_config_set: {e}") })
+        .map_err(|e| IpcError::Internal {
+            message: format!("browser_config_set join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("browser_config_set: {e}"),
+        })
 }

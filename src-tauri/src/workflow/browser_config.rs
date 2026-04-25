@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserConfig {
@@ -29,7 +29,9 @@ fn config_path() -> anyhow::Result<PathBuf> {
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .ok_or_else(|| anyhow::anyhow!("no $HOME"))?;
-    Ok(PathBuf::from(home).join(".hermes").join("browser_config.json"))
+    Ok(PathBuf::from(home)
+        .join(".hermes")
+        .join("browser_config.json"))
 }
 
 pub fn load() -> BrowserConfig {

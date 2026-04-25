@@ -97,10 +97,7 @@ fn resolve_path(kind: MemoryKind) -> IpcResult<PathBuf> {
 /// empty body (not an error). Hard-fail only on I/O we can't classify
 /// (permission denied, etc.).
 #[tauri::command]
-pub async fn memory_read(
-    _state: State<'_, AppState>,
-    kind: MemoryKind,
-) -> IpcResult<MemoryFile> {
+pub async fn memory_read(_state: State<'_, AppState>, kind: MemoryKind) -> IpcResult<MemoryFile> {
     let path = resolve_path(kind)?;
     let path_display = path.display().to_string();
 
@@ -249,11 +246,7 @@ mod tests {
             let leftovers: Vec<_> = std::fs::read_dir(dir)
                 .unwrap()
                 .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.file_name()
-                        .to_string_lossy()
-                        .contains(".caduceus.tmp-")
-                })
+                .filter(|e| e.file_name().to_string_lossy().contains(".caduceus.tmp-"))
                 .collect();
             assert!(leftovers.is_empty(), "found tmp siblings: {leftovers:?}");
         });

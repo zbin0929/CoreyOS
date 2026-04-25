@@ -70,8 +70,9 @@ pub struct McpServer {
 pub async fn mcp_server_list(state: State<'_, AppState>) -> IpcResult<Vec<McpServer>> {
     let authority = state.authority.clone();
     tokio::task::spawn_blocking(move || -> IpcResult<Vec<McpServer>> {
-        let doc = read_config_yaml(&authority)
-            .map_err(|e| IpcError::Internal { message: format!("mcp_server_list: {e}") })?;
+        let doc = read_config_yaml(&authority).map_err(|e| IpcError::Internal {
+            message: format!("mcp_server_list: {e}"),
+        })?;
         Ok(extract_servers(&doc))
     })
     .await
@@ -91,10 +92,7 @@ pub async fn mcp_server_list(state: State<'_, AppState>) -> IpcResult<Vec<McpSer
 /// present, whether the tool filter is valid, whether the remote URL
 /// is reachable — is Hermes' responsibility once it reloads.
 #[tauri::command]
-pub async fn mcp_server_upsert(
-    state: State<'_, AppState>,
-    server: McpServer,
-) -> IpcResult<()> {
+pub async fn mcp_server_upsert(state: State<'_, AppState>, server: McpServer) -> IpcResult<()> {
     validate_id(&server.id)?;
     let id = server.id.clone();
     let journal = state.changelog_path.clone();
@@ -150,24 +148,30 @@ pub struct McpProbeResult {
 }
 
 #[tauri::command]
-pub async fn mcp_server_probe(
-    state: State<'_, AppState>,
-    id: String,
-) -> IpcResult<McpProbeResult> {
+pub async fn mcp_server_probe(state: State<'_, AppState>, id: String) -> IpcResult<McpProbeResult> {
     let authority = state.authority.clone();
     let server: serde_json::Value = tokio::task::spawn_blocking({
         let authority = authority.clone();
         let id = id.clone();
         move || -> IpcResult<serde_json::Value> {
-            let doc = read_config_yaml(&authority)
-                .map_err(|e| IpcError::Internal { message: format!("mcp_probe read: {e}") })?;
-            let servers = extract_servers(&doc);
-            let srv = servers.into_iter().find(|s| s.id == id).ok_or_else(|| {
-                IpcError::Internal { message: format!("mcp server '{id}' not found") }
+            let doc = read_config_yaml(&authority).map_err(|e| IpcError::Internal {
+                message: format!("mcp_probe read: {e}"),
             })?;
+            let servers = extract_servers(&doc);
+            let srv =
+                servers
+                    .into_iter()
+                    .find(|s| s.id == id)
+                    .ok_or_else(|| IpcError::Internal {
+                        message: format!("mcp server '{id}' not found"),
+                    })?;
             Ok(srv.config)
         }
-    }).await.map_err(|e| IpcError::Internal { message: format!("mcp_probe join: {e}") })?
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("mcp_probe join: {e}"),
+    })?
     .map_err(|e: IpcError| e)?;
 
     let rid = id.clone();
@@ -178,19 +182,30 @@ pub async fn mcp_server_probe(
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
-            .map_err(|e| IpcError::Internal { message: format!("build client: {e}") })?;
+            .map_err(|e| IpcError::Internal {
+                message: format!("build client: {e}"),
+            })?;
         let resp = client.head(&url).send().await;
         let latency = start.elapsed().as_millis() as u64;
         match resp {
             Ok(r) if r.status().is_success() || r.status().is_server_error() => {
-                Ok(McpProbeResult { id: rid, reachable: true, latency_ms: Some(latency), error: None })
+                Ok(McpProbeResult {
+                    id: rid,
+                    reachable: true,
+                    latency_ms: Some(latency),
+                    error: None,
+                })
             }
             Ok(r) => Ok(McpProbeResult {
-                id: rid, reachable: false, latency_ms: Some(latency),
+                id: rid,
+                reachable: false,
+                latency_ms: Some(latency),
                 error: Some(format!("HTTP {}", r.status())),
             }),
             Err(e) => Ok(McpProbeResult {
-                id: rid, reachable: false, latency_ms: Some(latency),
+                id: rid,
+                reachable: false,
+                latency_ms: Some(latency),
                 error: Some(e.to_string()),
             }),
         }
@@ -198,19 +213,27 @@ pub async fn mcp_server_probe(
         let cmd_str = cmd.to_string();
         let which = tokio::task::spawn_blocking(move || {
             std::process::Command::new("which").arg(&cmd_str).output()
-        }).await;
+        })
+        .await;
         match which {
-            Ok(Ok(o)) if o.status.success() => {
-                Ok(McpProbeResult { id: rid, reachable: true, latency_ms: None, error: None })
-            }
+            Ok(Ok(o)) if o.status.success() => Ok(McpProbeResult {
+                id: rid,
+                reachable: true,
+                latency_ms: None,
+                error: None,
+            }),
             _ => Ok(McpProbeResult {
-                id: rid, reachable: false, latency_ms: None,
+                id: rid,
+                reachable: false,
+                latency_ms: None,
                 error: Some(format!("command '{}' not found in PATH", cmd.to_string())),
             }),
         }
     } else {
         Ok(McpProbeResult {
-            id: rid, reachable: false, latency_ms: None,
+            id: rid,
+            reachable: false,
+            latency_ms: None,
             error: Some("no 'url' or 'command' field".into()),
         })
     }

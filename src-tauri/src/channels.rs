@@ -517,7 +517,10 @@ mod tests {
             find_spec("weixin").unwrap().display_name,
             "WeiXin (Personal)",
         );
-        assert!(find_spec("wechat").is_none(), "legacy `wechat` slug removed");
+        assert!(
+            find_spec("wechat").is_none(),
+            "legacy `wechat` slug removed"
+        );
         assert!(find_spec("twitter").is_none());
     }
 
@@ -529,12 +532,18 @@ mod tests {
         let whatsapp = find_spec("whatsapp").unwrap();
         let names: Vec<&str> = whatsapp.env_keys.iter().map(|e| e.name.as_str()).collect();
         assert!(names.contains(&"WHATSAPP_ENABLED"));
-        assert!(!names.contains(&"WHATSAPP_TOKEN"), "WHATSAPP_TOKEN is not read by Hermes");
+        assert!(
+            !names.contains(&"WHATSAPP_TOKEN"),
+            "WHATSAPP_TOKEN is not read by Hermes"
+        );
 
         let wecom = find_spec("wecom").unwrap();
         let names: Vec<&str> = wecom.env_keys.iter().map(|e| e.name.as_str()).collect();
         assert!(names.contains(&"WECOM_SECRET"));
-        assert!(!names.contains(&"WECOM_BOT_SECRET"), "WECOM_BOT_SECRET is an off-by-prefix typo");
+        assert!(
+            !names.contains(&"WECOM_BOT_SECRET"),
+            "WECOM_BOT_SECRET is an off-by-prefix typo"
+        );
 
         let weixin = find_spec("weixin").unwrap();
         let names: Vec<&str> = weixin.env_keys.iter().map(|e| e.name.as_str()).collect();
@@ -544,7 +553,10 @@ mod tests {
         let slack = find_spec("slack").unwrap();
         let names: Vec<&str> = slack.env_keys.iter().map(|e| e.name.as_str()).collect();
         assert!(names.contains(&"SLACK_BOT_TOKEN"));
-        assert!(names.contains(&"SLACK_APP_TOKEN"), "Socket Mode needs both tokens");
+        assert!(
+            names.contains(&"SLACK_APP_TOKEN"),
+            "Socket Mode needs both tokens"
+        );
     }
 
     #[test]

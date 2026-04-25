@@ -75,7 +75,11 @@ pub async fn rag_search(
 
             let intersection = query_tokens.intersection(&msg_tokens).count() as f64;
             let union = query_tokens.union(&msg_tokens).count() as f64;
-            let jaccard = if union > 0.0 { intersection / union } else { 0.0 };
+            let jaccard = if union > 0.0 {
+                intersection / union
+            } else {
+                0.0
+            };
 
             if jaccard > 0.15 {
                 let snippet: String = msg.chars().take(200).collect();
@@ -89,7 +93,11 @@ pub async fn rag_search(
             }
         }
 
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(lim);
         Ok(scored)
     })
@@ -100,9 +108,7 @@ pub async fn rag_search(
 }
 
 #[tauri::command]
-pub async fn rag_index_recent(
-    state: State<'_, AppState>,
-) -> IpcResult<RagIndexResult> {
+pub async fn rag_index_recent(state: State<'_, AppState>) -> IpcResult<RagIndexResult> {
     let db = state.db.clone().ok_or_else(|| IpcError::Internal {
         message: "DB not initialized".into(),
     })?;

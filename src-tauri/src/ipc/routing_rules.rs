@@ -25,8 +25,7 @@ pub async fn routing_rule_upsert(
     // Normalise + validate before touching disk.
     let id = rule.id.trim().to_string();
     routing_rules::validate_id(&id).map_err(|e| IpcError::NotConfigured { hint: e })?;
-    routing_rules::validate_match(&rule.match_)
-        .map_err(|e| IpcError::NotConfigured { hint: e })?;
+    routing_rules::validate_match(&rule.match_).map_err(|e| IpcError::NotConfigured { hint: e })?;
 
     let normalised = RoutingRule {
         id,
@@ -66,8 +65,7 @@ pub async fn routing_rule_upsert(
 #[tauri::command]
 pub async fn routing_rule_delete(state: State<'_, AppState>, id: String) -> IpcResult<()> {
     let id_norm = id.trim().to_string();
-    routing_rules::validate_id(&id_norm)
-        .map_err(|e| IpcError::NotConfigured { hint: e })?;
+    routing_rules::validate_id(&id_norm).map_err(|e| IpcError::NotConfigured { hint: e })?;
 
     let dir = state.config_dir.clone();
     tokio::task::spawn_blocking(move || -> IpcResult<()> {

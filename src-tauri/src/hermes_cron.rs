@@ -154,10 +154,7 @@ pub fn load_jobs() -> io::Result<Vec<HermesJob>> {
     match fs::read_to_string(&path) {
         Ok(raw) if raw.trim().is_empty() => Ok(Vec::new()),
         Ok(raw) => parse_jobs(&raw).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("jobs.json parse: {e}"),
-            )
+            io::Error::new(io::ErrorKind::InvalidData, format!("jobs.json parse: {e}"))
         }),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(e) => Err(e),
@@ -293,9 +290,8 @@ fn serialize_jobs(jobs: &[HermesJob]) -> io::Result<String> {
     // pretty-printed so the file is diffable when the user edits by
     // hand. `atomic_write` serialises to bytes so the choice of
     // indent only costs a few extra bytes.
-    serde_json::to_string_pretty(jobs).map_err(|e| {
-        io::Error::new(io::ErrorKind::InvalidData, format!("serialize jobs: {e}"))
-    })
+    serde_json::to_string_pretty(jobs)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("serialize jobs: {e}")))
 }
 
 fn read_preview(path: &Path) -> io::Result<String> {
