@@ -48,7 +48,10 @@
     "createUpdaterArtifacts": true,
     "resources": [
       "assets/presets/**/*"
-    ]
+    ],
+    "macOS": {
+      "infoPlist": "../src-tauri/macos.Info.plist"
+    }
   },
   "plugins": {
     "updater": {

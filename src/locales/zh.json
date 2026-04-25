@@ -807,6 +807,7 @@
     "saved": "已保存 ✓",
     "test_asr": "测试 ASR",
     "test_asr_hint": "点击录制 5 秒音频，然后转写。",
+    "mic_unavailable": "当前环境不支持麦克风录制。在 macOS 上，WebView 可能不支持 getUserMedia。请尝试在浏览器中打开 http://localhost:5173 使用，或等待后续版本支持系统级录音。",
     "record_5s": "录音 5 秒",
     "recording": "录音中…",
     "transcribing": "转写中…",

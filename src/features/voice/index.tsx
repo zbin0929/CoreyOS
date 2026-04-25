@@ -308,6 +308,10 @@ function VoiceTestPanel() {
 
   const onRecord = useCallback(async () => {
     if (recording) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setResult(t('voice.mic_unavailable'));
+      return;
+    }
     setRecording(true);
     setResult(null);
     try {
@@ -342,19 +346,26 @@ function VoiceTestPanel() {
       setRecording(false);
       setResult(`Mic error: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [recording]);
+  }, [recording, t]);
 
   const onTts = useCallback(async () => {
     if (playing || !ttsText.trim()) return;
     setPlaying(true);
     try {
       const res = await voiceTts(ttsText);
-      const audio = new Audio(`file://${res.audio_path}`);
+      const src = res.audio_path.startsWith('/')
+        ? `asset://localhost${encodeURI(res.audio_path)}`
+        : `file://${res.audio_path}`;
+      const audio = new Audio(src);
       audio.onended = () => setPlaying(false);
-      audio.onerror = () => setPlaying(false);
+      audio.onerror = () => {
+        setPlaying(false);
+        setResult('Playback error: audio format not supported or file not found.');
+      };
       void audio.play();
-    } catch {
+    } catch (e) {
       setPlaying(false);
+      setResult(`TTS error: ${ipcErrorMessage(e)}`);
     }
   }, [ttsText, playing]);
 
@@ -386,7 +397,7 @@ function VoiceTestPanel() {
           value={ttsText}
           onChange={(e) => setTtsText(e.target.value)}
           rows={2}
-          className="input"
+          className="w-full resize-none rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40"
           data-testid="voice-test-tts-text"
         />
         <Button

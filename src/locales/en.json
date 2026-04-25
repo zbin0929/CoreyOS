@@ -807,6 +807,7 @@
     "saved": "Saved ✓",
     "test_asr": "Test ASR",
     "test_asr_hint": "Click to record 5 seconds of audio, then transcribe it.",
+    "mic_unavailable": "Microphone recording is not available in this environment. On macOS, the WebView may not support getUserMedia. Try opening http://localhost:5173 in a browser, or wait for a future update with system-level recording support.",
     "record_5s": "Record 5s",
     "recording": "Recording…",
     "transcribing": "Transcribing…",
