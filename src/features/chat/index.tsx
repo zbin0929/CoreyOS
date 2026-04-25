@@ -21,9 +21,7 @@ import {
   attachmentStageBlob,
   chatStream,
   dbMessageSetUsage,
-  generateTitle,
   ipcErrorMessage,
-  learningExtract,
   learningIndexMessage,
   learningSearchSimilar,
   ragSearch,
@@ -32,9 +30,7 @@ import {
   voiceRecord,
   voiceRecordStop,
   learningReadLearnings,
-  learningDetectPattern,
   memoryRead,
-  skillSave,
   type ChatMessageDto,
   type ChatStreamHandle,
   type StagedAttachment,
@@ -57,6 +53,7 @@ import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { ChatSearch } from './ChatSearch';
 import { computeActiveMatchIndex } from './chatSearchMatch';
 import { useChatIntentSuggestions } from './useChatIntentSuggestions';
+import { usePostSendEffects } from './usePostSendEffects';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
 import type { VirtuosoHandle } from 'react-virtuoso';
@@ -197,6 +194,12 @@ function ChatPane({
     handleSuggestionDismiss,
     detectIntents,
   } = useChatIntentSuggestions({ sessionId, patchMessage });
+
+  const onStreamDone = usePostSendEffects({
+    sessionId,
+    renameSession,
+    detectIntents,
+  });
 
   // Cmd+F / Ctrl+F inside the chat route opens the search bar. We
   // register the handler on the ChatPane's root (below) rather than
@@ -689,61 +692,7 @@ function ChatPane({
             setSending(false);
             streamRef.current = null;
             pendingRef.current = null;
-            // T2.4: persist token usage so Analytics can roll it up. Fire-
-            // and-forget — a DB hiccup shouldn't visibly break the chat.
-            if (
-              summary.prompt_tokens !== null ||
-              summary.completion_tokens !== null
-            ) {
-              void dbMessageSetUsage({
-                messageId: pendingId,
-                promptTokens: summary.prompt_tokens,
-                completionTokens: summary.completion_tokens,
-              }).catch(() => {
-                /* intentionally swallowed — see comment above */
-              });
-            }
-            // After the FIRST full turn, ask the LLM for a better title.
-            // We detect "first turn" by checking that the only user message
-            // in this session is the one we just sent.
-            const sess = useChatStore.getState().sessions[sessionId];
-            if (!sess) return;
-            const userCount = sess.messages.filter((m) => m.role === 'user').length;
-            const firstAssistant = sess.messages.find(
-              (m) => m.id === pendingId,
-            )?.content;
-            if (userCount === 1 && firstAssistant && firstAssistant.length > 0) {
-              void generateTitle(trimmed, firstAssistant).then((title) => {
-                if (title) renameSession(sessionId, title);
-              });
-            }
-            // Phase E · P0 — self-learning: extract memorable facts
-            // from this turn and append to MEMORY.md. Fire-and-forget.
-            if (firstAssistant && firstAssistant.length > 0 && trimmed.length > 0) {
-              void learningExtract({
-                userMessage: trimmed,
-                assistantMessage: firstAssistant,
-              }).catch(() => {});
-
-              // Phase E · P3 — detect repeated task pattern and auto-create Skill.
-              void learningDetectPattern(trimmed)
-                .then(async (result) => {
-                  if (!result.pattern_found) return;
-                  const body = `# Auto-detected Skill: ${result.suggested_skill_name}\n\n`
-                    + `Detected from ${result.occurrence_count} similar requests.\n\n`
-                    + `## Pattern\n${result.pattern_description}\n\n`
-                    + `## Usage\nDescribe your request in natural language.\n`;
-                  const path = `auto/${result.suggested_skill_name}.md`;
-                  try {
-                    await skillSave(path, body, true);
-                  } catch {
-                    // already exists — skip
-                  }
-                })
-                .catch(() => {});
-
-              detectIntents(pendingId, trimmed);
-            }
+            onStreamDone(pendingId, trimmed, summary);
           },
           onError: (err) => {
             patchMessage(sessionId, pendingId, {
