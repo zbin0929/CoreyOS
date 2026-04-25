@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -29,7 +29,7 @@ import {
 
 const nodeTypes: NodeTypes = { step: StepNode };
 
-function stepToNode(step: WorkflowStep, allIds: string[]): Node {
+function stepToNode(step: WorkflowStep, index: number): Node {
   const data: StepNodeData = {
     id: step.id,
     name: step.name,
@@ -39,7 +39,7 @@ function stepToNode(step: WorkflowStep, allIds: string[]): Node {
   return {
     id: step.id,
     type: 'step',
-    position: { x: 250, y: allIds.indexOf(step.id) * 120 },
+    position: { x: 250, y: index * 120 },
     data,
   };
 }
@@ -60,7 +60,7 @@ function stepsToEdges(steps: WorkflowStep[]): Edge[] {
 }
 
 interface Props {
-  workflowId: string;
+  workflowId: string | null;
   onBack: () => void;
 }
 
@@ -69,10 +69,31 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
   const [def, setDef] = useState<WorkflowDef | null>(null);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (workflowId) {
+      void workflowGet(workflowId).then((d) => {
+        setDef(d);
+        setLoaded(true);
+      }).catch(() => setLoaded(true));
+    } else {
+      setDef({
+        id: `wf_${Date.now()}`,
+        name: '',
+        description: '',
+        version: 1,
+        trigger: { type: 'manual' } as any,
+        inputs: [],
+        steps: [],
+      });
+      setLoaded(true);
+    }
+  }, [workflowId]);
 
   const initialNodes = useMemo(() => {
     if (!def) return [];
-    return def.steps.map((s, _i, arr) => stepToNode(s, arr.map((x) => x.id)));
+    return def.steps.map((s, i) => stepToNode(s, i));
   }, [def]);
 
   const initialEdges = useMemo(() => {
@@ -83,14 +104,10 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  const loadDef = useCallback(async () => {
-    try {
-      const d = await workflowGet(workflowId);
-      setDef(d);
-    } catch { /* ignore */ }
-  }, [workflowId]);
-
-  useState(() => { void loadDef(); });
+  useEffect(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
 
   const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge({ ...connection, animated: true }, eds));
@@ -177,9 +194,22 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
     setSelectedStepId(null);
   };
 
+  const handleDefFieldChange = (field: 'name' | 'description' | 'trigger_type', value: string) => {
+    setDef((prev) => {
+      if (!prev) return prev;
+      if (field === 'trigger_type') {
+        const trigger = value === 'cron'
+          ? { type: 'cron' as const, expression: '0 * * * *' }
+          : { type: 'manual' as const };
+        return { ...prev, trigger };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
   const selectedStep = def?.steps.find((s) => s.id === selectedStepId) ?? null;
 
-  if (!def) {
+  if (!loaded || !def) {
     return (
       <div className="flex h-full items-center justify-center text-fg-subtle">
         {t('workflow_page.loading')}
@@ -190,7 +220,7 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title={def.name}
+        title={def.name || t('workflow_page.new_workflow')}
         subtitle={t('workflow_page.editor_subtitle')}
         actions={
           <div className="flex items-center gap-2">
@@ -209,6 +239,41 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
         }
       />
       <div className="flex flex-1 min-h-0">
+        <div className="w-64 shrink-0 border-r border-border bg-bg-elev-1 p-4 flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-fg">{t('workflow_page.basic_info')}</h3>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">{t('workflow_page.wf_name')}</span>
+            <input
+              className="flex h-8 w-full rounded-md border border-border bg-bg-elev-1 px-2.5 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-2 focus-visible:outline-gold-500"
+              value={def.name}
+              onChange={(e) => handleDefFieldChange('name', e.target.value)}
+              placeholder={t('workflow_page.wf_name_placeholder')}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">{t('workflow_page.wf_desc')}</span>
+            <input
+              className="flex h-8 w-full rounded-md border border-border bg-bg-elev-1 px-2.5 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-2 focus-visible:outline-gold-500"
+              value={def.description}
+              onChange={(e) => handleDefFieldChange('description', e.target.value)}
+              placeholder={t('workflow_page.wf_desc_placeholder')}
+            />
+          </label>
+          <div className="rounded-md border border-border p-3">
+            <p className="mb-2 text-xs font-medium text-fg-subtle">{t('workflow_page.help_title')}</p>
+            <ul className="space-y-1 text-[11px] text-fg-subtle">
+              <li>🤖 <b>Agent</b> — AI 执行任务</li>
+              <li>🔧 <b>Tool</b> — 调用工具</li>
+              <li>⚡ <b>Parallel</b> — 并行执行</li>
+              <li>🔀 <b>Branch</b> — 条件分支</li>
+              <li>🔄 <b>Loop</b> — 循环执行</li>
+              <li>✋ <b>Approval</b> — 人工审批</li>
+            </ul>
+            <p className="mt-2 text-[11px] text-fg-subtle">
+              {t('workflow_page.help_tip')}
+            </p>
+          </div>
+        </div>
         <div className="flex-1">
           <ReactFlow
             nodes={nodes}

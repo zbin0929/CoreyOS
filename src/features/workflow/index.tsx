@@ -6,6 +6,7 @@ import {
   Loader2,
   Pencil,
   Play,
+  Plus,
   Trash2,
   Workflow,
   XCircle,
@@ -29,7 +30,7 @@ import { WorkflowEditor } from './Editor';
 
 type Mode =
   | { kind: 'list' }
-  | { kind: 'edit'; wfId: string }
+  | { kind: 'edit'; wfId: string | null }
   | { kind: 'run'; wf: WorkflowSummary };
 
 export function WorkflowRoute() {
@@ -197,6 +198,12 @@ export function WorkflowRoute() {
       <PageHeader
         title={t('workflow_page.title')}
         subtitle={t('workflow_page.subtitle')}
+        actions={
+          <Button variant="secondary" onClick={() => setMode({ kind: 'edit', wfId: null })}>
+            <Icon icon={Plus} size="xs" />
+            {t('workflow_page.create')}
+          </Button>
+        }
       />
       <div className="flex-1 overflow-y-auto p-6">
         {error && (

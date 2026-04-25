@@ -1144,6 +1144,17 @@
     "output_format": "Output Format",
     "editor_subtitle": "Visual Flow Editor",
     "approve": "Approve",
-    "reject": "Reject"
+    "reject": "Reject",
+    "create": "New Workflow",
+    "new_workflow": "New Workflow",
+    "basic_info": "Basic Info",
+    "wf_name": "Workflow Name",
+    "wf_name_placeholder": "Enter workflow name...",
+    "wf_desc": "Description",
+    "wf_desc_placeholder": "Describe this workflow...",
+    "help_title": "Quick Guide",
+    "help_tip": "Click 'Add Step' to create nodes, drag to connect dependencies, click a node to edit.",
+    "add_condition": "Add Condition",
+    "approval_message": "Approval Message"
   }
 }

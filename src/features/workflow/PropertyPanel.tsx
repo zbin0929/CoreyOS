@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import type { WorkflowStep } from '@/lib/ipc';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
 import { Trash2 } from 'lucide-react';
 
 interface Props {
@@ -11,7 +14,20 @@ interface Props {
   onDelete: (id: string) => void;
 }
 
-const STEP_TYPES = ['agent', 'tool', 'parallel', 'branch', 'loop', 'approval'] as const;
+const STEP_TYPES = [
+  { value: 'agent', label: '🤖 Agent', hint: 'AI Agent 执行任务' },
+  { value: 'tool', label: '🔧 Tool', hint: '调用工具' },
+  { value: 'parallel', label: '⚡ Parallel', hint: '并行执行' },
+  { value: 'branch', label: '🔀 Branch', hint: '条件分支' },
+  { value: 'loop', label: '🔄 Loop', hint: '循环执行' },
+  { value: 'approval', label: '✋ Approval', hint: '人工审批' },
+] as const;
+
+const OUTPUT_FORMATS = [
+  { value: 'text', label: 'Text' },
+  { value: 'json', label: 'JSON' },
+  { value: 'markdown', label: 'Markdown' },
+] as const;
 
 export function PropertyPanel({ step, onUpdate, onDelete }: Props) {
   const { t } = useTranslation();
@@ -48,51 +64,51 @@ export function PropertyPanel({ step, onUpdate, onDelete }: Props) {
 
       <label className="flex flex-col gap-1">
         <span className="text-xs text-fg-subtle">ID</span>
-        <input
-          className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
+        <Input
           value={local.id}
           onChange={(e) => set('id', e.target.value)}
+          className="text-xs"
         />
       </label>
 
       <label className="flex flex-col gap-1">
         <span className="text-xs text-fg-subtle">{t('workflow_page.step_name')}</span>
-        <input
-          className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
+        <Input
           value={local.name}
           onChange={(e) => set('name', e.target.value)}
+          className="text-xs"
         />
       </label>
 
       <label className="flex flex-col gap-1">
         <span className="text-xs text-fg-subtle">{t('workflow_page.step_type')}</span>
-        <select
-          className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
+        <Select
           value={st}
-          onChange={(e) => set('type', e.target.value as typeof st)}
-        >
-          {STEP_TYPES.map((v) => (
-            <option key={v} value={v}>{v}</option>
-          ))}
-        </select>
+          onChange={(v) => set('type', v as typeof st)}
+          options={[...STEP_TYPES]}
+          ariaLabel={t('workflow_page.step_type')}
+        />
       </label>
 
       {st === 'agent' && (
         <>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-fg-subtle">Agent ID</span>
-            <input
-              className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
+            <Input
               value={local.agent_id ?? ''}
               onChange={(e) => set('agent_id', e.target.value || undefined)}
+              placeholder="hermes-default"
+              className="text-xs"
             />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-fg-subtle">Prompt</span>
-            <textarea
-              className="h-24 rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
+            <Textarea
+              rows={4}
               value={local.prompt ?? ''}
               onChange={(e) => set('prompt', e.target.value || undefined)}
+              placeholder="输入提示词..."
+              className="text-xs"
             />
           </label>
         </>
@@ -101,21 +117,21 @@ export function PropertyPanel({ step, onUpdate, onDelete }: Props) {
       {st === 'tool' && (
         <label className="flex flex-col gap-1">
           <span className="text-xs text-fg-subtle">Tool Name</span>
-          <input
-            className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
+          <Input
             value={local.tool_name ?? ''}
             onChange={(e) => set('tool_name', e.target.value || undefined)}
+            placeholder="web_search"
+            className="text-xs"
           />
         </label>
       )}
 
       {st === 'branch' && (
-        <div className="rounded border border-border p-2">
-          <span className="text-xs text-fg-subtle">{t('workflow_page.conditions')}</span>
+        <div className="flex flex-col gap-1.5 rounded-md border border-border p-3">
+          <span className="text-xs font-medium text-fg-subtle">{t('workflow_page.conditions')}</span>
           {(local.conditions ?? []).map((c, i) => (
-            <div key={i} className="mt-1 flex gap-1">
-              <input
-                className="flex-1 rounded border border-border bg-bg px-1 py-0.5 text-[10px] text-fg"
+            <div key={i} className="flex items-center gap-1">
+              <Input
                 value={c.expression}
                 placeholder="expression"
                 onChange={(e) => {
@@ -123,10 +139,10 @@ export function PropertyPanel({ step, onUpdate, onDelete }: Props) {
                   next[i] = { expression: e.target.value, goto: next[i]?.goto ?? '' };
                   set('conditions', next);
                 }}
+                className="flex-1 text-[11px]"
               />
-              <span className="text-[10px] text-fg-subtle">→</span>
-              <input
-                className="w-16 rounded border border-border bg-bg px-1 py-0.5 text-[10px] text-fg"
+              <span className="text-xs text-fg-subtle">→</span>
+              <Input
                 value={c.goto}
                 placeholder="step id"
                 onChange={(e) => {
@@ -134,47 +150,67 @@ export function PropertyPanel({ step, onUpdate, onDelete }: Props) {
                   next[i] = { expression: next[i]?.expression ?? '', goto: e.target.value };
                   set('conditions', next);
                 }}
+                className="w-20 text-[11px]"
               />
             </div>
           ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const next = [...(local.conditions ?? []), { expression: '', goto: '' }];
+              set('conditions', next);
+            }}
+          >
+            + {t('workflow_page.add_condition')}
+          </Button>
         </div>
       )}
 
       {st === 'loop' && (
         <label className="flex flex-col gap-1">
           <span className="text-xs text-fg-subtle">{t('workflow_page.max_iterations')}</span>
-          <input
+          <Input
             type="number"
-            className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
             value={local.max_iterations ?? 3}
             onChange={(e) => set('max_iterations', Number(e.target.value))}
+            className="text-xs"
           />
         </label>
       )}
 
       {st === 'approval' && (
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-fg-subtle">{t('workflow_page.timeout_min')}</span>
-          <input
-            type="number"
-            className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
-            value={local.timeout_minutes ?? 1440}
-            onChange={(e) => set('timeout_minutes', Number(e.target.value))}
-          />
-        </label>
+        <>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">{t('workflow_page.timeout_min')}</span>
+            <Input
+              type="number"
+              value={local.timeout_minutes ?? 1440}
+              onChange={(e) => set('timeout_minutes', Number(e.target.value))}
+              className="text-xs"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">{t('workflow_page.approval_message')}</span>
+            <Textarea
+              rows={2}
+              value={local.approval_message ?? ''}
+              onChange={(e) => set('approval_message', e.target.value || undefined)}
+              placeholder="审批提示信息..."
+              className="text-xs"
+            />
+          </label>
+        </>
       )}
 
       <label className="flex flex-col gap-1">
         <span className="text-xs text-fg-subtle">{t('workflow_page.output_format')}</span>
-        <select
-          className="rounded border border-border bg-bg px-2 py-1 text-xs text-fg"
+        <Select
           value={local.output_format ?? 'text'}
-          onChange={(e) => set('output_format', e.target.value)}
-        >
-          <option value="text">text</option>
-          <option value="json">json</option>
-          <option value="markdown">markdown</option>
-        </select>
+          onChange={(v) => set('output_format', v)}
+          options={[...OUTPUT_FORMATS]}
+          ariaLabel={t('workflow_page.output_format')}
+        />
       </label>
     </div>
   );

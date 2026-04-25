@@ -1144,6 +1144,17 @@
     "output_format": "输出格式",
     "editor_subtitle": "可视化流程编辑器",
     "approve": "通过",
-    "reject": "驳回"
+    "reject": "驳回",
+    "create": "新建工作流",
+    "new_workflow": "新建工作流",
+    "basic_info": "基本信息",
+    "wf_name": "工作流名称",
+    "wf_name_placeholder": "输入工作流名称...",
+    "wf_desc": "描述",
+    "wf_desc_placeholder": "描述这个工作流的用途...",
+    "help_title": "使用说明",
+    "help_tip": "点击「添加步骤」创建节点，拖拽连线建立依赖关系，点击节点编辑属性。",
+    "add_condition": "添加条件",
+    "approval_message": "审批提示"
   }
 }
