@@ -8,6 +8,7 @@ import { useAppStatusStore } from '@/stores/appStatus';
 import { useRoutingStore } from '@/stores/routing';
 import { useSandboxStore } from '@/stores/sandbox';
 import { SandboxConsentModal } from '@/components/sandbox/ConsentModal';
+import { ContextMenuProvider } from '@/components/ui/context-menu';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -116,13 +117,24 @@ export function Providers({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Suppress the native WebView context menu everywhere except
+  // textarea and input elements (users need copy/paste/select-all).
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+      e.preventDefault();
+    };
+    window.addEventListener('contextmenu', handler);
+    return () => window.removeEventListener('contextmenu', handler);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      {/* Sandbox consent prompt — mounted once at app root; only renders
-          when `useSandboxStore.pending` has entries. Z-index 50 puts it
-          above every feature-level modal (which sit at z-40). */}
-      <SandboxConsentModal />
+      <ContextMenuProvider>
+        {children}
+        <SandboxConsentModal />
+      </ContextMenuProvider>
     </QueryClientProvider>
   );
 }

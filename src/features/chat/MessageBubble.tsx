@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { ReactNode } from 'react';
 import {
   AlertCircle,
   Check,
@@ -18,6 +19,7 @@ import remarkGfm from 'remark-gfm';
 import { highlightCode } from './highlight';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { useContextMenu } from '@/components/ui/context-menu';
 import { attachmentPreview, learningReadLearnings, learningWriteLearnings } from '@/lib/ipc';
 import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from '@/stores/chat';
 
@@ -45,12 +47,56 @@ export function MessageBubble({
   // meaningful to rate.
   const canRate = !isUser && canCopy;
   const canRetry = !isUser && !msg.pending && onRetry !== undefined;
+
+  const menuItems = useMemo(() => {
+    const items: { label: string; icon: ReactNode; onClick: () => void }[] = [];
+    if (canCopy) {
+      items.push({
+        label: t('chat_page.copy'),
+        icon: <Icon icon={Copy} size="xs" />,
+        onClick: () => void navigator.clipboard.writeText(msg.content).catch(() => {}),
+      });
+    }
+    if (canRetry) {
+      items.push({
+        label: t('chat_page.retry'),
+        icon: <Icon icon={RefreshCw} size="xs" />,
+        onClick: () => onRetry!(),
+      });
+    }
+    if (canRate) {
+      const sessionId = useChatStore.getState().currentId;
+      items.push(
+        {
+          label: t('chat_page.feedback_up'),
+          icon: <Icon icon={ThumbsUp} size="xs" />,
+          onClick: () => {
+            if (!sessionId) return;
+            useChatStore.getState().setMessageFeedback(sessionId, msg.id, 'up');
+          },
+        },
+        {
+          label: t('chat_page.feedback_down'),
+          icon: <Icon icon={ThumbsDown} size="xs" />,
+          onClick: () => {
+            if (!sessionId) return;
+            useChatStore.getState().setMessageFeedback(sessionId, msg.id, 'down');
+          },
+        },
+      );
+    }
+    return items;
+  }, [canCopy, canRetry, canRate, msg.content, msg.id, onRetry, t]);
+
+  const onContextMenu = useContextMenu(menuItems);
+
   return (
     <div
       className={cn(
         'group flex gap-3',
         isUser ? 'flex-row-reverse' : 'flex-row',
       )}
+      onContextMenu={menuItems.length > 0 ? onContextMenu : undefined}
     >
       <div
         className={cn(
