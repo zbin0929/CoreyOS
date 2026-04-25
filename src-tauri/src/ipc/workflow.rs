@@ -300,6 +300,32 @@ pub async fn workflow_approve(
 }
 
 #[tauri::command]
+pub async fn workflow_active_runs(
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<WorkflowRun>> {
+    let runs = state.workflow_runs.clone();
+    let active = tokio::task::spawn_blocking(move || {
+        runs.lock()
+            .values()
+            .filter(|r| {
+                matches!(
+                    r.status,
+                    engine::RunStatus::Running
+                        | engine::RunStatus::Pending
+                        | engine::RunStatus::Paused
+                )
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("workflow_active_runs join: {e}"),
+    })?;
+    Ok(active)
+}
+
+#[tauri::command]
 pub async fn browser_config_get() -> IpcResult<BrowserConfig> {
     let cfg = tokio::task::spawn_blocking(browser_config::load)
         .await

@@ -22,6 +22,7 @@ import {
   workflowDelete,
   workflowRun,
   workflowRunStatus,
+  workflowActiveRuns,
   workflowApprove,
   type WorkflowSummary,
   type WorkflowRunResult,
@@ -54,6 +55,25 @@ export function WorkflowRoute() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const active = await workflowActiveRuns();
+        if (active.length > 0) {
+          const run = active[0]!;
+          const wf = rows?.find((w) => w.id === run.workflow_id);
+          if (wf) {
+            setMode({ kind: 'run', wf });
+            setRunning(true);
+            setRunResult(run);
+            runIdRef.current = run.id;
+            void pollRunStatus(run.id);
+          }
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [rows]);
 
   const handleDelete = async (id: string) => {
     try {

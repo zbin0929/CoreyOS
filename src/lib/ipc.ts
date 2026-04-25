@@ -2019,6 +2019,10 @@ export function workflowRunStatus(runId: string): Promise<WorkflowRunResult | nu
   return invoke('workflow_run_status', { runId });
 }
 
+export function workflowActiveRuns(): Promise<WorkflowRunResult[]> {
+  return invoke('workflow_active_runs');
+}
+
 export function workflowApprove(
   runId: string,
   stepId: string,
