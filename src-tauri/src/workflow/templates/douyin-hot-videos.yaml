@@ -1,0 +1,46 @@
+id: douyin-hot-videos
+name: 抖音热门视频抓取
+description: 自动打开抖音，搜索指定关键词，抓取热门视频的标题、点赞数和链接
+version: 1
+
+trigger:
+  type: manual
+
+inputs:
+  - name: keyword
+    label: 搜索关键词
+    type: string
+    default: "搞笑"
+    required: true
+  - name: count
+    label: 抓取数量
+    type: string
+    default: "5"
+    required: true
+
+steps:
+  - id: browse
+    name: 浏览抖音搜索
+    type: browser
+    tool_name: "https://www.douyin.com"
+    agent_id: agent
+    prompt: |
+      1. 在抖音首页的搜索框中输入「{{inputs.keyword}}」并搜索
+      2. 切换到「视频」标签页
+      3. 按「最多点赞」排序
+      4. 找到前{{inputs.count}}个视频
+      5. 对每个视频提取：标题、作者昵称、点赞数
+    output_format: json
+
+  - id: format
+    name: 整理结果
+    type: agent
+    after: [browse]
+    agent_id: hermes-default
+    prompt: |
+      将以下抖音视频数据整理成 Markdown 表格：
+      {{browse.output}}
+      
+      表格列：排名 | 标题 | 作者 | 点赞数
+      最后附上简短的热门趋势分析。
+    output_format: markdown
