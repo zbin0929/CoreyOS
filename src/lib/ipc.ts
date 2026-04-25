@@ -1699,6 +1699,7 @@ export function voiceTranscribe(audioBase64: string, mime: string): Promise<Voic
 
 export interface VoiceTtsResult {
   audio_path: string;
+  audio_base64: string;
   duration_ms: number | null;
 }
 

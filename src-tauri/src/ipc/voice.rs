@@ -125,6 +125,7 @@ pub struct VoiceTranscribeResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct VoiceTtsResult {
     pub audio_path: String,
+    pub audio_base64: String,
     pub duration_ms: Option<u64>,
 }
 
@@ -509,10 +510,18 @@ pub async fn voice_tts(
         message: format!("write tts audio: {e}"),
     })?;
 
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&audio_bytes);
+    let mime = match provider {
+        VoiceProvider::Zhipu => "audio/wav",
+        _ => "audio/mpeg",
+    };
+    let audio_base64 = format!("data:{mime};base64,{b64}");
+
     write_audit("voice.tts", provider.as_str(), duration, true);
 
     Ok(VoiceTtsResult {
         audio_path: audio_path.to_string_lossy().to_string(),
+        audio_base64,
         duration_ms: Some(duration),
     })
 }

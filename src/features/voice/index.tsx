@@ -70,8 +70,8 @@ const VOICE_PROVIDERS: VoiceProviderTemplate[] = [
     apiKeyName: 'ZHIPUAI_API_KEY',
     setupUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     setupLabel: 'open.bigmodel.cn',
-    ttsVoices: ['male-01', 'female-01', 'male-02', 'female-02'],
-    defaultVoice: 'male-01',
+    ttsVoices: ['tongtong', 'xiaochen', 'chuichui', 'jamka', 'zidou', 'jiluo'],
+    defaultVoice: 'tongtong',
   },
   {
     id: 'groq',
@@ -552,10 +552,7 @@ function VoiceTestPanel() {
     setResult(null);
     try {
       const res = await voiceTts(ttsText);
-      const src = res.audio_path.startsWith('/')
-        ? `asset://localhost${encodeURI(res.audio_path)}`
-        : `file://${res.audio_path}`;
-      const audio = new Audio(src);
+      const audio = new Audio(res.audio_base64);
       audio.onended = () => setPlaying(false);
       audio.onerror = () => {
         setPlaying(false);
