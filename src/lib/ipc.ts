@@ -1754,6 +1754,10 @@ export function voiceAuditLog(limit?: number): Promise<VoiceAuditEntry[]> {
   return invoke<VoiceAuditEntry[]>('voice_audit_log', { limit });
 }
 
+export function voiceRecord(durationSecs?: number): Promise<string> {
+  return invoke<string>('voice_record', { durationSecs });
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

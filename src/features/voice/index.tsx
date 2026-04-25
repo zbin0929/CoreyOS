@@ -20,6 +20,7 @@ import {
   voiceTranscribe,
   voiceTts,
   voiceAuditLog,
+  voiceRecord,
   type VoiceConfig,
   type VoiceAuditEntry,
 } from '@/lib/ipc';
@@ -308,49 +309,30 @@ function VoiceTestPanel() {
 
   const onRecord = useCallback(async () => {
     if (recording) return;
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setResult(t('voice.mic_unavailable'));
-      return;
-    }
     setRecording(true);
     setResult(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((tr) => tr.stop());
-        setRecording(false);
-        setTranscribing(true);
-        try {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const dataUrl = reader.result as string;
-            const base64 = dataUrl.split(',')[1] ?? '';
-            const res = await voiceTranscribe(base64, 'audio/webm');
-            setResult(res.text || '(empty)');
-          };
-          reader.readAsDataURL(blob);
-        } catch (e) {
-          setResult(`Error: ${ipcErrorMessage(e)}`);
-        } finally {
-          setTranscribing(false);
-        }
-      };
-      recorder.start();
-      await new Promise((r) => setTimeout(r, 5000));
-      recorder.stop();
+      const base64 = await voiceRecord(5);
+      setRecording(false);
+      setTranscribing(true);
+      try {
+        const res = await voiceTranscribe(base64, 'audio/wav');
+        setResult(res.text || '(empty)');
+      } catch (e) {
+        setResult(`ASR error: ${ipcErrorMessage(e)}`);
+      } finally {
+        setTranscribing(false);
+      }
     } catch (e) {
       setRecording(false);
-      setResult(`Mic error: ${e instanceof Error ? e.message : String(e)}`);
+      setResult(`Mic error: ${ipcErrorMessage(e)}`);
     }
-  }, [recording, t]);
+  }, [recording]);
 
   const onTts = useCallback(async () => {
     if (playing || !ttsText.trim()) return;
     setPlaying(true);
+    setResult(null);
     try {
       const res = await voiceTts(ttsText);
       const src = res.audio_path.startsWith('/')

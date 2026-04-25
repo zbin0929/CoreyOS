@@ -13,6 +13,8 @@ use tauri::State;
 use crate::error::{IpcError, IpcResult};
 use crate::fs_atomic;
 use crate::state::AppState;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use std::io::Write as _;
 
 // ───────────────────────── Provider ─────────────────────────
 
@@ -637,4 +639,97 @@ pub async fn voice_audit_log(
     entries.sort_by_key(|b| std::cmp::Reverse(b.timestamp));
     entries.truncate(lim);
     Ok(entries)
+}
+
+// ───────────────────────── System-level recording ─────────────────────────
+
+#[tauri::command]
+pub async fn voice_record(duration_secs: Option<u64>) -> IpcResult<String> {
+    let secs = duration_secs.unwrap_or(5).min(30);
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<u8>, String>>();
+
+    std::thread::spawn(move || {
+        let result = record_audio_blocking(secs);
+        let _ = tx.send(result);
+    });
+
+    let wav_bytes = rx.await.map_err(|e| IpcError::Internal {
+        message: format!("recording thread panicked: {e}"),
+    })?.map_err(|msg| IpcError::Internal { message: msg })?;
+
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&wav_bytes);
+    Ok(b64)
+}
+
+fn record_audio_blocking(secs: u64) -> Result<Vec<u8>, String> {
+    let host = cpal::default_host();
+    let device = host.default_input_device().ok_or("No input device found")?;
+    let config = device.default_input_config().map_err(|e| format!("input config: {e}"))?;
+
+    let sample_rate = config.sample_rate().0;
+    let channels = config.channels() as u16;
+
+    let (rec_tx, rec_rx) = std::sync::mpsc::channel();
+    let err_tx = rec_tx.clone();
+
+    let stream = match config.sample_format() {
+        cpal::SampleFormat::F32 => device.build_input_stream(
+            &config.into(),
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                let samples: Vec<f32> = data.to_vec();
+                let _ = rec_tx.send(samples);
+            },
+            move |err| {
+                let _ = err_tx.send(vec![]);
+                let _ = std::io::stderr().write_all(format!("audio err: {err}").as_bytes());
+            },
+            None,
+        ),
+        cpal::SampleFormat::I16 => device.build_input_stream(
+            &config.into(),
+            move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                let samples: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
+                let _ = rec_tx.send(samples);
+            },
+            move |err| {
+                let _ = err_tx.send(vec![]);
+                let _ = std::io::stderr().write_all(format!("audio err: {err}").as_bytes());
+            },
+            None,
+        ),
+        fmt => return Err(format!("unsupported sample format: {fmt}")),
+    }.map_err(|e| format!("stream build: {e}"))?;
+
+    stream.play().map_err(|e| format!("stream play: {e}"))?;
+
+    let start = std::time::Instant::now();
+    let mut all_samples: Vec<f32> = Vec::new();
+    while start.elapsed().as_secs() < secs {
+        match rec_rx.recv_timeout(std::time::Duration::from_millis(100)) {
+            Ok(samples) => all_samples.extend_from_slice(&samples),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    drop(stream);
+
+    let spec = hound::WavSpec {
+        channels,
+        sample_rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let mut wav_buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut writer = hound::WavWriter::new(&mut wav_buf, spec).map_err(|e| format!("wav writer: {e}"))?;
+        for &s in &all_samples {
+            let val = (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32);
+            writer.write_sample(val as i16).map_err(|e| format!("wav write: {e}"))?;
+        }
+        writer.finalize().map_err(|e| format!("wav finalize: {e}"))?;
+    }
+
+    Ok(wav_buf.into_inner())
 }
