@@ -43,10 +43,8 @@ import {
  *     silently overwrite the agent's notes. Cmd/Ctrl-S or the Save
  *     button commits; unsaved changes persist only until tab switch,
  *     at which point we warn.
- *   - No session_search panel yet — deferred to a T7.3b follow-up once
- *     the Hermes FTS5 surface is pinned down. The editor + capacity
- *     meter is the core value here; search over past sessions is
- *     additive.
+ *   - Includes a session_search tab (T7.3b) over Hermes FTS5 so users
+ *     can find prior context without leaving Corey.
  *
  * Reuses the Skills CodeMirror editor verbatim: both surfaces edit
  * Markdown, both want ⌘S, both want hide-the-chrome dark mode support.
