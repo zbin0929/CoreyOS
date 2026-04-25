@@ -28,6 +28,12 @@ suggestions to the assistant message bubble.
 IPC queries in-memory runs with active status. Frontend auto-recovers
 running workflow on component remount.
 
+**PDF text extraction.** `lopdf` 0.34 added as dependency. New
+`extract_pdf_text()` function iterates PDF pages, decompresses content
+streams, parses literal `()` and hex `<>` text tokens. Auto-truncates at
+50 KB. Users uploading PDFs in chat now have the text content sent to
+the LLM instead of a placeholder `[attached: file.pdf]`.
+
 ### Fixed
 
 - CI: added `libasound2-dev` to Ubuntu deps (required by `cpal` crate)
