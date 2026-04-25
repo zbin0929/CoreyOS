@@ -535,7 +535,10 @@
       "kind_regex": "Regex",
       "save": "Save",
       "create": "Create",
-      "confirm_delete": "Delete rule \"{{name}}\"?"
+      "confirm_delete": "Delete rule \"{{name}}\"?",
+      "ai_suggest": "AI suggestions",
+      "ai_empty": "Not enough conversation data to generate suggestions yet.",
+      "ai_confidence": "Confidence"
     },
     "hermes_instances": {
       "title": "Extra Hermes instances",

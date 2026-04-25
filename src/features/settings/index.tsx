@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
+  Brain,
   CheckCircle2,
   Check,
   Copy,
@@ -21,6 +22,7 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
+  Wand2,
   Wifi,
   X,
 } from 'lucide-react';
@@ -46,6 +48,7 @@ import {
   hermesInstanceTest,
   hermesInstanceUpsert,
   ipcErrorMessage,
+  learningSuggestRouting,
   routingRuleDelete,
   routingRuleUpsert,
   sandboxScopeDelete,
@@ -57,6 +60,7 @@ import {
   type HermesInstanceProbeResult,
   type RoutingMatch,
   type RoutingRule,
+  type RoutingSuggestion,
   type SandboxScope,
 } from '@/lib/ipc';
 import { AgentWizard } from './AgentWizard';
@@ -1399,6 +1403,8 @@ function RoutingRulesSection() {
   const hydrate = useRoutingStore((s) => s.hydrate);
   const adapters = useAgentsStore((s) => s.adapters);
   const [adding, setAdding] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<RoutingSuggestion[] | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     if (rules === null) void hydrate();
@@ -1474,6 +1480,56 @@ function RoutingRulesSection() {
           </Button>
         </div>
       )}
+
+      {/* Phase E · P4 — AI routing suggestions */}
+      <div className="mt-4 rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={aiLoading}
+            onClick={() => {
+              setAiLoading(true);
+              void learningSuggestRouting()
+                .then(setAiSuggestions)
+                .catch(() => setAiSuggestions([]))
+                .finally(() => setAiLoading(false));
+            }}
+            data-testid="routing-ai-suggest"
+          >
+            <Icon icon={Wand2} size="sm" />
+            {t('settings.routing_rules.ai_suggest')}
+          </Button>
+          {aiLoading && (
+            <Icon icon={Loader2} size="sm" className="animate-spin text-fg-subtle" />
+          )}
+        </div>
+        {aiSuggestions !== null && aiSuggestions.length === 0 && (
+          <p className="mt-2 text-xs text-fg-subtle">
+            {t('settings.routing_rules.ai_empty')}
+          </p>
+        )}
+        {aiSuggestions && aiSuggestions.length > 0 && (
+          <ul className="mt-2 flex flex-col gap-2">
+            {aiSuggestions.map((s, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 rounded border border-border bg-bg-elev-2 px-3 py-2 text-xs"
+              >
+                <Icon icon={Brain} size="xs" className="mt-0.5 flex-none text-gold-500" />
+                <div className="flex-1">
+                  <p className="font-medium text-fg">{s.pattern}</p>
+                  <p className="text-fg-subtle">{s.reason}</p>
+                  <p className="mt-1 text-fg-muted">
+                    {t('settings.routing_rules.ai_confidence')}: {Math.round(s.confidence * 100)}%
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </Section>
   );
 }

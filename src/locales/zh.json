@@ -535,7 +535,10 @@
       "kind_regex": "正则",
       "save": "保存",
       "create": "创建",
-      "confirm_delete": "删除规则“{{name}}”？"
+      "confirm_delete": "删除规则“{{name}}”？",
+      "ai_suggest": "AI 建议",
+      "ai_empty": "对话数据不足，暂时无法生成建议。",
+      "ai_confidence": "置信度"
     },
     "hermes_instances": {
       "title": "额外的 Hermes 实例",
