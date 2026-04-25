@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
+import { FALLBACK_PRICE } from '@/features/chat/budgetGate';
 import {
   analyticsSummary,
   budgetDelete,
@@ -54,12 +55,6 @@ import { useAgentsStore } from '@/stores/agents';
  * to settings.
  */
 
-// Fallback per-1M-token price in USD cents. Used for cost-progress
-// estimation when the server doesn't return an accounted cost yet.
-// Intentionally a single flat rate: the richer per-model price table
-// was dead code as of T4.4b (when the real cost projection moved to
-// the server) and was removed to stop it going stale silently.
-const FALLBACK_PRICE = { input: 100, output: 300 };
 
 type Mode =
   | { kind: 'list' }
@@ -159,6 +154,35 @@ export function BudgetsRoute() {
                 description={t('budgets.empty_desc')}
               />
             ) : (
+              <>
+                {summary && (
+                  <div className="mb-4 grid grid-cols-3 gap-3">
+                    <div className="rounded-md border border-border bg-bg-elev-1 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                        {t('budgets.total_prompt')}
+                      </div>
+                      <div className="text-lg font-semibold text-fg">
+                        {(summary.totals.prompt_tokens / 1_000_000).toFixed(2)}M
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-border bg-bg-elev-1 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                        {t('budgets.total_completion')}
+                      </div>
+                      <div className="text-lg font-semibold text-fg">
+                        {(summary.totals.completion_tokens / 1_000_000).toFixed(2)}M
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-border bg-bg-elev-1 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                        {t('budgets.estimated_cost')}
+                      </div>
+                      <div className="text-lg font-semibold text-fg">
+                        ${(lifetimeCents / 100).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                )}
               <ul className="flex flex-col gap-2" data-testid="budgets-list">
                 {rows.map((b) => (
                   <BudgetCard
@@ -177,6 +201,7 @@ export function BudgetsRoute() {
                   />
                 ))}
               </ul>
+              </>
             ))}
         </div>
       </div>

@@ -307,7 +307,12 @@
     "inspector": {
       "content": "Content",
       "tokens": "Tokens",
-      "tools": "Tool calls"
+      "tools": "Tool calls",
+      "session_stats": "Session stats",
+      "messages": "Messages",
+      "total_tokens": "Total tokens",
+      "tool_calls": "Tool calls",
+      "duration": "Duration"
     },
     "subagent": {
       "step_count": "{{n}} subagent step",
@@ -326,6 +331,9 @@
     "warning_80": "80% of budget spent.",
     "empty_title": "No budgets yet",
     "empty_desc": "Add one to see your projected spend against a cap. All storage is local — no cloud sync.",
+    "total_prompt": "Prompt tokens",
+    "total_completion": "Completion tokens",
+    "estimated_cost": "Est. cost",
     "field": {
       "scope_kind": "Scope",
       "scope_value": "Scope value",
@@ -662,6 +670,7 @@
     "winners": "Winners",
     "fastest": "Fastest",
     "most_tokens": "Most tokens",
+    "fewest_tokens": "Fewest tokens",
     "export_md": "Export MD",
     "export_json": "Export JSON",
     "empty_title": "Pick at least one model and type a prompt",

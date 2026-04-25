@@ -346,13 +346,30 @@ export function CompareRoute() {
                     lanes.length >= 4 && 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4',
                   )}
                 >
-                  {lanes.map((lane) => (
-                    <LanePanel
-                      key={lane.laneId}
-                      lane={lane}
-                      onCancel={() => cancelLane(lane.laneId)}
-                    />
-                  ))}
+                  {lanes.map((lane) => {
+                    const doneLanes = lanes.filter((l): l is Lane & { state: Extract<LaneState, { kind: 'done' }> } => l.state.kind === 'done');
+                    const fastestId = doneLanes.length >= 2
+                      ? doneLanes.reduce((a, b) =>
+                          (b.state.finishedAt - b.state.startedAt) < (a.state.finishedAt - a.state.startedAt) ? b : a,
+                        ).laneId
+                      : null;
+                    const fewestTokensId = doneLanes.length >= 2
+                      ? doneLanes.reduce((a, b) =>
+                          ((b.state.summary.prompt_tokens ?? 0) + (b.state.summary.completion_tokens ?? 0)) <
+                          ((a.state.summary.prompt_tokens ?? 0) + (a.state.summary.completion_tokens ?? 0))
+                            ? b : a,
+                        ).laneId
+                      : null;
+                    return (
+                      <LanePanel
+                        key={lane.laneId}
+                        lane={lane}
+                        onCancel={() => cancelLane(lane.laneId)}
+                        isFastest={lane.laneId === fastestId}
+                        isFewestTokens={lane.laneId === fewestTokensId}
+                      />
+                    );
+                  })}
                 </div>
                 <DiffFooter lanes={lanes} />
               </>
@@ -537,7 +554,12 @@ function ModelPicker({
 
 // ───────────────────────── Lane ─────────────────────────
 
-function LanePanel({ lane, onCancel }: { lane: Lane; onCancel: () => void }) {
+function LanePanel({ lane, onCancel, isFastest, isFewestTokens }: {
+  lane: Lane;
+  onCancel: () => void;
+  isFastest?: boolean;
+  isFewestTokens?: boolean;
+}) {
   const { t } = useTranslation();
   const streaming = lane.state.kind === 'streaming';
   const content =
@@ -567,6 +589,16 @@ function LanePanel({ lane, onCancel }: { lane: Lane; onCancel: () => void }) {
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-fg">
             {lane.model.display_name ?? lane.model.id}
+            {isFastest && (
+              <span className="ml-1.5 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-amber-500">
+                ⚡ {t('compare.fastest')}
+              </span>
+            )}
+            {isFewestTokens && (
+              <span className="ml-1.5 inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-emerald-500">
+                💰 {t('compare.fewest_tokens')}
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-fg-subtle">{lane.model.provider}</div>
         </div>

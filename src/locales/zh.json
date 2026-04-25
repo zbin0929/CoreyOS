@@ -307,7 +307,12 @@
     "inspector": {
       "content": "内容",
       "tokens": "Token",
-      "tools": "工具调用"
+      "tools": "工具调用",
+      "session_stats": "会话统计",
+      "messages": "消息数",
+      "total_tokens": "总 Token",
+      "tool_calls": "工具调用",
+      "duration": "耗时"
     },
     "subagent": {
       "step_count": "{{n}} 次子代理操作",
@@ -326,6 +331,9 @@
     "warning_80": "已用 80%。",
     "empty_title": "还没有预算",
     "empty_desc": "新建一条以查看预估花费。所有数据存储在本地，不上云。",
+    "total_prompt": "Prompt Token",
+    "total_completion": "Completion Token",
+    "estimated_cost": "预估费用",
     "field": {
       "scope_kind": "范围",
       "scope_value": "范围值",
@@ -662,6 +670,7 @@
     "winners": "本轮赢家",
     "fastest": "最快",
     "most_tokens": "Token 最多",
+    "fewest_tokens": "Token 最省",
     "export_md": "导出 MD",
     "export_json": "导出 JSON",
     "empty_title": "选至少一个模型并输入 prompt",

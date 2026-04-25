@@ -449,10 +449,28 @@ function Inspector({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+
+  const sessionStats = useMemo(() => {
+    const msgs = session.messages;
+    const totalTokens = msgs.reduce(
+      (sum, m) => sum + (m.prompt_tokens ?? 0) + (m.completion_tokens ?? 0),
+      0,
+    );
+    const toolCallCount = msgs.reduce((sum, m) => sum + m.tool_calls.length, 0);
+    const first = msgs[0]?.created_at;
+    const last = msgs[msgs.length - 1]?.created_at;
+    const durationMs = first && last ? last - first : 0;
+    const duration =
+      durationMs < 60_000
+        ? `${Math.round(durationMs / 1000)}s`
+        : `${Math.floor(durationMs / 60_000)}m ${Math.round((durationMs % 60_000) / 1000)}s`;
+    return { totalTokens, toolCallCount, duration };
+  }, [session.messages]);
+
   const msg = session.messages.find((m) => m.id === messageId);
-  if (!msg) return null;
-  return (
-    <aside
+   if (!msg) return null;
+   return (
+     <aside
       className="flex w-80 flex-none flex-col border-l border-border bg-bg-elev-1"
       data-testid="trajectory-inspector"
     >
@@ -468,6 +486,23 @@ function Inspector({
         </Button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 text-xs">
+        {sessionStats && (
+          <section className="rounded-md border border-border bg-bg-elev-2 px-2 py-2">
+            <h3 className="mb-1 text-[10px] uppercase tracking-wider text-fg-subtle">
+              {t('trajectory.inspector.session_stats')}
+            </h3>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
+              <dt className="text-fg-muted">{t('trajectory.inspector.messages')}</dt>
+              <dd className="text-right text-fg">{session.messages.length}</dd>
+              <dt className="text-fg-muted">{t('trajectory.inspector.total_tokens')}</dt>
+              <dd className="text-right text-fg">{sessionStats.totalTokens.toLocaleString()}</dd>
+              <dt className="text-fg-muted">{t('trajectory.inspector.tool_calls')}</dt>
+              <dd className="text-right text-fg">{sessionStats.toolCallCount}</dd>
+              <dt className="text-fg-muted">{t('trajectory.inspector.duration')}</dt>
+              <dd className="text-right text-fg">{sessionStats.duration}</dd>
+            </dl>
+          </section>
+        )}
         {msg.error && (
           <div className="rounded border border-danger/40 bg-danger/5 px-2 py-1 text-danger">
             {msg.error}
