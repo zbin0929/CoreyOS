@@ -131,7 +131,7 @@ fn validate_step<'a>(
         });
     }
 
-    let valid_types = ["agent", "tool", "parallel", "branch", "loop", "approval"];
+    let valid_types = ["agent", "tool", "browser", "parallel", "branch", "loop", "approval"];
     if !valid_types.contains(&step.step_type.as_str()) {
         errors.push(ValidationError {
             field: format!("steps[{}].type", step.id),

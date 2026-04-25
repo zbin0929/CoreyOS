@@ -537,6 +537,11 @@
       "dirty": "Unsaved changes.",
       "clean": "No changes."
     },
+    "browser_llm_title": "Browser Automation LLM",
+    "browser_llm_desc": "Configure the AI model for browser automation. Stagehand needs an LLM to understand web pages and perform actions. Only token costs apply — DeepSeek (cheapest) or local Ollama (free) recommended.",
+    "browser_llm_model": "Model",
+    "browser_llm_api_key": "API Key",
+    "browser_llm_base_url": "Custom Base URL",
     "routing_rules": {
       "title": "Routing rules",
       "desc": "When the composed message matches a rule, the next turn is sent to the rule's target adapter instead of whichever one is active. First enabled match in list order wins; an empty list means routing is off.",
@@ -1155,6 +1160,8 @@
     "help_title": "Quick Guide",
     "help_tip": "Click 'Add Step' to create nodes, drag to connect dependencies, click a node to edit.",
     "add_condition": "Add Condition",
-    "approval_message": "Approval Message"
+    "approval_message": "Approval Message",
+    "browser_action": "Action Type",
+    "browser_instruction": "Browser Instruction"
   }
 }

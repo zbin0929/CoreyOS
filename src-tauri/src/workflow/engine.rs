@@ -86,6 +86,9 @@ pub fn create_initial_run(def: &WorkflowDef, inputs: serde_json::Value) -> (Work
 
 pub trait StepExecutor: Send + Sync {
     fn execute_agent(&self, agent_id: &str, prompt: &str) -> Result<String, String>;
+    fn execute_browser(&self, action: &str, url: &str, instruction: &str) -> Result<String, String> {
+        Ok(format!("[browser:{}] {} @ {}", action, instruction, url))
+    }
 }
 
 pub struct SimulatedExecutor;
@@ -163,6 +166,7 @@ fn execute_step_live(
     match step.step_type.as_str() {
         "agent" => execute_agent_step_live(step, ctx, executor),
         "tool" => execute_tool_step(step, ctx),
+        "browser" => execute_browser_step(step, ctx, executor),
         "parallel" => execute_parallel_step_live(step, ctx, executor),
         "branch" => execute_branch_step(step, ctx),
         "loop" => execute_loop_step_live(step, ctx, executor),
@@ -184,6 +188,23 @@ fn execute_agent_step_live(
         "text": text,
         "agent_id": agent_id,
     }))
+}
+
+fn execute_browser_step(
+    step: &WorkflowStep,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+) -> Result<serde_json::Value, String> {
+    let instruction = step.prompt.as_deref().ok_or("browser step missing instruction (prompt)")?;
+    let rendered = ctx.render_template(instruction);
+    let url = step.tool_name.as_deref().unwrap_or("");
+    let action = step.agent_id.as_deref().unwrap_or("agent");
+    let result = executor.execute_browser(action, url, &rendered)?;
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&result);
+    match parsed {
+        Ok(v) => Ok(v),
+        Err(_) => Ok(json!({ "raw": result })),
+    }
 }
 
 fn execute_parallel_step_live(

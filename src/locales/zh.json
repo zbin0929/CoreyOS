@@ -537,6 +537,11 @@
       "dirty": "有未保存的更改。",
       "clean": "无改动。"
     },
+    "browser_llm_title": "浏览器自动化 LLM",
+    "browser_llm_desc": "配置用于浏览器自动化的 AI 模型。Stagehand 需要 LLM 来理解网页内容并执行操作。只需 token 费用，推荐使用 DeepSeek（最便宜）或本地 Ollama（免费）。",
+    "browser_llm_model": "模型",
+    "browser_llm_api_key": "API Key",
+    "browser_llm_base_url": "自定义 Base URL",
     "routing_rules": {
       "title": "路由规则",
       "desc": "当输入的消息匹配某条规则时，下一轮对话将发送到规则指定的适配器，而不是当前激活的适配器。按列表顺序取第一条启用的匹配；列表为空即路由关闭。",
@@ -1155,6 +1160,8 @@
     "help_title": "使用说明",
     "help_tip": "点击「添加步骤」创建节点，拖拽连线建立依赖关系，点击节点编辑属性。",
     "add_condition": "添加条件",
-    "approval_message": "审批提示"
+    "approval_message": "审批提示",
+    "browser_action": "操作类型",
+    "browser_instruction": "浏览器指令"
   }
 }

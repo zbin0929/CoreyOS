@@ -264,6 +264,7 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
             <ul className="space-y-1 text-[11px] text-fg-subtle">
               <li>🤖 <b>Agent</b> — AI 执行任务</li>
               <li>🔧 <b>Tool</b> — 调用工具</li>
+              <li>🌐 <b>Browser</b> — 浏览器自动化</li>
               <li>⚡ <b>Parallel</b> — 并行执行</li>
               <li>🔀 <b>Branch</b> — 条件分支</li>
               <li>🔄 <b>Loop</b> — 循环执行</li>

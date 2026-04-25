@@ -48,6 +48,9 @@ import {
   hermesInstanceTest,
   hermesInstanceUpsert,
   ipcErrorMessage,
+  browserConfigGet,
+  browserConfigSet,
+  type BrowserLLMConfig,
   learningSuggestRouting,
   routingRuleDelete,
   routingRuleUpsert,
@@ -363,6 +366,8 @@ export function SettingsRoute() {
               default-scope workspace section so users see the "global
               roots" and "named scopes" as adjacent affordances. */}
           <SandboxScopesSection />
+
+          <BrowserLLMSection />
 
           {/* Read-only storage info. Lives below the gateway form — it's the
               least-frequently-needed section but important for backup /
@@ -2096,6 +2101,93 @@ const inputCls = cn(
   'placeholder:text-fg-subtle',
   'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
 );
+
+function BrowserLLMSection() {
+  const { t } = useTranslation();
+  const [cfg, setCfg] = useState<BrowserLLMConfig>({ model: 'openai/gpt-4o-mini', api_key: '', base_url: '' });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void browserConfigGet().then(setCfg).catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await browserConfigSet(cfg);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section
+      title={t('settings.browser_llm_title')}
+      description={t('settings.browser_llm_desc')}
+    >
+      <div className="flex max-w-lg flex-col gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-fg-subtle">{t('settings.browser_llm_model')}</span>
+          <Combobox
+            value={cfg.model}
+            onChange={(v) => setCfg({ ...cfg, model: v })}
+            options={[
+              { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini' },
+              { value: 'openai/gpt-4o', label: 'GPT-4o' },
+              { value: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
+              { value: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+              { value: 'google/gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+              { value: 'ollama/llama3', label: 'Ollama Llama 3 (本地)' },
+            ]}
+            placeholder="选择模型或输入自定义名称"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-fg-subtle">{t('settings.browser_llm_api_key')}</span>
+          <input
+            type="password"
+            className="flex h-8 w-full rounded-md border border-border bg-bg-elev-1 px-2.5 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-2 focus-visible:outline-gold-500"
+            value={cfg.api_key}
+            onChange={(e) => setCfg({ ...cfg, api_key: e.target.value })}
+            placeholder="sk-..."
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-fg-subtle">{t('settings.browser_llm_base_url')}</span>
+          <input
+            className="flex h-8 w-full rounded-md border border-border bg-bg-elev-1 px-2.5 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-2 focus-visible:outline-gold-500"
+            value={cfg.base_url}
+            onChange={(e) => setCfg({ ...cfg, base_url: e.target.value })}
+            placeholder="https://api.openai.com/v1（留空用默认）"
+          />
+        </label>
+
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={() => void handleSave()} disabled={saving}>
+            {saving ? <Icon icon={Loader2} size="xs" className="animate-spin" /> : <Icon icon={Save} size="xs" />}
+            {saving ? t('settings.saving') : t('settings.save')}
+          </Button>
+          {saved && (
+            <span className="flex items-center gap-1 text-xs text-green-500">
+              <Icon icon={Check} size="xs" /> {t('settings.saved')}
+            </span>
+          )}
+          {error && <span className="text-xs text-red-500">{error}</span>}
+        </div>
+      </div>
+    </Section>
+  );
+}
 
 function Section({
   id,

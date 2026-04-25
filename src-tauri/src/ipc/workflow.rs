@@ -7,6 +7,7 @@ use crate::state::AppState;
 use crate::workflow::engine::{self, StepExecutor, WorkflowRun};
 use crate::workflow::model::{WorkflowDef, WorkflowSummary};
 use crate::workflow::store::{self, ValidationError};
+use crate::workflow::browser_config::{self, BrowserConfig};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationResult {
@@ -119,6 +120,47 @@ impl StepExecutor for HermesExecutor {
         rt.block_on(async { adapter.chat_once(turn).await })
             .map_err(|e| format!("agent error: {e}"))
     }
+
+    fn execute_browser(&self, action: &str, url: &str, instruction: &str) -> Result<String, String> {
+        use std::process::Command;
+
+        let cfg = browser_config::load();
+
+        let script_path = std::env::current_exe()
+            .map(|p| p.parent().map(|d| d.parent().map(|d2| d2.join("scripts").join("browser-runner.cjs")).unwrap_or_default()).unwrap_or_default())
+            .unwrap_or_else(|_| std::path::PathBuf::from("scripts/browser-runner.cjs"));
+
+        let task = serde_json::json!({
+            "action": action,
+            "url": url,
+            "instruction": instruction,
+        });
+
+        let mut cmd = Command::new("node");
+        cmd.arg(&script_path).arg(task.to_string());
+
+        if !cfg.model.is_empty() {
+            cmd.env("BROWSER_LLM_MODEL", &cfg.model);
+        }
+        if !cfg.api_key.is_empty() {
+            cmd.env("BROWSER_LLM_API_KEY", &cfg.api_key);
+        }
+        if !cfg.base_url.is_empty() {
+            cmd.env("BROWSER_LLM_BASE_URL", &cfg.base_url);
+        }
+
+        let output = cmd.output()
+            .map_err(|e| format!("failed to spawn browser-runner: {e}"))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        if !output.status.success() {
+            return Err(format!("browser-runner failed: {}{}", stdout, stderr));
+        }
+
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[tauri::command]
@@ -209,4 +251,20 @@ pub async fn workflow_approve(
     .map_err(|e: anyhow::Error| IpcError::Internal {
         message: format!("workflow_approve: {e}"),
     })
+}
+
+#[tauri::command]
+pub async fn browser_config_get() -> IpcResult<BrowserConfig> {
+    let cfg = tokio::task::spawn_blocking(browser_config::load)
+        .await
+        .map_err(|e| IpcError::Internal { message: format!("browser_config_get join: {e}") })?;
+    Ok(cfg)
+}
+
+#[tauri::command]
+pub async fn browser_config_set(config: BrowserConfig) -> IpcResult<()> {
+    tokio::task::spawn_blocking(move || browser_config::save(&config))
+        .await
+        .map_err(|e| IpcError::Internal { message: format!("browser_config_set join: {e}") })?
+        .map_err(|e| IpcError::Internal { message: format!("browser_config_set: {e}") })
 }

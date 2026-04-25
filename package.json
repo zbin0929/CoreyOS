@@ -27,6 +27,7 @@
     "check:sandbox-fs": "node scripts/check-sandbox-fs.mjs"
   },
   "dependencies": {
+    "@browserbasehq/stagehand": "^3.2.1",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language-data": "^6.5.2",
     "@tanstack/react-query": "^5.59.0",

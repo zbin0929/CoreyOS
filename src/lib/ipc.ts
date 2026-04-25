@@ -1923,7 +1923,7 @@ export interface WorkflowInput {
 export interface WorkflowStep {
   id: string;
   name: string;
-  type: 'agent' | 'tool' | 'parallel' | 'branch' | 'loop' | 'approval';
+  type: 'agent' | 'tool' | 'browser' | 'parallel' | 'branch' | 'loop' | 'approval';
   after: string[];
   agent_id?: string;
   prompt?: string;
@@ -2009,6 +2009,20 @@ export interface WorkflowStepRun {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   output?: Record<string, unknown>;
   error?: string;
+}
+
+export interface BrowserLLMConfig {
+  model: string;
+  api_key: string;
+  base_url: string;
+}
+
+export function browserConfigGet(): Promise<BrowserLLMConfig> {
+  return invoke('browser_config_get');
+}
+
+export function browserConfigSet(config: BrowserLLMConfig): Promise<void> {
+  return invoke('browser_config_set', { config });
 }
 
 export interface WorkflowRunResult {

@@ -17,6 +17,7 @@ interface Props {
 const STEP_TYPES = [
   { value: 'agent', label: '🤖 Agent', hint: 'AI Agent 执行任务' },
   { value: 'tool', label: '🔧 Tool', hint: '调用工具' },
+  { value: 'browser', label: '🌐 Browser', hint: '浏览器自动化' },
   { value: 'parallel', label: '⚡ Parallel', hint: '并行执行' },
   { value: 'branch', label: '🔀 Branch', hint: '条件分支' },
   { value: 'loop', label: '🔄 Loop', hint: '循环执行' },
@@ -124,6 +125,44 @@ export function PropertyPanel({ step, onUpdate, onDelete }: Props) {
             className="text-xs"
           />
         </label>
+      )}
+
+      {st === 'browser' && (
+        <>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">URL</span>
+            <Input
+              value={local.tool_name ?? ''}
+              onChange={(e) => set('tool_name', e.target.value || undefined)}
+              placeholder="https://www.douyin.com"
+              className="text-xs"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">{t('workflow_page.browser_action')}</span>
+            <Select
+              value={local.agent_id ?? 'agent'}
+              onChange={(v) => set('agent_id', v || undefined)}
+              options={[
+                { value: 'agent', label: 'Agent（多步自动）' },
+                { value: 'act', label: 'Act（执行操作）' },
+                { value: 'extract', label: 'Extract（提取数据）' },
+                { value: 'observe', label: 'Observe（观察页面）' },
+              ]}
+              ariaLabel={t('workflow_page.browser_action')}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-subtle">{t('workflow_page.browser_instruction')}</span>
+            <Textarea
+              rows={3}
+              value={local.prompt ?? ''}
+              onChange={(e) => set('prompt', e.target.value || undefined)}
+              placeholder="搜索热门搞笑视频，提取前5个的标题和点赞数"
+              className="text-xs"
+            />
+          </label>
+        </>
       )}
 
       {st === 'branch' && (
