@@ -205,6 +205,7 @@ pub fn run() {
             ipc::workflow::workflow_save,
             ipc::workflow::workflow_delete,
             ipc::workflow::workflow_validate,
+            ipc::workflow::workflow_run,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");

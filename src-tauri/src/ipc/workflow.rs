@@ -91,3 +91,26 @@ pub async fn workflow_validate(def: WorkflowDef) -> IpcResult<ValidationResult> 
         errors,
     })
 }
+
+use crate::workflow::engine::{self, WorkflowRun};
+
+#[tauri::command]
+pub async fn workflow_run(
+    id: String,
+    inputs: serde_json::Value,
+) -> IpcResult<WorkflowRun> {
+    let wf_id = id.clone();
+    let run = tokio::task::spawn_blocking(move || {
+        let def = store::get(&wf_id)?;
+        let result = engine::execute_sync(&def, inputs);
+        anyhow::Ok(result.run)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("workflow_run join: {e}"),
+    })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("workflow_run: {e}"),
+    })?;
+    Ok(run)
+}

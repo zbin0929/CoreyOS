@@ -1986,3 +1986,23 @@ export function workflowDelete(id: string): Promise<boolean> {
 export function workflowValidate(def: WorkflowDef): Promise<WorkflowValidationResult> {
   return invoke('workflow_validate', { def });
 }
+
+export function workflowRun(id: string, inputs: Record<string, unknown>): Promise<WorkflowRunResult> {
+  return invoke('workflow_run', { id, inputs });
+}
+
+export interface WorkflowStepRun {
+  step_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  output?: Record<string, unknown>;
+  error?: string;
+}
+
+export interface WorkflowRunResult {
+  id: string;
+  workflow_id: string;
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  inputs: Record<string, unknown>;
+  step_runs: Record<string, WorkflowStepRun>;
+  error?: string;
+}
