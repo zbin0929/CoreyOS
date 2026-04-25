@@ -42,11 +42,21 @@ pub async fn workflow_extract_intent(message: String) -> IpcResult<WorkflowInten
             let desc_tokens: std::collections::HashSet<&str> =
                 lower_desc.split_whitespace().collect();
 
-            let name_matches = name_tokens.iter().filter(|t| token_set.contains(*t)).count();
-            let desc_matches = desc_tokens.iter().filter(|t| token_set.contains(*t)).count();
+            let name_matches = name_tokens
+                .iter()
+                .filter(|t| token_set.contains(*t))
+                .count();
+            let desc_matches = desc_tokens
+                .iter()
+                .filter(|t| token_set.contains(*t))
+                .count();
             let total = name_matches as f64 * 2.0 + desc_matches as f64;
             let max_possible = name_tokens.len() as f64 * 2.0 + desc_tokens.len() as f64;
-            let confidence = if max_possible > 0.0 { total / max_possible } else { 0.0 };
+            let confidence = if max_possible > 0.0 {
+                total / max_possible
+            } else {
+                0.0
+            };
 
             let direct_keywords = match wf.id.as_str() {
                 "ups-tracking" => ["ups", "物流", "快递", "包裹", "tracking", "shipment"]
@@ -397,9 +407,7 @@ pub async fn workflow_approve(
 }
 
 #[tauri::command]
-pub async fn workflow_active_runs(
-    state: State<'_, AppState>,
-) -> IpcResult<Vec<WorkflowRun>> {
+pub async fn workflow_active_runs(state: State<'_, AppState>) -> IpcResult<Vec<WorkflowRun>> {
     let runs = state.workflow_runs.clone();
     let active = tokio::task::spawn_blocking(move || {
         runs.lock()
