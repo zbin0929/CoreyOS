@@ -1,19 +1,42 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
 
-cd "$(dirname "$0")/scripts"
+if ! command -v pkg &>/dev/null; then
+  echo "  Installing @yao-pkg/pkg..."
+  npm install -g @yao-pkg/pkg 2>/dev/null
+fi
 
-echo "==> Installing @yao-pkg/pkg..."
-npm install -g @yao-pkg/pkg 2>/dev/null || true
+cd scripts
 
-echo "==> Building browser-runner for macOS ARM64..."
-pkg . --target node18-macos-arm64 --output browser-runner-macos-arm64
+OS="$(uname -s)"
+ARCH="$(uname -m)"
 
-echo "==> Building browser-runner for macOS x64..."
-pkg . --target node18-macos-x64 --output browser-runner-macos-x64
+TARGET=""
+BINARY_NAME=""
 
-echo "==> Building browser-runner for Windows x64..."
-pkg . --target node18-win-x64 --output browser-runner-win-x64.exe
+if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
+  TARGET="node18-macos-arm64"
+  BINARY_NAME="browser-runner-macos-arm64"
+elif [[ "$OS" == "Darwin" && "$ARCH" == "x86_64" ]]; then
+  TARGET="node18-macos-x64"
+  BINARY_NAME="browser-runner-macos-x64"
+elif [[ "$OS" == "Linux" ]]; then
+  TARGET="node18-linuxstatic-x64"
+  BINARY_NAME="browser-runner-linux-x64"
+elif [[ "$OS" == "MINGW"* || "$OS" == "CYGWIN"* || "$OS" == "Windows_NT" ]]; then
+  TARGET="node18-win-x64"
+  BINARY_NAME="browser-runner-win-x64.exe"
+else
+  echo "  Unsupported platform: $OS $ARCH, skipping browser-runner build"
+  exit 0
+fi
 
-echo "==> Done! Binaries in scripts/dist/"
-ls -lh browser-runner-*
+echo "  Building browser-runner ($TARGET)..."
+pkg . --target "$TARGET" --output "$BINARY_NAME" 2>&1 | sed 's/^/    /'
+
+DEST="../src-tauri/scripts/$BINARY_NAME"
+cp "$BINARY_NAME" "$DEST"
+chmod +x "$DEST"
+
+echo "  ✓ $DEST ($(du -h "$DEST" | cut -f1))"

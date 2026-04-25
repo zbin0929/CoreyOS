@@ -53,6 +53,11 @@ done
 echo "→ Building frontend"
 pnpm build
 
+echo "→ Building browser-runner binary (pkg)"
+bash "$(dirname "$0")/build-browser-runner.sh" || {
+  echo "⚠ browser-runner build failed — browser automation will need Node.js at runtime"
+}
+
 case "$MODE" in
   universal)
     # Fat binary covers Intel + Apple Silicon Macs in one .dmg. ~2x build time.
