@@ -38,7 +38,7 @@ All met as of commit `3682cb0`:
    - If profiles exist → show them as primary cards; click one → land
      on a minimal "just name it" screen.
    - Otherwise → the provider template grid (OpenAI / Anthropic /
-     DeepSeek / Gemini / Ollama / OpenRouter / Qwen / GLM / Kimi /
+     DeepSeek / Gemini / Ollama / OpenRouter / NVIDIA NIM / Qwen / GLM / Kimi /
      Yi / Baichuan / Hunyuan).
 5. Every native `<select>` in the multi-agent flows is replaced with
    the themed `<Select>` (strict) or `<Combobox>` (freeSolo). macOS
