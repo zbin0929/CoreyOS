@@ -45,6 +45,7 @@
     "feedback_up": "Helpful",
     "feedback_down": "Not helpful",
     "tts_play": "Read aloud",
+    "tts_stop": "Stop reading",
     "routing_hint": "→ {{adapter}} · rule \"{{rule}}\"",
     "routing_hint_missing": "→ {{adapter}} (not registered) · rule \"{{rule}}\"",
     "attach_file": "Attach file",

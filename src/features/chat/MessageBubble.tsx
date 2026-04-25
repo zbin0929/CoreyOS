@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import {
@@ -10,6 +10,7 @@ import {
   Paperclip,
   RefreshCw,
   Sparkles,
+  StopCircle,
   ThumbsDown,
   ThumbsUp,
   Volume2,
@@ -260,21 +261,7 @@ function FeedbackButtons({ msg }: { msg: UiMessage }) {
         <Icon icon={ThumbsDown} size="xs" />
       </button>
       {msg.role === 'assistant' && msg.content.trim().length > 0 && (
-        <button
-          type="button"
-          onClick={() => {
-            void voiceTts(msg.content).then((res) => {
-              const audio = new Audio(res.audio_base64);
-              void audio.play();
-            }).catch(() => {});
-          }}
-          className={baseBtn}
-          aria-label={t('chat_page.tts_play')}
-          title={t('chat_page.tts_play')}
-          data-testid={`bubble-tts-${msg.id}`}
-        >
-          <Icon icon={Volume2} size="xs" />
-        </button>
+        <TtsButton content={msg.content} />
       )}
     </>
   );
@@ -285,6 +272,59 @@ function FeedbackButtons({ msg }: { msg: UiMessage }) {
  * the parent `.group` (or when pressed, to give the 'copied' feedback a beat
  * to be seen on touch).
  */
+let _ttsAudio: HTMLAudioElement | null = null;
+
+function TtsButton({ content }: { content: string }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<'idle' | 'loading' | 'playing'>('idle');
+
+  const onClick = useCallback(() => {
+    if (state === 'playing') {
+      _ttsAudio?.pause();
+      _ttsAudio = null;
+      setState('idle');
+      return;
+    }
+    if (state === 'loading') return;
+    setState('loading');
+    void voiceTts(content)
+      .then((res) => {
+        const audio = new Audio(res.audio_base64);
+        _ttsAudio = audio;
+        audio.onended = () => {
+          _ttsAudio = null;
+          setState('idle');
+        };
+        audio.onerror = () => {
+          _ttsAudio = null;
+          setState('idle');
+        };
+        void audio.play();
+        setState('playing');
+      })
+      .catch(() => setState('idle'));
+  }, [content, state]);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'transition-colors',
+        state === 'playing' ? 'text-gold-500 hover:text-gold-400' : state === 'loading' ? 'text-fg-muted' : 'text-fg-subtle hover:text-fg',
+      )}
+      aria-label={state === 'playing' ? t('chat_page.tts_stop') : t('chat_page.tts_play')}
+      title={state === 'playing' ? t('chat_page.tts_stop') : t('chat_page.tts_play')}
+    >
+      <Icon
+        icon={state === 'playing' ? StopCircle : state === 'loading' ? Loader2 : Volume2}
+        size="xs"
+        className={cn(state === 'loading' && 'animate-spin')}
+      />
+    </button>
+  );
+}
+
 function CopyButton({ text }: { text: string }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);

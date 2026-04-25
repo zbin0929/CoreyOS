@@ -45,6 +45,7 @@
     "feedback_up": "有帮助",
     "feedback_down": "没帮助",
     "tts_play": "朗读",
+    "tts_stop": "停止朗读",
     "routing_hint": "→ {{adapter}} · 规则 “{{rule}}”",
     "routing_hint_missing": "→ {{adapter}}（未注册）· 规则 “{{rule}}”",
     "attach_file": "添加附件",
