@@ -153,12 +153,8 @@ pub fn save(path: &Path, cfg: &SandboxConfig) -> io::Result<()> {
             format!("sandbox.json serialize error: {e}"),
         )
     })?;
-    fs_atomic::atomic_write(
-        path,
-        &bytes,
-        #[cfg(unix)]
-        Some(0o600),
-    )
+    fs_atomic::atomic_write(path, &bytes, Some(0o600))?;
+    Ok(())
 }
 
 #[cfg(test)]
