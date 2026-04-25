@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
   ipcErrorMessage,
@@ -141,16 +142,15 @@ export function VoiceRoute() {
               </div>
               <p className="text-xs text-fg-subtle">{t('voice.asr_desc')}</p>
               <Field label={t('voice.provider')}>
-                <select
+                <Select
                   value={asrProvider}
-                  onChange={(e) => setAsrProvider(e.target.value)}
-                  className="input"
+                  onChange={setAsrProvider}
+                  options={config.available_asr_providers.map((p) => ({
+                    value: p,
+                    label: PROVIDER_LABELS[p] ?? p,
+                  }))}
                   data-testid="voice-asr-provider"
-                >
-                  {config.available_asr_providers.map((p) => (
-                    <option key={p} value={p}>{PROVIDER_LABELS[p] ?? p}</option>
-                  ))}
-                </select>
+                />
               </Field>
               <Field label={t('voice.asr_endpoint')}>
                 <input
@@ -185,16 +185,15 @@ export function VoiceRoute() {
               </div>
               <p className="text-xs text-fg-subtle">{t('voice.tts_desc')}</p>
               <Field label={t('voice.provider')}>
-                <select
+                <Select
                   value={ttsProvider}
-                  onChange={(e) => setTtsProvider(e.target.value)}
-                  className="input"
+                  onChange={setTtsProvider}
+                  options={config.available_tts_providers.map((p) => ({
+                    value: p,
+                    label: PROVIDER_LABELS[p] ?? p,
+                  }))}
                   data-testid="voice-tts-provider"
-                >
-                  {config.available_tts_providers.map((p) => (
-                    <option key={p} value={p}>{PROVIDER_LABELS[p] ?? p}</option>
-                  ))}
-                </select>
+                />
               </Field>
               {!ttsDisabled && (
                 <>
@@ -221,16 +220,12 @@ export function VoiceRoute() {
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label={t('voice.tts_voice')}>
-                      <select
+                      <Select
                         value={ttsVoice}
-                        onChange={(e) => setTtsVoice(e.target.value)}
-                        className="input"
+                        onChange={setTtsVoice}
+                        options={ttsVoices.map((v) => ({ value: v, label: v }))}
                         data-testid="voice-tts-voice"
-                      >
-                        {ttsVoices.map((v) => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
+                      />
                     </Field>
                     <Field label={t('voice.tts_speed')}>
                       <input
