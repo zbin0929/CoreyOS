@@ -494,6 +494,23 @@ function WorkspaceSection() {
             )}
           </div>
 
+          {/* Status indicator + test guide */}
+          {mode === 'enforced' && (
+            <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+              <Icon icon={ShieldCheck} size="sm" className="mt-0.5 flex-none" />
+              <div>
+                <span className="font-medium">{t('settings.sandbox.active_title')}</span>
+                <p className="mt-0.5 text-[11px] opacity-80">{t('settings.sandbox.test_guide')}</p>
+              </div>
+            </div>
+          )}
+          {mode === 'dev_allow' && (
+            <div className="flex items-start gap-2 rounded-md border border-gold-500/30 bg-gold-500/5 px-3 py-2 text-xs text-gold-600 dark:text-gold-400">
+              <Icon icon={Lock} size="sm" className="mt-0.5 flex-none" />
+              <span>{t('settings.sandbox.dev_hint')}</span>
+            </div>
+          )}
+
           {/* Existing roots */}
           <div className="flex flex-col gap-2">
             <div className="text-xs font-medium text-fg">

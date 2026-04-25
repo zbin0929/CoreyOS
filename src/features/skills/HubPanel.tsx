@@ -106,6 +106,7 @@ export function HubPanel() {
         <h3 className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
           {t('skill_hub.browse_title')}
         </h3>
+        <p className="text-[11px] text-fg-subtle">{t('skill_hub.source_hint')}</p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-fg-muted">{t('skill_hub.source')}</span>

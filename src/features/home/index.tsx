@@ -210,6 +210,34 @@ export function HomeRoute() {
           </ul>
         </section>
 
+        {/* Feature guide — shown after onboarding is complete */}
+        {allDone && (
+          <section
+            className="flex flex-col gap-3 rounded-lg border border-border bg-bg-elev-1/60 p-4"
+            data-testid="home-features"
+          >
+            <h2 className="text-sm font-semibold text-fg">{t('home.features_title')}</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: t('nav.runbooks'), desc: t('home.feature_runbooks'), path: '/runbooks' },
+                { label: t('nav.compare'), desc: t('home.feature_compare'), path: '/compare' },
+                { label: t('nav.trajectory'), desc: t('home.feature_trajectory'), path: '/trajectory' },
+                { label: t('nav.budgets'), desc: t('home.feature_budgets'), path: '/budgets' },
+              ].map((f) => (
+                <button
+                  key={f.path}
+                  type="button"
+                  onClick={() => void navigate({ to: f.path })}
+                  className="flex flex-col items-start gap-0.5 rounded-md border border-border bg-bg-elev-2 px-3 py-2 text-left transition hover:border-border-strong hover:bg-bg-elev-3"
+                >
+                  <span className="text-xs font-medium text-fg">{f.label}</span>
+                  <span className="text-[11px] text-fg-subtle">{f.desc}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="flex justify-center">
           <a
             href="https://github.com/zbin0929/CoreyOS#readme"

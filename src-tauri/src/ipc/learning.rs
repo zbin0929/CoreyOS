@@ -512,7 +512,9 @@ pub async fn learning_compact_memory() -> IpcResult<MemoryCompactResult> {
     }
 
     if removed > 0 {
-        let _ = fs_atomic::atomic_write(&memory_path_clone, deduped.as_bytes(), None);
+        if let Err(e) = fs_atomic::atomic_write(&memory_path_clone, deduped.as_bytes(), None) {
+            tracing::warn!("learning_compact_memory write failed: {e}");
+        }
     }
 
     let learnings_content = tokio::task::spawn_blocking(move || {

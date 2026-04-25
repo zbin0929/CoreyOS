@@ -212,7 +212,9 @@ function FeedbackButtons({ msg }: { msg: UiMessage }) {
       const section = kind === 'up' ? '## preferred (👍 patterns)' : '## avoided (👎 patterns)';
       const summary = content.slice(0, 100).replace(/\n/g, ' ');
       const entry = `- ${summary}`;
-      const lines = existing || `${'## preferred (👍 patterns)'}\n${'## avoided (👎 patterns)'}`;
+      let lines = existing || '';
+      if (!lines.includes('## preferred')) lines += '\n## preferred (👍 patterns)\n';
+      if (!lines.includes('## avoided')) lines += '\n## avoided (👎 patterns)\n';
       const updated = lines.replace(section, `${section}\n${entry}`);
       await learningWriteLearnings(updated);
     } catch {
