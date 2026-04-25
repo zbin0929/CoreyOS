@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::adapters::{ChatMessageDto, ChatTurn};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
+use crate::workflow::engine::{self, StepExecutor, WorkflowRun};
 use crate::workflow::model::{WorkflowDef, WorkflowSummary};
 use crate::workflow::store::{self, ValidationError};
-use crate::workflow::engine::{self, WorkflowRun, StepRunStatus};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationResult {
@@ -93,6 +94,33 @@ pub async fn workflow_validate(def: WorkflowDef) -> IpcResult<ValidationResult> 
     })
 }
 
+struct HermesExecutor {
+    adapters: std::sync::Arc<crate::adapters::AdapterRegistry>,
+}
+
+impl StepExecutor for HermesExecutor {
+    fn execute_agent(&self, agent_id: &str, prompt: &str) -> Result<String, String> {
+        let rt = tokio::runtime::Handle::current();
+        let adapter_id = if agent_id.is_empty() { "hermes" } else { agent_id };
+        let adapter = self.adapters.get(adapter_id)
+            .or_else(|| self.adapters.default_adapter())
+            .ok_or_else(|| format!("adapter '{}' not found", adapter_id))?;
+
+        let turn = ChatTurn {
+            messages: vec![ChatMessageDto {
+                role: "user".into(),
+                content: prompt.into(),
+                attachments: vec![],
+            }],
+            model: None,
+            cwd: None,
+        };
+
+        rt.block_on(async { adapter.chat_once(turn).await })
+            .map_err(|e| format!("agent error: {e}"))
+    }
+}
+
 #[tauri::command]
 pub async fn workflow_run(
     state: State<'_, AppState>,
@@ -101,24 +129,33 @@ pub async fn workflow_run(
 ) -> IpcResult<String> {
     let wf_id = id.clone();
     let runs = state.workflow_runs.clone();
+    let adapters = state.adapters.clone();
 
-    let run_id = tokio::task::spawn_blocking(move || {
-        let def = store::get(&wf_id)?;
-        let result = engine::execute_sync(&def, inputs);
-        let run = result.run;
-        let rid = run.id.clone();
-        runs.lock().insert(rid.clone(), run);
-        anyhow::Ok(rid)
-    })
-    .await
-    .map_err(|e| IpcError::Internal {
-        message: format!("workflow_run join: {e}"),
-    })?
-    .map_err(|e| IpcError::Internal {
-        message: format!("workflow_run: {e}"),
-    })?;
+    let def = tokio::task::spawn_blocking(move || store::get(&wf_id))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("workflow_run load: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("workflow_run load: {e}"),
+        })?;
 
-    Ok(run_id)
+    let (mut run, mut ctx) = engine::create_initial_run(&def, inputs);
+    let run_id = run.id.clone();
+    runs.lock().insert(run_id.clone(), run);
+
+    let cloned_runs = runs.clone();
+    let rid_for_log = run_id.clone();
+    let rid_return = run_id.clone();
+    tokio::task::spawn_blocking(move || {
+        let executor = HermesExecutor { adapters };
+        if let Some(r) = cloned_runs.lock().get_mut(&run_id) {
+            engine::execute_with_executor(&def, r, &mut ctx, &executor);
+        }
+        tracing::info!(wf_id = %def.id, run_id = %rid_for_log, status = ?cloned_runs.lock().get(&rid_for_log).map(|r| &r.status), "workflow run finished");
+    });
+
+    Ok(rid_return)
 }
 
 #[tauri::command]
@@ -155,7 +192,7 @@ pub async fn workflow_approve(
         let mut map = runs.lock();
         if let Some(run) = map.get_mut(&params.run_id) {
             if let Some(sr) = run.step_runs.get_mut(&params.step_id) {
-                sr.status = StepRunStatus::Completed;
+                sr.status = engine::StepRunStatus::Completed;
                 sr.output = Some(serde_json::json!({
                     "approved": params.approved,
                     "feedback": params.feedback,

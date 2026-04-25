@@ -60,12 +60,13 @@ impl WorkflowRun {
 
 pub struct EngineResult {
     pub run: WorkflowRun,
+    #[allow(dead_code)]
     pub context: RunContext,
 }
 
-pub fn execute_sync(def: &WorkflowDef, inputs: serde_json::Value) -> EngineResult {
+pub fn create_initial_run(def: &WorkflowDef, inputs: serde_json::Value) -> (WorkflowRun, RunContext) {
     let run_id = Uuid::new_v4().to_string();
-    let mut ctx = RunContext::new(&def.id, &run_id, inputs);
+    let ctx = RunContext::new(&def.id, &run_id, inputs);
     let mut run = WorkflowRun::new(&def.id, ctx.inputs.clone());
 
     for step in &def.steps {
@@ -79,9 +80,28 @@ pub fn execute_sync(def: &WorkflowDef, inputs: serde_json::Value) -> EngineResul
             },
         );
     }
-
     run.status = RunStatus::Running;
+    (run, ctx)
+}
 
+pub trait StepExecutor: Send + Sync {
+    fn execute_agent(&self, agent_id: &str, prompt: &str) -> Result<String, String>;
+}
+
+pub struct SimulatedExecutor;
+
+impl StepExecutor for SimulatedExecutor {
+    fn execute_agent(&self, _agent_id: &str, prompt: &str) -> Result<String, String> {
+        Ok(format!("[simulated] {}", prompt))
+    }
+}
+
+pub fn execute_with_executor(
+    def: &WorkflowDef,
+    run: &mut WorkflowRun,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+) {
     let mut plan = planner::build_plan(def);
     let mut ready: Vec<String> = plan.ready.clone();
 
@@ -98,7 +118,7 @@ pub fn execute_sync(def: &WorkflowDef, inputs: serde_json::Value) -> EngineResul
                 sr.status = StepRunStatus::Running;
             }
 
-            match execute_step(step, &mut ctx) {
+            match execute_step_live(step, ctx, executor) {
                 Ok(output) => {
                     ctx.set_step_output(step_id, output.clone());
                     if let Some(sr) = run.step_runs.get_mut(step_id) {
@@ -115,7 +135,7 @@ pub fn execute_sync(def: &WorkflowDef, inputs: serde_json::Value) -> EngineResul
                     }
                     run.status = RunStatus::Failed;
                     run.error = Some(e);
-                    return EngineResult { run, context: ctx };
+                    return;
                 }
             }
         }
@@ -126,33 +146,95 @@ pub fn execute_sync(def: &WorkflowDef, inputs: serde_json::Value) -> EngineResul
     if run.status != RunStatus::Failed {
         run.status = RunStatus::Completed;
     }
+}
 
+pub fn execute_sync(def: &WorkflowDef, inputs: serde_json::Value) -> EngineResult {
+    let (mut run, mut ctx) = create_initial_run(def, inputs);
+    let executor = SimulatedExecutor;
+    execute_with_executor(def, &mut run, &mut ctx, &executor);
     EngineResult { run, context: ctx }
 }
 
-fn execute_step(step: &WorkflowStep, ctx: &mut RunContext) -> Result<serde_json::Value, String> {
+fn execute_step_live(
+    step: &WorkflowStep,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+) -> Result<serde_json::Value, String> {
     match step.step_type.as_str() {
-        "agent" => execute_agent_step(step, ctx),
+        "agent" => execute_agent_step_live(step, ctx, executor),
         "tool" => execute_tool_step(step, ctx),
-        "parallel" => execute_parallel_step(step, ctx),
+        "parallel" => execute_parallel_step_live(step, ctx, executor),
         "branch" => execute_branch_step(step, ctx),
-        "loop" => execute_loop_step(step, ctx),
+        "loop" => execute_loop_step_live(step, ctx, executor),
         "approval" => execute_approval_step(step, ctx),
         other => Err(format!("Unknown step type: {other}")),
     }
 }
 
-fn execute_agent_step(
+fn execute_agent_step_live(
     step: &WorkflowStep,
     ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
 ) -> Result<serde_json::Value, String> {
     let prompt = step.prompt.as_deref().ok_or("agent step missing prompt")?;
     let rendered = ctx.render_template(prompt);
+    let agent_id = step.agent_id.as_deref().unwrap_or("hermes-default");
+    let text = executor.execute_agent(agent_id, &rendered)?;
     Ok(json!({
-        "text": rendered,
-        "agent_id": step.agent_id,
-        "status": "simulated"
+        "text": text,
+        "agent_id": agent_id,
     }))
+}
+
+fn execute_parallel_step_live(
+    step: &WorkflowStep,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+) -> Result<serde_json::Value, String> {
+    let branches = step.branches.as_ref().ok_or("parallel step missing branches")?;
+    let mut results = serde_json::Map::new();
+    for branch in branches {
+        let output = execute_step_live(branch, ctx, executor)?;
+        ctx.set_step_output(&branch.id, output.clone());
+        results.insert(branch.id.clone(), output);
+    }
+    Ok(serde_json::Value::Object(results))
+}
+
+fn execute_loop_step_live(
+    step: &WorkflowStep,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+) -> Result<serde_json::Value, String> {
+    let body = step.body.as_ref().ok_or("loop step missing body")?;
+    let max = step.max_iterations.unwrap_or(3);
+    let mut iterations = Vec::new();
+
+    for i in 0..max {
+        let mut iter_output = serde_json::Map::new();
+        for b in body {
+            match execute_step_live(b, ctx, executor) {
+                Ok(out) => {
+                    ctx.set_step_output(&b.id, out.clone());
+                    iter_output.insert(b.id.clone(), out);
+                }
+                Err(e) => {
+                    iterations.push(json!({ "iteration": i, "error": e }));
+                    return Ok(json!({ "iterations": iterations, "status": "failed" }));
+                }
+            }
+        }
+
+        iterations.push(json!({ "iteration": i, "outputs": iter_output }));
+
+        if let Some(exit_cond) = &step.exit_condition {
+            if evaluate_condition(exit_cond, ctx) {
+                return Ok(json!({ "iterations": iterations, "status": "exited_early" }));
+            }
+        }
+    }
+
+    Ok(json!({ "iterations": iterations, "status": "max_reached" }))
 }
 
 fn execute_tool_step(
@@ -176,20 +258,6 @@ fn execute_tool_step(
     }))
 }
 
-fn execute_parallel_step(
-    step: &WorkflowStep,
-    ctx: &mut RunContext,
-) -> Result<serde_json::Value, String> {
-    let branches = step.branches.as_ref().ok_or("parallel step missing branches")?;
-    let mut results = serde_json::Map::new();
-    for branch in branches {
-        let output = execute_step(branch, ctx)?;
-        ctx.set_step_output(&branch.id, output.clone());
-        results.insert(branch.id.clone(), output);
-    }
-    Ok(serde_json::Value::Object(results))
-}
-
 fn execute_branch_step(
     step: &WorkflowStep,
     ctx: &mut RunContext,
@@ -204,41 +272,6 @@ fn execute_branch_step(
         }
     }
     Ok(json!({ "matched": null, "goto": null }))
-}
-
-fn execute_loop_step(
-    step: &WorkflowStep,
-    ctx: &mut RunContext,
-) -> Result<serde_json::Value, String> {
-    let body = step.body.as_ref().ok_or("loop step missing body")?;
-    let max = step.max_iterations.unwrap_or(3);
-    let mut iterations = Vec::new();
-
-    for i in 0..max {
-        let mut iter_output = serde_json::Map::new();
-        for b in body {
-            match execute_step(b, ctx) {
-                Ok(out) => {
-                    ctx.set_step_output(&b.id, out.clone());
-                    iter_output.insert(b.id.clone(), out);
-                }
-                Err(e) => {
-                    iterations.push(json!({ "iteration": i, "error": e }));
-                    return Ok(json!({ "iterations": iterations, "status": "failed" }));
-                }
-            }
-        }
-
-        iterations.push(json!({ "iteration": i, "outputs": iter_output }));
-
-        if let Some(exit_cond) = &step.exit_condition {
-            if evaluate_condition(exit_cond, ctx) {
-                return Ok(json!({ "iterations": iterations, "status": "exited_early" }));
-            }
-        }
-    }
-
-    Ok(json!({ "iterations": iterations, "status": "max_reached" }))
 }
 
 fn execute_approval_step(
@@ -382,7 +415,7 @@ mod tests {
         let result = execute_sync(&def, json!({ "topic": "test" }));
         assert_eq!(result.run.status, RunStatus::Completed);
         let output = result.run.step_runs["a"].output.as_ref().unwrap();
-        assert_eq!(output["text"], "topic is test");
+        assert!(output["text"].as_str().unwrap().contains("topic is test"));
     }
 
     #[test]
@@ -407,5 +440,31 @@ mod tests {
         assert_eq!(result.run.status, RunStatus::Completed);
         let output = result.run.step_runs["l"].output.as_ref().unwrap();
         assert_eq!(output["status"], "max_reached");
+    }
+
+    #[test]
+    fn execute_with_custom_executor() {
+        struct UpperExecutor;
+        impl StepExecutor for UpperExecutor {
+            fn execute_agent(&self, _agent_id: &str, prompt: &str) -> Result<String, String> {
+                Ok(prompt.to_uppercase())
+            }
+        }
+
+        let def = WorkflowDef {
+            id: "custom".into(),
+            name: "Custom".into(),
+            description: String::new(),
+            version: 1,
+            trigger: WorkflowTrigger::Manual,
+            inputs: vec![],
+            steps: vec![agent_step("a", vec![], "hello world")],
+        };
+        let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+        let executor = UpperExecutor;
+        execute_with_executor(&def, &mut run, &mut ctx, &executor);
+        assert_eq!(run.status, RunStatus::Completed);
+        let output = run.step_runs["a"].output.as_ref().unwrap();
+        assert_eq!(output["text"], "HELLO WORLD");
     }
 }
