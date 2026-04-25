@@ -16,9 +16,10 @@ use uuid::Uuid;
 
 use crate::error::{IpcError, IpcResult};
 use crate::fs_atomic;
+use crate::ipc::embedding;
 use crate::state::AppState;
 
-const CHUNK_SIZE: usize = 500;
+const _CHUNK_SIZE: usize = 500;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct KnowledgeDoc {
@@ -50,7 +51,8 @@ fn doc_dir(id: &str) -> io::Result<PathBuf> {
     Ok(knowledge_dir()?.join(id))
 }
 
-fn chunk_text(text: &str, max_chars: usize) -> Vec<String> {
+#[allow(dead_code)]
+fn _chunk_text(text: &str, max_chars: usize) -> Vec<String> {
     let mut chunks = Vec::new();
     let mut current = String::new();
 
@@ -103,7 +105,7 @@ pub async fn knowledge_upload(
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().timestamp();
     let total_chars = content.len();
-    let chunks = chunk_text(&content, CHUNK_SIZE);
+    let chunks = embedding::chunk_text_smart(&content);
     let chunk_count = chunks.len();
 
     let id_clone = id.clone();
@@ -116,16 +118,23 @@ pub async fn knowledge_upload(
         fs_atomic::atomic_write(&dir.join("original.txt"), content.as_bytes(), None)
             .map_err(io_err)?;
 
-        db.insert_knowledge_doc(
-            &id_clone,
-            &name_clone,
-            &filename_clone,
-            chunk_count,
-            total_chars,
-            now,
-            &chunks,
-        )
-        .map_err(db_err)?;
+        let chunk_ids = db
+            .insert_knowledge_doc(
+                &id_clone,
+                &name_clone,
+                &filename_clone,
+                chunk_count,
+                total_chars,
+                now,
+                &chunks,
+            )
+            .map_err(db_err)?;
+
+        let embeddings = embedding::embed(&chunks);
+        for (chunk_id, emb) in chunk_ids.iter().zip(embeddings.iter()) {
+            let _ = embedding::store_embedding(&db, *chunk_id, emb);
+        }
+
         Ok(())
     })
     .await
@@ -198,19 +207,26 @@ pub async fn knowledge_search(
     }
 
     tokio::task::spawn_blocking(move || -> IpcResult<Vec<KnowledgeSearchHit>> {
-        let query_tokens: std::collections::HashSet<String> = q
-            .to_lowercase()
-            .split_whitespace()
-            .filter(|w| w.len() > 2)
-            .map(String::from)
-            .collect();
-
-        if query_tokens.is_empty() {
+        let q = query.trim().to_string();
+        if q.is_empty() {
             return Ok(Vec::new());
         }
 
-        db.search_knowledge_chunks(&query_tokens, lim)
-            .map_err(db_err)
+        let expanded = embedding::expand_query(&q);
+        let full_query = expanded.join(" ");
+
+        let results = embedding::hybrid_search(&db, &full_query, lim);
+
+        Ok(results
+            .into_iter()
+            .map(|r| KnowledgeSearchHit {
+                doc_id: String::new(),
+                doc_name: r.doc_name,
+                chunk_index: r.chunk_index,
+                content: r.content.chars().take(300).collect(),
+                score: r.score,
+            })
+            .collect())
     })
     .await
     .map_err(|e| IpcError::Internal {

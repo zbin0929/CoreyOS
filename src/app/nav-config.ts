@@ -16,6 +16,7 @@ import {
   PiggyBank,
   Brain,
   BookOpen,
+  Mic,
   Plug,
   Settings,
   type LucideIcon,
@@ -64,5 +65,6 @@ export const NAV: NavEntry[] = [
   { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank, group: 'manage', phase: 4 },
   { id: 'memory', path: '/memory', labelKey: 'nav.memory', icon: Brain, group: 'manage', phase: 7 },
   { id: 'knowledge', path: '/knowledge', labelKey: 'nav.knowledge', icon: BookOpen, group: 'manage', phase: 7 },
+  { id: 'voice', path: '/voice', labelKey: 'nav.voice', icon: Mic, group: 'manage', phase: 8 },
   { id: 'mcp', path: '/mcp', labelKey: 'nav.mcp', icon: Plug, group: 'manage', phase: 7 },
 ];

@@ -5,12 +5,14 @@ import {
   AlertCircle,
   Check,
   Copy,
+  Film,
   Loader2,
   Paperclip,
   RefreshCw,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  Volume2,
   User,
   Wrench,
 } from 'lucide-react';
@@ -20,7 +22,7 @@ import { highlightCode } from './highlight';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { useContextMenu } from '@/components/ui/context-menu';
-import { attachmentPreview, learningReadLearnings, learningWriteLearnings } from '@/lib/ipc';
+import { attachmentPreview, learningReadLearnings, learningWriteLearnings, voiceTts } from '@/lib/ipc';
 import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from '@/stores/chat';
 
 export function MessageBubble({
@@ -257,6 +259,23 @@ function FeedbackButtons({ msg }: { msg: UiMessage }) {
       >
         <Icon icon={ThumbsDown} size="xs" />
       </button>
+      {msg.role === 'assistant' && msg.content.trim().length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            void voiceTts(msg.content).then((res) => {
+              const audio = new Audio(`file://${res.audio_path}`);
+              void audio.play();
+            }).catch(() => {});
+          }}
+          className={baseBtn}
+          aria-label={t('chat_page.tts_play')}
+          title={t('chat_page.tts_play')}
+          data-testid={`bubble-tts-${msg.id}`}
+        >
+          <Icon icon={Volume2} size="xs" />
+        </button>
+      )}
     </>
   );
 }
@@ -453,6 +472,16 @@ function AttachmentsStrip({ attachments }: { attachments: UiAttachment[] }) {
       {attachments.map((a) =>
         a.mime.startsWith('image/') ? (
           <AttachmentImageTile key={a.id} attachment={a} />
+        ) : a.mime.startsWith('video/') ? (
+          <li
+            key={a.id}
+            className="inline-flex items-center gap-1 rounded-full bg-purple-500/15 px-2 py-0.5 text-[11px] text-purple-300"
+            title={a.mime}
+            data-testid={`bubble-attachment-${a.id}`}
+          >
+            <Icon icon={Film} size="xs" className="opacity-70" />
+            <span className="max-w-[220px] truncate">{a.name}</span>
+          </li>
         ) : (
           <li
             key={a.id}

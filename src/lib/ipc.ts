@@ -1685,6 +1685,67 @@ export function knowledgeSearch(query: string, limit?: number): Promise<Knowledg
   return invoke<KnowledgeSearchHit[]>('knowledge_search', { query, limit });
 }
 
+// ───────────────────────── Voice ─────────────────────────
+
+export interface VoiceTranscribeResult {
+  text: string;
+  language: string | null;
+  duration_ms: number | null;
+}
+
+export function voiceTranscribe(audioBase64: string, mime: string): Promise<VoiceTranscribeResult> {
+  return invoke<VoiceTranscribeResult>('voice_transcribe', { audioBase64, mime });
+}
+
+export interface VoiceTtsResult {
+  audio_path: string;
+  duration_ms: number | null;
+}
+
+export function voiceTts(text: string): Promise<VoiceTtsResult> {
+  return invoke<VoiceTtsResult>('voice_tts', { text });
+}
+
+export interface VoiceConfig {
+  asr_endpoint: string | null;
+  asr_api_key_set: boolean;
+  tts_endpoint: string | null;
+  tts_api_key_set: boolean;
+  tts_voice: string;
+  tts_speed: number;
+  hotkey: string;
+}
+
+export function voiceGetConfig(): Promise<VoiceConfig> {
+  return invoke<VoiceConfig>('voice_get_config');
+}
+
+export interface VoiceConfigUpdate {
+  asr_endpoint?: string;
+  asr_api_key?: string;
+  tts_endpoint?: string;
+  tts_api_key?: string;
+  tts_voice?: string;
+  tts_speed?: number;
+  hotkey?: string;
+}
+
+export function voiceSetConfig(args: VoiceConfigUpdate): Promise<void> {
+  return invoke<void>('voice_set_config', { args });
+}
+
+export interface VoiceAuditEntry {
+  event_type: string;
+  timestamp: number;
+  provider: string;
+  duration_ms: number;
+  success: boolean;
+}
+
+export function voiceAuditLog(limit?: number): Promise<VoiceAuditEntry[]> {
+  return invoke<VoiceAuditEntry[]>('voice_audit_log', { limit });
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { AlertTriangle, Paperclip, Send, Sparkles, Square, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Mic, Paperclip, Send, Sparkles, Square, Wand2, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -28,6 +28,7 @@ import {
   learningSearchSimilar,
   ragSearch,
   knowledgeSearch,
+  voiceTranscribe,
   learningReadLearnings,
   learningDetectPattern,
   memoryRead,
@@ -149,6 +150,9 @@ function ChatPane({
     () => useComposerStore.getState().pendingDraft ?? '',
   );
   const [sending, setSending] = useState(false);
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceStreamRef = useRef<MediaStream | null>(null);
   // Live handle for the current stream, so Stop can cancel it.
   const streamRef = useRef<ChatStreamHandle | null>(null);
   // Also track the pending id to null-out the spinner on stop.
@@ -953,6 +957,47 @@ function ChatPane({
     }
   }
 
+  function onVoiceStart() {
+    if (voiceRecording) return;
+    void (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceStreamRef.current = stream;
+        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (e) => chunks.push(e.data);
+        recorder.onstop = () => {
+          stream.getTracks().forEach((tr) => tr.stop());
+          voiceStreamRef.current = null;
+          voiceRecorderRef.current = null;
+          setVoiceRecording(false);
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1] ?? '';
+            try {
+              const res = await voiceTranscribe(base64, 'audio/webm');
+              if (res.text) {
+                setDraft((d) => (d ? `${d} ${res.text}` : res.text));
+              }
+            } catch { /* non-critical */ }
+          };
+          reader.readAsDataURL(blob);
+        };
+        voiceRecorderRef.current = recorder;
+        setVoiceRecording(true);
+        recorder.start();
+      } catch {
+        setVoiceRecording(false);
+      }
+    })();
+  }
+
+  function onVoiceStop() {
+    voiceRecorderRef.current?.stop();
+  }
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (sending) {
@@ -1206,6 +1251,31 @@ function ChatPane({
               )}
               data-testid="chat-textarea"
             />
+            {voiceRecording ? (
+              <Button
+                type="button"
+                variant="danger"
+                className="h-11 px-4 animate-pulse"
+                onClick={onVoiceStop}
+                aria-label={t('chat_page.voice_stop')}
+                title={t('chat_page.voice_stop')}
+                data-testid="chat-voice-stop"
+              >
+                <Icon icon={Mic} size="md" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 px-3"
+                onClick={onVoiceStart}
+                aria-label={t('chat_page.voice_start')}
+                title={t('chat_page.voice_start')}
+                data-testid="chat-voice-start"
+              >
+                <Icon icon={Mic} size="md" className="text-fg-subtle" />
+              </Button>
+            )}
             {sending ? (
               <Button
                 type="submit"

@@ -47,6 +47,7 @@ const SkillsRoute = lazyFeature(() => import('@/features/skills'), 'SkillsRoute'
 const SchedulerRoute = lazyFeature(() => import('@/features/scheduler'), 'SchedulerRoute');
 const MemoryRoute = lazyFeature(() => import('@/features/memory'), 'MemoryRoute');
 const KnowledgeRoute = lazyFeature(() => import('@/features/knowledge'), 'KnowledgeRoute');
+const VoiceRoute = lazyFeature(() => import('@/features/voice'), 'VoiceRoute');
 const McpRoute = lazyFeature(() => import('@/features/mcp'), 'McpRoute');
 
 const rootRoute = createRootRoute({
@@ -173,6 +174,12 @@ const knowledgeRoute = createRoute({
   component: KnowledgeRoute,
 });
 
+const voiceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/voice',
+  component: VoiceRoute,
+});
+
 const mcpRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/mcp',
@@ -197,6 +204,7 @@ const routeTree = rootRoute.addChildren([
   budgetsRoute,
   memoryRoute,
   knowledgeRoute,
+  voiceRoute,
   mcpRoute,
   settingsRoute,
 ]);

@@ -1339,6 +1339,10 @@ impl Db {
 
     // ───────────────────────── Knowledge base ─────────────────────────
 
+    pub fn conn_raw(&self) -> parking_lot::MutexGuard<'_, Connection> {
+        self.conn.lock()
+    }
+
     fn ensure_knowledge_tables_inner(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         conn.execute_batch(
             r#"
@@ -1354,7 +1358,8 @@ impl Db {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 doc_id TEXT NOT NULL REFERENCES knowledge_docs(id) ON DELETE CASCADE,
                 chunk_index INTEGER NOT NULL,
-                content TEXT NOT NULL
+                content TEXT NOT NULL,
+                embedding BLOB
             );
             CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_doc ON knowledge_chunks(doc_id);
             "#,
@@ -1362,11 +1367,13 @@ impl Db {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn ensure_knowledge_tables(&self) -> rusqlite::Result<()> {
         let conn = self.conn.lock();
         Self::ensure_knowledge_tables_inner(&conn)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_knowledge_doc(
         &self,
         id: &str,
@@ -1376,20 +1383,22 @@ impl Db {
         total_chars: usize,
         created_at: i64,
         chunks: &[String],
-    ) -> rusqlite::Result<()> {
+    ) -> rusqlite::Result<Vec<i64>> {
         let conn = self.conn.lock();
         Self::ensure_knowledge_tables_inner(&conn)?;
         conn.execute(
             "INSERT INTO knowledge_docs (id, name, filename, chunk_count, total_chars, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![id, name, filename, chunk_count, total_chars, created_at],
         )?;
+        let mut chunk_ids = Vec::with_capacity(chunks.len());
         for (i, chunk) in chunks.iter().enumerate() {
             conn.execute(
                 "INSERT INTO knowledge_chunks (doc_id, chunk_index, content) VALUES (?1, ?2, ?3)",
                 params![id, i, chunk],
             )?;
+            chunk_ids.push(conn.last_insert_rowid());
         }
-        Ok(())
+        Ok(chunk_ids)
     }
 
     pub fn list_knowledge_docs(&self) -> rusqlite::Result<Vec<super::ipc::knowledge::KnowledgeDoc>> {
@@ -1422,6 +1431,7 @@ impl Db {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn search_knowledge_chunks(
         &self,
         query_tokens: &std::collections::HashSet<String>,
