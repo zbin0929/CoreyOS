@@ -123,6 +123,7 @@ jobs:
             libgtk-3-dev \
             libjavascriptcoregtk-4.1-dev \
             libsoup-3.0-dev \
+            libasound2-dev \
             patchelf
 
       # tauri::generate_context!() reads frontendDist from tauri.conf.json
