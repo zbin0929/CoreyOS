@@ -29,6 +29,8 @@ import {
   ragSearch,
   knowledgeSearch,
   voiceTranscribe,
+  voiceRecord,
+  voiceRecordStop,
   learningReadLearnings,
   learningDetectPattern,
   memoryRead,
@@ -151,8 +153,6 @@ function ChatPane({
   );
   const [sending, setSending] = useState(false);
   const [voiceRecording, setVoiceRecording] = useState(false);
-  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
-  const voiceStreamRef = useRef<MediaStream | null>(null);
   // Live handle for the current stream, so Stop can cancel it.
   const streamRef = useRef<ChatStreamHandle | null>(null);
   // Also track the pending id to null-out the spinner on stop.
@@ -959,35 +959,17 @@ function ChatPane({
 
   function onVoiceStart() {
     if (voiceRecording) return;
+    setVoiceRecording(true);
     void (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        voiceStreamRef.current = stream;
-        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => chunks.push(e.data);
-        recorder.onstop = () => {
-          stream.getTracks().forEach((tr) => tr.stop());
-          voiceStreamRef.current = null;
-          voiceRecorderRef.current = null;
-          setVoiceRecording(false);
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const dataUrl = reader.result as string;
-            const base64 = dataUrl.split(',')[1] ?? '';
-            try {
-              const res = await voiceTranscribe(base64, 'audio/webm');
-              if (res.text) {
-                setDraft((d) => (d ? `${d} ${res.text}` : res.text));
-              }
-            } catch { /* non-critical */ }
-          };
-          reader.readAsDataURL(blob);
-        };
-        voiceRecorderRef.current = recorder;
-        setVoiceRecording(true);
-        recorder.start();
+        const base64 = await voiceRecord(120);
+        setVoiceRecording(false);
+        try {
+          const res = await voiceTranscribe(base64, 'audio/wav');
+          if (res.text) {
+            setDraft((d) => (d ? `${d} ${res.text}` : res.text));
+          }
+        } catch { /* non-critical */ }
       } catch {
         setVoiceRecording(false);
       }
@@ -995,7 +977,7 @@ function ChatPane({
   }
 
   function onVoiceStop() {
-    voiceRecorderRef.current?.stop();
+    void voiceRecordStop().catch(() => {});
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -1255,7 +1237,7 @@ function ChatPane({
               <Button
                 type="button"
                 variant="danger"
-                className="h-11 px-4 animate-pulse"
+                className="h-11 px-4"
                 onClick={onVoiceStop}
                 aria-label={t('chat_page.voice_stop')}
                 title={t('chat_page.voice_stop')}

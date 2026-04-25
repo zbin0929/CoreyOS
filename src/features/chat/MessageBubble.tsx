@@ -264,7 +264,7 @@ function FeedbackButtons({ msg }: { msg: UiMessage }) {
           type="button"
           onClick={() => {
             void voiceTts(msg.content).then((res) => {
-              const audio = new Audio(`file://${res.audio_path}`);
+              const audio = new Audio(res.audio_base64);
               void audio.play();
             }).catch(() => {});
           }}
