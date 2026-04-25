@@ -22,6 +22,12 @@ import {
   type VoiceAuditEntry,
 } from '@/lib/ipc';
 
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: 'OpenAI',
+  zhipu: 'Zhipu (智谱)',
+  groq: 'Groq',
+};
+
 export function VoiceRoute() {
   const { t } = useTranslation();
   const [config, setConfig] = useState<VoiceConfig | null>(null);
@@ -29,8 +35,10 @@ export function VoiceRoute() {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<'settings' | 'test' | 'audit'>('settings');
 
+  const [asrProvider, setAsrProvider] = useState('openai');
   const [asrEndpoint, setAsrEndpoint] = useState('');
   const [asrApiKey, setAsrApiKey] = useState('');
+  const [ttsProvider, setTtsProvider] = useState('openai');
   const [ttsEndpoint, setTtsEndpoint] = useState('');
   const [ttsApiKey, setTtsApiKey] = useState('');
   const [ttsVoice, setTtsVoice] = useState('alloy');
@@ -41,8 +49,10 @@ export function VoiceRoute() {
     try {
       const cfg = await voiceGetConfig();
       setConfig(cfg);
+      setAsrProvider(cfg.asr_provider);
       setAsrEndpoint(cfg.asr_endpoint ?? '');
       setAsrApiKey('');
+      setTtsProvider(cfg.tts_provider);
       setTtsEndpoint(cfg.tts_endpoint ?? '');
       setTtsApiKey('');
       setTtsVoice(cfg.tts_voice);
@@ -62,8 +72,10 @@ export function VoiceRoute() {
     setError(null);
     try {
       await voiceSetConfig({
+        asr_provider: asrProvider,
         asr_endpoint: asrEndpoint || undefined,
         asr_api_key: asrApiKey || undefined,
+        tts_provider: ttsProvider,
         tts_endpoint: ttsEndpoint || undefined,
         tts_api_key: ttsApiKey || undefined,
         tts_voice: ttsVoice,
@@ -76,7 +88,7 @@ export function VoiceRoute() {
     } finally {
       setSaving(false);
     }
-  }, [asrEndpoint, asrApiKey, ttsEndpoint, ttsApiKey, ttsVoice, ttsSpeed, hotkey, load]);
+  }, [asrProvider, asrEndpoint, asrApiKey, ttsProvider, ttsEndpoint, ttsApiKey, ttsVoice, ttsSpeed, hotkey, load]);
 
   if (!config) {
     return (
@@ -85,6 +97,9 @@ export function VoiceRoute() {
       </div>
     );
   }
+
+  const ttsVoices = config.tts_voices.length > 0 ? config.tts_voices : [ttsVoice];
+  const ttsDisabled = ttsProvider === 'groq';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -119,23 +134,35 @@ export function VoiceRoute() {
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-6">
-            {/* ASR Section */}
             <section className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
               <div className="flex items-center gap-2">
                 <Icon icon={Mic} size="md" className="text-fg-subtle" />
                 <h3 className="text-sm font-medium text-fg">{t('voice.asr_title')}</h3>
               </div>
               <p className="text-xs text-fg-subtle">{t('voice.asr_desc')}</p>
+              <Field label={t('voice.provider')}>
+                <select
+                  value={asrProvider}
+                  onChange={(e) => setAsrProvider(e.target.value)}
+                  className="input"
+                  data-testid="voice-asr-provider"
+                >
+                  {config.available_asr_providers.map((p) => (
+                    <option key={p} value={p}>{PROVIDER_LABELS[p] ?? p}</option>
+                  ))}
+                </select>
+              </Field>
               <Field label={t('voice.asr_endpoint')}>
                 <input
                   type="text"
                   value={asrEndpoint}
                   onChange={(e) => setAsrEndpoint(e.target.value)}
-                  placeholder="https://api.openai.com/v1/audio/transcriptions"
+                  placeholder={t('voice.endpoint_auto')}
                   className="input"
                   data-testid="voice-asr-endpoint"
                 />
               </Field>
+              <p className="text-[11px] text-fg-subtle">{t('voice.endpoint_hint')}</p>
               <Field label={t('voice.asr_api_key')}>
                 <input
                   type="password"
@@ -148,62 +175,83 @@ export function VoiceRoute() {
               </Field>
             </section>
 
-            {/* TTS Section */}
-            <section className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
+            <section className={cn(
+              'flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4',
+              ttsDisabled && 'opacity-50',
+            )}>
               <div className="flex items-center gap-2">
                 <Icon icon={Volume2} size="md" className="text-fg-subtle" />
                 <h3 className="text-sm font-medium text-fg">{t('voice.tts_title')}</h3>
               </div>
               <p className="text-xs text-fg-subtle">{t('voice.tts_desc')}</p>
-              <Field label={t('voice.tts_endpoint')}>
-                <input
-                  type="text"
-                  value={ttsEndpoint}
-                  onChange={(e) => setTtsEndpoint(e.target.value)}
-                  placeholder="https://api.openai.com/v1/audio/speech"
+              <Field label={t('voice.provider')}>
+                <select
+                  value={ttsProvider}
+                  onChange={(e) => setTtsProvider(e.target.value)}
                   className="input"
-                  data-testid="voice-tts-endpoint"
-                />
+                  data-testid="voice-tts-provider"
+                >
+                  {config.available_tts_providers.map((p) => (
+                    <option key={p} value={p}>{PROVIDER_LABELS[p] ?? p}</option>
+                  ))}
+                </select>
               </Field>
-              <Field label={t('voice.tts_api_key')}>
-                <input
-                  type="password"
-                  value={ttsApiKey}
-                  onChange={(e) => setTtsApiKey(e.target.value)}
-                  placeholder={config.tts_api_key_set ? '••••••••' : t('voice.api_key_placeholder')}
-                  className="input"
-                  data-testid="voice-tts-key"
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label={t('voice.tts_voice')}>
-                  <select
-                    value={ttsVoice}
-                    onChange={(e) => setTtsVoice(e.target.value)}
-                    className="input"
-                    data-testid="voice-tts-voice"
-                  >
-                    {['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].map((v) => (
-                      <option key={v} value={v}>{v}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label={t('voice.tts_speed')}>
-                  <input
-                    type="number"
-                    value={ttsSpeed}
-                    onChange={(e) => setTtsSpeed(parseFloat(e.target.value) || 1.0)}
-                    min={0.25}
-                    max={4.0}
-                    step={0.25}
-                    className="input"
-                    data-testid="voice-tts-speed"
-                  />
-                </Field>
-              </div>
+              {!ttsDisabled && (
+                <>
+                  <Field label={t('voice.tts_endpoint')}>
+                    <input
+                      type="text"
+                      value={ttsEndpoint}
+                      onChange={(e) => setTtsEndpoint(e.target.value)}
+                      placeholder={t('voice.endpoint_auto')}
+                      className="input"
+                      data-testid="voice-tts-endpoint"
+                    />
+                  </Field>
+                  <p className="text-[11px] text-fg-subtle">{t('voice.endpoint_hint')}</p>
+                  <Field label={t('voice.tts_api_key')}>
+                    <input
+                      type="password"
+                      value={ttsApiKey}
+                      onChange={(e) => setTtsApiKey(e.target.value)}
+                      placeholder={config.tts_api_key_set ? '••••••••' : t('voice.api_key_placeholder')}
+                      className="input"
+                      data-testid="voice-tts-key"
+                    />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={t('voice.tts_voice')}>
+                      <select
+                        value={ttsVoice}
+                        onChange={(e) => setTtsVoice(e.target.value)}
+                        className="input"
+                        data-testid="voice-tts-voice"
+                      >
+                        {ttsVoices.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label={t('voice.tts_speed')}>
+                      <input
+                        type="number"
+                        value={ttsSpeed}
+                        onChange={(e) => setTtsSpeed(parseFloat(e.target.value) || 1.0)}
+                        min={0.25}
+                        max={4.0}
+                        step={0.25}
+                        className="input"
+                        data-testid="voice-tts-speed"
+                      />
+                    </Field>
+                  </div>
+                </>
+              )}
+              {ttsDisabled && (
+                <p className="text-xs text-fg-subtle">{t('voice.tts_not_available')}</p>
+              )}
             </section>
 
-            {/* Hotkey */}
             <section className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
               <Field label={t('voice.hotkey')}>
                 <input
@@ -387,7 +435,7 @@ function VoiceAuditPanel() {
               </span>
               <span className="text-fg-subtle">{new Date(e.timestamp * 1000).toLocaleString()}</span>
               <span className="text-fg-subtle">{e.duration_ms}ms</span>
-              <span className="text-fg-subtle truncate">{e.provider}</span>
+              <span className="text-fg-subtle truncate">{PROVIDER_LABELS[e.provider] ?? e.provider}</span>
               <span className={cn('ml-auto text-[10px]', e.success ? 'text-emerald-500' : 'text-danger')}>
                 {e.success ? '✓' : '✗'}
               </span>

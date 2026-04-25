@@ -1,15 +1,8 @@
 //! Voice IPC — T8.1 (ASR) + T8.2 (TTS) + T8.5 (audit log).
 //!
-//! Push-to-talk flow:
-//!   1. Frontend captures audio via MediaRecorder → base64
-//!   2. `voice_transcribe` IPC sends audio to configured ASR endpoint
-//!   3. Returns transcribed text → user confirms → sends as chat message
-//!
-//! TTS flow:
-//!   1. `voice_tts` IPC sends text to configured TTS endpoint
-//!   2. Returns audio bytes → frontend plays via <audio> element
-//!
-//! Audit: every voice IPC call logs to changelog.jsonl for privacy transparency.
+//! Multi-provider support: OpenAI, Zhipu (智谱), Groq.
+//! The user picks a provider in Settings → Voice; the backend routes
+//! to the correct endpoint and adapts the request/response format.
 
 use std::path::PathBuf;
 
@@ -20,6 +13,79 @@ use tauri::State;
 use crate::error::{IpcError, IpcResult};
 use crate::fs_atomic;
 use crate::state::AppState;
+
+// ───────────────────────── Provider ─────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum VoiceProvider {
+    #[default]
+    Openai,
+    Zhipu,
+    Groq,
+}
+
+impl VoiceProvider {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Openai => "openai",
+            Self::Zhipu => "zhipu",
+            Self::Groq => "groq",
+        }
+    }
+
+    fn all() -> &'static [Self] {
+        &[Self::Openai, Self::Zhipu, Self::Groq]
+    }
+
+    fn default_asr_endpoint(&self) -> &'static str {
+        match self {
+            Self::Openai => "https://api.openai.com/v1/audio/transcriptions",
+            Self::Zhipu => "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions",
+            Self::Groq => "https://api.groq.com/openai/v1/audio/transcriptions",
+        }
+    }
+
+    fn default_tts_endpoint(&self) -> Option<&'static str> {
+        match self {
+            Self::Openai => Some("https://api.openai.com/v1/audio/speech"),
+            Self::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4/audio/speech"),
+            Self::Groq => None,
+        }
+    }
+
+    fn asr_model(&self) -> &'static str {
+        match self {
+            Self::Openai => "whisper-1",
+            Self::Zhipu => "glm-asr",
+            Self::Groq => "whisper-large-v3",
+        }
+    }
+
+    fn tts_model(&self) -> &'static str {
+        match self {
+            Self::Openai => "tts-1",
+            Self::Zhipu => "glm-tts",
+            Self::Groq => "",
+        }
+    }
+
+    fn tts_voices(&self) -> &'static [&'static str] {
+        match self {
+            Self::Openai => &["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+            Self::Zhipu => &["tongtong", "xiaochen", "chuichui", "jamka", "zidou", "jiluo"],
+            Self::Groq => &[],
+        }
+    }
+
+    fn default_voice(&self) -> &'static str {
+        match self {
+            Self::Openai => "alloy",
+            Self::Zhipu => "tongtong",
+            Self::Groq => "",
+        }
+    }
+}
 
 // ───────────────────────── Types ─────────────────────────
 
@@ -38,6 +104,8 @@ pub struct VoiceTtsResult {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct VoiceConfig {
+    pub asr_provider: String,
+    pub tts_provider: String,
     pub asr_endpoint: Option<String>,
     pub asr_api_key_set: bool,
     pub tts_endpoint: Option<String>,
@@ -45,12 +113,18 @@ pub struct VoiceConfig {
     pub tts_voice: String,
     pub tts_speed: f32,
     pub hotkey: String,
+    pub available_asr_providers: Vec<String>,
+    pub available_tts_providers: Vec<String>,
+    pub asr_voices: Vec<String>,
+    pub tts_voices: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VoiceConfigUpdate {
+    pub asr_provider: Option<String>,
     pub asr_endpoint: Option<String>,
     pub asr_api_key: Option<String>,
+    pub tts_provider: Option<String>,
     pub tts_endpoint: Option<String>,
     pub tts_api_key: Option<String>,
     pub tts_voice: Option<String>,
@@ -88,9 +162,13 @@ fn audit_dir() -> std::io::Result<PathBuf> {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct VoiceConfigFile {
     #[serde(default)]
+    asr_provider: Option<String>,
+    #[serde(default)]
     asr_endpoint: Option<String>,
     #[serde(default)]
     asr_api_key: Option<String>,
+    #[serde(default)]
+    tts_provider: Option<String>,
     #[serde(default)]
     tts_endpoint: Option<String>,
     #[serde(default)]
@@ -113,6 +191,15 @@ fn default_speed() -> f32 {
 
 fn default_hotkey() -> String {
     "Meta+Space".into()
+}
+
+fn parse_provider(s: &Option<String>, fallback: VoiceProvider) -> VoiceProvider {
+    match s.as_deref() {
+        Some("zhipu") => VoiceProvider::Zhipu,
+        Some("groq") => VoiceProvider::Groq,
+        Some("openai") => VoiceProvider::Openai,
+        _ => fallback,
+    }
 }
 
 fn load_config() -> VoiceConfigFile {
@@ -172,9 +259,10 @@ pub async fn voice_transcribe(
     mime: String,
 ) -> IpcResult<VoiceTranscribeResult> {
     let cfg = load_config();
-    let endpoint = cfg.asr_endpoint.unwrap_or_else(|| {
-        "https://api.openai.com/v1/audio/transcriptions".into()
-    });
+    let provider = parse_provider(&cfg.asr_provider, VoiceProvider::Openai);
+    let endpoint = cfg
+        .asr_endpoint
+        .unwrap_or_else(|| provider.default_asr_endpoint().to_owned());
     let api_key = cfg.asr_api_key.unwrap_or_default();
     if api_key.is_empty() {
         return Err(IpcError::Internal {
@@ -197,10 +285,17 @@ pub async fn voice_transcribe(
             message: format!("mime: {e}"),
         })?;
 
-    let form = reqwest::multipart::Form::new()
-        .part("file", part)
-        .text("model", "whisper-1")
-        .text("response_format", "verbose_json");
+    let model = provider.asr_model().to_owned();
+
+    let form = match provider {
+        VoiceProvider::Zhipu => reqwest::multipart::Form::new()
+            .part("file", part)
+            .text("model", model),
+        _ => reqwest::multipart::Form::new()
+            .part("file", part)
+            .text("model", model)
+            .text("response_format", "verbose_json"),
+    };
 
     let resp = client
         .post(&endpoint)
@@ -220,29 +315,56 @@ pub async fn voice_transcribe(
     let duration = start.elapsed().as_millis() as u64;
 
     if !status.is_success() {
-        write_audit("voice.transcribe", &endpoint, duration, false);
+        write_audit("voice.transcribe", provider.as_str(), duration, false);
         return Err(IpcError::Internal {
             message: format!("ASR API error {}: {}", status, &body[..body.len().min(500)]),
         });
     }
 
-    #[derive(Deserialize)]
-    struct WhisperResponse {
-        text: String,
-        language: Option<String>,
-        duration: Option<f64>,
-    }
+    let text = match provider {
+        VoiceProvider::Zhipu => {
+            #[derive(Deserialize)]
+            struct ZhipuAsrResponse {
+                choices: Vec<ZhipuChoice>,
+            }
+            #[derive(Deserialize)]
+            struct ZhipuChoice {
+                message: ZhipuMessage,
+            }
+            #[derive(Deserialize)]
+            struct ZhipuMessage {
+                content: String,
+            }
+            let parsed: ZhipuAsrResponse =
+                serde_json::from_str(&body).map_err(|e| IpcError::Internal {
+                    message: format!("ASR parse (zhipu): {e}"),
+                })?;
+            parsed
+                .choices
+                .into_iter()
+                .next()
+                .map(|c| c.message.content)
+                .unwrap_or_default()
+        }
+        _ => {
+            #[derive(Deserialize)]
+            struct WhisperResponse {
+                text: String,
+            }
+            let parsed: WhisperResponse =
+                serde_json::from_str(&body).map_err(|e| IpcError::Internal {
+                    message: format!("ASR parse: {e}"),
+                })?;
+            parsed.text
+        }
+    };
 
-    let parsed: WhisperResponse = serde_json::from_str(&body).map_err(|e| IpcError::Internal {
-        message: format!("ASR parse: {e}"),
-    })?;
-
-    write_audit("voice.transcribe", &endpoint, duration, true);
+    write_audit("voice.transcribe", provider.as_str(), duration, true);
 
     Ok(VoiceTranscribeResult {
-        text: parsed.text,
-        language: parsed.language,
-        duration_ms: parsed.duration.map(|d| (d * 1000.0) as u64),
+        text,
+        language: None,
+        duration_ms: Some(duration),
     })
 }
 
@@ -254,9 +376,14 @@ pub async fn voice_tts(
     text: String,
 ) -> IpcResult<VoiceTtsResult> {
     let cfg = load_config();
-    let endpoint = cfg.tts_endpoint.unwrap_or_else(|| {
-        "https://api.openai.com/v1/audio/speech".into()
-    });
+    let provider = parse_provider(&cfg.tts_provider, VoiceProvider::Openai);
+    let default_ep = provider.default_tts_endpoint().map(str::to_owned);
+    let endpoint = cfg.tts_endpoint.or(default_ep).unwrap_or_default();
+    if endpoint.is_empty() {
+        return Err(IpcError::Internal {
+            message: "TTS is not available for the selected provider. Switch to OpenAI or Zhipu in Settings › Voice.".into(),
+        });
+    }
     let api_key = cfg.tts_api_key.unwrap_or_default();
     if api_key.is_empty() {
         return Err(IpcError::Internal {
@@ -266,19 +393,45 @@ pub async fn voice_tts(
 
     let start = std::time::Instant::now();
 
-    #[derive(Serialize)]
-    struct TtsRequest {
-        model: String,
-        input: String,
-        voice: String,
-        speed: f32,
-    }
-
-    let body = TtsRequest {
-        model: "tts-1".into(),
-        input: text,
-        voice: cfg.tts_voice.clone(),
-        speed: cfg.tts_speed,
+    let body = match provider {
+        VoiceProvider::Zhipu => {
+            #[derive(Serialize)]
+            struct ZhipuTtsReq {
+                model: String,
+                input: String,
+                voice: String,
+                speed: f32,
+                response_format: String,
+            }
+            serde_json::to_value(ZhipuTtsReq {
+                model: provider.tts_model().to_owned(),
+                input: text,
+                voice: cfg.tts_voice.clone(),
+                speed: cfg.tts_speed,
+                response_format: "wav".into(),
+            })
+            .map_err(|e| IpcError::Internal {
+                message: format!("TTS serialize: {e}"),
+            })?
+        }
+        _ => {
+            #[derive(Serialize)]
+            struct OpenaiTtsReq {
+                model: String,
+                input: String,
+                voice: String,
+                speed: f32,
+            }
+            serde_json::to_value(OpenaiTtsReq {
+                model: provider.tts_model().to_owned(),
+                input: text,
+                voice: cfg.tts_voice.clone(),
+                speed: cfg.tts_speed,
+            })
+            .map_err(|e| IpcError::Internal {
+                message: format!("TTS serialize: {e}"),
+            })?
+        }
     };
 
     let client = reqwest::Client::new();
@@ -297,7 +450,7 @@ pub async fn voice_tts(
 
     if !status.is_success() {
         let err_body = resp.text().await.unwrap_or_default();
-        write_audit("voice.tts", &endpoint, duration, false);
+        write_audit("voice.tts", provider.as_str(), duration, false);
         return Err(IpcError::Internal {
             message: format!("TTS API error {}: {}", status, &err_body[..err_body.len().min(500)]),
         });
@@ -307,18 +460,22 @@ pub async fn voice_tts(
         message: format!("TTS read body: {e}"),
     })?;
 
+    let ext = match provider {
+        VoiceProvider::Zhipu => "wav",
+        _ => "mp3",
+    };
     let cache_dir = std::env::temp_dir().join("corey-tts");
     std::fs::create_dir_all(&cache_dir).map_err(|e| IpcError::Internal {
         message: format!("create tts cache dir: {e}"),
     })?;
 
-    let filename = format!("tts_{}.mp3", chrono::Utc::now().timestamp_millis());
+    let filename = format!("tts_{}.{ext}", chrono::Utc::now().timestamp_millis());
     let audio_path = cache_dir.join(&filename);
     std::fs::write(&audio_path, &audio_bytes).map_err(|e| IpcError::Internal {
         message: format!("write tts audio: {e}"),
     })?;
 
-    write_audit("voice.tts", &endpoint, duration, true);
+    write_audit("voice.tts", provider.as_str(), duration, true);
 
     Ok(VoiceTtsResult {
         audio_path: audio_path.to_string_lossy().to_string(),
@@ -331,7 +488,11 @@ pub async fn voice_tts(
 #[tauri::command]
 pub async fn voice_get_config() -> IpcResult<VoiceConfig> {
     let cfg = load_config();
+    let asr_p = parse_provider(&cfg.asr_provider, VoiceProvider::Openai);
+    let tts_p = parse_provider(&cfg.tts_provider, VoiceProvider::Openai);
     Ok(VoiceConfig {
+        asr_provider: asr_p.as_str().to_owned(),
+        tts_provider: tts_p.as_str().to_owned(),
         asr_endpoint: cfg.asr_endpoint,
         asr_api_key_set: !cfg.asr_api_key.unwrap_or_default().is_empty(),
         tts_endpoint: cfg.tts_endpoint,
@@ -339,17 +500,46 @@ pub async fn voice_get_config() -> IpcResult<VoiceConfig> {
         tts_voice: cfg.tts_voice,
         tts_speed: cfg.tts_speed,
         hotkey: cfg.hotkey,
+        available_asr_providers: VoiceProvider::all()
+            .iter()
+            .map(|p| p.as_str().to_owned())
+            .collect(),
+        available_tts_providers: VoiceProvider::all()
+            .iter()
+            .filter(|p| p.default_tts_endpoint().is_some())
+            .map(|p| p.as_str().to_owned())
+            .collect(),
+        asr_voices: Vec::new(),
+        tts_voices: tts_p.tts_voices().iter().map(|s| s.to_string()).collect(),
     })
 }
 
 #[tauri::command]
 pub async fn voice_set_config(args: VoiceConfigUpdate) -> IpcResult<()> {
     let mut cfg = load_config();
+    if let Some(v) = args.asr_provider {
+        let p = parse_provider(&Some(v), VoiceProvider::Openai);
+        cfg.asr_provider = Some(p.as_str().to_owned());
+        if cfg.asr_endpoint.is_none() {
+            cfg.asr_endpoint = None;
+        }
+    }
     if let Some(v) = args.asr_endpoint {
         cfg.asr_endpoint = if v.is_empty() { None } else { Some(v) };
     }
     if let Some(v) = args.asr_api_key {
         cfg.asr_api_key = if v.is_empty() { None } else { Some(v) };
+    }
+    if let Some(v) = args.tts_provider {
+        let p = parse_provider(&Some(v), VoiceProvider::Openai);
+        cfg.tts_provider = Some(p.as_str().to_owned());
+        if cfg.tts_endpoint.is_none() {
+            cfg.tts_endpoint = None;
+        }
+        let default_v = p.default_voice().to_owned();
+        if !p.tts_voices().contains(&cfg.tts_voice.as_str()) {
+            cfg.tts_voice = default_v;
+        }
     }
     if let Some(v) = args.tts_endpoint {
         cfg.tts_endpoint = if v.is_empty() { None } else { Some(v) };

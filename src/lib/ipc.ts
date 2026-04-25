@@ -1707,6 +1707,8 @@ export function voiceTts(text: string): Promise<VoiceTtsResult> {
 }
 
 export interface VoiceConfig {
+  asr_provider: string;
+  tts_provider: string;
   asr_endpoint: string | null;
   asr_api_key_set: boolean;
   tts_endpoint: string | null;
@@ -1714,6 +1716,10 @@ export interface VoiceConfig {
   tts_voice: string;
   tts_speed: number;
   hotkey: string;
+  available_asr_providers: string[];
+  available_tts_providers: string[];
+  asr_voices: string[];
+  tts_voices: string[];
 }
 
 export function voiceGetConfig(): Promise<VoiceConfig> {
@@ -1721,8 +1727,10 @@ export function voiceGetConfig(): Promise<VoiceConfig> {
 }
 
 export interface VoiceConfigUpdate {
+  asr_provider?: string;
   asr_endpoint?: string;
   asr_api_key?: string;
+  tts_provider?: string;
   tts_endpoint?: string;
   tts_api_key?: string;
   tts_voice?: string;

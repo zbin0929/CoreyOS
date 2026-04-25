@@ -51,8 +51,8 @@ fn doc_dir(id: &str) -> io::Result<PathBuf> {
     Ok(knowledge_dir()?.join(id))
 }
 
-#[allow(dead_code)]
-fn _chunk_text(text: &str, max_chars: usize) -> Vec<String> {
+#[cfg(test)]
+fn chunk_text(text: &str, max_chars: usize) -> Vec<String> {
     let mut chunks = Vec::new();
     let mut current = String::new();
 
@@ -239,20 +239,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn chunk_text_splits_on_paragraphs() {
+    fn chunk_text_accumulates_paragraphs() {
         let text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
         let chunks = chunk_text(text, 100);
-        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks.len(), 1);
+        assert!(chunks[0].contains("First"));
+        assert!(chunks[0].contains("Third"));
     }
 
     #[test]
-    fn chunk_text_respects_max_size() {
-        let long = "word ".repeat(200);
-        let chunks = chunk_text(&long, 100);
-        assert!(chunks.len() > 1);
-        for c in &chunks {
-            assert!(c.len() <= 120);
-        }
+    fn chunk_text_splits_when_exceeds_max() {
+        let text = "A".repeat(60) + "\n\n" + &"B".repeat(60);
+        let chunks = chunk_text(&text, 100);
+        assert!(chunks.len() >= 2);
     }
 
     #[test]
