@@ -1129,6 +1129,19 @@
     "running": "Running…",
     "run_result": "Run Result",
     "executing": "Executing workflow…",
-    "back": "Back to list"
+    "back": "Back to list",
+    "edit": "Edit",
+    "save": "Save",
+    "saving": "Saving…",
+    "add_step": "Add Step",
+    "step_props": "Step Properties",
+    "step_name": "Name",
+    "step_type": "Type",
+    "select_step": "Click a node to edit",
+    "conditions": "Conditions",
+    "max_iterations": "Max Iterations",
+    "timeout_min": "Timeout (min)",
+    "output_format": "Output Format",
+    "editor_subtitle": "Visual Flow Editor"
   }
 }

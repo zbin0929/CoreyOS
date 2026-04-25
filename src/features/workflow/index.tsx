@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  Pencil,
   Play,
   Trash2,
   Workflow,
@@ -22,9 +23,11 @@ import {
   type WorkflowSummary,
   type WorkflowRunResult,
 } from '@/lib/ipc';
+import { WorkflowEditor } from './Editor';
 
 type Mode =
   | { kind: 'list' }
+  | { kind: 'edit'; wfId: string }
   | { kind: 'run'; wf: WorkflowSummary };
 
 export function WorkflowRoute() {
@@ -71,6 +74,10 @@ export function WorkflowRoute() {
       setRunning(false);
     }
   };
+
+  if (mode.kind === 'edit') {
+    return <WorkflowEditor workflowId={mode.wfId} onBack={() => setMode({ kind: 'list' })} />;
+  }
 
   if (mode.kind === 'run' && mode.wf) {
     return (
@@ -197,6 +204,14 @@ export function WorkflowRoute() {
                 </div>
 
                 <div className="mt-4 flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setMode({ kind: 'edit', wfId: wf.id })}
+                  >
+                    <Icon icon={Pencil} size="xs" />
+                    {t('workflow_page.edit')}
+                  </Button>
                   <Button
                     variant="secondary"
                     size="sm"

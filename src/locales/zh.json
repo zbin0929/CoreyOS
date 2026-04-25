@@ -1129,6 +1129,19 @@
     "running": "运行中…",
     "run_result": "运行结果",
     "executing": "正在执行工作流…",
-    "back": "返回列表"
+    "back": "返回列表",
+    "edit": "编辑",
+    "save": "保存",
+    "saving": "保存中…",
+    "add_step": "添加步骤",
+    "step_props": "步骤属性",
+    "step_name": "名称",
+    "step_type": "类型",
+    "select_step": "点击节点编辑属性",
+    "conditions": "条件",
+    "max_iterations": "最大循环次数",
+    "timeout_min": "超时(分钟)",
+    "output_format": "输出格式",
+    "editor_subtitle": "可视化流程编辑器"
   }
 }
