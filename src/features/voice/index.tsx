@@ -70,7 +70,7 @@ const VOICE_PROVIDERS: VoiceProviderTemplate[] = [
     apiKeyName: 'ZHIPUAI_API_KEY',
     setupUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     setupLabel: 'open.bigmodel.cn',
-    ttsVoices: ['tongtong', 'xiaochen', 'chuichui', 'jamka', 'zidou', 'jiluo'],
+    ttsVoices: ['tongtong', 'chuichui', 'xiaochen', 'jam', 'kazi', 'douji', 'luodo'],
     defaultVoice: 'tongtong',
   },
   {

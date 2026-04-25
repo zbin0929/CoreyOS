@@ -82,7 +82,7 @@ impl VoiceProvider {
     fn tts_voices(&self) -> &'static [&'static str] {
         match self {
             Self::Openai => &["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
-            Self::Zhipu => &["tongtong", "xiaochen", "chuichui", "jamka", "zidou", "jiluo"],
+            Self::Zhipu => &["tongtong", "chuichui", "xiaochen", "jam", "kazi", "douji", "luodo"],
             Self::Groq => &[],
             Self::Edge => &[
                 "zh-CN-XiaoxiaoNeural",
@@ -445,7 +445,9 @@ pub async fn voice_tts(
     } else {
         provider.default_voice().to_owned()
     };
-    let speed = if cfg.tts_speed <= 0.0 || cfg.tts_speed > 4.0 {
+    let speed = if cfg.tts_speed < 0.5 || cfg.tts_speed > 2.0 {
+        1.0
+    } else if matches!(provider, VoiceProvider::Openai | VoiceProvider::Edge) && (cfg.tts_speed < 0.25 || cfg.tts_speed > 4.0) {
         1.0
     } else {
         cfg.tts_speed
@@ -466,7 +468,7 @@ pub async fn voice_tts(
                 input: text,
                 voice,
                 speed,
-                response_format: "mp3".into(),
+                response_format: "wav".into(),
             })
             .map_err(|e| IpcError::Internal {
                 message: format!("TTS serialize: {e}"),
@@ -521,7 +523,7 @@ pub async fn voice_tts(
     })?;
 
     let ext = match provider {
-        VoiceProvider::Zhipu => "mp3",
+        VoiceProvider::Zhipu => "wav",
         _ => "mp3",
     };
     let cache_dir = std::env::temp_dir().join("corey-tts");
@@ -537,7 +539,7 @@ pub async fn voice_tts(
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&audio_bytes);
     let mime = match provider {
-        VoiceProvider::Zhipu => "audio/mpeg",
+        VoiceProvider::Zhipu => "audio/wav",
         _ => "audio/mpeg",
     };
     let audio_base64 = format!("data:{mime};base64,{b64}");
