@@ -15,6 +15,7 @@ use crate::fs_atomic;
 use crate::state::AppState;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::io::Write as _;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // ───────────────────────── Provider ─────────────────────────
 
@@ -643,28 +644,44 @@ pub async fn voice_audit_log(
 
 // ───────────────────────── System-level recording ─────────────────────────
 
+static RECORDING_ACTIVE: AtomicBool = AtomicBool::new(false);
+
 #[tauri::command]
 pub async fn voice_record(duration_secs: Option<u64>) -> IpcResult<String> {
-    let secs = duration_secs.unwrap_or(5).min(30);
+    let secs = duration_secs.unwrap_or(30).min(120);
+    RECORDING_ACTIVE.store(true, Ordering::SeqCst);
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<u8>, String>>();
+    let flag = &RECORDING_ACTIVE;
 
     std::thread::spawn(move || {
-        let result = record_audio_blocking(secs);
+        let result = record_audio_blocking(secs, flag);
         let _ = tx.send(result);
     });
 
-    let wav_bytes = rx.await.map_err(|e| IpcError::Internal {
-        message: format!("recording thread panicked: {e}"),
-    })?.map_err(|msg| IpcError::Internal { message: msg })?;
+    let wav_bytes = rx.await.map_err(|e| {
+        RECORDING_ACTIVE.store(false, Ordering::SeqCst);
+        IpcError::Internal {
+            message: format!("recording thread panicked: {e}"),
+        }
+    })?.map_err(|msg| {
+        RECORDING_ACTIVE.store(false, Ordering::SeqCst);
+        IpcError::Internal { message: msg }
+    })?;
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&wav_bytes);
     Ok(b64)
 }
 
-fn record_audio_blocking(secs: u64) -> Result<Vec<u8>, String> {
+#[tauri::command]
+pub async fn voice_record_stop() -> IpcResult<()> {
+    RECORDING_ACTIVE.store(false, Ordering::SeqCst);
+    Ok(())
+}
+
+fn record_audio_blocking(secs: u64, active: &AtomicBool) -> Result<Vec<u8>, String> {
     let host = cpal::default_host();
-    let device = host.default_input_device().ok_or("No input device found")?;
-    let config = device.default_input_config().map_err(|e| format!("input config: {e}"))?;
+    let device = host.default_input_device().ok_or("no_input_device")?;
+    let config = device.default_input_config().map_err(|e| format!("input_config:{e}"))?;
 
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as u16;
@@ -697,14 +714,14 @@ fn record_audio_blocking(secs: u64) -> Result<Vec<u8>, String> {
             },
             None,
         ),
-        fmt => return Err(format!("unsupported sample format: {fmt}")),
-    }.map_err(|e| format!("stream build: {e}"))?;
+        fmt => return Err(format!("unsupported_format:{fmt}")),
+    }.map_err(|e| format!("stream_build:{e}"))?;
 
-    stream.play().map_err(|e| format!("stream play: {e}"))?;
+    stream.play().map_err(|e| format!("stream_play:{e}"))?;
 
     let start = std::time::Instant::now();
     let mut all_samples: Vec<f32> = Vec::new();
-    while start.elapsed().as_secs() < secs {
+    while active.load(Ordering::SeqCst) && start.elapsed().as_secs() < secs {
         match rec_rx.recv_timeout(std::time::Duration::from_millis(100)) {
             Ok(samples) => all_samples.extend_from_slice(&samples),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
@@ -713,6 +730,11 @@ fn record_audio_blocking(secs: u64) -> Result<Vec<u8>, String> {
     }
 
     drop(stream);
+    active.store(false, Ordering::SeqCst);
+
+    if all_samples.is_empty() {
+        return Err("no_audio_captured".into());
+    }
 
     let spec = hound::WavSpec {
         channels,
@@ -723,12 +745,12 @@ fn record_audio_blocking(secs: u64) -> Result<Vec<u8>, String> {
 
     let mut wav_buf = std::io::Cursor::new(Vec::new());
     {
-        let mut writer = hound::WavWriter::new(&mut wav_buf, spec).map_err(|e| format!("wav writer: {e}"))?;
+        let mut writer = hound::WavWriter::new(&mut wav_buf, spec).map_err(|e| format!("wav_writer:{e}"))?;
         for &s in &all_samples {
             let val = (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32);
-            writer.write_sample(val as i16).map_err(|e| format!("wav write: {e}"))?;
+            writer.write_sample(val as i16).map_err(|e| format!("wav_write:{e}"))?;
         }
-        writer.finalize().map_err(|e| format!("wav finalize: {e}"))?;
+        writer.finalize().map_err(|e| format!("wav_finalize:{e}"))?;
     }
 
     Ok(wav_buf.into_inner())

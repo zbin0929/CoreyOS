@@ -1758,6 +1758,10 @@ export function voiceRecord(durationSecs?: number): Promise<string> {
   return invoke<string>('voice_record', { durationSecs });
 }
 
+export function voiceRecordStop(): Promise<void> {
+  return invoke<void>('voice_record_stop');
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

@@ -23,6 +23,7 @@ import {
   voiceTts,
   voiceAuditLog,
   voiceRecord,
+  voiceRecordStop,
   type VoiceConfig,
   type VoiceAuditEntry,
 } from '@/lib/ipc';
@@ -506,28 +507,44 @@ function VoiceTestPanel() {
   const [result, setResult] = useState<string | null>(null);
   const [ttsText, setTtsText] = useState('Hello! 你好！こんにちは！');
   const [playing, setPlaying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
-  const onRecord = useCallback(async () => {
+  useEffect(() => {
+    if (!recording) return;
+    setElapsed(0);
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [recording]);
+
+  const onStartRecord = useCallback(async () => {
     if (recording) return;
     setRecording(true);
     setResult(null);
     try {
-      const base64 = await voiceRecord(5);
+      const base64 = await voiceRecord(120);
       setRecording(false);
       setTranscribing(true);
       try {
         const res = await voiceTranscribe(base64, 'audio/wav');
         setResult(res.text || '(empty)');
       } catch (e) {
-        setResult(`ASR error: ${ipcErrorMessage(e)}`);
+        setResult(t('voice.error_asr', { msg: localizeError(ipcErrorMessage(e)) }));
       } finally {
         setTranscribing(false);
       }
     } catch (e) {
       setRecording(false);
-      setResult(`Mic error: ${ipcErrorMessage(e)}`);
+      setResult(t('voice.error_mic', { msg: localizeError(ipcErrorMessage(e)) }));
     }
-  }, [recording]);
+  }, [recording, t]);
+
+  const onStopRecord = useCallback(async () => {
+    try {
+      await voiceRecordStop();
+    } catch {
+      // ignore — the record promise will resolve shortly
+    }
+  }, []);
 
   const onTts = useCallback(async () => {
     if (playing || !ttsText.trim()) return;
@@ -542,30 +559,72 @@ function VoiceTestPanel() {
       audio.onended = () => setPlaying(false);
       audio.onerror = () => {
         setPlaying(false);
-        setResult('Playback error: audio format not supported or file not found.');
+        setResult(t('voice.error_playback'));
       };
       void audio.play();
     } catch (e) {
       setPlaying(false);
-      setResult(`TTS error: ${ipcErrorMessage(e)}`);
+      setResult(t('voice.error_tts', { msg: localizeError(ipcErrorMessage(e)) }));
     }
-  }, [ttsText, playing]);
+  }, [ttsText, playing, t]);
 
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
         <h3 className="text-sm font-medium text-fg">{t('voice.test_asr')}</h3>
         <p className="text-xs text-fg-subtle">{t('voice.test_asr_hint')}</p>
-        <Button
-          size="sm"
-          variant={recording ? 'ghost' : 'primary'}
-          onClick={() => void onRecord()}
-          disabled={recording || transcribing}
-          data-testid="voice-test-record"
-        >
-          <Icon icon={recording || transcribing ? Loader2 : Mic} size="sm" className={cn((recording || transcribing) && 'animate-spin')} />
-          {recording ? t('voice.recording') : transcribing ? t('voice.transcribing') : t('voice.record_5s')}
-        </Button>
+
+        {!recording && !transcribing && (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => void onStartRecord()}
+            data-testid="voice-test-record"
+          >
+            <Icon icon={Mic} size="sm" />
+            {t('voice.record_start')}
+          </Button>
+        )}
+
+        {recording && (
+          <div className="flex flex-col gap-3 rounded-md border border-danger/30 bg-danger/5 p-3">
+            <div className="flex items-center gap-3">
+              <div className="voice-wave flex items-center gap-[3px]">
+                {[3, 5, 3, 7, 4, 6, 3, 5, 4, 7, 3, 5].map((h, i) => (
+                  <span
+                    key={i}
+                    className="inline-block w-[3px] rounded-full bg-danger animate-voice-bar"
+                    style={{
+                      height: `${h * 3}px`,
+                      animationDelay: `${i * 0.08}s`,
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="text-sm font-medium text-danger">
+                {t('voice.recording_timer', { sec: elapsed })}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void onStopRecord()}
+              className="text-danger hover:text-danger"
+              data-testid="voice-test-stop"
+            >
+              <Icon icon={Mic} size="sm" />
+              {t('voice.record_stop')}
+            </Button>
+          </div>
+        )}
+
+        {transcribing && (
+          <div className="flex items-center gap-2 text-sm text-fg-muted">
+            <Icon icon={Loader2} size="sm" className="animate-spin" />
+            {t('voice.transcribing')}
+          </div>
+        )}
+
         {result && (
           <div className="rounded-md border border-border bg-bg-elev-2 p-3 text-sm text-fg" data-testid="voice-test-result">
             {result}
@@ -593,8 +652,32 @@ function VoiceTestPanel() {
           {playing ? t('voice.playing') : t('voice.play')}
         </Button>
       </section>
+
+      <style>{`
+        @keyframes voice-bar {
+          0%, 100% { transform: scaleY(0.4); }
+          50% { transform: scaleY(1); }
+        }
+        .animate-voice-bar {
+          animation: voice-bar 0.6s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
+}
+
+function localizeError(msg: string): string {
+  const map: Record<string, string> = {
+    'ASR API key not configured': 'ASR API Key 未配置，请先在语音设置中填写 API Key',
+    'TTS API key not configured': 'TTS API Key 未配置，请先在语音设置中填写 API Key',
+    'No input device found': '未找到麦克风设备，请检查系统设置',
+    'no_input_device': '未找到麦克风设备，请检查系统设置',
+    'no_audio_captured': '未能捕获到音频，请检查麦克风权限',
+  };
+  for (const [key, val] of Object.entries(map)) {
+    if (msg.includes(key)) return val;
+  }
+  return msg;
 }
 
 // ───────────────────────── Audit Panel ─────────────────────────
