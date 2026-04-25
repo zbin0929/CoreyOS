@@ -50,11 +50,35 @@ import {
   type BudgetRow,
 } from '@/lib/ipc';
 
-/** Per-1M-token rough prices in USD cents. Mirrors the table on the
- *  Budgets page — intentionally duplicated to keep `budgetGate` free
- *  of a React-component import cycle. Update both sites together when
- *  the real pricing source ships. */
-export const FALLBACK_PRICE = { input: 100, output: 300 };
+/** Per-1M-token rough prices in USD cents, keyed by model family prefix.
+ *  Order matters: first matching prefix wins. Fallback is the last entry.
+ *  Update both here and the Budgets page when the real pricing source ships. */
+export const MODEL_PRICES: { prefix: string; input: number; output: number }[] = [
+  { prefix: 'claude-opus', input: 1500, output: 7500 },
+  { prefix: 'claude-sonnet', input: 300, output: 1500 },
+  { prefix: 'claude-haiku', input: 100, output: 500 },
+  { prefix: 'gpt-4.1', input: 200, output: 800 },
+  { prefix: 'gpt-4o', input: 250, output: 1000 },
+  { prefix: 'gpt-4', input: 300, output: 600 },
+  { prefix: 'o3', input: 200, output: 800 },
+  { prefix: 'o4-mini', input: 110, output: 440 },
+  { prefix: 'deepseek-r1', input: 55, output: 219 },
+  { prefix: 'deepseek-chat', input: 14, output: 28 },
+  { prefix: 'gemini-2.5-pro', input: 125, output: 500 },
+  { prefix: 'gemini', input: 75, output: 300 },
+  { prefix: 'qwen', input: 40, output: 120 },
+  { prefix: '', input: 100, output: 300 },
+];
+
+export const FALLBACK_PRICE = MODEL_PRICES[MODEL_PRICES.length - 1]!;
+
+export function priceForModel(model: string): { input: number; output: number } {
+  const lower = model.toLowerCase();
+  for (const entry of MODEL_PRICES) {
+    if (entry.prefix && lower.includes(entry.prefix)) return entry;
+  }
+  return FALLBACK_PRICE;
+}
 
 /** Blended per-million-token rate in cents, used when we only have a
  *  combined (prompt+completion) token count per day and can't split it

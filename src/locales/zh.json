@@ -543,7 +543,8 @@
     "hermes_instances": {
       "title": "额外的 Hermes 实例",
       "desc": "登记额外的 Hermes 网关，可在 AgentSwitcher 中切换。每条以 'hermes:<id>' 注册，与上面的主网关并列。",
-      "empty": "暂无额外实例。点击“新增实例”来登记。",
+      "empty": "添加你的第一个 Agent 开始对话。每个 Agent 连接一个 Hermes 网关或 API 服务。",
+      "empty_title": "尚未配置 Agent",
       "add": "新增实例",
       "add_advanced": "高级 · 手填字段",
       "quick_add": "新建 Agent",
@@ -716,6 +717,7 @@
     "restart_now": "重启网关",
     "empty_title": "还没有 MCP 服务",
     "empty_desc": "添加 MCP 服务以向 Hermes 暴露工具。推荐从文件系统服务开始：npx -y @modelcontextprotocol/server-filesystem /你的项目路径。",
+    "recommended_title": "快捷添加 — 推荐 MCP 服务",
     "form_title_new": "新建 MCP 服务",
     "form_title_edit": "编辑 {{id}}",
     "form_id": "服务 id",

@@ -199,7 +199,8 @@ export function Select<V extends string = string>({
           role="listbox"
           aria-activedescendant={`${listboxId}-opt-${activeIdx}`}
           className={cn(
-            'absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden',
+            'absolute left-0 z-50 mt-1 overflow-hidden',
+            'min-w-full max-w-[min(90vw,400px)]',
             'rounded-md border border-border bg-bg-elev-1 shadow-lg',
           )}
         >
@@ -237,9 +238,9 @@ export function Select<V extends string = string>({
                     )}
                   />
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate">{opt.label}</span>
+                    <span className="break-all">{opt.label}</span>
                     {opt.hint && (
-                      <span className="truncate text-[11px] text-fg-subtle">
+                      <span className="break-all text-[11px] text-fg-subtle">
                         {opt.hint}
                       </span>
                     )}

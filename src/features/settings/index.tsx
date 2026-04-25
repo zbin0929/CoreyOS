@@ -830,7 +830,20 @@ export function HermesInstancesSection() {
           className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-8 text-center text-xs text-fg-subtle"
           data-testid="hermes-instances-list"
         >
-          {t('settings.hermes_instances.empty')}
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-accent/10">
+            <Icon icon={Server} size="md" className="text-accent" />
+          </div>
+          <p className="mb-1 font-medium text-fg">{t('settings.hermes_instances.empty_title')}</p>
+          <p className="mb-3">{t('settings.hermes_instances.empty')}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            onClick={() => setWizardOpen(true)}
+          >
+            <Icon icon={Plus} size="sm" />
+            {t('settings.hermes_instances.quick_add')}
+          </Button>
         </div>
       ) : (
         // T8 polish — CSS masonry via `columns` so cards with different

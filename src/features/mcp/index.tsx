@@ -215,6 +215,37 @@ export function McpRoute() {
             onCancel={() => setEditing(null)}
           />
         )}
+
+        {/* Recommended MCP quick-add */}
+        {servers !== null && !editing && (
+          <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-3">
+            <p className="mb-2 text-xs font-medium text-fg">{t('mcp.recommended_title')}</p>
+            <div className="flex flex-wrap gap-2">
+              {RECOMMENDED_MCPS.map((rec) => {
+                const exists = servers.some((s) => s.id === rec.id);
+                return (
+                  <Button
+                    key={rec.id}
+                    type="button"
+                    size="xs"
+                    variant={exists ? 'ghost' : 'secondary'}
+                    disabled={exists}
+                    onClick={() => {
+                      void mcpServerUpsert(rec.config).then(() => {
+                        setRestartHint(true);
+                        void reload();
+                      });
+                    }}
+                  >
+                    <Icon icon={Plug} size="xs" />
+                    {rec.label}
+                    {exists && ` ✓`}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -757,6 +788,52 @@ const TEMPLATES: readonly Template[] = [
     config: {
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-memory'],
+    },
+  },
+];
+
+const RECOMMENDED_MCPS: { id: string; label: string; config: McpServer }[] = [
+  {
+    id: 'fetch',
+    label: 'Fetch',
+    config: {
+      id: 'fetch',
+      config: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-fetch'] },
+    },
+  },
+  {
+    id: 'filesystem',
+    label: 'Filesystem',
+    config: {
+      id: 'filesystem',
+      config: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', '~'],
+      },
+    },
+  },
+  {
+    id: 'memory',
+    label: 'Memory',
+    config: {
+      id: 'memory',
+      config: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'] },
+    },
+  },
+  {
+    id: 'ddg',
+    label: 'DuckDuckGo',
+    config: {
+      id: 'ddg',
+      config: { command: 'uvx', args: ['duckduckgo-mcp-server'] },
+    },
+  },
+  {
+    id: 'sqlite',
+    label: 'SQLite',
+    config: {
+      id: 'sqlite',
+      config: { command: 'uvx', args: ['mcp-server-sqlite', '--db-path', '~/.hermes/state.db'] },
     },
   },
 ];

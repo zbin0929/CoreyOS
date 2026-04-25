@@ -543,7 +543,8 @@
     "hermes_instances": {
       "title": "Extra Hermes instances",
       "desc": "Register additional Hermes gateways so you can switch between them in the AgentSwitcher. Each entry is registered as 'hermes:<id>' alongside the primary gateway above.",
-      "empty": "No extra instances yet. Click \"Add instance\" to register one.",
+      "empty": "Add your first agent to start chatting. Each agent connects to a Hermes gateway or API provider.",
+      "empty_title": "No agents configured",
       "add": "Add instance",
       "add_advanced": "Advanced · manual fields",
       "quick_add": "New agent",
@@ -716,6 +717,7 @@
     "restart_now": "Restart gateway",
     "empty_title": "No MCP servers configured",
     "empty_desc": "Add an MCP server to expose its tools to Hermes. Try the filesystem server first: npx -y @modelcontextprotocol/server-filesystem /path/to/project.",
+    "recommended_title": "Quick add — recommended MCP servers",
     "form_title_new": "New MCP server",
     "form_title_edit": "Edit {{id}}",
     "form_id": "Server id",

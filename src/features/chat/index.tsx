@@ -28,6 +28,7 @@ import {
   learningSearchSimilar,
   learningReadLearnings,
   learningDetectPattern,
+  memoryRead,
   skillSave,
   type ChatMessageDto,
   type ChatStreamHandle,
@@ -494,6 +495,20 @@ function ChatPane({
         historyForIpc.unshift({
           role: 'system',
           content: `[User feedback patterns — follow preferred, avoid avoided]\n${learnings.slice(0, 800)}`,
+        });
+      }
+    } catch {
+      // non-critical
+    }
+
+    // Q7 fix — inject USER.md (user profile) as system prompt so the LLM
+    // always knows user preferences, even if Hermes doesn't inject it.
+    try {
+      const userFile = await memoryRead('user');
+      if (userFile.content && userFile.content.trim().length > 5) {
+        historyForIpc.unshift({
+          role: 'system',
+          content: `[User profile — follow these preferences]\n${userFile.content.slice(0, 1000)}`,
         });
       }
     } catch {
