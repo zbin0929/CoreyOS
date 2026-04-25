@@ -9,12 +9,10 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { AlertTriangle, Mic, Paperclip, Send, Sparkles, Square, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Mic, Paperclip, Send, Square, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { ExportSessionMenu } from './ExportSessionMenu';
-import { SaveAsSkillDrawer } from './SaveAsSkillDrawer';
 import { cn } from '@/lib/cn';
 import {
   attachmentDelete,
@@ -54,6 +52,8 @@ import { ChatSearch } from './ChatSearch';
 import { computeActiveMatchIndex } from './chatSearchMatch';
 import { useChatIntentSuggestions } from './useChatIntentSuggestions';
 import { usePostSendEffects } from './usePostSendEffects';
+import { ChatHeaderActions, EmptyHero, RoutingHint } from './ChatHelpers';
+import { formatBytes } from './formatBytes';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
 import type { VirtuosoHandle } from 'react-virtuoso';
@@ -1219,152 +1219,5 @@ function ChatPane({
         </form>
       </div>
     </div>
-  );
-}
-
-/**
- * Compact byte formatter used in attachment chip tooltips. `1` kb = 1024 b.
- * Lives here rather than in `@/lib/` because it's the only caller; lift it
- * out if a second feature needs it.
- */
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  const kib = n / 1024;
-  if (kib < 1024) return `${kib.toFixed(1)} KB`;
-  return `${(kib / 1024).toFixed(1)} MB`;
-}
-
-/**
- * Header action cluster — the export menu + the Save-as-Skill button,
- * side by side. Split out so the top-level `<PageHeader actions>` prop
- * stays a single JSX node and adding future actions (share link,
- * branch session) doesn't require edits to ChatPane's return.
- */
-function ChatHeaderActions({
-  sessionId,
-  messages,
-}: {
-  sessionId: string;
-  messages: UiMessage[];
-}) {
-  const title = useChatStore(
-    (s) => s.sessions[sessionId]?.title ?? 'chat',
-  );
-  return (
-    <div className="flex items-center gap-2">
-      <ExportSessionMenu title={title} messages={messages} />
-      <SaveAsSkillHeaderAction messages={messages} />
-    </div>
-  );
-}
-
-/**
- * T7.2 — "Save as Skill" header action. Disabled until the session
- * has at least one completed (non-pending, non-error) assistant reply
- * — otherwise the template has nothing useful to distil. Owns the
- * drawer state so chat/index.tsx stays focused on send/receive.
- */
-function SaveAsSkillHeaderAction({ messages }: { messages: UiMessage[] }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const canSave = messages.some(
-    (m) => m.role === 'assistant' && !m.pending && !m.error && m.content.length > 0,
-  );
-  return (
-    <>
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={() => setOpen(true)}
-        disabled={!canSave}
-        title={canSave ? undefined : t('chat.save_as_skill.disabled_hint')}
-        data-testid="chat-save-as-skill"
-      >
-        <Icon icon={Wand2} size="sm" />
-        {t('chat.save_as_skill.button')}
-      </Button>
-      <SaveAsSkillDrawer
-        open={open}
-        onClose={() => setOpen(false)}
-        messages={messages}
-      />
-    </>
-  );
-}
-
-function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
-  const { t } = useTranslation();
-  const suggestions = [
-    t('chat_page.hero_suggestion_1'),
-    t('chat_page.hero_suggestion_2'),
-    t('chat_page.hero_suggestion_3'),
-  ];
-  return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-500/10 text-gold-500">
-        <Icon icon={Sparkles} size={24} />
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight">{t('chat_page.hero_title')}</h2>
-        <p className="text-sm text-fg-muted">
-          {t('chat_page.hero_subtitle_prefix')}
-          <code className="font-mono text-xs">:8642</code>
-          {t('chat_page.hero_subtitle_suffix')}
-        </p>
-      </div>
-      <div className="grid w-full max-w-xl gap-2 sm:grid-cols-1">
-        {suggestions.map((s) => (
-          <button
-            key={s}
-            onClick={() => onPick(s)}
-            className="rounded-xl border border-border bg-bg-elev-1 px-4 py-3 text-left text-sm text-fg transition hover:border-gold-500/40 hover:bg-gold-500/5"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * T6.4 — inline hint above the Composer showing which routing rule
- * (if any) will fire on the current draft. When a rule matches but
- * its `target_adapter_id` isn't registered, we show a warning chip so
- * the user knows to either add the adapter or edit the rule.
- */
-function RoutingHint({ draft }: { draft: string }) {
-  const { t } = useTranslation();
-  const rules = useRoutingStore((s) => s.rules);
-  const adapters = useAgentsStore((s) => s.adapters);
-
-  if (!rules || rules.length === 0) return null;
-  const matched = resolveRoutedRule(rules, draft);
-  if (!matched) return null;
-
-  const registered = new Set(adapters?.map((a) => a.id) ?? []);
-  const isRegistered = registered.has(matched.target_adapter_id);
-  const adapterLabel =
-    adapters?.find((a) => a.id === matched.target_adapter_id)?.name ??
-    matched.target_adapter_id;
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
-        isRegistered
-          ? 'border border-gold-500/30 bg-gold-500/10 text-gold-600'
-          : 'border border-danger/30 bg-danger/5 text-danger',
-      )}
-      data-testid="chat-routing-hint"
-      title={matched.name}
-    >
-      {isRegistered
-        ? t('chat_page.routing_hint', { adapter: adapterLabel, rule: matched.name })
-        : t('chat_page.routing_hint_missing', {
-            adapter: matched.target_adapter_id,
-            rule: matched.name,
-          })}
-    </span>
   );
 }
