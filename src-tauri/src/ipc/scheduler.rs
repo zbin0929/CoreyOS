@@ -267,3 +267,85 @@ fn _retain_time_imports() {
     let _ = SystemTime::now();
     let _ = UNIX_EPOCH;
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SchedulerIntent {
+    pub detected: bool,
+    pub cron_expression: String,
+    pub suggested_name: String,
+    pub prompt: String,
+    pub confidence: f64,
+}
+
+#[tauri::command]
+pub async fn scheduler_extract_intent(message: String) -> IpcResult<SchedulerIntent> {
+    let lower = message.to_lowercase();
+    let tokens: Vec<&str> = lower.split_whitespace().collect();
+    let token_set: std::collections::HashSet<&str> = tokens.iter().copied().collect();
+
+    let patterns: &[(&[&str], &str, f64)] = &[
+        (&["每天", "早上", "8点"], "0 8 * * *", 0.9),
+        (&["每天", "早上", "9点"], "0 9 * * *", 0.9),
+        (&["每天", "早上"], "0 9 * * *", 0.7),
+        (&["每天", "晚上", "8点"], "0 20 * * *", 0.9),
+        (&["每天", "晚上", "9点"], "0 21 * * *", 0.9),
+        (&["每天", "晚上"], "0 20 * * *", 0.7),
+        (&["每天", "中午"], "0 12 * * *", 0.8),
+        (&["每天", "定时"], "0 9 * * *", 0.6),
+        (&["每天"], "0 9 * * *", 0.5),
+        (&["每周一"], "0 9 * * 1", 0.8),
+        (&["每周五"], "0 9 * * 5", 0.8),
+        (&["每周", "一"], "0 9 * * 1", 0.7),
+        (&["每周", "五"], "0 9 * * 5", 0.7),
+        (&["每周"], "0 9 * * 1", 0.5),
+        (&["每小时"], "0 * * * *", 0.8),
+        (&["每", "小时"], "0 * * * *", 0.7),
+        (&["每30分钟"], "*/30 * * * *", 0.8),
+        (&["每", "分钟"], "*/5 * * * *", 0.6),
+        (&["每小时", "整点"], "0 * * * *", 0.9),
+        (&["every", "day", "morning"], "0 9 * * *", 0.8),
+        (&["every", "day"], "0 9 * * *", 0.7),
+        (&["every", "hour"], "0 * * * *", 0.8),
+        (&["every", "week"], "0 9 * * 1", 0.7),
+        (&["every", "monday"], "0 9 * * 1", 0.8),
+        (&["every", "friday"], "0 9 * * 5", 0.8),
+        (&["daily"], "0 9 * * *", 0.7),
+        (&["hourly"], "0 * * * *", 0.7),
+        (&["weekly"], "0 9 * * 1", 0.7),
+        (&["cron"], "0 9 * * *", 0.4),
+        (&["schedule", "daily"], "0 9 * * *", 0.6),
+    ];
+
+    let mut best_match: Option<(&str, f64)> = None;
+    for (keywords, cron, confidence) in patterns {
+        let matched = keywords.iter().all(|k| token_set.contains(k));
+        if matched {
+            if let Some((_, best_conf)) = best_match {
+                if *confidence > best_conf {
+                    best_match = Some((cron, *confidence));
+                }
+            } else {
+                best_match = Some((cron, *confidence));
+            }
+        }
+    }
+
+    let Some((cron, confidence)) = best_match else {
+        return Ok(SchedulerIntent {
+            detected: false,
+            cron_expression: String::new(),
+            suggested_name: String::new(),
+            prompt: String::new(),
+            confidence: 0.0,
+        });
+    };
+
+    let suggested_name: String = message.chars().take(30).collect();
+    Ok(SchedulerIntent {
+        detected: true,
+        cron_expression: cron.to_string(),
+        suggested_name,
+        prompt: message.clone(),
+        confidence,
+    })
+}

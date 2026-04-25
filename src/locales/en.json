@@ -98,6 +98,7 @@
     "budget_over_cap": "Budget over cap",
     "budget_over_cap_confirm": "One or more budgets are over cap:\n\n{{lines}}\n\nSend anyway?",
     "attach_text_only": "(images will be ignored — {{model}} is text-only)",
+    "schedule_confirm": "Detected a scheduled task:\n\n📋 {{name}}\n⏰ {{cron}}\n\nCreate this scheduled job?",
     "attach_vision_unverified": "(image support for this model is unverified)"
   },
   

@@ -98,6 +98,7 @@
     "budget_over_cap": "预算超限",
     "budget_over_cap_confirm": "以下预算已超上限：\n\n{{lines}}\n\n仍然发送？",
     "attach_text_only": "（图片将被忽略 — {{model}} 不支持图片）",
+    "schedule_confirm": "检测到定时任务意图：\n\n📋 {{name}}\n⏰ {{cron}}\n\n是否创建此定时任务？",
     "attach_vision_unverified": "（此模型的图片支持未验证）"
   },
   

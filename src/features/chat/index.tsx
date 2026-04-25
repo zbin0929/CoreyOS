@@ -26,10 +26,13 @@ import {
   learningExtract,
   learningIndexMessage,
   learningSearchSimilar,
+  ragSearch,
   learningReadLearnings,
   learningDetectPattern,
   memoryRead,
   skillSave,
+  schedulerExtractIntent,
+  schedulerUpsertJob,
   type ChatMessageDto,
   type ChatStreamHandle,
   type StagedAttachment,
@@ -472,8 +475,10 @@ function ChatPane({
     // Phase E · P2 — inject similar historical context as a system prefix.
     // Fire-and-forget: if the search fails or returns nothing, we just
     // proceed without context. Capped at 3 results, each truncated to 200 chars.
+    let tfidfHitCount = 0;
     try {
       const similar = await learningSearchSimilar(contentForMessage, 3);
+      tfidfHitCount = similar.length;
       if (similar.length > 0) {
         const contextParts = similar
           .map((r) => r.content.slice(0, 200).replace(/\n/g, ' '))
@@ -485,6 +490,29 @@ function ChatPane({
       }
     } catch {
       // non-critical — proceed without context
+    }
+
+    // RAG retrieval — fallback when TF-IDF yields no results. Uses
+    // Jaccard similarity over a broader sample (500 messages) with a
+    // lower threshold for broader recall.
+    if (tfidfHitCount === 0) {
+      try {
+        const ragResults = await ragSearch(contentForMessage, 5);
+        if (ragResults.length > 0) {
+          const ragContext = ragResults
+            .filter((r) => r.score > 0.1)
+            .map((r) => r.content.slice(0, 200).replace(/\n/g, ' '))
+            .join('\n');
+          if (ragContext.length > 0) {
+            historyForIpc.unshift({
+              role: 'system',
+              content: `[Semantically related context]\n${ragContext}`,
+            });
+          }
+        }
+      } catch {
+        // non-critical
+      }
     }
 
     // Phase E · P1 — inject LEARNINGS.md (user feedback patterns) as
@@ -685,6 +713,33 @@ function ChatPane({
                   }
                 })
                 .catch(() => {});
+
+              // Scheduler intent detection — if user mentions a schedule,
+              // prompt to create a cron job automatically.
+              if (trimmed.length > 5) {
+                void schedulerExtractIntent(trimmed)
+                  .then(async (intent) => {
+                    if (!intent.detected || intent.confidence < 0.6) return;
+                    const confirmed = window.confirm(
+                      t('chat_page.schedule_confirm', {
+                        name: intent.suggested_name,
+                        cron: intent.cron_expression,
+                      }),
+                    );
+                    if (!confirmed) return;
+                    try {
+                      await schedulerUpsertJob({
+                        name: intent.suggested_name,
+                        cron_expression: intent.cron_expression,
+                        prompt: intent.prompt,
+                        enabled: true,
+                      });
+                    } catch {
+                      // non-critical
+                    }
+                  })
+                  .catch(() => {});
+              }
             }
           },
           onError: (err) => {

@@ -1615,6 +1615,41 @@ export function schedulerListRuns(jobId: string): Promise<SchedulerRunInfo[]> {
   return invoke<SchedulerRunInfo[]>('scheduler_list_runs', { jobId });
 }
 
+export interface SchedulerIntent {
+  detected: boolean;
+  cron_expression: string;
+  suggested_name: string;
+  prompt: string;
+  confidence: number;
+}
+
+export function schedulerExtractIntent(message: string): Promise<SchedulerIntent> {
+  return invoke<SchedulerIntent>('scheduler_extract_intent', { message });
+}
+
+// ───────────────────────── RAG ─────────────────────────
+
+export interface RagSearchResult {
+  message_id: string;
+  session_id: string;
+  content: string;
+  score: number;
+  source: string;
+}
+
+export function ragSearch(query: string, limit?: number): Promise<RagSearchResult[]> {
+  return invoke<RagSearchResult[]>('rag_search', { query, limit });
+}
+
+export interface RagIndexResult {
+  indexed: number;
+  skipped: number;
+}
+
+export function ragIndexRecent(): Promise<RagIndexResult> {
+  return invoke<RagIndexResult>('rag_index_recent');
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';
