@@ -64,7 +64,7 @@ impl VoiceProvider {
     fn asr_model(&self) -> &'static str {
         match self {
             Self::Openai => "whisper-1",
-            Self::Zhipu => "glm-asr",
+            Self::Zhipu => "glm-asr-2512",
             Self::Groq => "whisper-large-v3",
             Self::Edge => "",
         }
@@ -306,8 +306,16 @@ pub async fn voice_transcribe(
         })?;
 
     let client = reqwest::Client::new();
+    let file_name = if mime.contains("wav") {
+        "audio.wav"
+    } else if mime.contains("mp3") || mime.contains("mpeg") {
+        "audio.mp3"
+    } else {
+        "audio.webm"
+    };
+
     let part = reqwest::multipart::Part::bytes(audio_bytes)
-        .file_name("audio.webm")
+        .file_name(file_name)
         .mime_str(&mime)
         .map_err(|e| IpcError::Internal {
             message: format!("mime: {e}"),
@@ -353,7 +361,8 @@ pub async fn voice_transcribe(
         VoiceProvider::Zhipu => {
             #[derive(Deserialize)]
             struct ZhipuAsrResponse {
-                choices: Vec<ZhipuChoice>,
+                text: Option<String>,
+                choices: Option<Vec<ZhipuChoice>>,
             }
             #[derive(Deserialize)]
             struct ZhipuChoice {
@@ -367,12 +376,17 @@ pub async fn voice_transcribe(
                 serde_json::from_str(&body).map_err(|e| IpcError::Internal {
                     message: format!("ASR parse (zhipu): {e}"),
                 })?;
-            parsed
-                .choices
-                .into_iter()
-                .next()
-                .map(|c| c.message.content)
-                .unwrap_or_default()
+            if let Some(t) = parsed.text {
+                t
+            } else {
+                parsed
+                    .choices
+                    .unwrap_or_default()
+                    .into_iter()
+                    .next()
+                    .map(|c| c.message.content)
+                    .unwrap_or_default()
+            }
         }
         _ => {
             #[derive(Deserialize)]
@@ -452,7 +466,7 @@ pub async fn voice_tts(
                 input: text,
                 voice,
                 speed,
-                response_format: "wav".into(),
+                response_format: "mp3".into(),
             })
             .map_err(|e| IpcError::Internal {
                 message: format!("TTS serialize: {e}"),
@@ -507,7 +521,7 @@ pub async fn voice_tts(
     })?;
 
     let ext = match provider {
-        VoiceProvider::Zhipu => "wav",
+        VoiceProvider::Zhipu => "mp3",
         _ => "mp3",
     };
     let cache_dir = std::env::temp_dir().join("corey-tts");
@@ -523,7 +537,7 @@ pub async fn voice_tts(
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&audio_bytes);
     let mime = match provider {
-        VoiceProvider::Zhipu => "audio/wav",
+        VoiceProvider::Zhipu => "audio/mpeg",
         _ => "audio/mpeg",
     };
     let audio_base64 = format!("data:{mime};base64,{b64}");
