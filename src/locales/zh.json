@@ -1142,6 +1142,8 @@
     "max_iterations": "最大循环次数",
     "timeout_min": "超时(分钟)",
     "output_format": "输出格式",
-    "editor_subtitle": "可视化流程编辑器"
+    "editor_subtitle": "可视化流程编辑器",
+    "approve": "通过",
+    "reject": "驳回"
   }
 }

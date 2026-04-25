@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
@@ -20,6 +20,8 @@ import {
   workflowList,
   workflowDelete,
   workflowRun,
+  workflowRunStatus,
+  workflowApprove,
   type WorkflowSummary,
   type WorkflowRunResult,
 } from '@/lib/ipc';
@@ -66,12 +68,40 @@ export function WorkflowRoute() {
     setRunResult(null);
     setMode({ kind: 'run', wf });
     try {
-      const result = await workflowRun(wf.id, {});
-      setRunResult(result);
+      const runId = await workflowRun(wf.id, {});
+      runIdRef.current = runId;
+      void pollRunStatus(runId);
     } catch (e) {
       setError(ipcErrorMessage(e));
-    } finally {
       setRunning(false);
+    }
+  };
+
+  const runIdRef = useRef<string>('');
+
+  const pollRunStatus = async (runId: string) => {
+    const poll = async () => {
+      try {
+        const result = await workflowRunStatus(runId);
+        if (result) {
+          setRunResult(result);
+          if (result.status === 'completed' || result.status === 'failed' || result.status === 'cancelled') {
+            setRunning(false);
+            return;
+          }
+        }
+      } catch { /* retry */ }
+      setTimeout(poll, 1500);
+    };
+    poll();
+  };
+
+  const handleApprove = async (stepId: string, approved: boolean) => {
+    if (!runIdRef.current) return;
+    try {
+      await workflowApprove(runIdRef.current, stepId, approved);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
     }
   };
 
@@ -141,6 +171,16 @@ export function WorkflowRoute() {
                       <pre className="ml-auto max-w-xs truncate text-xs text-fg-subtle">
                         {JSON.stringify(sr.output).slice(0, 100)}
                       </pre>
+                    )}
+                    {sr.status === 'running' && runResult?.status === 'paused' && (
+                      <div className="ml-auto flex gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => void handleApprove(sr.step_id, true)}>
+                          {t('workflow_page.approve')}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => void handleApprove(sr.step_id, false)}>
+                          {t('workflow_page.reject')}
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))}

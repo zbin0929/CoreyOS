@@ -5,6 +5,7 @@ use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
 use crate::workflow::model::{WorkflowDef, WorkflowSummary};
 use crate::workflow::store::{self, ValidationError};
+use crate::workflow::engine::{self, WorkflowRun, RunStatus, StepRunStatus};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationResult {
@@ -92,18 +93,22 @@ pub async fn workflow_validate(def: WorkflowDef) -> IpcResult<ValidationResult> 
     })
 }
 
-use crate::workflow::engine::{self, WorkflowRun};
-
 #[tauri::command]
 pub async fn workflow_run(
+    state: State<'_, AppState>,
     id: String,
     inputs: serde_json::Value,
-) -> IpcResult<WorkflowRun> {
+) -> IpcResult<String> {
     let wf_id = id.clone();
-    let run = tokio::task::spawn_blocking(move || {
+    let runs = state.workflow_runs.clone();
+
+    let run_id = tokio::task::spawn_blocking(move || {
         let def = store::get(&wf_id)?;
         let result = engine::execute_sync(&def, inputs);
-        anyhow::Ok(result.run)
+        let run = result.run;
+        let rid = run.id.clone();
+        runs.lock().insert(rid.clone(), run);
+        anyhow::Ok(rid)
     })
     .await
     .map_err(|e| IpcError::Internal {
@@ -112,5 +117,59 @@ pub async fn workflow_run(
     .map_err(|e| IpcError::Internal {
         message: format!("workflow_run: {e}"),
     })?;
+
+    Ok(run_id)
+}
+
+#[tauri::command]
+pub async fn workflow_run_status(
+    state: State<'_, AppState>,
+    run_id: String,
+) -> IpcResult<Option<WorkflowRun>> {
+    let runs = state.workflow_runs.clone();
+    let run = tokio::task::spawn_blocking(move || {
+        runs.lock().get(&run_id).cloned()
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("workflow_run_status join: {e}"),
+    })?;
     Ok(run)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApproveParams {
+    pub run_id: String,
+    pub step_id: String,
+    pub approved: bool,
+    pub feedback: Option<String>,
+}
+
+#[tauri::command]
+pub async fn workflow_approve(
+    state: State<'_, AppState>,
+    params: ApproveParams,
+) -> IpcResult<bool> {
+    let runs = state.workflow_runs.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut map = runs.lock();
+        if let Some(run) = map.get_mut(&params.run_id) {
+            if let Some(sr) = run.step_runs.get_mut(&params.step_id) {
+                sr.status = StepRunStatus::Completed;
+                sr.output = Some(serde_json::json!({
+                    "approved": params.approved,
+                    "feedback": params.feedback,
+                }));
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("workflow_approve join: {e}"),
+    })?
+    .map_err(|e: anyhow::Error| IpcError::Internal {
+        message: format!("workflow_approve: {e}"),
+    })
 }

@@ -1142,6 +1142,8 @@
     "max_iterations": "Max Iterations",
     "timeout_min": "Timeout (min)",
     "output_format": "Output Format",
-    "editor_subtitle": "Visual Flow Editor"
+    "editor_subtitle": "Visual Flow Editor",
+    "approve": "Approve",
+    "reject": "Reject"
   }
 }

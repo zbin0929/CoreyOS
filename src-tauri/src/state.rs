@@ -50,6 +50,7 @@ pub struct AppState {
     /// Each open terminal tab corresponds to one entry; kill/close
     /// drops it from the map so the OS resources free immediately.
     pub ptys: Arc<Mutex<HashMap<String, Arc<Pty>>>>,
+    pub workflow_runs: Arc<Mutex<HashMap<String, crate::workflow::engine::WorkflowRun>>>,
     // 2026-04-23 pm (T6.8): removed the `scheduler: Option<Arc<Scheduler>>`
     // field. Hermes' gateway owns cron scheduling now; Corey only
     // reads/writes `~/.hermes/cron/jobs.json`. See `hermes_cron.rs`.
@@ -79,6 +80,7 @@ impl AppState {
             db_path,
             channel_status,
             ptys: Arc::new(Mutex::new(HashMap::new())),
+            workflow_runs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

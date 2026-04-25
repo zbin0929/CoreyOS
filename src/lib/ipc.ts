@@ -1987,8 +1987,21 @@ export function workflowValidate(def: WorkflowDef): Promise<WorkflowValidationRe
   return invoke('workflow_validate', { def });
 }
 
-export function workflowRun(id: string, inputs: Record<string, unknown>): Promise<WorkflowRunResult> {
+export function workflowRun(id: string, inputs: Record<string, unknown>): Promise<string> {
   return invoke('workflow_run', { id, inputs });
+}
+
+export function workflowRunStatus(runId: string): Promise<WorkflowRunResult | null> {
+  return invoke('workflow_run_status', { runId });
+}
+
+export function workflowApprove(
+  runId: string,
+  stepId: string,
+  approved: boolean,
+  feedback?: string,
+): Promise<boolean> {
+  return invoke('workflow_approve', { params: { runId, stepId, approved, feedback } });
 }
 
 export interface WorkflowStepRun {
