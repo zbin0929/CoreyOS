@@ -176,6 +176,21 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     isLocal: true,
   },
   {
+    id: 'nvidia',
+    label: 'NVIDIA NIM',
+    description: 'NVIDIA AI 平台，提供 GLM-5、DeepSeek、MiniMax 等多种模型，OpenAI 兼容接口。',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    envKey: 'NVIDIA_API_KEY',
+    suggestedModels: [
+      'z-ai/glm-5.1',
+      'deepseek-ai/deepseek-v3.2',
+      'minimaxai/minimax-m2.7',
+      'meta/llama-3.3-70b-instruct',
+      'nvidia/llama-3.1-nemotron-70b-instruct',
+    ],
+    setupUrl: 'https://build.nvidia.com/',
+  },
+  {
     id: 'openrouter',
     label: 'OpenRouter',
     description: 'One API key, 100+ models (Claude, GPT, Gemini, …).',
