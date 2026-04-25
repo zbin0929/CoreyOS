@@ -108,6 +108,14 @@
     "schedule_confirm": "Detected a scheduled task:\n\n📋 {{name}}\n⏰ {{cron}}\n\nCreate this scheduled job?",
     "attach_vision_unverified": "(image support for this model is unverified)"
   },
+  "suggestion": {
+    "confirm": "Confirm",
+    "dismiss": "Dismiss",
+    "schedule_created": "Scheduled job created",
+    "schedule_error": "Failed to create",
+    "workflow_running": "Workflow started",
+    "workflow_error": "Failed to start"
+  },
   
   "models_page": {
     "title": "Language models",

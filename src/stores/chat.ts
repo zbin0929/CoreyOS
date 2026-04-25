@@ -13,9 +13,20 @@ import {
 import { useAgentsStore } from './agents';
 import { useAppStatusStore } from './appStatus';
 
+export interface UiSuggestion {
+  id: string;
+  type: 'schedule' | 'workflow';
+  title: string;
+  subtitle?: string;
+  payload: Record<string, unknown>;
+  status: 'pending' | 'done' | 'error';
+  resultText?: string;
+}
+
 export interface UiMessage {
   id: string;
   role: 'user' | 'assistant';
+  suggestions?: UiSuggestion[];
   content: string;
   /** Reasoning / chain-of-thought tokens accumulated from the
    *  `chat:reasoning:*` stream. Present on assistant messages produced

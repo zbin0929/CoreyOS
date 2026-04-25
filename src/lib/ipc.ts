@@ -2023,6 +2023,17 @@ export function workflowActiveRuns(): Promise<WorkflowRunResult[]> {
   return invoke('workflow_active_runs');
 }
 
+export interface WorkflowIntent {
+  detected: boolean;
+  workflow_id: string;
+  workflow_name: string;
+  confidence: number;
+}
+
+export function workflowExtractIntent(message: string): Promise<WorkflowIntent> {
+  return invoke<WorkflowIntent>('workflow_extract_intent', { message });
+}
+
 export function workflowApprove(
   runId: string,
   stepId: string,

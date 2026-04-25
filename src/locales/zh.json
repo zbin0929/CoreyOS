@@ -108,6 +108,14 @@
     "schedule_confirm": "检测到定时任务意图：\n\n📋 {{name}}\n⏰ {{cron}}\n\n是否创建此定时任务？",
     "attach_vision_unverified": "（此模型的图片支持未验证）"
   },
+  "suggestion": {
+    "confirm": "确认执行",
+    "dismiss": "忽略",
+    "schedule_created": "定时任务已创建",
+    "schedule_error": "创建失败",
+    "workflow_running": "工作流已启动",
+    "workflow_error": "启动失败"
+  },
   
   "models_page": {
     "title": "语言模型",

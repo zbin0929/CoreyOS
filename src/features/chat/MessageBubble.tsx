@@ -24,12 +24,15 @@ import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { useContextMenu } from '@/components/ui/context-menu';
 import { attachmentThumbnail, learningReadLearnings, learningWriteLearnings, voiceTts } from '@/lib/ipc';
-import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from '@/stores/chat';
+import { useChatStore, type UiAttachment, type UiMessage, type UiSuggestion, type UiToolCall } from '@/stores/chat';
+import { SuggestionCard } from './SuggestionCard';
 
 export function MessageBubble({
   msg,
   highlight = false,
   onRetry,
+  onSuggestionConfirm,
+  onSuggestionDismiss,
 }: {
   msg: UiMessage;
   /** T-polish — renders a gold ring around the bubble when this
@@ -41,6 +44,8 @@ export function MessageBubble({
    *  it replays the preceding user turn and re-streams into this
    *  message's id. Undefined ⇒ hide the button entirely. */
   onRetry?: () => void;
+  onSuggestionConfirm?: (sug: UiSuggestion) => Promise<void>;
+  onSuggestionDismiss?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const isUser = msg.role === 'user';
@@ -179,6 +184,18 @@ export function MessageBubble({
             <Markdown>{msg.content}</Markdown>
           ) : null}
         </div>
+        {msg.suggestions && msg.suggestions.length > 0 && (
+          <div className="w-full max-w-[85%]">
+            {msg.suggestions.map((sug) => (
+              <SuggestionCard
+                key={sug.id}
+                suggestion={sug}
+                onConfirm={onSuggestionConfirm ?? (async () => {})}
+                onDismiss={onSuggestionDismiss ?? (() => {})}
+              />
+            ))}
+          </div>
+        )}
         {(canCopy || canRate || canRetry) && (
           <div className="flex items-center gap-1">
             {canCopy && <CopyButton text={msg.content} />}

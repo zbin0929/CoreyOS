@@ -1,7 +1,7 @@
 import { forwardRef, useMemo } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { MessageBubble } from './MessageBubble';
-import type { UiMessage } from '@/stores/chat';
+import type { UiMessage, UiSuggestion } from '@/stores/chat';
 
 /**
  * T1.9 — virtualised chat message list.
@@ -52,10 +52,12 @@ interface MessageListProps {
    *  only for deciding which bubble shows the button (the terminal
    *  assistant row); the actual stream-replay lives in `ChatPane.retry`. */
   onRetryLastAssistant?: () => void;
+  onSuggestionConfirm?: (sug: UiSuggestion) => Promise<void>;
+  onSuggestionDismiss?: (id: string) => void;
 }
 
 export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
-  function MessageList({ messages, activeMatchId, onRetryLastAssistant }, ref) {
+  function MessageList({ messages, activeMatchId, onRetryLastAssistant, onSuggestionConfirm, onSuggestionDismiss }, ref) {
     // Precompute the index of the last assistant row once per render
     // pass so the per-row `itemContent` closure doesn't re-scan the
     // array on every scroll event. `-1` when no such row exists.
@@ -87,11 +89,13 @@ export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
                   ? onRetryLastAssistant
                   : undefined
               }
+              onSuggestionConfirm={onSuggestionConfirm}
+              onSuggestionDismiss={onSuggestionDismiss}
             />
           </div>
         );
       },
-      [messages, activeMatchId, lastAssistantIdx, onRetryLastAssistant],
+      [messages, activeMatchId, lastAssistantIdx, onRetryLastAssistant, onSuggestionConfirm, onSuggestionDismiss],
     );
 
     return (
