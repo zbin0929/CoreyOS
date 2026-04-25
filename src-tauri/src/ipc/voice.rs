@@ -431,6 +431,11 @@ pub async fn voice_tts(
     } else {
         provider.default_voice().to_owned()
     };
+    let speed = if cfg.tts_speed <= 0.0 || cfg.tts_speed > 4.0 {
+        1.0
+    } else {
+        cfg.tts_speed
+    };
 
     let body = match provider {
         VoiceProvider::Zhipu => {
@@ -446,7 +451,7 @@ pub async fn voice_tts(
                 model: provider.tts_model().to_owned(),
                 input: text,
                 voice,
-                speed: cfg.tts_speed,
+                speed,
                 response_format: "wav".into(),
             })
             .map_err(|e| IpcError::Internal {
@@ -465,7 +470,7 @@ pub async fn voice_tts(
                 model: provider.tts_model().to_owned(),
                 input: text,
                 voice,
-                speed: cfg.tts_speed,
+                speed,
             })
             .map_err(|e| IpcError::Internal {
                 message: format!("TTS serialize: {e}"),
@@ -544,6 +549,11 @@ pub async fn voice_get_config() -> IpcResult<VoiceConfig> {
     } else {
         tts_p.default_voice().to_owned()
     };
+    let tts_speed = if cfg.tts_speed <= 0.0 || cfg.tts_speed > 4.0 {
+        1.0
+    } else {
+        cfg.tts_speed
+    };
     Ok(VoiceConfig {
         asr_provider: asr_p.as_str().to_owned(),
         tts_provider: tts_p.as_str().to_owned(),
@@ -552,7 +562,7 @@ pub async fn voice_get_config() -> IpcResult<VoiceConfig> {
         tts_endpoint: cfg.tts_endpoint,
         tts_api_key_set: !cfg.tts_api_key.unwrap_or_default().is_empty(),
         tts_voice,
-        tts_speed: cfg.tts_speed,
+        tts_speed,
         hotkey: cfg.hotkey,
         available_asr_providers: VoiceProvider::all()
             .iter()
