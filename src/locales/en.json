@@ -22,7 +22,9 @@
     "mcp": "MCP",
     "agents": "Agents",
     "settings": "Settings",
-    "section_ops": "Ops"
+    "section_core": "Core",
+    "section_tools": "Tools",
+    "section_manage": "Manage"
   },
   "agents_page": {
     "title": "Agents",
@@ -361,6 +363,11 @@
     "onboarding_done_title": "You're all set",
     "onboarding_progress": "{{done}} of {{total}} complete",
     "step_open": "Open",
+    "step_next": "Next",
+    "quick_title": "Try your first prompt",
+    "quick_1": "Explain what Hermes Agent is in one sentence.",
+    "quick_2": "Summarize the TRAE sandboxing model in 3 bullets.",
+    "quick_3": "Generate a basic Rust Tokio example for me.",
     "step_gateway": "Connect to Hermes",
     "step_gateway_desc": "Make sure the local Hermes gateway is reachable. If you haven't installed Hermes yet, run the Hermes setup from hermes-agent.nousresearch.com.",
     "step_model": "Pick a model",
@@ -741,6 +748,7 @@
     "save": "Save",
     "saved": "Saved",
     "saved_ago": "Saved {{seconds}}s ago",
+    "compact": "Deduplicate",
     "unsaved": "Unsaved changes",
     "capacity": "{{bytes}} / {{max}}",
     "capacity_meter": "Memory file size",

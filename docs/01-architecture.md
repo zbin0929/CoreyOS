@@ -13,9 +13,8 @@
 │  │  • TanStack Router/Query │      │  • SSE / WS streams      │   │
 │  │  • Zustand (UI state)    │      │  • File I/O (~/.hermes)  │   │
 │  │  • ⌘K command palette    │      │  • PTY (portable-pty)    │   │
-│  │  • i18n (en / zh)        │      │  • Keychain (secrets)    │   │
-│  └──────────────────────────┘      │  • AgentAdapter registry │   │
-│                                    └──────────┬───────────────┘   │
+│  │  • i18n (en / zh)        │      │  • AgentAdapter registry │   │
+│  └──────────────────────────┘      └──────────┬───────────────┘   │
 └───────────────────────────────────────────────┼───────────────────┘
                                                 │
                                                 ▼
@@ -55,19 +54,19 @@ Key contrast with `hermes-web-ui`: no separate Koa BFF. Rust core owns everythin
 | Components       | shadcn/ui                                  | Own the source, restyle freely                   |
 | Styling          | Tailwind CSS 3 + CSS variables             | Token-driven theming                             |
 | Icons            | Lucide + custom glyph set                  | Consistent line weight                           |
-| Charts           | Recharts (+ D3 for trajectory tree)        | Declarative for dashboards, D3 where needed      |
-| Markdown         | react-markdown + remark-gfm + shiki        | Server-free syntax highlighting                  |
-| Virtualization   | react-virtuoso (chat) / TanStack Virtual (tables) | react-virtuoso handles the chat's bottom-pin + dynamic row heights better; TanStack Virtual for fixed-height lists |
+| Charts           | (none — Analytics renders KPI cards + simple activity bar from SQLite aggregates) | Custom lightweight charts; no charting library in bundle |
+| Markdown         | react-markdown + remark-gfm + highlight.js | Server-free syntax highlighting                  |
+| Virtualization   | react-virtuoso                             | Bottom-pin + dynamic row heights for chat        |
 | Command palette  | cmdk                                       | Battle-tested, a11y-correct                      |
-| Forms            | react-hook-form + zod                      | Type-safe validation                             |
+| Forms            | native HTML form + controlled components   | Lightweight; no form library needed for current form complexity |
 | i18n             | react-i18next                              | en / zh out of the box                           |
 | Animation        | Framer Motion                              | Layout transitions, modal motion                 |
 | Testing          | Vitest + Testing Library + Playwright      | Unit + e2e; Playwright drives Tauri via webdriver |
 | Rust HTTP        | reqwest + tokio + eventsource-stream       | SSE support, async-first                         |
 | Rust PTY         | portable-pty                               | Cross-platform terminal                          |
 | Rust IPC types   | hand-written mirrors in `src/lib/ipc.ts`   | Originally planned specta + tauri-specta; in practice the interface stayed stable and the hand-written mirrors are cheaper to reason about. Revisit if the IPC surface churns rapidly. |
-| Rust config      | serde_yaml, toml, dotenvy                  | Read/write Hermes configs                        |
-| Rust secrets     | keyring                                    | OS keychain for tokens when possible             |
+| Rust config      | serde_yaml, serde_json                      | Read/write Hermes configs                        |
+| Rust secrets     | (none — API keys in ~/.hermes/.env with 0600 perms) | Hermes-compatible; OS keyring not currently wired |
 
 ## Data flow — three canonical paths
 
@@ -99,7 +98,7 @@ User input ─► Frontend Chat store
 ### B. Configuration write (safety-critical)
 
 ```
-User edits form (Telegram token) ─► react-hook-form + zod validate
+User edits form (Telegram token) ─► native form validation
                 │
                 ▼
      invoke('config_set', { path: '.env', key: 'TELEGRAM_BOT_TOKEN', value })
@@ -153,7 +152,7 @@ caduceus/
 │   └── src/
 │       ├── main.rs
 │       ├── lib.rs
-│       ├── ipc/                   # Tauri command handlers, typed via specta
+│       ├── ipc/                   # Tauri command handlers (hand-written TS mirrors in src/lib/ipc.ts)
 │       │   ├── chat.rs
 │       │   ├── config.rs
 │       │   ├── model.rs
@@ -165,20 +164,10 @@ caduceus/
 │       │   ├── hermes/
 │       │   │   ├── mod.rs
 │       │   │   ├── gateway.rs     # HTTP + SSE
-│       │   │   ├── cli.rs         # `hermes` command wrapper
-│       │   │   ├── config.rs      # ~/.hermes/config.yaml
-│       │   │   ├── env.rs         # ~/.hermes/.env
-│       │   │   └── auth.rs        # ~/.hermes/auth.json
-│       │   ├── claude_code/       # Phase 5
-│       │   ├── aider/             # Phase 5
-│       │   └── openhands/         # Phase 5
-│       ├── store/                 # SQLite (sqlx) for Corey-local data
-│       │   ├── mod.rs
-│       │   ├── migrations/
-│       │   ├── sessions.rs
-│       │   ├── usage.rs
-│       │   └── budgets.rs
-│       ├── secrets.rs             # keyring wrapper
+│       │   │   └── probe.rs       # Gateway health probe
+│       │   ├── claude_code/       # Phase 5 (mock)
+│       │   └── aider/             # Phase 5 (mock)
+│       ├── db.rs                  # SQLite (rusqlite bundled) for session/message persistence
 │       ├── fs_atomic.rs           # atomic writes + journal
 │       └── error.rs
 │
@@ -210,11 +199,11 @@ caduceus/
 │   │   ├── diff/
 │   │   └── …
 │   ├── lib/
-│   │   ├── ipc.ts                 # generated from specta
-│   │   ├── agent/                 # AgentAdapter TS types, re-exported
-│   │   ├── sse.ts
+│   │   ├── ipc.ts                 # hand-written TS mirrors of Rust IPC types
 │   │   ├── cn.ts
-│   │   └── formatters.ts
+│   │   ├── i18n.ts
+│   │   ├── modelCapabilities.ts
+│   │   └── useIsMobile.ts
 │   ├── stores/                    # Zustand stores
 │   │   ├── chat.ts
 │   │   ├── ui.ts
@@ -248,8 +237,8 @@ caduceus/
 ## Security
 
 - **Tauri allowlist**: explicit permissions (`fs: ~/.hermes/**`, `shell: none`, `http: only configured agent endpoints`).
-- **Secrets**: provider API keys stored in OS keychain via `keyring`. Never plain in `.env` when we can avoid; for Hermes compatibility we still read/write `~/.hermes/.env` but always with 0600 perms.
-- **CSP**: strict; no `unsafe-eval`. Shiki uses pre-compiled grammars.
+- **Secrets**: provider API keys stored in `~/.hermes/.env` with 0600 perms. OS keychain not currently wired; keys are local-file only.
+- **CSP**: strict; no `unsafe-eval`. highlight.js uses pre-built grammars.
 - **External fetches**: frontend cannot fetch arbitrary URLs; all network calls go through Rust, which enforces the adapter's configured endpoint.
 - **Update channel**: Tauri updater with minisign signatures; manifest on GitHub Releases.
 

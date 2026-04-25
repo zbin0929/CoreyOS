@@ -357,9 +357,7 @@ function DetailsStep({
           default_model: selectedProfile.model,
           llm_profile_id: selectedProfile.id,
         };
-        console.log('[AgentWizard] save (linked) →', payload);
         const inst = await hermesInstanceUpsert(payload);
-        console.log('[AgentWizard] save ok →', inst);
         await onCreated(inst);
         return;
       }
@@ -376,7 +374,6 @@ function DetailsStep({
         model: model.trim(),
         api_key_env: template.envKey ?? null,
       };
-      console.log('[AgentWizard] save (fresh) profile →', profilePayload);
       const savedProfile = await llmProfileUpsert(profilePayload);
 
       const agentPayload: HermesInstance = {
@@ -387,9 +384,7 @@ function DetailsStep({
         default_model: savedProfile.model,
         llm_profile_id: savedProfile.id,
       };
-      console.log('[AgentWizard] save (fresh) agent →', agentPayload);
       const inst = await hermesInstanceUpsert(agentPayload);
-      console.log('[AgentWizard] save ok →', inst);
       await onCreated(inst);
     } catch (e) {
       console.error('[AgentWizard] save failed →', e);

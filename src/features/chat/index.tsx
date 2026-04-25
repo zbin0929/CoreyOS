@@ -23,6 +23,12 @@ import {
   dbMessageSetUsage,
   generateTitle,
   ipcErrorMessage,
+  learningExtract,
+  learningIndexMessage,
+  learningSearchSimilar,
+  learningReadLearnings,
+  learningDetectPattern,
+  skillSave,
   type ChatMessageDto,
   type ChatStreamHandle,
   type StagedAttachment,
@@ -419,6 +425,8 @@ function ChatPane({
     appendMessage(sessionId, userMsg);
     appendMessage(sessionId, pendingMsg);
 
+    void learningIndexMessage(userMsg.id, contentForMessage).catch(() => {});
+
     setDraft('');
     // Pending attachments have been baked into the message above; clear
     // them so a follow-up turn starts fresh. Do NOT sweep the files from
@@ -459,6 +467,38 @@ function ChatPane({
         .map<ChatMessageDto>((m) => toDto(m.role, m.content, m.attachments)),
       toDto('user', contentForMessage, hasAttachments ? attachmentsSnapshot : undefined),
     ];
+
+    // Phase E · P2 — inject similar historical context as a system prefix.
+    // Fire-and-forget: if the search fails or returns nothing, we just
+    // proceed without context. Capped at 3 results, each truncated to 200 chars.
+    try {
+      const similar = await learningSearchSimilar(contentForMessage, 3);
+      if (similar.length > 0) {
+        const contextParts = similar
+          .map((r) => r.content.slice(0, 200).replace(/\n/g, ' '))
+          .join('\n');
+        historyForIpc.unshift({
+          role: 'system',
+          content: `[Relevant past conversations]\n${contextParts}`,
+        });
+      }
+    } catch {
+      // non-critical — proceed without context
+    }
+
+    // Phase E · P1 — inject LEARNINGS.md (user feedback patterns) as
+    // a system prefix so the LLM can adjust its behaviour accordingly.
+    try {
+      const learnings = await learningReadLearnings();
+      if (learnings && learnings.length > 10) {
+        historyForIpc.unshift({
+          role: 'system',
+          content: `[User feedback patterns — follow preferred, avoid avoided]\n${learnings.slice(0, 800)}`,
+        });
+      }
+    } catch {
+      // non-critical
+    }
 
     // T5.5b — route the stream to whichever adapter the user picked in the
     // Topbar AgentSwitcher. Read the store imperatively (no subscribe)
@@ -605,6 +645,31 @@ function ChatPane({
               void generateTitle(trimmed, firstAssistant).then((title) => {
                 if (title) renameSession(sessionId, title);
               });
+            }
+            // Phase E · P0 — self-learning: extract memorable facts
+            // from this turn and append to MEMORY.md. Fire-and-forget.
+            if (firstAssistant && firstAssistant.length > 0 && trimmed.length > 0) {
+              void learningExtract({
+                userMessage: trimmed,
+                assistantMessage: firstAssistant,
+              }).catch(() => {});
+
+              // Phase E · P3 — detect repeated task pattern and auto-create Skill.
+              void learningDetectPattern(trimmed)
+                .then(async (result) => {
+                  if (!result.pattern_found) return;
+                  const body = `# Auto-detected Skill: ${result.suggested_skill_name}\n\n`
+                    + `Detected from ${result.occurrence_count} similar requests.\n\n`
+                    + `## Pattern\n${result.pattern_description}\n\n`
+                    + `## Usage\nDescribe your request in natural language.\n`;
+                  const path = `auto/${result.suggested_skill_name}.md`;
+                  try {
+                    await skillSave(path, body, true);
+                  } catch {
+                    // already exists — skip
+                  }
+                })
+                .catch(() => {});
             }
           },
           onError: (err) => {

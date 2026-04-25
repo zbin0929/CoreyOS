@@ -18,7 +18,7 @@ import remarkGfm from 'remark-gfm';
 import { highlightCode } from './highlight';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
-import { attachmentPreview } from '@/lib/ipc';
+import { attachmentPreview, learningReadLearnings, learningWriteLearnings } from '@/lib/ipc';
 import { useChatStore, type UiAttachment, type UiMessage, type UiToolCall } from '@/stores/chat';
 
 export function MessageBubble({
@@ -157,6 +157,21 @@ function FeedbackButtons({ msg }: { msg: UiMessage }) {
     if (!sessionId) return;
     const next = msg.feedback === value ? null : value;
     setFeedback(sessionId, msg.id, next);
+    if (next) void appendLearning(next, msg.content);
+  }
+
+  async function appendLearning(kind: 'up' | 'down', content: string) {
+    try {
+      const existing = await learningReadLearnings();
+      const section = kind === 'up' ? '## preferred (👍 patterns)' : '## avoided (👎 patterns)';
+      const summary = content.slice(0, 100).replace(/\n/g, ' ');
+      const entry = `- ${summary}`;
+      const lines = existing || `${'## preferred (👍 patterns)'}\n${'## avoided (👎 patterns)'}`;
+      const updated = lines.replace(section, `${section}\n${entry}`);
+      await learningWriteLearnings(updated);
+    } catch {
+      // fire-and-forget
+    }
   }
 
   // Keep action buttons keyboard-reachable: `visibility:hidden`

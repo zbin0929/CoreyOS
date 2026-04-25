@@ -22,7 +22,9 @@
     "mcp": "MCP",
     "agents": "Agents",
     "settings": "设置",
-    "section_ops": "运维"
+    "section_core": "核心",
+    "section_tools": "工具",
+    "section_manage": "管理"
   },
   "agents_page": {
     "title": "Agents",
@@ -413,6 +415,11 @@
     "onboarding_done_title": "准备就绪",
     "onboarding_progress": "已完成 {{done}} / {{total}}",
     "step_open": "打开",
+    "step_next": "下一步",
+    "quick_title": "试试你的第一条提示词",
+    "quick_1": "用一句话解释什么是 Hermes Agent。",
+    "quick_2": "用 3 个要点总结 TRAE 的沙箱模型。",
+    "quick_3": "帮我生成一个 Rust 的 Tokio 基础示例。",
     "step_gateway": "连接 Hermes",
     "step_gateway_desc": "确保本地 Hermes 网关可达。如果还没装 Hermes，请访问 hermes-agent.nousresearch.com 运行安装程序。",
     "step_model": "选择模型",
@@ -741,6 +748,7 @@
     "save": "保存",
     "saved": "已保存",
     "saved_ago": "{{seconds}} 秒前已保存",
+    "compact": "去重",
     "unsaved": "未保存的改动",
     "capacity": "{{bytes}} / {{max}}",
     "capacity_meter": "记忆文件大小",

@@ -673,6 +673,83 @@ export function memoryWrite(kind: MemoryKind, content: string): Promise<MemoryFi
   return invoke<MemoryFile>('memory_write', { kind, content });
 }
 
+// ──────────────────── Learning (Phase E) ────────────────────
+
+export interface LearningExtractResult {
+  learned: string[];
+  skipped_reason: string | null;
+}
+
+export function learningExtract(args: {
+  userMessage: string;
+  assistantMessage: string;
+}): Promise<LearningExtractResult> {
+  return invoke<LearningExtractResult>('learning_extract', {
+    args: { user_message: args.userMessage, assistant_message: args.assistantMessage },
+  });
+}
+
+export function learningReadLearnings(): Promise<string> {
+  return invoke<string>('learning_read_learnings');
+}
+
+export function learningWriteLearnings(content: string): Promise<void> {
+  return invoke<void>('learning_write_learnings', { content });
+}
+
+export function learningIndexMessage(
+  messageId: string,
+  content: string,
+): Promise<void> {
+  return invoke<void>('learning_index_message', { messageId, content });
+}
+
+export interface SimilarResult {
+  message_id: string;
+  content: string;
+  snippet: string;
+}
+
+export function learningSearchSimilar(
+  query: string,
+  limit?: number,
+): Promise<SimilarResult[]> {
+  return invoke<SimilarResult[]>('learning_search_similar', { query, limit });
+}
+
+export interface PatternDetectionResult {
+  pattern_found: boolean;
+  pattern_description: string;
+  occurrence_count: number;
+  suggested_skill_name: string;
+}
+
+export function learningDetectPattern(
+  query: string,
+): Promise<PatternDetectionResult> {
+  return invoke<PatternDetectionResult>('learning_detect_pattern', { query });
+}
+
+export interface RoutingSuggestion {
+  pattern: string;
+  suggested_model: string;
+  confidence: number;
+  reason: string;
+}
+
+export function learningSuggestRouting(): Promise<RoutingSuggestion[]> {
+  return invoke<RoutingSuggestion[]>('learning_suggest_routing');
+}
+
+export interface MemoryCompactResult {
+  memory_entries_removed: number;
+  learnings_entries_count: number;
+}
+
+export function learningCompactMemory(): Promise<MemoryCompactResult> {
+  return invoke<MemoryCompactResult>('learning_compact_memory');
+}
+
 // ──────────────────── Session search (T7.3b) ────────────────────
 
 export interface SessionSearchHit {

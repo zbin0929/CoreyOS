@@ -83,6 +83,16 @@ const MODEL_SUGGESTIONS = [
   'claude-3-5-sonnet-20241022',
 ];
 
+const SETTINGS_ANCHORS = [
+  { id: 'settings-appearance', labelKey: 'settings.appearance.title' },
+  { id: 'settings-gateway', labelKey: 'settings.gateway.title' },
+  { id: 'settings-model', labelKey: 'settings.model.title' },
+  { id: 'settings-routing', labelKey: 'settings.routing_rules.title' },
+  { id: 'settings-sandbox', labelKey: 'settings.sandbox.title' },
+  { id: 'settings-scopes', labelKey: 'settings.sandbox_scopes.title' },
+  { id: 'settings-storage', labelKey: 'settings.storage.title' },
+] as const;
+
 export function SettingsRoute() {
   const { t } = useTranslation();
 
@@ -190,7 +200,34 @@ export function SettingsRoute() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto" id="settings-scroll-container">
+        <nav className="sticky top-0 z-10 border-b border-border bg-bg-elev-1/95 backdrop-blur-sm">
+          <div className="mx-auto flex w-full max-w-2xl gap-1 overflow-x-auto px-6 py-2">
+            {SETTINGS_ANCHORS.map((a) => (
+              <a
+                key={a.id}
+                href={`#${a.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  const el = document.getElementById(a.id);
+                  const container = document.getElementById('settings-scroll-container');
+                  if (el && container) {
+                    let offset = 0;
+                    let node: HTMLElement | null = el;
+                    while (node && node !== container) {
+                      offset += node.offsetTop;
+                      node = node.offsetParent as HTMLElement | null;
+                    }
+                    container.scrollTo({ top: offset - 48, behavior: 'smooth' });
+                  }
+                }}
+                className="shrink-0 rounded-md px-2.5 py-1 text-xs text-fg-muted transition-colors hover:bg-bg-elev-2 hover:text-fg"
+              >
+                {t(a.labelKey)}
+              </a>
+            ))}
+          </div>
+        </nav>
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8">
           {/* Appearance is independent of gateway config — render first and
               always, even while the gateway config is still loading. */}
@@ -204,6 +241,7 @@ export function SettingsRoute() {
           ) : (
             <form onSubmit={onSubmit} className="flex flex-col gap-6">
               <Section
+                id="settings-gateway"
                 title={t('settings.gateway.title')}
                 description={t('settings.gateway.desc')}
               >
@@ -258,6 +296,7 @@ export function SettingsRoute() {
               </Section>
 
               <Section
+                id="settings-model"
                 title={t('settings.model.title')}
                 description={t('settings.model.desc')}
               >
@@ -414,6 +453,7 @@ function WorkspaceSection() {
 
   return (
     <Section
+      id="settings-sandbox"
       title={t('settings.sandbox.title')}
       description={t('settings.sandbox.desc')}
     >
@@ -1371,6 +1411,7 @@ function RoutingRulesSection() {
 
   return (
     <Section
+      id="settings-routing"
       title={t('settings.routing_rules.title')}
       description={t('settings.routing_rules.desc')}
     >
@@ -1667,6 +1708,7 @@ function AppearanceSection() {
 
   return (
     <Section
+      id="settings-appearance"
       title={t('settings.appearance.title')}
       description={t('settings.appearance.desc')}
     >
@@ -1793,6 +1835,7 @@ function SandboxScopesSection() {
 
   return (
     <Section
+      id="settings-scopes"
       title={t('settings.sandbox_scopes.title')}
       description={t('settings.sandbox_scopes.desc')}
     >
@@ -1904,6 +1947,7 @@ function StorageSection({ paths }: { paths: AppPaths }) {
 
   return (
     <Section
+      id="settings-storage"
       title={t('settings.storage.title')}
       description={t('settings.storage.desc')}
     >
@@ -1968,16 +2012,18 @@ const inputCls = cn(
 );
 
 function Section({
+  id,
   title,
   description,
   children,
 }: {
+  id?: string;
   title: string;
   description?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section id={id} className="scroll-mt-12 flex flex-col gap-4">
       <div>
         <h2 className="text-sm font-semibold text-fg">{title}</h2>
         {description && (

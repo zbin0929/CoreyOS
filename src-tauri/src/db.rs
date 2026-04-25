@@ -150,6 +150,75 @@ impl Db {
         Ok(())
     }
 
+    pub fn upsert_embedding(
+        &self,
+        message_id: &str,
+        vector_json: &str,
+    ) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO embeddings (message_id, vector, created_at)
+             VALUES (?1, ?2, unixepoch())
+             ON CONFLICT(message_id) DO UPDATE SET vector = excluded.vector, created_at = excluded.created_at",
+            params![message_id, vector_json],
+        )?;
+        Ok(())
+    }
+
+    pub fn sample_message_contents(
+        &self,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<String>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT content FROM messages WHERE role = 'user' AND content != ''
+             ORDER BY RANDOM() LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit], |row| row.get(0))?;
+        rows.collect()
+    }
+
+    pub fn search_similar_messages(
+        &self,
+        query_vector_json: &str,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<(String, String, String)>> {
+        let query_vec = crate::tfidf::TfidfVector::from_json(query_vector_json);
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT e.message_id, e.vector, m.content
+             FROM embeddings e
+             JOIN messages m ON m.id = e.message_id
+             WHERE m.content != ''
+             ORDER BY e.created_at DESC
+             LIMIT 500",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let msg_id: String = row.get(0)?;
+            let vec_json: String = row.get(1)?;
+            let content: String = row.get(2)?;
+            Ok((msg_id, vec_json, content))
+        })?;
+
+        let mut scored: Vec<(f64, String, String)> = rows
+            .filter_map(|r| r.ok())
+            .map(|(msg_id, vec_json, content)| {
+                let vec = crate::tfidf::TfidfVector::from_json(&vec_json);
+                let sim = query_vec.cosine_similarity(&vec);
+                (sim, msg_id, content)
+            })
+            .filter(|(sim, _, _)| *sim > 0.15)
+            .collect();
+
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+
+        Ok(scored
+            .into_iter()
+            .map(|(_, msg_id, content)| (msg_id, content, format!("{:.2}", 0.0)))
+            .collect())
+    }
+
     /// Stamp token usage onto an existing message row. Idempotent — the
     /// streaming `onDone` callback may fire once per turn but Hermes sometimes
     /// redelivers `[DONE]`, and we also want the update to survive the app
@@ -605,6 +674,25 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
                    adapter_id     = 'hermes'
              WHERE adapter_id LIKE 'hermes:profile:%';
             PRAGMA user_version = 10;
+            "#,
+        )?;
+    }
+
+    // v11 (Phase E · P2) — TF-IDF embeddings for semantic search.
+    // Stores sparse TF-IDF vectors as JSON for each user message.
+    // Enables "find similar historical messages" without external
+    // embedding models.
+    if version < 11 {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS embeddings (
+                message_id TEXT PRIMARY KEY,
+                vector TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_embeddings_created
+                ON embeddings(created_at DESC);
+            PRAGMA user_version = 11;
             "#,
         )?;
     }

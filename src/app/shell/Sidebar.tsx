@@ -1,7 +1,7 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { type LucideIcon } from 'lucide-react';
+import { type LucideIcon, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { NAV, type NavEntry } from '@/app/nav-config';
 import { CoreyMark } from '@/components/ui/corey-mark';
@@ -9,12 +9,6 @@ import { Icon } from '@/components/ui/icon';
 import { useAgentsStore } from '@/stores/agents';
 import type { AdapterCapabilities, AdapterListEntry } from '@/lib/ipc';
 
-/** T5.5b — resolve whether a nav entry is allowed under the active
- *  adapter's capabilities. Entries with no `requires` field are always
- *  visible. Before the registry's first probe lands, nothing is hidden
- *  (we default to the full nav set so first paint doesn't flash shrink).
- *  `channels` is the only capability backed by an array — empty counts
- *  as "not supported". */
 function entryVisible(entry: NavEntry, caps: AdapterCapabilities | null): boolean {
   if (!entry.requires || !caps) return true;
   if (entry.requires === 'channels') return caps.channels.length > 0;
@@ -24,12 +18,11 @@ function entryVisible(entry: NavEntry, caps: AdapterCapabilities | null): boolea
 export function Sidebar() {
   const { t } = useTranslation();
   const { location } = useRouterState();
+  const [manageExpanded, setManageExpanded] = useState<boolean>(
+    () => localStorage.getItem('corey:sidebar:manage-expanded') === 'true',
+  );
+  const [manageUserCollapsed, setManageUserCollapsed] = useState(false);
 
-  // T5.5b — capability-gated navigation. Derive the effective active
-  // adapter reactively: persisted selection wins, fallback to registry
-  // default, fallback to the first row. Using the raw array comparison
-  // below avoids a store-selector function that would re-subscribe on
-  // every render.
   const adapters = useAgentsStore((s) => s.adapters);
   const activeId = useAgentsStore((s) => s.activeId);
   const activeEntry: AdapterListEntry | null = (() => {
@@ -43,17 +36,30 @@ export function Sidebar() {
   const caps = activeEntry?.capabilities ?? null;
 
   const visible = NAV.filter((n) => entryVisible(n, caps));
-  const primary = visible.filter((n) => n.group === 'primary');
-  const ops = visible.filter((n) => n.group === 'ops');
+  const core = visible.filter((n) => n.group === 'core');
+  const tools = visible.filter((n) => n.group === 'tools');
+  const manage = visible.filter((n) => n.group === 'manage');
+
+  const manageHasActive = manage.some(
+    (entry) => isActive(location.pathname, entry.path),
+  );
+  const effectiveManageExpanded = (manageExpanded || manageHasActive) && !manageUserCollapsed;
+
+  useEffect(() => {
+    if (manageHasActive) setManageUserCollapsed(false);
+  }, [manageHasActive]);
+
+  const toggleManage = useCallback(() => {
+    setManageExpanded((v) => {
+      const next = !v;
+      localStorage.setItem('corey:sidebar:manage-expanded', String(next));
+      setManageUserCollapsed(!next ? true : false);
+      return next;
+    });
+  }, []);
 
   return (
     <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-border bg-bg-elev-1">
-      {/* Brand — drag region, with left inset to clear macOS traffic lights.
-          `pl-20` reserves ~80px for the system-rendered traffic lights
-          (Tauri v2 `titleBarStyle: Overlay`); when the window is in
-          fullscreen mode macOS hides the lights, so we collapse back to
-          `pl-4` to avoid a dead-looking gap. `shrink-0` guards against
-          the icon compressing when something pushes from inside. */}
       <div
         data-tauri-drag-region
         className={cn(
@@ -67,12 +73,9 @@ export function Sidebar() {
         </span>
       </div>
 
-      {/* Primary nav — scrollable so the footer below always stays
-          visible even on short viewports. Without overflow here the
-          footer would be clipped off the bottom. */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2 mt-2">
-        <SectionLabel>{t('nav.chat')} · {t('nav.compare')}</SectionLabel>
-        {primary.map((entry) => (
+        <SectionLabel>{t('nav.section_core')}</SectionLabel>
+        {core.map((entry) => (
           <NavItem
             key={entry.id}
             to={entry.path}
@@ -83,8 +86,8 @@ export function Sidebar() {
           </NavItem>
         ))}
 
-        <SectionLabel className="mt-4">{t('nav.section_ops')}</SectionLabel>
-        {ops.map((entry) => (
+        <SectionLabel className="mt-4">{t('nav.section_tools')}</SectionLabel>
+        {tools.map((entry) => (
           <NavItem
             key={entry.id}
             to={entry.path}
@@ -94,12 +97,43 @@ export function Sidebar() {
             {t(entry.labelKey)}
           </NavItem>
         ))}
+
+        {manage.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={toggleManage}
+              aria-expanded={effectiveManageExpanded}
+              className={cn(
+                'mt-4 flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle',
+                'hover:text-fg-muted transition-colors duration-fast',
+              )}
+            >
+              <Icon
+                icon={ChevronRight}
+                size="xs"
+                className={cn(
+                  'transition-transform duration-fast',
+                  effectiveManageExpanded && 'rotate-90',
+                )}
+              />
+              {t('nav.section_manage')}
+            </button>
+
+            {effectiveManageExpanded && manage.map((entry) => (
+              <NavItem
+                key={entry.id}
+                to={entry.path}
+                icon={entry.icon}
+                active={isActive(location.pathname, entry.path)}
+              >
+                {t(entry.labelKey)}
+              </NavItem>
+            ))}
+          </>
+        )}
       </nav>
 
-      {/* Sidebar footer intentionally minimal — just the product name +
-          version. Previous "Phase 0 · foundation" marker was a dev
-          artifact from the initial scaffold; it outlived its purpose
-          once shipped phases went into CHANGELOG.md. */}
       <div className="border-t border-border p-3 text-[10px] text-fg-subtle">
         <div className="font-mono">{t('app.name')} v{__APP_VERSION__}</div>
       </div>

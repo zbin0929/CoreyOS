@@ -7,6 +7,7 @@ import {
   FileText,
   FolderOpen,
   Loader2,
+  RefreshCcw,
   Save,
   Search,
   UserCircle2,
@@ -19,6 +20,7 @@ import { MarkdownEditor } from '@/features/skills/MarkdownEditor';
 import { cn } from '@/lib/cn';
 import {
   ipcErrorMessage,
+  learningCompactMemory,
   memoryRead,
   memoryWrite,
   sessionSearch,
@@ -156,20 +158,37 @@ export function MemoryRoute() {
               testId="memory-help"
             />
             {isFileTab && current ? (
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={() => void save(active)}
-                disabled={!isDirty || current.saving}
-                data-testid="memory-save"
-              >
-                {current.saving ? (
-                  <Icon icon={Loader2} size="sm" className="animate-spin" />
-                ) : (
-                  <Icon icon={Save} size="sm" />
-                )}
-                {t('memory.save')}
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    void learningCompactMemory().then((result) => {
+                      if (result.memory_entries_removed > 0) {
+                        void load(active);
+                      }
+                    }).catch(() => {});
+                  }}
+                  data-testid="memory-compact"
+                >
+                  <Icon icon={RefreshCcw} size="sm" />
+                  {t('memory.compact')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => void save(active)}
+                  disabled={!isDirty || current.saving}
+                  data-testid="memory-save"
+                >
+                  {current.saving ? (
+                    <Icon icon={Loader2} size="sm" className="animate-spin" />
+                  ) : (
+                    <Icon icon={Save} size="sm" />
+                  )}
+                  {t('memory.save')}
+                </Button>
+              </>
             ) : null}
           </div>
         }

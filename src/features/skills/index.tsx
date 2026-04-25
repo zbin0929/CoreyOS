@@ -265,6 +265,11 @@ export function SkillsRoute() {
                           >
                             <Icon icon={FileText} size="xs" className="flex-none text-fg-subtle" />
                             <span className="truncate">{s.name}</span>
+                            {s.path.startsWith('auto/') && (
+                              <span className="ml-auto flex-none rounded border border-gold-500/40 bg-gold-500/10 px-1 py-0.5 text-[9px] uppercase tracking-wider text-gold-500">
+                                AI
+                              </span>
+                            )}
                           </button>
                         </li>
                       ))}

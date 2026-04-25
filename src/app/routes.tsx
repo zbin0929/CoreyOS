@@ -6,6 +6,7 @@ import {
   Outlet,
 } from '@tanstack/react-router';
 import { AppShell } from '@/app/shell/AppShell';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteFallback } from '@/app/shell/RouteFallback';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
@@ -50,9 +51,11 @@ const McpRoute = lazyFeature(() => import('@/features/mcp'), 'McpRoute');
 const rootRoute = createRootRoute({
   component: () => (
     <AppShell>
-      <Suspense fallback={<RouteFallback />}>
-        <Outlet />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Outlet />
+        </Suspense>
+      </ErrorBoundary>
     </AppShell>
   ),
 });

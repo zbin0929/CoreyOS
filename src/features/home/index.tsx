@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -7,7 +7,6 @@ import {
   Circle,
   MessageSquare,
   Plug,
-  Radio,
   Settings,
   Sparkles,
   Wifi,
@@ -23,19 +22,6 @@ import { useChatStore } from '@/stores/chat';
 import { HermesInstallCard } from './HermesInstallCard';
 import { PresetCard } from './PresetCard';
 
-/**
- * Home is the post-install landing page. Users who just opened the
- * `.dmg` / `.exe` for the first time land here. The goal is a
- * completed onboarding checklist, not a marketing hero: we detect
- * what's configured and what isn't, and point at the right settings
- * page for each unchecked item.
- *
- * Detection signals (all live, not cached):
- *   - `useAppStatusStore.gateway` → Hermes gateway reachable?
- *   - `useAppStatusStore.currentModel` → a model selected?
- *   - `useChatStore.orderedIds.length` → at least one session on disk?
- *   - `memoryRead('user')` → USER.md has content?
- */
 interface OnboardingStep {
   id: string;
   labelKey: string;
@@ -53,7 +39,6 @@ export function HomeRoute() {
   const currentModel = useAppStatusStore((s) => s.currentModel);
   const sessionCount = useChatStore((s) => s.orderedIds.length);
 
-  // USER.md populated? Cheap one-shot read on mount; doesn't poll.
   const [userMemoryFilled, setUserMemoryFilled] = useState(false);
   useEffect(() => {
     memoryRead('user')
@@ -61,7 +46,7 @@ export function HomeRoute() {
       .catch(() => setUserMemoryFilled(false));
   }, []);
 
-  const steps: OnboardingStep[] = [
+  const steps: OnboardingStep[] = useMemo(() => [
     {
       id: 'gateway',
       labelKey: 'home.step_gateway',
@@ -94,22 +79,14 @@ export function HomeRoute() {
       path: '/memory',
       icon: Sparkles,
     },
-    {
-      id: 'channel',
-      labelKey: 'home.step_channel',
-      descKey: 'home.step_channel_desc',
-      done: false, // never auto-ticks; user decides if they want a channel at all
-      path: '/channels',
-      icon: Radio,
-    },
-  ];
+  ], [gateway, currentModel, sessionCount, userMemoryFilled]);
 
   const completed = steps.filter((s) => s.done).length;
-  const allDone = completed >= 4; // 4/5 is "onboarded"; channel is optional
+  const allDone = completed === steps.length;
+  const nextStep = steps.find((s) => !s.done);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* Ambient gold glow */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-60"
@@ -129,9 +106,6 @@ export function HomeRoute() {
             </h1>
             <p className="text-sm text-fg-muted">{t('home.subtitle')}</p>
           </div>
-          {/* Gateway chip — the one piece of state that tells the user
-              whether the app is actually going to work. Clickable:
-              takes them to Settings where they can reconfigure. */}
           <button
             type="button"
             onClick={() => void navigate({ to: '/settings' })}
@@ -157,19 +131,11 @@ export function HomeRoute() {
           </button>
         </div>
 
-        {/* Hermes-binary install / gateway-start CTA. Hidden once both
-            the binary is on PATH AND the gateway is reachable — at
-            which point the onboarding-checklist's green check is the
-            single source of truth. */}
         <HermesInstallCard />
-
-        {/* First-run / activation CTA. Renders a prominent "Install
-            starter content" card when ~/.hermes/skills/ is empty;
-            collapses to a success confirmation right after install,
-            then stays hidden on subsequent visits. */}
         <PresetCard />
 
-        {/* Onboarding checklist */}
+        {/* Onboarding checklist — progressive style. The "next step"
+            is visually prominent; completed steps are muted. */}
         <section
           className="flex flex-col gap-3 rounded-lg border border-border bg-bg-elev-1/60 p-4"
           data-testid="home-onboarding"
@@ -189,49 +155,61 @@ export function HomeRoute() {
           </header>
 
           <ul className="flex flex-col divide-y divide-border/40">
-            {steps.map((s) => (
-              <li
-                key={s.id}
-                className="flex items-center gap-3 py-2.5"
-                data-testid={`home-step-${s.id}`}
-                data-done={s.done ? 'true' : 'false'}
-              >
-                <span
+            {steps.map((s) => {
+              const isNext = nextStep?.id === s.id;
+              return (
+                <li
+                  key={s.id}
                   className={cn(
-                    'flex h-6 w-6 flex-none items-center justify-center rounded-full border',
-                    s.done
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500'
-                      : 'border-border bg-bg-elev-2 text-fg-subtle',
+                    'flex items-center gap-3 py-2.5',
+                    isNext && !s.done && 'rounded-md bg-gold-500/[0.04] -mx-2 px-2 border border-gold-500/15',
                   )}
+                  data-testid={`home-step-${s.id}`}
+                  data-done={s.done ? 'true' : 'false'}
                 >
-                  <Icon icon={s.done ? Check : Circle} size="xs" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div
+                  <span
                     className={cn(
-                      'text-sm font-medium',
-                      s.done ? 'text-fg-muted line-through' : 'text-fg',
+                      'flex h-6 w-6 flex-none items-center justify-center rounded-full border',
+                      s.done
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500'
+                        : isNext
+                          ? 'border-gold-500/40 bg-gold-500/10 text-gold-500'
+                          : 'border-border bg-bg-elev-2 text-fg-subtle',
                     )}
                   >
-                    {t(s.labelKey)}
+                    <Icon icon={s.done ? Check : Circle} size="xs" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={cn(
+                        'text-sm font-medium',
+                        s.done ? 'text-fg-muted line-through' : 'text-fg',
+                      )}
+                    >
+                      {t(s.labelKey)}
+                      {isNext && !s.done && (
+                        <span className="ml-2 rounded bg-gold-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gold-500">
+                          {t('home.step_next')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-fg-subtle">{t(s.descKey)}</div>
                   </div>
-                  <div className="text-xs text-fg-subtle">{t(s.descKey)}</div>
-                </div>
-                <Button
-                  size="xs"
-                  variant={s.done ? 'ghost' : 'secondary'}
-                  onClick={() => void navigate({ to: s.path })}
-                  data-testid={`home-step-${s.id}-open`}
-                >
-                  <Icon icon={s.icon} size="xs" />
-                  {t('home.step_open')}
-                </Button>
-              </li>
-            ))}
+                  <Button
+                    size="xs"
+                    variant={s.done ? 'ghost' : isNext ? 'primary' : 'secondary'}
+                    onClick={() => void navigate({ to: s.path })}
+                    data-testid={`home-step-${s.id}-open`}
+                  >
+                    <Icon icon={s.icon} size="xs" />
+                    {t('home.step_open')}
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         </section>
 
-        {/* Secondary CTA: documentation */}
         <div className="flex justify-center">
           <a
             href="https://github.com/zbin0929/CoreyOS#readme"

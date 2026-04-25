@@ -30,6 +30,7 @@ mod routing_rules;
 mod sandbox;
 mod skills;
 mod state;
+mod tfidf;
 
 use std::sync::Arc;
 
@@ -153,6 +154,14 @@ pub fn run() {
             ipc::sandbox::sandbox_scope_delete,
             ipc::memory::memory_read,
             ipc::memory::memory_write,
+            ipc::learning::learning_extract,
+            ipc::learning::learning_read_learnings,
+            ipc::learning::learning_write_learnings,
+            ipc::learning::learning_index_message,
+            ipc::learning::learning_search_similar,
+            ipc::learning::learning_detect_pattern,
+            ipc::learning::learning_suggest_routing,
+            ipc::learning::learning_compact_memory,
             ipc::session_search::session_search,
             ipc::mcp::mcp_server_list,
             ipc::mcp::mcp_server_upsert,
