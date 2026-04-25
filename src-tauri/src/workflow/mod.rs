@@ -3,3 +3,4 @@ pub mod engine;
 pub mod model;
 pub mod planner;
 pub mod store;
+pub mod templates;

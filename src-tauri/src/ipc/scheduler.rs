@@ -92,6 +92,10 @@ pub struct SchedulerJobUpsert {
     pub adapter_id: Option<String>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    #[serde(default)]
+    pub workflow_id: Option<String>,
+    #[serde(default)]
+    pub workflow_inputs: Option<serde_json::Value>,
 }
 
 fn default_enabled() -> bool {
@@ -195,6 +199,8 @@ pub async fn scheduler_upsert_job(
         job.paused = !args.enabled;
         job.corey_created_at = job.corey_created_at.or(Some(now));
         job.corey_updated_at = Some(now);
+        job.workflow_id = args.workflow_id.clone();
+        job.workflow_inputs = args.workflow_inputs.clone();
 
         // Upsert back into the list.
         if let Some(slot) = jobs.iter_mut().find(|j| j.id == id) {

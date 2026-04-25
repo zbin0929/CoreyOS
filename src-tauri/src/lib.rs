@@ -362,6 +362,12 @@ pub fn run() {
             // already inside the Arc inside AppState.
             app_state.authority.init_from_disk(&config_dir);
 
+            if let Ok(n) = workflow::templates::ensure_templates() {
+                if n > 0 {
+                    info!(n, "workflow templates installed");
+                }
+            }
+
             app.manage(app_state);
 
             if let Some(window) = app.get_webview_window("main") {
