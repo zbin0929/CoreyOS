@@ -37,6 +37,7 @@ export function MessageBubble({
    *  message's id. Undefined ⇒ hide the button entirely. */
   onRetry?: () => void;
 }) {
+  const { t } = useTranslation();
   const isUser = msg.role === 'user';
   const canCopy = !msg.pending && !msg.error && msg.content.length > 0;
   // T6.1 — feedback buttons are offered only on completed, non-error
@@ -85,6 +86,16 @@ export function MessageBubble({
           )}
           data-active-search-match={highlight || undefined}
         >
+          {highlight && (
+            <div className="mb-2 flex justify-end">
+              <span
+                className="inline-flex items-center rounded-full border border-gold-500/40 bg-gold-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-gold-600"
+                data-testid="chat-search-match-badge"
+              >
+                {t('chat_page.search_match_badge')}
+              </span>
+            </div>
+          )}
           {/* Reasoning / chain-of-thought panel — shown for
               reasoning-capable models (deepseek-reasoner, o1). Open by
               default WHILE streaming so the user sees progress; the
@@ -148,11 +159,16 @@ function FeedbackButtons({ msg }: { msg: UiMessage }) {
     setFeedback(sessionId, msg.id, next);
   }
 
+  // Keep action buttons keyboard-reachable: `visibility:hidden`
+  // removes them from the tab order in several engines, so we hide via
+  // opacity + pointer-events instead and reveal on hover OR focus.
+  const revealable =
+    'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto';
   const baseBtn =
-    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition focus-visible:visible';
-  const idleBtn = 'text-fg-subtle invisible group-hover:visible hover:bg-bg-elev-2 hover:text-fg';
-  const activeUp = 'visible text-emerald-500';
-  const activeDown = 'visible text-danger';
+    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition';
+  const idleBtn = cn('text-fg-subtle hover:bg-bg-elev-2 hover:text-fg', revealable);
+  const activeUp = 'opacity-100 pointer-events-auto text-emerald-500';
+  const activeDown = 'opacity-100 pointer-events-auto text-danger';
 
   return (
     <>
@@ -209,8 +225,8 @@ function CopyButton({ text }: { text: string }) {
         'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition',
         'text-fg-subtle hover:bg-bg-elev-2 hover:text-fg',
         copied
-          ? 'visible text-gold-500'
-          : 'invisible group-hover:visible focus-visible:visible',
+          ? 'opacity-100 pointer-events-auto text-gold-500'
+          : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
       )}
       aria-label={copied ? t('chat_page.copied') : t('chat_page.copy')}
       title={copied ? t('chat_page.copied') : t('chat_page.copy')}
@@ -245,7 +261,7 @@ function RetryButton({ onClick }: { onClick: () => void }) {
       className={cn(
         'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]',
         'text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg',
-        'invisible group-hover:visible focus-visible:visible',
+        'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
       )}
       aria-label={t('chat_page.retry')}
       title={t('chat_page.retry_title')}

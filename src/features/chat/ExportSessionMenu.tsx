@@ -32,7 +32,9 @@ export function ExportSessionMenu({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const noticeTimerRef = useRef<number | null>(null);
 
   // Empty / pending-only sessions have nothing to export. Mirrors the
   // pattern used by the neighbouring SaveAsSkill button.
@@ -60,6 +62,30 @@ export function ExportSessionMenu({
     };
   }, [open]);
 
+  // Prevent dangling timers across hot reload / unmount.
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current !== null) {
+        window.clearTimeout(noticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  function announceExport(format: 'md' | 'json') {
+    setNotice(
+      t('chat_page.export_done', {
+        format: format === 'md' ? '.md' : '.json',
+      }),
+    );
+    if (noticeTimerRef.current !== null) {
+      window.clearTimeout(noticeTimerRef.current);
+    }
+    noticeTimerRef.current = window.setTimeout(() => {
+      setNotice(null);
+      noticeTimerRef.current = null;
+    }, 2200);
+  }
+
   function handle(format: 'md' | 'json') {
     setOpen(false);
     const slug = fileSlug(title);
@@ -80,6 +106,7 @@ export function ExportSessionMenu({
         ),
       );
     }
+    announceExport(format);
   }
 
   return (
@@ -102,6 +129,16 @@ export function ExportSessionMenu({
         {t('chat_page.export')}
         <Icon icon={ChevronDown} size="xs" className="opacity-60" />
       </Button>
+      <span
+        aria-live="polite"
+        className={cn(
+          'pointer-events-none absolute right-0 top-full mt-1 text-[11px] text-emerald-600',
+          notice ? 'opacity-100' : 'opacity-0',
+        )}
+        data-testid="chat-export-notice"
+      >
+        {notice ?? ''}
+      </span>
       {open && (
         <div
           role="menu"
