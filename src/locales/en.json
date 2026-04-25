@@ -22,6 +22,7 @@
     "knowledge": "Knowledge",
     "voice": "Voice",
     "mcp": "MCP",
+    "workflows": "Workflows",
     "agents": "Agents",
     "settings": "Settings",
     "section_core": "Core",
@@ -1116,5 +1117,18 @@
       "grant_once": "Just this once",
       "add_root": "Add to workspace"
     }
+  },
+  "workflow_page": {
+    "title": "Workflows",
+    "subtitle": "Define multi-step, multi-agent automated workflows",
+    "loading": "Loading…",
+    "empty_title": "No workflows yet",
+    "empty_desc": "Create YAML files in ~/.hermes/workflows/ to define workflows",
+    "steps_count": "{{count}} steps",
+    "run": "Run",
+    "running": "Running…",
+    "run_result": "Run Result",
+    "executing": "Executing workflow…",
+    "back": "Back to list"
   }
 }

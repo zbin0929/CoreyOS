@@ -22,6 +22,7 @@
     "knowledge": "知识库",
     "voice": "语音",
     "mcp": "MCP",
+    "workflows": "工作流",
     "agents": "Agents",
     "settings": "设置",
     "section_core": "核心",
@@ -1116,5 +1117,18 @@
       "grant_once": "仅本次",
       "add_root": "添加到工作区"
     }
+  },
+  "workflow_page": {
+    "title": "工作流",
+    "subtitle": "定义多步骤、多 Agent 协同的自动化工作流",
+    "loading": "加载中…",
+    "empty_title": "暂无工作流",
+    "empty_desc": "在 ~/.hermes/workflows/ 目录下创建 YAML 文件来定义工作流",
+    "steps_count": "{{count}} 个步骤",
+    "run": "运行",
+    "running": "运行中…",
+    "run_result": "运行结果",
+    "executing": "正在执行工作流…",
+    "back": "返回列表"
   }
 }

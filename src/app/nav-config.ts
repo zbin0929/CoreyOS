@@ -18,6 +18,7 @@ import {
   BookOpen,
   Mic,
   Plug,
+  Workflow as WorkflowIcon,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -67,4 +68,5 @@ export const NAV: NavEntry[] = [
   { id: 'knowledge', path: '/knowledge', labelKey: 'nav.knowledge', icon: BookOpen, group: 'manage', phase: 7 },
   { id: 'voice', path: '/voice', labelKey: 'nav.voice', icon: Mic, group: 'manage', phase: 8 },
   { id: 'mcp', path: '/mcp', labelKey: 'nav.mcp', icon: Plug, group: 'manage', phase: 7 },
+  { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'manage', phase: 9 },
 ];
