@@ -51,13 +51,23 @@ export function AgentSwitcher() {
   // back to the registry's default, then to the first entry. Mirrors
   // `useAgentsStore.getActiveEntry` but inline so this component
   // re-renders reactively when `activeId` or `adapters` changes.
+  //
+  // Filter out:
+  //   - LLM Profiles (hermes:profile:*) — belong in the chat model picker, not here
+  //   - Unconfigured mock adapters — show with "not configured" badge
+  const visibleAdapters = (adapters ?? []).filter(
+    (a) => !a.id.startsWith('hermes:profile:'),
+  );
+  const isMockAdapter = (id: string) =>
+    id === 'claude_code' || id === 'aider';
+
   const active = (() => {
-    if (!adapters || adapters.length === 0) return null;
+    if (visibleAdapters.length === 0) return null;
     if (activeId) {
-      const hit = adapters.find((a) => a.id === activeId);
+      const hit = visibleAdapters.find((a) => a.id === activeId);
       if (hit) return hit;
     }
-    return adapters.find((a) => a.is_default) ?? adapters[0] ?? null;
+    return visibleAdapters.find((a) => a.is_default) ?? visibleAdapters[0] ?? null;
   })();
   const activeOk = active?.health?.ok === true;
 
@@ -97,7 +107,7 @@ export function AgentSwitcher() {
         <span className="max-w-[140px] truncate font-medium">
           {active?.name ?? t('widgets.agents_fallback')}
         </span>
-        <span className="text-fg-subtle">{adapters.length}</span>
+        <span className="text-fg-subtle">{visibleAdapters.length}</span>
         <Icon icon={ChevronDown} size="xs" className="text-fg-subtle" />
       </button>
 
@@ -113,14 +123,15 @@ export function AgentSwitcher() {
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2 text-[10px] uppercase tracking-wider text-fg-subtle">
             <span>{t('widgets.registered_agents')}</span>
-            <span className="font-mono">{adapters.length}</span>
+            <span className="font-mono">{visibleAdapters.length}</span>
           </div>
           <ul className="max-h-80 overflow-y-auto py-1">
-            {adapters.map((a) => (
+            {visibleAdapters.map((a) => (
               <AgentRow
                 key={a.id}
                 entry={a}
                 active={active?.id === a.id}
+                unconfigured={isMockAdapter(a.id)}
                 onSelect={() => {
                   setActive(a.id);
                   setOpen(false);
@@ -153,10 +164,12 @@ export function AgentSwitcher() {
 function AgentRow({
   entry,
   active,
+  unconfigured,
   onSelect,
 }: {
   entry: AdapterListEntry;
   active: boolean;
+  unconfigured?: boolean;
   onSelect: () => void;
 }) {
   const ok = entry.health?.ok === true;
@@ -186,6 +199,11 @@ function AgentRow({
           {entry.is_default && (
             <span className="rounded-full border border-gold-500/40 bg-gold-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-gold-500">
               default
+            </span>
+          )}
+          {unconfigured && (
+            <span className="rounded-full border border-fg-subtle/40 bg-fg-subtle/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-fg-subtle">
+              not configured
             </span>
           )}
         </div>
