@@ -97,22 +97,36 @@ pub async fn workflow_validate(def: WorkflowDef) -> IpcResult<ValidationResult> 
 
 fn find_browser_runner() -> std::path::PathBuf {
     let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let exe_dir = exe.parent().unwrap_or(std::path::Path::new("."));
+    let exe_dir = exe.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+
+    let suffix = if cfg!(target_os = "windows") {
+        "browser-runner-win-x64.exe"
+    } else if cfg!(target_arch = "aarch64") {
+        "browser-runner-macos-arm64"
+    } else {
+        "browser-runner-macos-x64"
+    };
+
+    let cjs_suffix = "scripts/browser-runner.cjs";
 
     let candidates: Vec<std::path::PathBuf> = vec![
-        exe_dir.join("scripts/browser-runner.cjs"),
-        exe_dir.join("../scripts/browser-runner.cjs"),
-        exe_dir.join("../../scripts/browser-runner.cjs"),
-        exe_dir.join("../../../scripts/browser-runner.cjs"),
-        exe_dir.join("../../../../scripts/browser-runner.cjs"),
-        std::path::PathBuf::from("../scripts/browser-runner.cjs"),
+        exe_dir.join("scripts").join(suffix),
+        exe_dir.join(suffix),
+        exe_dir.join("../scripts").join(suffix),
+        exe_dir.join("../../scripts").join(suffix),
+        exe_dir.join("scripts").join(cjs_suffix),
+        exe_dir.join("../scripts").join(cjs_suffix),
+        exe_dir.join("../../scripts").join(cjs_suffix),
+        exe_dir.join("../../../scripts").join(cjs_suffix),
+        exe_dir.join("../../../../scripts").join(cjs_suffix),
+        std::path::PathBuf::from("../scripts").join(cjs_suffix),
     ];
     for p in &candidates {
         if p.exists() {
             return p.canonicalize().unwrap_or_else(|_| p.clone());
         }
     }
-    exe_dir.join("scripts/browser-runner.cjs")
+    exe_dir.join("scripts").join(suffix)
 }
 
 struct HermesExecutor {
@@ -147,6 +161,8 @@ impl StepExecutor for HermesExecutor {
         let cfg = browser_config::load();
 
         let script_path = find_browser_runner();
+        let is_binary = script_path.extension().map_or(false, |e| e == "exe")
+            || !script_path.extension().map_or(false, |e| e == "cjs");
 
         let task = serde_json::json!({
             "action": action,
@@ -155,8 +171,15 @@ impl StepExecutor for HermesExecutor {
             "profile": if profile.is_empty() { "" } else { profile },
         });
 
-        let mut cmd = Command::new("node");
-        cmd.arg(&script_path).arg(task.to_string());
+        let mut cmd = if is_binary {
+            let mut c = Command::new(&script_path);
+            c.arg(task.to_string());
+            c
+        } else {
+            let mut c = Command::new("node");
+            c.arg(&script_path).arg(task.to_string());
+            c
+        };
 
         if !cfg.model.is_empty() {
             cmd.env("BROWSER_LLM_MODEL", &cfg.model);

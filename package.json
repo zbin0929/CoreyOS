@@ -73,6 +73,7 @@
     "@typescript-eslint/parser": "^8.8.0",
     "@vitejs/plugin-react": "^4.3.0",
     "@vitest/ui": "^2.1.9",
+    "@yao-pkg/pkg": "^6.19.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.11.0",
     "eslint-plugin-react-hooks": "^5.0.0",
