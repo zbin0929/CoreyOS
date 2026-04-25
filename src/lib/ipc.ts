@@ -1650,6 +1650,41 @@ export function ragIndexRecent(): Promise<RagIndexResult> {
   return invoke<RagIndexResult>('rag_index_recent');
 }
 
+// ───────────────────────── Knowledge base ─────────────────────────
+
+export interface KnowledgeDoc {
+  id: string;
+  name: string;
+  filename: string;
+  chunk_count: number;
+  total_chars: number;
+  created_at: number;
+}
+
+export function knowledgeUpload(name: string, filename: string, content: string): Promise<KnowledgeDoc> {
+  return invoke<KnowledgeDoc>('knowledge_upload', { name, filename, content });
+}
+
+export function knowledgeList(): Promise<KnowledgeDoc[]> {
+  return invoke<KnowledgeDoc[]>('knowledge_list');
+}
+
+export function knowledgeDelete(id: string): Promise<void> {
+  return invoke<void>('knowledge_delete', { id });
+}
+
+export interface KnowledgeSearchHit {
+  doc_id: string;
+  doc_name: string;
+  chunk_index: number;
+  content: string;
+  score: number;
+}
+
+export function knowledgeSearch(query: string, limit?: number): Promise<KnowledgeSearchHit[]> {
+  return invoke<KnowledgeSearchHit[]>('knowledge_search', { query, limit });
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

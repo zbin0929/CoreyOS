@@ -27,6 +27,7 @@ import {
   learningIndexMessage,
   learningSearchSimilar,
   ragSearch,
+  knowledgeSearch,
   learningReadLearnings,
   learningDetectPattern,
   memoryRead,
@@ -513,6 +514,22 @@ function ChatPane({
       } catch {
         // non-critical
       }
+    }
+
+    // Knowledge base retrieval — search uploaded documents for relevant chunks.
+    try {
+      const kbResults = await knowledgeSearch(contentForMessage, 3);
+      if (kbResults.length > 0) {
+        const kbContext = kbResults
+          .map((r) => `[${r.doc_name}]\n${r.content}`)
+          .join('\n\n');
+        historyForIpc.unshift({
+          role: 'system',
+          content: `[Knowledge base]\n${kbContext}`,
+        });
+      }
+    } catch {
+      // non-critical
     }
 
     // Phase E · P1 — inject LEARNINGS.md (user feedback patterns) as

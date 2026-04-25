@@ -19,6 +19,7 @@
     "runbooks": "Runbooks",
     "budgets": "Budgets",
     "memory": "Memory",
+    "knowledge": "Knowledge",
     "mcp": "MCP",
     "agents": "Agents",
     "settings": "Settings",
@@ -756,6 +757,23 @@
     "form_error_must_be_object": "Config must be a JSON object.",
     "help_id": "A stable identifier used as the key under mcp_servers: in config.yaml. Hermes refers to servers by this name in logs and tool errors. Cannot be changed after creation — to rename, delete and re-add.",
     "help_transport": "stdio: Hermes forks a local command (npm / uvx / cargo) and talks over its stdin/stdout. Use for tools that need local filesystem or OS access. url: Hermes connects via HTTP to a hosted server. Use for managed services like Stripe, GitHub, etc."
+  },
+  "knowledge": {
+    "title": "Knowledge Base",
+    "subtitle": "Upload documents to build a searchable knowledge base. Relevant chunks are injected into chat context automatically.",
+    "help": "Upload text files (.txt, .md, .json, .csv, .yaml, source code). Documents are split into ~500-char chunks and indexed for Jaccard similarity search. When you send a chat message, the top relevant chunks are injected as system context. Future: embedding-based semantic search via Hermes gateway.",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "drop_hint": "Drop a file here or click Upload",
+    "drop_formats": ".txt · .md · .json · .csv · .yaml · .py · .ts · .rs · .go",
+    "search": "Search",
+    "search_placeholder": "Search your documents…",
+    "search_results": "{{count}} results",
+    "chunk": "Chunk {{index}}",
+    "chunks": "chunks",
+    "delete": "Delete",
+    "empty_title": "No documents yet",
+    "empty_desc": "Upload a text file to build your knowledge base. Documents are automatically chunked and indexed."
   },
   "memory": {
     "title": "Memory",

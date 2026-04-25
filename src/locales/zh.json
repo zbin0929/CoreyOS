@@ -19,6 +19,7 @@
     "runbooks": "运行手册",
     "budgets": "预算",
     "memory": "记忆",
+    "knowledge": "知识库",
     "mcp": "MCP",
     "agents": "Agents",
     "settings": "设置",
@@ -756,6 +757,23 @@
     "form_error_must_be_object": "配置必须是一个 JSON 对象。",
     "help_id": "稳定标识符，作为 mcp_servers: 下的 key 写入 config.yaml。Hermes 在日志和工具报错里用这个名字。创建后不能改名 —— 改名请先删再建。",
     "help_transport": "stdio：Hermes fork 一个本地命令（npm / uvx / cargo），通过 stdin/stdout 通信。适用于需要访问本地文件系统或操作系统的工具。url：Hermes 通过 HTTP 连接托管的服务，适用于 Stripe、GitHub 这类云端服务。"
+  },
+  "knowledge": {
+    "title": "知识库",
+    "subtitle": "上传文档构建可搜索的知识库。相关内容会自动注入到聊天上下文中。",
+    "help": "上传文本文件（.txt、.md、.json、.csv、.yaml、源代码）。文档按 ~500 字符分段并建立 Jaccard 相似度索引。发送聊天消息时，最相关的内容会作为系统上下文注入。",
+    "upload": "上传",
+    "uploading": "上传中…",
+    "drop_hint": "拖拽文件到此处或点击上传",
+    "drop_formats": ".txt · .md · .json · .csv · .yaml · .py · .ts · .rs · .go",
+    "search": "搜索",
+    "search_placeholder": "搜索你的文档…",
+    "search_results": "{{count}} 条结果",
+    "chunk": "第 {{index}} 段",
+    "chunks": "段",
+    "delete": "删除",
+    "empty_title": "还没有文档",
+    "empty_desc": "上传文本文件来构建你的知识库。文档会自动分段和索引。"
   },
   "memory": {
     "title": "记忆",

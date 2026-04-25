@@ -1,0 +1,254 @@
+//! Knowledge base — document upload, chunking, and retrieval.
+//!
+//! Users upload documents (text, markdown, JSON). We split them into
+//! chunks, store on disk under `~/.hermes/knowledge/{doc_id}/`, and
+//! index chunks in SQLite for Jaccard similarity search. The chat
+//! send flow queries this on every message to inject relevant context.
+
+use std::fs;
+use std::io;
+use std::path::PathBuf;
+
+use chrono::Utc;
+use serde::Serialize;
+use tauri::State;
+use uuid::Uuid;
+
+use crate::error::{IpcError, IpcResult};
+use crate::fs_atomic;
+use crate::state::AppState;
+
+const CHUNK_SIZE: usize = 500;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeDoc {
+    pub id: String,
+    pub name: String,
+    pub filename: String,
+    pub chunk_count: usize,
+    pub total_chars: usize,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeSearchHit {
+    pub doc_id: String,
+    pub doc_name: String,
+    pub chunk_index: usize,
+    pub content: String,
+    pub score: f64,
+}
+
+fn knowledge_dir() -> io::Result<PathBuf> {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no HOME"))?;
+    Ok(PathBuf::from(home).join(".hermes").join("knowledge"))
+}
+
+fn doc_dir(id: &str) -> io::Result<PathBuf> {
+    Ok(knowledge_dir()?.join(id))
+}
+
+fn chunk_text(text: &str, max_chars: usize) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+
+    for paragraph in text.split("\n\n") {
+        let trimmed = paragraph.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if current.len() + trimmed.len() + 2 > max_chars && !current.is_empty() {
+            chunks.push(current.trim().to_string());
+            current.clear();
+        }
+        if !current.is_empty() {
+            current.push_str("\n\n");
+        }
+        current.push_str(trimmed);
+    }
+    if !current.is_empty() {
+        chunks.push(current.trim().to_string());
+    }
+
+    if chunks.is_empty() && !text.trim().is_empty() {
+        chunks.push(text.trim().to_string());
+    }
+    chunks
+}
+
+fn db_err(e: rusqlite::Error) -> IpcError {
+    IpcError::Internal {
+        message: format!("db: {e}"),
+    }
+}
+
+fn io_err(e: io::Error) -> IpcError {
+    IpcError::Internal {
+        message: format!("io: {e}"),
+    }
+}
+
+#[tauri::command]
+pub async fn knowledge_upload(
+    state: State<'_, AppState>,
+    name: String,
+    filename: String,
+    content: String,
+) -> IpcResult<KnowledgeDoc> {
+    let db = state.db.clone().ok_or_else(|| IpcError::Internal {
+        message: "DB not initialized".into(),
+    })?;
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().timestamp();
+    let total_chars = content.len();
+    let chunks = chunk_text(&content, CHUNK_SIZE);
+    let chunk_count = chunks.len();
+
+    let id_clone = id.clone();
+    let name_clone = name.clone();
+    let filename_clone = filename.clone();
+
+    tokio::task::spawn_blocking(move || -> IpcResult<()> {
+        let dir = doc_dir(&id_clone).map_err(io_err)?;
+        fs::create_dir_all(&dir).map_err(io_err)?;
+        fs_atomic::atomic_write(&dir.join("original.txt"), content.as_bytes(), None)
+            .map_err(io_err)?;
+
+        db.insert_knowledge_doc(
+            &id_clone,
+            &name_clone,
+            &filename_clone,
+            chunk_count,
+            total_chars,
+            now,
+            &chunks,
+        )
+        .map_err(db_err)?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("knowledge_upload join: {e}"),
+    })??;
+
+    Ok(KnowledgeDoc {
+        id,
+        name,
+        filename,
+        chunk_count,
+        total_chars,
+        created_at: now,
+    })
+}
+
+#[tauri::command]
+pub async fn knowledge_list(
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<KnowledgeDoc>> {
+    let db = state.db.clone().ok_or_else(|| IpcError::Internal {
+        message: "DB not initialized".into(),
+    })?;
+
+    tokio::task::spawn_blocking(move || -> IpcResult<Vec<KnowledgeDoc>> {
+        db.list_knowledge_docs().map_err(db_err)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("knowledge_list join: {e}"),
+    })?
+}
+
+#[tauri::command]
+pub async fn knowledge_delete(
+    state: State<'_, AppState>,
+    id: String,
+) -> IpcResult<()> {
+    let db = state.db.clone().ok_or_else(|| IpcError::Internal {
+        message: "DB not initialized".into(),
+    })?;
+    let id_clone = id.clone();
+
+    tokio::task::spawn_blocking(move || -> IpcResult<()> {
+        db.delete_knowledge_doc(&id_clone).map_err(db_err)?;
+        let dir = doc_dir(&id_clone).map_err(io_err)?;
+        let _ = fs::remove_dir_all(dir);
+        Ok(())
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("knowledge_delete join: {e}"),
+    })?
+}
+
+#[tauri::command]
+pub async fn knowledge_search(
+    state: State<'_, AppState>,
+    query: String,
+    limit: Option<u32>,
+) -> IpcResult<Vec<KnowledgeSearchHit>> {
+    let db = state.db.clone().ok_or_else(|| IpcError::Internal {
+        message: "DB not initialized".into(),
+    })?;
+    let lim = limit.unwrap_or(5).min(20) as usize;
+    let q = query.trim().to_string();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    tokio::task::spawn_blocking(move || -> IpcResult<Vec<KnowledgeSearchHit>> {
+        let query_tokens: std::collections::HashSet<String> = q
+            .to_lowercase()
+            .split_whitespace()
+            .filter(|w| w.len() > 2)
+            .map(String::from)
+            .collect();
+
+        if query_tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        db.search_knowledge_chunks(&query_tokens, lim)
+            .map_err(db_err)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("knowledge_search join: {e}"),
+    })?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chunk_text_splits_on_paragraphs() {
+        let text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
+        let chunks = chunk_text(text, 100);
+        assert_eq!(chunks.len(), 3);
+    }
+
+    #[test]
+    fn chunk_text_respects_max_size() {
+        let long = "word ".repeat(200);
+        let chunks = chunk_text(&long, 100);
+        assert!(chunks.len() > 1);
+        for c in &chunks {
+            assert!(c.len() <= 120);
+        }
+    }
+
+    #[test]
+    fn chunk_text_empty_input() {
+        let chunks = chunk_text("", 500);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn chunk_text_single_short_text() {
+        let chunks = chunk_text("Hello world", 500);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], "Hello world");
+    }
+}
