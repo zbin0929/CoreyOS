@@ -4,6 +4,8 @@ import {
   AlertCircle,
   Check,
   Eye,
+  ExternalLink,
+  Info,
   Loader2,
   Mic,
   Save,
@@ -25,12 +27,94 @@ import {
   type VoiceAuditEntry,
 } from '@/lib/ipc';
 
-const PROVIDER_LABELS: Record<string, string> = {
-  openai: 'OpenAI',
-  zhipu: 'Zhipu (智谱)',
-  groq: 'Groq',
-  edge: 'Edge TTS (免费)',
-};
+// ───────────────────────── Voice Provider Templates ─────────────────────────
+
+interface VoiceProviderTemplate {
+  id: string;
+  label: string;
+  description: string;
+  asrEndpoint: string | null;
+  ttsEndpoint: string | null;
+  needsApiKey: boolean;
+  apiKeyName: string | null;
+  setupUrl: string | null;
+  setupLabel: string | null;
+  ttsVoices: string[];
+  defaultVoice: string;
+  isFree?: boolean;
+  isLocal?: boolean;
+}
+
+const VOICE_PROVIDERS: VoiceProviderTemplate[] = [
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    description: 'Whisper ASR + TTS。支持 50+ 种语言，高质量语音合成。',
+    asrEndpoint: 'https://api.openai.com/v1/audio/transcriptions',
+    ttsEndpoint: 'https://api.openai.com/v1/audio/speech',
+    needsApiKey: true,
+    apiKeyName: 'OPENAI_API_KEY',
+    setupUrl: 'https://platform.openai.com/api-keys',
+    setupLabel: 'platform.openai.com',
+    ttsVoices: ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer'],
+    defaultVoice: 'alloy',
+  },
+  {
+    id: 'zhipu',
+    label: '智谱 GLM',
+    description: 'GLM-ASR 语音识别 + GLM-TTS 语音合成。国内访问快。',
+    asrEndpoint: 'https://open.bigmodel.cn/api/paas/v4/audio/transcriptions',
+    ttsEndpoint: 'https://open.bigmodel.cn/api/paas/v4/audio/speech',
+    needsApiKey: true,
+    apiKeyName: 'ZHIPUAI_API_KEY',
+    setupUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
+    setupLabel: 'open.bigmodel.cn',
+    ttsVoices: ['male-01', 'female-01', 'male-02', 'female-02'],
+    defaultVoice: 'male-01',
+  },
+  {
+    id: 'groq',
+    label: 'Groq (免费 ASR)',
+    description: '免费 Whisper-large-v3 语音识别，速度极快。仅支持 ASR。',
+    asrEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
+    ttsEndpoint: null,
+    needsApiKey: true,
+    apiKeyName: 'GROQ_API_KEY',
+    setupUrl: 'https://console.groq.com/keys',
+    setupLabel: 'console.groq.com',
+    ttsVoices: [],
+    defaultVoice: '',
+    isFree: true,
+  },
+  {
+    id: 'edge',
+    label: 'Edge TTS (免费)',
+    description: '微软 Edge 在线语音合成，完全免费，音质高。仅支持 TTS，需本地启动服务。',
+    asrEndpoint: null,
+    ttsEndpoint: 'http://localhost:5050/v1/audio/speech',
+    needsApiKey: false,
+    apiKeyName: null,
+    setupUrl: 'https://github.com/travisvn/openai-edge-tts',
+    setupLabel: 'openai-edge-tts',
+    ttsVoices: [
+      'zh-CN-XiaoxiaoNeural',
+      'zh-CN-YunyangNeural',
+      'zh-CN-YunxiNeural',
+      'zh-CN-XiaohanNeural',
+      'en-US-AvaNeural',
+      'en-US-AndrewNeural',
+    ],
+    defaultVoice: 'zh-CN-XiaoxiaoNeural',
+    isFree: true,
+    isLocal: true,
+  },
+];
+
+function getProvider(id: string): VoiceProviderTemplate {
+  return VOICE_PROVIDERS.find((p) => p.id === id) ?? VOICE_PROVIDERS[0]!;
+}
+
+// ───────────────────────── Main Route ─────────────────────────
 
 export function VoiceRoute() {
   const { t } = useTranslation();
@@ -50,19 +134,24 @@ export function VoiceRoute() {
   const [ttsSpeed, setTtsSpeed] = useState(1.0);
   const [hotkey, setHotkey] = useState('Meta+Space');
 
+  const [userChangedAsrEndpoint, setUserChangedAsrEndpoint] = useState(false);
+  const [userChangedTtsEndpoint, setUserChangedTtsEndpoint] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const cfg = await voiceGetConfig();
       setConfig(cfg);
       setAsrProvider(cfg.asr_provider);
-      setAsrEndpoint(cfg.asr_endpoint ?? '');
+      setAsrEndpoint(cfg.asr_endpoint ?? getProvider(cfg.asr_provider).asrEndpoint ?? '');
       setAsrApiKey('');
       setTtsProvider(cfg.tts_provider);
-      setTtsEndpoint(cfg.tts_endpoint ?? '');
+      setTtsEndpoint(cfg.tts_endpoint ?? getProvider(cfg.tts_provider).ttsEndpoint ?? '');
       setTtsApiKey('');
       setTtsVoice(cfg.tts_voice);
       setTtsSpeed(cfg.tts_speed);
       setHotkey(cfg.hotkey);
+      setUserChangedAsrEndpoint(false);
+      setUserChangedTtsEndpoint(false);
     } catch (e) {
       setError(ipcErrorMessage(e));
     }
@@ -71,6 +160,28 @@ export function VoiceRoute() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleAsrProviderChange = useCallback((id: string) => {
+    const tpl = getProvider(id);
+    setAsrProvider(id);
+    if (!userChangedAsrEndpoint && tpl.asrEndpoint) {
+      setAsrEndpoint(tpl.asrEndpoint);
+    }
+    if (tpl.ttsVoices.length > 0 && !tpl.ttsVoices.includes(ttsVoice)) {
+      setTtsVoice(tpl.defaultVoice);
+    }
+  }, [userChangedAsrEndpoint, ttsVoice]);
+
+  const handleTtsProviderChange = useCallback((id: string) => {
+    const tpl = getProvider(id);
+    setTtsProvider(id);
+    if (!userChangedTtsEndpoint && tpl.ttsEndpoint) {
+      setTtsEndpoint(tpl.ttsEndpoint);
+    }
+    if (!tpl.ttsVoices.includes(ttsVoice)) {
+      setTtsVoice(tpl.defaultVoice);
+    }
+  }, [userChangedTtsEndpoint, ttsVoice]);
 
   const onSave = useCallback(async () => {
     setSaving(true);
@@ -106,8 +217,10 @@ export function VoiceRoute() {
     );
   }
 
-  const ttsVoices = config.tts_voices.length > 0 ? config.tts_voices : [ttsVoice];
-  const ttsDisabled = ttsProvider === 'groq';
+  const asrTpl = getProvider(asrProvider);
+  const ttsTpl = getProvider(ttsProvider);
+  const ttsVoices = ttsTpl.ttsVoices.length > 0 ? ttsTpl.ttsVoices : [ttsVoice];
+  const ttsDisabled = ttsTpl.ttsEndpoint === null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -142,20 +255,23 @@ export function VoiceRoute() {
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-6">
-            <section className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
-              <div className="flex items-center gap-2">
-                <Icon icon={Mic} size="md" className="text-fg-subtle" />
-                <h3 className="text-sm font-medium text-fg">{t('voice.asr_title')}</h3>
-              </div>
-              <p className="text-xs text-fg-subtle">{t('voice.asr_desc')}</p>
+            {/* ── ASR Section ── */}
+            <ProviderCard
+              icon={<Icon icon={Mic} size="md" className="text-fg-subtle" />}
+              title={t('voice.asr_title')}
+              template={asrTpl}
+            >
               <Field label={t('voice.provider')}>
                 <Select
                   value={asrProvider}
-                  onChange={setAsrProvider}
-                  options={config.available_asr_providers.map((p) => ({
-                    value: p,
-                    label: PROVIDER_LABELS[p] ?? p,
-                  }))}
+                  onChange={handleAsrProviderChange}
+                  options={VOICE_PROVIDERS
+                    .filter((p) => p.asrEndpoint !== null)
+                    .map((p) => ({
+                      value: p.id,
+                      label: p.label,
+                      hint: p.isFree ? '免费' : undefined,
+                    }))}
                   data-testid="voice-asr-provider"
                 />
               </Field>
@@ -163,42 +279,52 @@ export function VoiceRoute() {
                 <input
                   type="text"
                   value={asrEndpoint}
-                  onChange={(e) => setAsrEndpoint(e.target.value)}
-                  placeholder={t('voice.endpoint_auto')}
+                  onChange={(e) => {
+                    setAsrEndpoint(e.target.value);
+                    setUserChangedAsrEndpoint(true);
+                  }}
+                  placeholder={asrTpl.asrEndpoint ?? t('voice.endpoint_placeholder')}
                   className="input"
                   data-testid="voice-asr-endpoint"
                 />
               </Field>
-              <p className="text-[11px] text-fg-subtle">{t('voice.endpoint_hint')}</p>
-              <Field label={t('voice.asr_api_key')}>
-                <input
-                  type="password"
-                  value={asrApiKey}
-                  onChange={(e) => setAsrApiKey(e.target.value)}
-                  placeholder={config.asr_api_key_set ? '••••••••' : t('voice.api_key_placeholder')}
-                  className="input"
-                  data-testid="voice-asr-key"
-                />
-              </Field>
-            </section>
+              {asrTpl.needsApiKey && (
+                <Field label={t('voice.asr_api_key')}>
+                  <input
+                    type="password"
+                    value={asrApiKey}
+                    onChange={(e) => setAsrApiKey(e.target.value)}
+                    placeholder={config.asr_api_key_set ? '••••••••' : t('voice.api_key_placeholder')}
+                    className="input"
+                    data-testid="voice-asr-key"
+                  />
+                  {asrTpl.apiKeyName && (
+                    <span className="text-[10px] text-fg-subtle mt-1">
+                      环境变量: <code className="text-fg-muted">{asrTpl.apiKeyName}</code>
+                    </span>
+                  )}
+                </Field>
+              )}
+            </ProviderCard>
 
-            <section className={cn(
-              'flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4',
-              ttsDisabled && 'opacity-50',
-            )}>
-              <div className="flex items-center gap-2">
-                <Icon icon={Volume2} size="md" className="text-fg-subtle" />
-                <h3 className="text-sm font-medium text-fg">{t('voice.tts_title')}</h3>
-              </div>
-              <p className="text-xs text-fg-subtle">{t('voice.tts_desc')}</p>
+            {/* ── TTS Section ── */}
+            <ProviderCard
+              icon={<Icon icon={Volume2} size="md" className="text-fg-subtle" />}
+              title={t('voice.tts_title')}
+              template={ttsTpl}
+              disabled={ttsDisabled}
+            >
               <Field label={t('voice.provider')}>
                 <Select
                   value={ttsProvider}
-                  onChange={setTtsProvider}
-                  options={config.available_tts_providers.map((p) => ({
-                    value: p,
-                    label: PROVIDER_LABELS[p] ?? p,
-                  }))}
+                  onChange={handleTtsProviderChange}
+                  options={VOICE_PROVIDERS
+                    .filter((p) => p.ttsEndpoint !== null)
+                    .map((p) => ({
+                      value: p.id,
+                      label: p.label,
+                      hint: p.isFree ? '免费' : undefined,
+                    }))}
                   data-testid="voice-tts-provider"
                 />
               </Field>
@@ -208,23 +334,32 @@ export function VoiceRoute() {
                     <input
                       type="text"
                       value={ttsEndpoint}
-                      onChange={(e) => setTtsEndpoint(e.target.value)}
-                      placeholder={t('voice.endpoint_auto')}
+                      onChange={(e) => {
+                        setTtsEndpoint(e.target.value);
+                        setUserChangedTtsEndpoint(true);
+                      }}
+                      placeholder={ttsTpl.ttsEndpoint ?? t('voice.endpoint_placeholder')}
                       className="input"
                       data-testid="voice-tts-endpoint"
                     />
                   </Field>
-                  <p className="text-[11px] text-fg-subtle">{t('voice.endpoint_hint')}</p>
-                  <Field label={t('voice.tts_api_key')}>
-                    <input
-                      type="password"
-                      value={ttsApiKey}
-                      onChange={(e) => setTtsApiKey(e.target.value)}
-                      placeholder={config.tts_api_key_set ? '••••••••' : t('voice.api_key_placeholder')}
-                      className="input"
-                      data-testid="voice-tts-key"
-                    />
-                  </Field>
+                  {ttsTpl.needsApiKey && (
+                    <Field label={t('voice.tts_api_key')}>
+                      <input
+                        type="password"
+                        value={ttsApiKey}
+                        onChange={(e) => setTtsApiKey(e.target.value)}
+                        placeholder={config.tts_api_key_set ? '••••••••' : t('voice.api_key_placeholder')}
+                        className="input"
+                        data-testid="voice-tts-key"
+                      />
+                      {ttsTpl.apiKeyName && (
+                        <span className="text-[10px] text-fg-subtle mt-1">
+                          环境变量: <code className="text-fg-muted">{ttsTpl.apiKeyName}</code>
+                        </span>
+                      )}
+                    </Field>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <Field label={t('voice.tts_voice')}>
                       <Select
@@ -252,8 +387,9 @@ export function VoiceRoute() {
               {ttsDisabled && (
                 <p className="text-xs text-fg-subtle">{t('voice.tts_not_available')}</p>
               )}
-            </section>
+            </ProviderCard>
 
+            {/* ── Hotkey Section ── */}
             <section className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
               <Field label={t('voice.hotkey')}>
                 <input
@@ -289,6 +425,68 @@ export function VoiceRoute() {
   );
 }
 
+// ───────────────────────── Provider Card ─────────────────────────
+
+function ProviderCard({
+  icon,
+  title,
+  template,
+  disabled,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  template: VoiceProviderTemplate;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className={cn(
+      'flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4',
+      disabled && 'opacity-50',
+    )}>
+      <div className="flex items-center gap-2">
+        {icon}
+        <h3 className="text-sm font-medium text-fg">{title}</h3>
+        {template.isFree && (
+          <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500">
+            免费
+          </span>
+        )}
+        {template.isLocal && (
+          <span className="rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-500">
+            本地
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-fg-subtle">{template.description}</p>
+      {template.setupUrl && (
+        <a
+          href={template.setupUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex w-fit items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-fg-subtle transition-colors hover:border-gold-500/40 hover:text-fg"
+        >
+          <Icon icon={ExternalLink} size="xs" />
+          {template.setupLabel ?? t('voice.get_api_key')}
+        </a>
+      )}
+      {template.isLocal && template.id === 'edge' && (
+        <div className="flex items-start gap-2 rounded border border-blue-500/30 bg-blue-500/5 p-2 text-xs text-blue-400">
+          <Icon icon={Info} size="xs" className="mt-0.5 flex-none" />
+          <span>
+            启动命令：<code className="rounded bg-blue-500/10 px-1 py-0.5 text-[11px]">docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest</code>
+          </span>
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+// ───────────────────────── Field ─────────────────────────
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-xs">
@@ -298,6 +496,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   );
 }
+
+// ───────────────────────── Test Panel ─────────────────────────
 
 function VoiceTestPanel() {
   const { t } = useTranslation();
@@ -396,6 +596,12 @@ function VoiceTestPanel() {
     </div>
   );
 }
+
+// ───────────────────────── Audit Panel ─────────────────────────
+
+const PROVIDER_LABELS: Record<string, string> = Object.fromEntries(
+  VOICE_PROVIDERS.map((p) => [p.id, p.label]),
+);
 
 function VoiceAuditPanel() {
   const { t } = useTranslation();
