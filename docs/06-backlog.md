@@ -353,14 +353,12 @@ them requires a product-direction pivot, not an engineering decision.
 "Brand · Corey logo + Icon wrapper + Dock/window polish".)
 
 ### Conversational scheduler (natural-language job creation)
-- **Status**: **CLOSED AS OBSOLETE on 2026-04-23 pm (product audit)**.
-  Hermes cron natively accepts natural-language schedules
-  ("Every morning at 9am, check HN and send me a summary on
-  Telegram"); our planned regex + secondary-LLM + suggestion-card
-  machinery would be strictly worse. Once T6.8 wraps Hermes' native
-  cron, the user just talks to Hermes normally; Corey's Scheduler
-  page refreshes when a new job lands in `~/.hermes/cron/jobs.json`.
-- **Design doc** (historical): `docs/09-conversational-scheduler.md`.
+- **Status**: **Stage 1 shipped 2026-04-26 (Phase 9 T9.9)**. Keyword-based
+  `scheduler_extract_intent` + `workflow_extract_intent` IPCs detect schedule
+  and workflow intents from chat messages, render inline SuggestionCard with
+  one-click confirm. Stages 2–3 (LLM-assisted detection + tool calling) from
+  `docs/09-conversational-scheduler.md` remain backlog items.
+- **Design doc**: `docs/09-conversational-scheduler.md`.
 
 ### Platform channel e2e verification (post-Phase-3 debt)
 - **Status**: **promoted into Phase 6 as T6.7** on 2026-04-23 pm.

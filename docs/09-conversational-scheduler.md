@@ -1,9 +1,13 @@
 # 09 · Conversational scheduler (design)
 
-> **Status**: Design only (2026-04-23). Not yet implemented. Filed as a
-> Phase 6+ roadmap item. The current Scheduler page (shipped the same
-> day) requires users to hand-write cron expressions; this doc proposes
-> how to let them create jobs via natural conversation instead.
+> **Status**: **Partially shipped** (2026-04-26). Stage 1 (keyword-based
+> intent detection + inline SuggestionCard) is live in Phase 9 (T9.9).
+> `scheduler_extract_intent` IPC matches 40+ Chinese/English time patterns
+> and renders a `⏰` suggestion card in chat bubbles. `workflow_extract_intent`
+> IPC does the same for workflow templates. Stages 2–3 (LLM-assisted
+> detection + tool calling) remain on the roadmap for future implementation.
+>
+> See `docs/phases/phase-9-workflow.md` § T9.9 for the shipped implementation.
 
 ## Goal
 

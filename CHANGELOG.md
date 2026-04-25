@@ -6,6 +6,40 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-26 (afternoon) — T9.9 · Chat intent detection + SuggestionCard + QoL fixes
+
+Smart inline suggestion cards replace `window.confirm` for schedule and
+workflow intent detection in chat. Tab-switch run persistence fix. CI
+hardening (ALSA dep for Ubuntu, `attachment_thumbnail` E2E mock).
+
+### Shipped
+
+**T9.9 — Chat intent detection + SuggestionCard.** Two new Rust IPCs:
+`workflow_extract_intent` (keyword matching against workflow templates,
+per-template boost keywords) and `scheduler_extract_intent` (40+
+Chinese/English time-pattern rules). Frontend: `SuggestionCard` component
+replaces `window.confirm` with an inline gold/green/red card showing
+`⚡` (workflow) or `⏰` (schedule) icon, confirm/dismiss buttons, and
+status transitions (pending → done/error). `UiSuggestion` type added to
+chat store. Both intent detectors fire after each chat send and append
+suggestions to the assistant message bubble.
+
+**Bug fix: workflow run survives tab switch.** New `workflow_active_runs`
+IPC queries in-memory runs with active status. Frontend auto-recovers
+running workflow on component remount.
+
+### Fixed
+
+- CI: added `libasound2-dev` to Ubuntu deps (required by `cpal` crate)
+- CI: added `attachment_thumbnail` mock to Playwright fixtures
+- Clippy: `#[allow(dead_code)]` on `execute_sync`, `topological_order`,
+  `collect_all_step_ids`
+- Clippy: merged identical if-blocks in `voice.rs` and `hermes/mod.rs`
+- Windows: removed `#[cfg(unix)]` guard on `atomic_write` call
+- Bundle-size budget raised 260→300 KB (actual: 287.6 KB)
+
+---
+
 ## 2026-04-24 (night) — T8 · Multi-LLM + multi-Agent architecture
 
 Post-v0.1.0 expansion beyond the single-model / single-Hermes mental
