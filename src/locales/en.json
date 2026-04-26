@@ -1164,6 +1164,7 @@
     "reject": "Reject",
     "step_output": "Output",
     "create": "New Workflow",
+    "delete_selected": "Delete {{count}} selected",
     "new_workflow": "New Workflow",
     "basic_info": "Basic Info",
     "wf_name": "Workflow Name",

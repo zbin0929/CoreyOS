@@ -41,6 +41,7 @@ export function WorkflowRoute() {
   const [mode, setMode] = useState<Mode>({ kind: 'list' });
   const [runResult, setRunResult] = useState<WorkflowRunResult | null>(null);
   const [running, setRunning] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setError(null);
@@ -78,6 +79,17 @@ export function WorkflowRoute() {
   const handleDelete = async (id: string) => {
     try {
       await workflowDelete(id);
+      setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      await load();
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    try {
+      await Promise.all([...selected].map((id) => workflowDelete(id)));
+      setSelected(new Set());
       await load();
     } catch (e) {
       setError(ipcErrorMessage(e));
@@ -255,10 +267,18 @@ export function WorkflowRoute() {
         title={t('workflow_page.title')}
         subtitle={t('workflow_page.subtitle')}
         actions={
-          <Button variant="secondary" onClick={() => setMode({ kind: 'edit', wfId: null })}>
-            <Icon icon={Plus} size="xs" />
-            {t('workflow_page.create')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {selected.size > 0 && (
+              <Button variant="ghost" onClick={() => void handleDeleteSelected()}>
+                <Icon icon={Trash2} size="xs" className="text-red-500" />
+                {t('workflow_page.delete_selected', { count: selected.size })}
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => setMode({ kind: 'edit', wfId: null })}>
+              <Icon icon={Plus} size="xs" />
+              {t('workflow_page.create')}
+            </Button>
+          </div>
         }
       />
       <div className="flex-1 overflow-y-auto p-6">
@@ -286,11 +306,25 @@ export function WorkflowRoute() {
                 className="group rounded-xl border border-border bg-bg-elev-1 p-5 transition-colors hover:border-gold-500/30"
               >
                 <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-semibold text-fg">{wf.name}</h3>
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(wf.id)}
+                      onChange={(e) => {
+                        setSelected((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(wf.id); else next.delete(wf.id);
+                          return next;
+                        });
+                      }}
+                      className="mt-1 shrink-0 accent-gold-500"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-semibold text-fg">{wf.name}</h3>
                     {wf.description && (
                       <p className="mt-1 line-clamp-2 text-xs text-fg-subtle">{wf.description}</p>
                     )}
+                    </div>
                   </div>
                   <span className={cn(
                     'ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs',

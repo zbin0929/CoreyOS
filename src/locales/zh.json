@@ -1164,6 +1164,7 @@
     "reject": "驳回",
     "step_output": "输出",
     "create": "新建工作流",
+    "delete_selected": "删除选中的 {{count}} 个",
     "new_workflow": "新建工作流",
     "basic_info": "基本信息",
     "wf_name": "工作流名称",
