@@ -2048,6 +2048,7 @@ export interface WorkflowStepRun {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   output?: Record<string, unknown>;
   error?: string;
+  duration_ms?: number;
 }
 
 export interface BrowserLLMConfig {

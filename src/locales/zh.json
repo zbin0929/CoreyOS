@@ -1161,6 +1161,7 @@
     "editor_subtitle": "可视化流程编辑器",
     "approve": "通过",
     "reject": "驳回",
+    "step_output": "输出",
     "create": "新建工作流",
     "new_workflow": "新建工作流",
     "basic_info": "基本信息",

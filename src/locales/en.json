@@ -1161,6 +1161,7 @@
     "editor_subtitle": "Visual Flow Editor",
     "approve": "Approve",
     "reject": "Reject",
+    "step_output": "Output",
     "create": "New Workflow",
     "new_workflow": "New Workflow",
     "basic_info": "Basic Info",

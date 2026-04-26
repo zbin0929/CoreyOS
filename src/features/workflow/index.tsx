@@ -187,11 +187,27 @@ export function WorkflowRoute() {
                     />
                     <span className="text-sm font-medium text-fg">{sr.step_id}</span>
                     <span className="text-xs text-fg-subtle">{sr.status}</span>
-                    {sr.error && <span className="ml-auto text-xs text-red-500">{sr.error}</span>}
+                    {sr.duration_ms != null && (
+                      <span className="text-xs text-fg-subtle">
+                        {sr.duration_ms >= 1000
+                          ? `${(sr.duration_ms / 1000).toFixed(1)}s`
+                          : `${sr.duration_ms}ms`}
+                      </span>
+                    )}
+                    {sr.error && (
+                      <span className="ml-auto text-xs text-red-500" title={sr.error}>
+                        {sr.error.length > 80 ? sr.error.slice(0, 80) + '…' : sr.error}
+                      </span>
+                    )}
                     {sr.output && (
-                      <pre className="ml-auto max-w-xs truncate text-xs text-fg-subtle">
-                        {JSON.stringify(sr.output).slice(0, 100)}
-                      </pre>
+                      <details className="ml-auto">
+                        <summary className="cursor-pointer text-xs text-fg-subtle hover:text-fg">
+                          {t('workflow_page.step_output')}
+                        </summary>
+                        <pre className="mt-1 max-w-sm overflow-auto rounded bg-bg-elev-2 p-2 text-xs text-fg-subtle">
+                          {JSON.stringify(sr.output, null, 2).slice(0, 500)}
+                        </pre>
+                      </details>
                     )}
                     {sr.status === 'running' && runResult?.status === 'paused' && (
                       <div className="ml-auto flex gap-2">

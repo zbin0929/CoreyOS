@@ -33,6 +33,7 @@ pub struct StepRun {
     pub status: StepRunStatus,
     pub output: Option<serde_json::Value>,
     pub error: Option<String>,
+    pub duration_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,6 +82,7 @@ pub fn create_initial_run(
                 status: StepRunStatus::Pending,
                 output: None,
                 error: None,
+                duration_ms: None,
             },
         );
     }
@@ -135,21 +137,28 @@ pub fn execute_with_executor(
                 sr.status = StepRunStatus::Running;
             }
 
+            let step_start = std::time::Instant::now();
             match execute_step_live(step, ctx, executor) {
                 Ok(output) => {
+                    let elapsed = step_start.elapsed().as_millis() as u64;
                     ctx.set_step_output(step_id, output.clone());
                     if let Some(sr) = run.step_runs.get_mut(step_id) {
                         sr.status = StepRunStatus::Completed;
                         sr.output = Some(output);
+                        sr.duration_ms = Some(elapsed);
                     }
+                    tracing::info!(step_id = %step_id, duration_ms = elapsed, "workflow step completed");
                     let newly = planner::mark_completed(&mut plan.remaining, step_id);
                     next_ready.extend(newly);
                 }
                 Err(e) => {
+                    let elapsed = step_start.elapsed().as_millis() as u64;
                     if let Some(sr) = run.step_runs.get_mut(step_id) {
                         sr.status = StepRunStatus::Failed;
                         sr.error = Some(e.clone());
+                        sr.duration_ms = Some(elapsed);
                     }
+                    tracing::warn!(step_id = %step_id, duration_ms = elapsed, error = %e, "workflow step failed");
                     run.status = RunStatus::Failed;
                     run.error = Some(e);
                     return;
