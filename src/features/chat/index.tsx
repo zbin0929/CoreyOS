@@ -3,29 +3,20 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type ClipboardEvent,
-  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
-import { AlertTriangle, Mic, Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@/app/shell/PageHeader';
-import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/ui/icon';
-import { cn } from '@/lib/cn';
 import {
-  attachmentDelete,
-  attachmentStageBlob,
   chatStream,
   ipcErrorMessage,
   learningIndexMessage,
-  voiceTranscribe,
   voiceRecord,
   voiceRecordStop,
+  voiceTranscribe,
   type ChatMessageDto,
   type ChatStreamHandle,
-  type StagedAttachment,
 } from '@/lib/ipc';
 import { visionSupport } from '@/lib/modelCapabilities';
 import { describeBreach, evaluateBudgetGate } from './budgetGate';
@@ -41,26 +32,27 @@ import { useAgentsStore } from '@/stores/agents';
 import { useComposerStore } from '@/stores/composer';
 import { useRoutingStore } from '@/stores/routing';
 import { resolveRoutedRule } from './routing';
-import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { ChatSearch } from './ChatSearch';
 import { computeActiveMatchIndex } from './chatSearchMatch';
 import { useChatIntentSuggestions } from './useChatIntentSuggestions';
 import { usePostSendEffects } from './usePostSendEffects';
-import { ChatHeaderActions, EmptyHero, RoutingHint } from './ChatHelpers';
-import { formatBytes } from './formatBytes';
+import { ChatHeaderActions, EmptyHero } from './ChatHelpers';
+import { Composer } from './Composer';
+import { LearningIndicator } from './LearningIndicator';
 import { enrichHistoryWithContext } from './enrichHistory';
 import { buildStreamCallbacks, resolveAdapterId, toDto } from './useStreamCallbacks';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
+import { useAttachments } from './useAttachments';
 import type { VirtuosoHandle } from 'react-virtuoso';
 
 /**
  * Module-level empty array so the `sessionMessages` selector returns a
- * STABLE reference when the current session has no messages (or when there
- * is no current session at all). Creating `[]` inline inside the selector
- * produced a fresh array each call — with `useSyncExternalStore` that made
- * React think the store snapshot had changed on every render, leading to
- * "Maximum update depth exceeded" loops on startup.
+ * STABLE reference when the current session has no messages (or when
+ * there is no current session at all). Creating `[]` inline inside the
+ * selector produced a fresh array each call — with `useSyncExternalStore`
+ * that made React think the store snapshot had changed on every render,
+ * leading to "Maximum update depth exceeded" loops on startup.
  */
 const EMPTY_MESSAGES: UiMessage[] = [];
 
@@ -77,9 +69,10 @@ export function ChatRoute() {
   const appendToolCall = useChatStore((s) => s.appendToolCall);
   const renameSession = useChatStore((s) => s.renameSession);
 
-  // Once hydrated, ensure there's always a current session. If the DB came
-  // back empty, spin up a fresh one; otherwise the hydrate (dispatched
-  // once at app boot by `Providers`) has already restored the MRU session.
+  // Once hydrated, ensure there's always a current session. If the DB
+  // came back empty, spin up a fresh one; otherwise the hydrate
+  // (dispatched once at app boot by `Providers`) has already restored
+  // the MRU session.
   useLayoutEffect(() => {
     if (hydrated && !currentId) newSession();
   }, [hydrated, currentId, newSession]);
@@ -126,6 +119,27 @@ interface ChatPaneProps {
   renameSession: (id: string, title: string) => void;
 }
 
+/**
+ * Conversation pane — owns the lifecycle of a single chat session
+ * (composing → sending → streaming → done / cancelled) and the side
+ * effects that hang off it (post-send title generation + intent
+ * detection + learning indexing).
+ *
+ * What got pulled OUT of this component (for sanity):
+ *  - Drag/drop / paste / file-pick / chip removal → `useAttachments`
+ *  - Footer JSX (composer + warnings + chips) → `Composer`
+ *  - Bottom-of-pane "learning extracted" toast → `LearningIndicator`
+ *
+ * What stays HERE (because it's session-coupled):
+ *  - `send()` / `retry()` / `stop()` — the chat-stream orchestration
+ *    that wires together the budget gate, history, adapter routing,
+ *    optimistic message append, and IPC handle. Tightly bound to the
+ *    chat-store mutators and the `usePostSendEffects` hook.
+ *  - Search bar state (Cmd+F + match-index navigation).
+ *  - Voice record toggle (small enough to keep inline).
+ *  - Composer textarea auto-resize (uses the same ref we hand to
+ *    `<Composer>`).
+ */
 function ChatPane({
   sessionId,
   messages,
@@ -136,10 +150,11 @@ function ChatPane({
 }: ChatPaneProps) {
   const { t } = useTranslation();
   // T4.6: read pendingDraft as initial state so a Runbook launch is
-  // reflected on the very first paint. Clearing it happens in the mount
-  // effect below — doing it inside the initializer would race with
-  // React StrictMode's double-invocation (the second mount would see an
-  // already-cleared store and reset the composer to empty).
+  // reflected on the very first paint. Clearing it happens in the
+  // mount effect below — doing it inside the initializer would race
+  // with React StrictMode's double-invocation (the second mount
+  // would see an already-cleared store and reset the composer to
+  // empty).
   const [draft, setDraft] = useState<string>(
     () => useComposerStore.getState().pendingDraft ?? '',
   );
@@ -150,19 +165,11 @@ function ChatPane({
   // Also track the pending id to null-out the spinner on stop.
   const pendingRef = useRef<string | null>(null);
 
-  // T1.5 — pending attachments staged but not yet sent. Local state (not in
-  // a store) because it's purely UI-local and shouldn't survive navigation.
-  // On send, these become `UiAttachment[]` on the user message; on remove,
-  // we fire `attachmentDelete` to sweep the on-disk copy.
-  const [pendingAttachments, setPendingAttachments] = useState<StagedAttachment[]>([]);
-  // Drag-over visual; toggled by the form-level handlers. Counter-based so
-  // a child's enter/leave doesn't flicker the overlay during a drag.
-  const [dragDepth, setDragDepth] = useState(0);
-  // Hidden file input driving the Paperclip button. We keep it un-
-  // rendered-as-chip by using the native HTML element — no extra library.
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  // Transient error shown above the chip row when a stage fails.
-  const [attachError, setAttachError] = useState<string | null>(null);
+  // Attachment lifecycle (paste / drop / chip remove) — extracted
+  // because the inline version was ~75 lines of pure UI plumbing
+  // with no chat-state interlock beyond "snapshot on send".
+  const att = useAttachments();
+
   // T-polish — ref + auto-resize effect for the composer textarea.
   // Default `<textarea rows={1}>` is fixed-height; users typing more
   // than one line see their prose scroll inside a cramped box. We
@@ -170,15 +177,20 @@ function ChatPane({
   // and let overflow scroll after that — the composer is not a code
   // editor, and a bigger box starts to eat the message viewport.
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  // T4.4b — breaches flagged by the budget gate on the LAST send attempt.
-  // Re-populated (or cleared) every time send() runs so the list reflects
-  // the current turn, not stale state from minutes ago.
+  // Hidden file input driving the Paperclip button. Native HTML
+  // element — no plugin dependency, browser/Tauri-identical.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // T4.4b — breaches flagged by the budget gate on the LAST send
+  // attempt. Re-populated (or cleared) every time send() runs so the
+  // list reflects the current turn, not stale state.
   const [budgetWarnings, setBudgetWarnings] = useState<string[]>([]);
 
-  // T-polish — in-chat message search state. Query survives a close so
-  // re-opening with Cmd+F jumps right back to where the user was. Reset
-  // explicitly on session switch (effect below) because match indices
-  // across two different sessions are semantically meaningless.
+  // T-polish — in-chat message search state. Query survives a close
+  // so re-opening with Cmd+F jumps right back to where the user was.
+  // Reset explicitly on session switch (effect below) because match
+  // indices across two different sessions are semantically
+  // meaningless.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchActiveIdx, setSearchActiveIdx] = useState(0);
@@ -234,9 +246,9 @@ function ChatPane({
     setSearchActiveIdx(0);
   }, [sessionId]);
 
-  // T1.5c — resolve the effective model: per-session override wins over
-  // the gateway-wide default. Subscribed so the composer reacts live to
-  // a model switch in Settings or via the Models page.
+  // T1.5c — resolve the effective model: per-session override wins
+  // over the gateway-wide default. Subscribed so the composer reacts
+  // live to a model switch in Settings or via the Models page.
   const sessionModelOverride = useChatStore((s) => s.sessions[sessionId]?.model ?? null);
   const defaultModel = useAppStatusStore((s) => s.currentModel);
   const effectiveModel = sessionModelOverride ?? defaultModel;
@@ -244,14 +256,15 @@ function ChatPane({
   // Only warn about non-vision models when the user actually has an
   // image queued — non-image attachments still go through via the
   // `[attached: name]` text marker and don't need vision support.
-  const hasPendingImage = pendingAttachments.some((a) => a.mime.startsWith('image/'));
+  const hasPendingImage = att.pendingAttachments.some((a) => a.mime.startsWith('image/'));
   const imageBlockedByModel = visionCap === 'no' && hasPendingImage;
 
   // Reset composer when switching sessions. Also re-seeds from
-  // pendingDraft so launching a runbook into a brand-new session reaches
-  // the freshly-mounted pane. We do NOT clear pendingDraft here — the
-  // clear is deferred to `send()` and `onDraftChange()` so StrictMode's
-  // double-mount doesn't wipe it before the user sees it.
+  // pendingDraft so launching a runbook into a brand-new session
+  // reaches the freshly-mounted pane. We do NOT clear pendingDraft
+  // here — the clear is deferred to `send()` and `onDraftChange()`
+  // so StrictMode's double-mount doesn't wipe it before the user
+  // sees it.
   useEffect(() => {
     const pending = useComposerStore.getState().pendingDraft;
     setDraft(pending ?? '');
@@ -266,116 +279,25 @@ function ChatPane({
     }
   }
 
-  // T1.9 — autoscroll is now owned by `MessageList` (Virtuoso's
-  // `followOutput="smooth"`). It sticks to the bottom when the user
-  // is already there and leaves them alone once they scroll up to
-  // read back context — a genuine UX improvement over the old
-  // yanks-you-to-bottom-on-every-token behaviour.
-
-  /**
-   * Read a File through FileReader and base64-encode it so the Rust
-   * `attachment_stage_blob` command can decode once server-side. We
-   * strip the `data:<mime>;base64,` prefix because the Rust helper
-   * expects bare base64.
-   */
-  async function stageFile(file: File): Promise<void> {
-    setAttachError(null);
-    try {
-      const base64Body = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onerror = () => reject(r.error ?? new Error('read failed'));
-        r.onload = () => {
-          const raw = typeof r.result === 'string' ? r.result : '';
-          const comma = raw.indexOf(',');
-          resolve(comma >= 0 ? raw.slice(comma + 1) : raw);
-        };
-        r.readAsDataURL(file);
-      });
-      const staged = await attachmentStageBlob({
-        name: file.name || 'pasted',
-        mime: file.type || 'application/octet-stream',
-        base64Body,
-      });
-      setPendingAttachments((prev) => [...prev, staged]);
-    } catch (e) {
-      setAttachError(ipcErrorMessage(e));
-    }
-  }
-
-  async function removePendingAttachment(id: string) {
-    const victim = pendingAttachments.find((a) => a.id === id);
-    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
-    if (victim) {
-      // Fire-and-forget — the DB has no row yet (not sent), so only the
-      // on-disk file needs sweeping. A missing file is not an error.
-      void attachmentDelete(victim.path).catch(() => {
-        /* intentionally ignored */
-      });
-    }
-  }
-
-  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (file) {
-          e.preventDefault();
-          void stageFile(file);
-        }
-      }
-    }
-  }
-
-  function onDragEnter(e: DragEvent<HTMLFormElement>) {
-    // Only react to drags that actually carry files — ignore text drags
-    // from within the app (e.g. highlighting a message bubble).
-    if (!e.dataTransfer?.types.includes('Files')) return;
-    e.preventDefault();
-    setDragDepth((d) => d + 1);
-  }
-  function onDragLeave(e: DragEvent<HTMLFormElement>) {
-    if (!e.dataTransfer?.types.includes('Files')) return;
-    e.preventDefault();
-    setDragDepth((d) => Math.max(0, d - 1));
-  }
-  function onDragOver(e: DragEvent<HTMLFormElement>) {
-    if (!e.dataTransfer?.types.includes('Files')) return;
-    // preventDefault allows `drop` to fire.
-    e.preventDefault();
-  }
-  async function onDrop(e: DragEvent<HTMLFormElement>) {
-    if (!e.dataTransfer?.types.includes('Files')) return;
-    e.preventDefault();
-    setDragDepth(0);
-    const files = Array.from(e.dataTransfer.files);
-    for (const f of files) await stageFile(f);
-  }
-
-  async function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    for (const f of files) await stageFile(f);
-    e.target.value = '';
-  }
-
   async function send(text: string) {
     const trimmed = text.trim();
-    const hasAttachments = pendingAttachments.length > 0;
-    // Let the user send a message whose payload is purely attachments —
-    // the provider still gets a "[attached: …]" marker in the content.
+    const hasAttachments = att.pendingAttachments.length > 0;
+    // Let the user send a message whose payload is purely
+    // attachments — the provider still gets a "[attached: …]" marker
+    // in the content.
     if ((!trimmed && !hasAttachments) || sending) return;
 
     // T4.4b — budget gate. Runs BEFORE we commit the message to the
-    // store so a blocked send leaves the composer exactly as the user
-    // typed it. `evaluateBudgetGate` fails-safe on IPC errors (returns
-    // empty verdict), so a transient db/analytics hiccup never locks
-    // the user out of chatting. `activeAdapterId` is read imperatively
-    // (same pattern as the chatStream call below) because the gate's
-    // verdict is tied to THIS send, not a subsequent switcher change.
-    // Budget-gate should scope to whichever adapter this turn will
-    // actually land on, which mirrors the send() priority order
-    // below: profile pin > global active > null.
+    // store so a blocked send leaves the composer exactly as the
+    // user typed it. `evaluateBudgetGate` fails-safe on IPC errors
+    // (returns empty verdict), so a transient db/analytics hiccup
+    // never locks the user out of chatting. `activeAdapterId` is
+    // read imperatively (same pattern as the chatStream call below)
+    // because the gate's verdict is tied to THIS send, not a
+    // subsequent switcher change. Budget-gate should scope to
+    // whichever adapter this turn will actually land on, which
+    // mirrors the send() priority order below: profile pin > global
+    // active > null.
     const gateSess = useChatStore.getState().sessions[sessionId];
     const gateProfilePin = gateSess?.llmProfileId ?? null;
     const activeAdapterIdForGate =
@@ -388,23 +310,23 @@ function ChatPane({
     });
     if (verdict.blocks.length > 0) {
       const lines = verdict.blocks.map((b) => '  · ' + describeBreach(b)).join('\n');
-      const ok = window.confirm(
-        t('chat_page.budget_over_cap_confirm', { lines }),
-      );
+      const ok = window.confirm(t('chat_page.budget_over_cap_confirm', { lines }));
       if (!ok) return;
     }
     if (verdict.warns.length > 0) {
-      // Non-blocking: surface above the chip row for the next render.
-      // We reset it once the stream starts so it's clearly tied to
-      // this single send, not stale state.
+      // Non-blocking: surface above the chip row for the next
+      // render. We reset it once the stream starts so it's clearly
+      // tied to this single send, not stale state.
       setBudgetWarnings(verdict.warns.map(describeBreach));
     } else {
       setBudgetWarnings([]);
     }
 
-    // Bake pending attachments into the user message. Snapshot before
-    // we clear so a fast follow-up paste doesn't attach to the wrong turn.
-    const attachmentsSnapshot: UiAttachment[] = pendingAttachments.map((a) => ({
+    // Bake pending attachments into the user message. Snapshot
+    // before we clear so a fast follow-up paste doesn't attach to
+    // the wrong turn.
+    const snapshotStaged = att.takeSnapshotAndClear();
+    const attachmentsSnapshot: UiAttachment[] = snapshotStaged.map((a) => ({
       id: a.id,
       name: a.name,
       mime: a.mime,
@@ -412,11 +334,12 @@ function ChatPane({
       path: a.path,
       createdAt: a.created_at,
     }));
-    // T1.5b — the stored bubble content is now just the user's typed
-    // text (attachments render as chips above/inside the bubble). The
-    // LLM receives the same clean text PLUS an `attachments` array on
-    // the outgoing ChatMessageDto; the Rust adapter expands that into
-    // OpenAI's multimodal content array (text part + image_url parts).
+    // T1.5b — the stored bubble content is now just the user's
+    // typed text (attachments render as chips above/inside the
+    // bubble). The LLM receives the same clean text PLUS an
+    // `attachments` array on the outgoing ChatMessageDto; the Rust
+    // adapter expands that into OpenAI's multimodal content array
+    // (text part + image_url parts).
     const contentForMessage = trimmed;
 
     const userMsg: UiMessage = {
@@ -441,11 +364,6 @@ function ChatPane({
     void learningIndexMessage(userMsg.id, contentForMessage).catch(() => {});
 
     setDraft('');
-    // Pending attachments have been baked into the message above; clear
-    // them so a follow-up turn starts fresh. Do NOT sweep the files from
-    // disk — the message now owns them and their lifecycle ties to the
-    // DB row's cascade on session delete.
-    setPendingAttachments([]);
     setSending(true);
     pendingRef.current = pendingId;
     intentPendingRef.current = pendingId;
@@ -462,29 +380,15 @@ function ChatPane({
 
     const finalHistory = await enrichHistoryWithContext(historyForIpc, contentForMessage);
 
-    // T5.5b — route the stream to whichever adapter the user picked in the
-    // Topbar AgentSwitcher. Read the store imperatively (no subscribe)
-    // because we only need the value at send-time; any later change should
-    // apply to the NEXT send, not retroactively hijack this stream.
-    //
-    // T6.4 — routing-rule override. If the composed text matches an
-    // enabled rule AND its target adapter is registered, prefer that
-    // adapter over the active one. Missing targets are silently
-    // ignored (the composer pill already warned the user); we never
-    // send to a non-existent adapter. For a fresh session (0 prior
-    // user messages) the session's pinned adapter_id is also updated
-    // so subsequent turns stay with the chosen adapter — mid-session
-    // rule matches only override THIS turn so history isn't silently
-    // split across adapters.
-    // Priority order for the adapter we ship with this turn:
+    // T5.5b / T6.4 — adapter routing. Priority for THIS turn:
     //   1. Routing-rule match (handled below as `routedAdapterId`)
     //   2. Per-session LLM Profile pin — set when the user picked a
     //      Profile row in the model picker. Must win over the global
     //      AgentSwitcher choice, otherwise "pick profile X" silently
     //      keeps routing through whatever agent is globally active.
-    //      NOTE: this does NOT look at session.adapterId — that field
-    //      is purely for sidebar grouping and is frozen at creation
-    //      (see db.rs :: upsert_session COALESCE).
+    //      NOTE: this does NOT look at session.adapterId — that
+    //      field is purely for sidebar grouping and is frozen at
+    //      creation (see db.rs :: upsert_session COALESCE).
     //   3. Global AgentSwitcher choice (`useAgentsStore.activeId`).
     //   4. Default registry entry (undefined → backend picks).
     const sendSess = useChatStore.getState().sessions[sessionId];
@@ -522,8 +426,13 @@ function ChatPane({
 
     try {
       const callbacks = buildStreamCallbacks(
-        sessionId, pendingId, patchMessage, appendToolCall,
-        setSending, streamRef, pendingRef,
+        sessionId,
+        pendingId,
+        patchMessage,
+        appendToolCall,
+        setSending,
+        streamRef,
+        pendingRef,
         (pid, _text, summary) => onStreamDone(pid, trimmed, summary),
       );
       const handle = await chatStream(
@@ -560,12 +469,12 @@ function ChatPane({
    *  1. Confirm the last message is a completed assistant bubble
    *     with an immediately-preceding user turn.
    *  2. Patch that assistant row in place: clear content / error /
-   *     reasoning, drop its tool-call ribbon, flip pending=true. This
-   *     keeps its id (and DB row) stable — tokens, feedback, and the
-   *     title-generation trigger all key off the same id so reusing
-   *     it avoids a cascade of side-effect cleanups.
-   *  3. Re-stream into the same id with history[..target), i.e. every
-   *     message up to (but not including) the assistant being
+   *     reasoning, drop its tool-call ribbon, flip pending=true.
+   *     This keeps its id (and DB row) stable — tokens, feedback,
+   *     and the title-generation trigger all key off the same id so
+   *     reusing it avoids a cascade of side-effect cleanups.
+   *  3. Re-stream into the same id with history[..target), i.e.
+   *     every message up to (but not including) the assistant being
    *     retried, plus the preceding user turn as the tail.
    */
   async function retry() {
@@ -607,8 +516,13 @@ function ChatPane({
     pendingRef.current = targetId;
     try {
       const callbacks = buildStreamCallbacks(
-        sessionId, targetId, patchMessage, appendToolCall,
-        setSending, streamRef, pendingRef,
+        sessionId,
+        targetId,
+        patchMessage,
+        appendToolCall,
+        setSending,
+        streamRef,
+        pendingRef,
       );
       const handle = await chatStream(
         {
@@ -657,7 +571,9 @@ function ChatPane({
           if (res.text) {
             setDraft((d) => (d ? `${d} ${res.text}` : res.text));
           }
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
       } catch {
         setVoiceRecording(false);
       }
@@ -678,14 +594,14 @@ function ChatPane({
   }
 
   function onTextareaKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // IME guard. `isComposing` alone is not enough on macOS WKWebView +
-    // Chinese pinyin: after a candidate commit, some IMEs fire a
+    // IME guard. `isComposing` alone is not enough on macOS WKWebView
+    // + Chinese pinyin: after a candidate commit, some IMEs fire a
     // trailing Enter keydown with `isComposing === false` but
-    // `keyCode === 229` (the "IME still processing" sentinel). Without
-    // checking 229 we'd treat that trailing Enter as "send" and split
-    // the user's typed CJK across a literal newline (bug: "下午好" → bubble
-    // shows "下午\n好"). React's `KeyboardEvent` doesn't expose
-    // `keyCode`, so read it off the native event.
+    // `keyCode === 229` (the "IME still processing" sentinel).
+    // Without checking 229 we'd treat that trailing Enter as "send"
+    // and split the user's typed CJK across a literal newline (bug:
+    // "下午好" → bubble shows "下午\n好"). React's `KeyboardEvent`
+    // doesn't expose `keyCode`, so read it off the native event.
     const ne = e.nativeEvent as unknown as { keyCode?: number };
     if (
       e.key === 'Enter' &&
@@ -696,6 +612,11 @@ function ChatPane({
       e.preventDefault();
       if (!sending) void send(draft);
     }
+  }
+
+  function onDraftChange(next: string) {
+    setDraft(next);
+    clearPendingDraftIfSet();
   }
 
   return (
@@ -717,10 +638,10 @@ function ChatPane({
         </div>
       ) : (
         <div className="relative flex min-h-0 flex-1 flex-col">
-          {/* Floating-ish search bar: absolutely positioned INSIDE the
-              scroll container so it doesn't steal layout height from
-              the message list (no "bar pushes list down" jank). Kept
-              above the list via z-10. */}
+          {/* Floating-ish search bar: absolutely positioned INSIDE
+              the scroll container so it doesn't steal layout height
+              from the message list (no "bar pushes list down"
+              jank). Kept above the list via z-10. */}
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center px-6">
             <ChatSearch
               open={searchOpen}
@@ -756,247 +677,33 @@ function ChatPane({
         </div>
       )}
 
-      <div className="border-t border-border bg-bg/80 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 pt-3">
-          <ActiveLLMBadge />
-          <RoutingHint draft={draft} />
-        </div>
-        <form
-          onSubmit={onSubmit}
-          onDragEnter={onDragEnter}
-          onDragLeave={onDragLeave}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          className={cn(
-            'relative mx-auto flex max-w-3xl flex-col gap-2 px-6 pb-4 pt-2',
-            dragDepth > 0 && 'ring-2 ring-gold-500/50 ring-offset-0',
-          )}
-          data-testid="chat-composer"
-        >
-          {/* Drag-drop overlay — appears when files are being dragged over
-              the composer area so the user knows dropping will attach. */}
-          {dragDepth > 0 && (
-            <div
-              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-gold-500/10 backdrop-blur-[1px]"
-              data-testid="chat-drop-overlay"
-            >
-              <span className="rounded-md border border-gold-500/40 bg-bg-elev-1 px-3 py-1.5 text-xs text-gold-500">
-                Drop to attach
-              </span>
-            </div>
-          )}
-
-          {attachError && (
-            <div
-              className="rounded-md border border-danger/40 bg-danger/5 px-3 py-1.5 text-xs text-danger"
-              data-testid="chat-attach-error"
-            >
-              {attachError}
-            </div>
-          )}
-
-          {/* T4.4b — non-blocking budget warnings from the last send.
-              Blocking breaches are handled by a modal confirm in
-              send() itself, not here. */}
-          {budgetWarnings.length > 0 && (
-            <div
-              className="flex flex-col gap-0.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
-              data-testid="chat-budget-warning"
-            >
-              <div className="inline-flex items-center gap-1.5">
-                <Icon icon={AlertTriangle} size="sm" />
-                <span className="font-medium">{t('chat_page.budget_over_cap')}</span>
-              </div>
-              {budgetWarnings.map((line, i) => (
-                <div key={i} className="pl-5 font-mono text-[11px] opacity-90">
-                  {line}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* T1.5c — surface when the active model clearly can't read
-              images. We don't hard-block the send (the user may be
-              mid-model-switch and know what they're doing); just warn
-              once so nobody wonders why the model keeps saying "I can't
-              see any image". Non-image attachments never trigger this
-              because their [attached: name] text marker still works. */}
-          {imageBlockedByModel && (
-            <div
-              className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
-              data-testid="chat-vision-warning"
-            >
-              <Icon icon={AlertTriangle} size="sm" />
-              <span>
-                <Trans
-                  i18nKey="chat_page.vision_warning"
-                  values={{ model: effectiveModel }}
-                  components={{
-                    code: <code className="rounded bg-amber-500/10 px-1" />,
-                  }}
-                />
-              </span>
-            </div>
-          )}
-
-          {pendingAttachments.length > 0 && (
-            <ul
-              className="flex flex-wrap items-center gap-1.5"
-              data-testid="chat-attachment-chips"
-            >
-              {pendingAttachments.map((a) => (
-                <li
-                  key={a.id}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elev-1 px-2 py-0.5 text-xs text-fg"
-                  data-testid={`chat-attachment-chip-${a.id}`}
-                  title={`${a.mime} · ${formatBytes(a.size)}`}
-                >
-                  <Icon icon={Paperclip} size="xs" className="text-fg-subtle" />
-                  <span className="max-w-[180px] truncate">{a.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => void removePendingAttachment(a.id)}
-                    aria-label={`${t('chat_page.remove_attachment')} ${a.name}`}
-                    className="rounded p-0.5 text-fg-subtle transition-colors hover:bg-bg-elev-2 hover:text-fg"
-                  >
-                    <Icon icon={X} size="xs" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="flex items-end gap-2">
-            {/* Hidden input — Paperclip button clicks it to open the
-                native file chooser. No plugin dependency, works in both
-                browser (dev/e2e) and Tauri. */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={onFilePicked}
-              className="hidden"
-              data-testid="chat-file-input"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 px-3"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={sending}
-              aria-label={t('chat_page.attach_file')}
-              title={
-                visionCap === 'no'
-                  ? `${t('chat_page.attach_file')} ${t('chat_page.attach_text_only', { model: effectiveModel ?? 'current model' })}`
-                  : visionCap === 'unknown'
-                    ? `${t('chat_page.attach_file')} ${t('chat_page.attach_vision_unverified')}`
-                    : t('chat_page.attach_file')
-              }
-              data-testid="chat-attach-button"
-              data-vision-support={visionCap}
-            >
-              <Icon icon={Paperclip} size="md" />
-            </Button>
-
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                clearPendingDraftIfSet();
-              }}
-              onKeyDown={onTextareaKeyDown}
-              onPaste={onPaste}
-              rows={1}
-              placeholder={t('chat_page.message_placeholder')}
-              disabled={sending}
-              className={cn(
-                // `min-h` anchors the empty state; JS auto-resize
-                // governs everything above that up to the ~132px
-                // ceiling enforced in the useLayoutEffect. `max-h`
-                // is kept as a CSS safety net in case the JS never
-                // runs (SSR, error boundaries).
-                'min-h-[44px] max-h-[132px] flex-1 resize-none rounded-xl border border-border',
-                'bg-bg-elev-1 px-4 py-3 text-sm text-fg placeholder:text-fg-subtle',
-                'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
-                'disabled:opacity-60',
-              )}
-              data-testid="chat-textarea"
-            />
-            {voiceRecording ? (
-              <Button
-                type="button"
-                variant="danger"
-                className="h-11 px-4"
-                onClick={onVoiceStop}
-                aria-label={t('chat_page.voice_stop')}
-                title={t('chat_page.voice_stop')}
-                data-testid="chat-voice-stop"
-              >
-                <Icon icon={Mic} size="md" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-11 px-3"
-                onClick={onVoiceStart}
-                aria-label={t('chat_page.voice_start')}
-                title={t('chat_page.voice_start')}
-                data-testid="chat-voice-start"
-              >
-                <Icon icon={Mic} size="md" className="text-fg-subtle" />
-              </Button>
-            )}
-            {sending ? (
-              <Button
-                type="submit"
-                variant="secondary"
-                className="h-11 px-4"
-                aria-label={t('chat_page.stop_generating')}
-                title={t('chat_page.stop')}
-              >
-                <Icon icon={Square} size="md" fill="currentColor" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={!draft.trim() && pendingAttachments.length === 0}
-                className="h-11 px-4"
-                aria-label={t('chat_page.send_message')}
-                title={t('chat_page.send')}
-                data-testid="chat-send"
-              >
-                <Icon icon={Send} size="md" />
-              </Button>
-            )}
-          </div>
-        </form>
-        <LearningIndicator />
-      </div>
-    </div>
-  );
-}
-
-function LearningIndicator() {
-  const { t } = useTranslation();
-  const lastLearningAt = useChatStore((s) => s.lastLearningAt);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!lastLearningAt) return;
-    setVisible(true);
-    const h = setTimeout(() => setVisible(false), 5000);
-    return () => clearTimeout(h);
-  }, [lastLearningAt]);
-
-  if (!visible) return null;
-
-  return (
-    <div className="flex items-center justify-center gap-1.5 py-1 text-[10px] text-fg-subtle">
-      <Icon icon={Sparkles} size="xs" className="text-gold-500" />
-      {t('chat_page.learning_extracted')}
+      <Composer
+        draft={draft}
+        sending={sending}
+        voiceRecording={voiceRecording}
+        pendingAttachments={att.pendingAttachments}
+        dragDepth={att.dragDepth}
+        attachError={att.attachError}
+        budgetWarnings={budgetWarnings}
+        imageBlockedByModel={imageBlockedByModel}
+        visionCap={visionCap}
+        effectiveModel={effectiveModel}
+        textareaRef={textareaRef}
+        fileInputRef={fileInputRef}
+        onDraftChange={onDraftChange}
+        onTextareaKeyDown={onTextareaKeyDown}
+        onPaste={att.onPaste}
+        onSubmit={onSubmit}
+        onDragEnter={att.onDragEnter}
+        onDragLeave={att.onDragLeave}
+        onDragOver={att.onDragOver}
+        onDrop={att.onDrop}
+        onFilePicked={att.onFilePicked}
+        onRemoveAttachment={(id) => void att.removePendingAttachment(id)}
+        onVoiceStart={onVoiceStart}
+        onVoiceStop={onVoiceStop}
+      />
+      <LearningIndicator />
     </div>
   );
 }
