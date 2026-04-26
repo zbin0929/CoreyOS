@@ -34,6 +34,7 @@ import { describeBreach, evaluateBudgetGate } from './budgetGate';
 import { enrichHistoryWithContext } from './enrichHistory';
 import { canRetryLastAssistant } from './retryGuard';
 import { resolveRoutedRule } from './routing';
+import { pickTurnAdapter } from './turnAdapter';
 import { buildStreamCallbacks, resolveAdapterId, toDto } from './useStreamCallbacks';
 import type { useAttachments } from './useAttachments';
 
@@ -284,32 +285,21 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
 
     const finalHistory = await enrichHistoryWithContext(historyForIpc, contentForMessage);
 
-    // T5.5b / T6.4 — adapter routing. Priority for THIS turn:
-    //   1. Routing-rule match (handled below as `routedAdapterId`)
-    //   2. Per-session LLM Profile pin — set when the user picked a
-    //      Profile row in the model picker. Must win over the global
-    //      AgentSwitcher choice, otherwise "pick profile X" silently
-    //      keeps routing through whatever agent is globally active.
-    //      NOTE: this does NOT look at session.adapterId — that
-    //      field is purely for sidebar grouping and is frozen at
-    //      creation (see db.rs :: upsert_session COALESCE).
-    //   3. Global AgentSwitcher choice (`useAgentsStore.activeId`).
-    //   4. Default registry entry (undefined → backend picks).
+    // T5.5b / T6.4 — adapter routing. The priority-chain logic is
+    // factored into `pickTurnAdapter` (pure, fully unit-tested);
+    // here we just gather the inputs imperatively from the three
+    // stores so the verdict is scoped to THIS send (a subsequent
+    // switcher change must NOT re-route the in-flight stream).
     const sendSess = useChatStore.getState().sessions[sessionId];
-    const sendProfilePin = sendSess?.llmProfileId ?? null;
-    const fallbackAdapterId =
-      (sendProfilePin
-        ? `hermes:profile:${sendProfilePin}`
-        : useAgentsStore.getState().activeId) ?? undefined;
-    const registered = new Set(
-      useAgentsStore.getState().adapters?.map((a) => a.id) ?? [],
-    );
     const matched = resolveRoutedRule(useRoutingStore.getState().rules, trimmed);
-    const routedAdapterId =
-      matched && registered.has(matched.target_adapter_id)
-        ? matched.target_adapter_id
-        : null;
-    const activeAdapterId = routedAdapterId ?? fallbackAdapterId;
+    const { activeAdapterId, routedAdapterId } = pickTurnAdapter({
+      profilePin: sendSess?.llmProfileId ?? null,
+      agentsActiveId: useAgentsStore.getState().activeId,
+      registeredAdapterIds: new Set(
+        useAgentsStore.getState().adapters?.map((a) => a.id) ?? [],
+      ),
+      routedRuleTargetId: matched?.target_adapter_id ?? null,
+    });
     if (routedAdapterId) {
       const priorUserCount = messages.filter((m) => m.role === 'user').length;
       if (priorUserCount === 0) {
