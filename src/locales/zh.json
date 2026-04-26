@@ -889,11 +889,16 @@
     "show": "显示",
     "hide": "隐藏",
     "env_placeholder_new": "粘贴 Token…",
-    "env_placeholder_overwrite": "留空保持不变",
+    "env_placeholder_overwrite": "",
     "env_placeholder_will_clear": "保存时将清除",
     "env_clear": "保存时清除此密钥",
     "env_clear_undo": "保留此密钥",
     "list_placeholder": "每行一个",
+    "token_probe": {
+      "checking": "正在验证 token…",
+      "ok": "已验证：{{name}}",
+      "err": "Token 校验失败"
+    },
     "no_changes": "没有待保存的改动。",
     "confirm_title": "确认改动",
     "confirm_save": "应用",

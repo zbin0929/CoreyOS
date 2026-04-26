@@ -108,6 +108,7 @@ pub fn run() {
             ipc::paths::app_paths,
             ipc::channels::hermes_channel_list,
             ipc::channels::hermes_channel_save,
+            ipc::channels::probe::hermes_channel_probe_token,
             ipc::channel_status::hermes_channel_status_list,
             ipc::hermes_logs::hermes_log_tail,
             ipc::hermes_profiles::hermes_profile_list,

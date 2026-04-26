@@ -20,6 +20,8 @@ use serde_yaml::Value as YamlValue;
 use tauri::State;
 
 use crate::channels::{self as cat, CHANNEL_SPECS};
+
+pub mod probe;
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config;
 use crate::sandbox::{self, PathAuthority};

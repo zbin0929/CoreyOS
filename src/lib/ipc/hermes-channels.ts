@@ -73,6 +73,44 @@ export function hermesChannelSave(args: ChannelSaveArgs): Promise<ChannelState> 
   return invoke<ChannelState>('hermes_channel_save', { args });
 }
 
+// ──────────────────────── Channel token probe ─────────────────────────
+
+/**
+ * Result of `hermesChannelProbeToken`. The form surfaces this inline
+ * next to the token input so the user can confirm a fresh paste
+ * actually authenticates as the bot they think it does.
+ *
+ * Only Telegram / Discord / Slack are wired today — those are the
+ * three platforms whose identity probe is a single GET with the bot
+ * token alone. Multi-credential flows (WeCom, Feishu) and OAuth
+ * flows (Slack distribution) need richer UI and are intentionally
+ * absent.
+ */
+export interface ChannelProbeResult {
+  ok: boolean;
+  /** Platform-side label: `@MyBotName`, `MyBot#1234`, `acme-team`. */
+  display_name: string | null;
+  /** Secondary id (Telegram bot id, Slack team id, Discord user id). */
+  identifier: string | null;
+  /** Humanised error from the platform — e.g. Telegram's
+   *  `Unauthorized`, Slack's `invalid_auth`. Null on success. */
+  error: string | null;
+}
+
+/** Hit the platform's identity endpoint with the supplied token. The
+ *  `channel_id` MUST match one of the supported probes (telegram /
+ *  discord / slack); other channels return an IPC error so the UI can
+ *  hide the affordance for them. */
+export function hermesChannelProbeToken(
+  channelId: string,
+  token: string,
+): Promise<ChannelProbeResult> {
+  return invoke<ChannelProbeResult>('hermes_channel_probe_token', {
+    channelId,
+    token,
+  });
+}
+
 // ──────────────────────── Channel live status (T3.4) ─────────────────────────
 
 /** Three-way liveness verdict for a single channel. `unknown` when the

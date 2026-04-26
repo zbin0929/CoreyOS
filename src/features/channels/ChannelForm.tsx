@@ -1,9 +1,33 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Eye, EyeOff, Loader2, Trash2, Undo2, X } from 'lucide-react';
+import { AlertCircle, Check, Eye, EyeOff, Loader2, Trash2, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import type { ChannelFieldKind, ChannelState } from '@/lib/ipc';
+import {
+  hermesChannelProbeToken,
+  type ChannelFieldKind,
+  type ChannelProbeResult,
+  type ChannelState,
+} from '@/lib/ipc';
+
+/**
+ * Channels whose identity endpoint we wired up in
+ * `ipc::channels::probe`. Each entry is `(channel_id, env_key)` —
+ * the env key the probe IPC expects in the `token` field. Adding
+ * a new platform here is a one-liner once its Rust probe lands.
+ */
+const PROBE_TARGETS: Record<string, string> = {
+  telegram: 'TELEGRAM_BOT_TOKEN',
+  discord: 'DISCORD_BOT_TOKEN',
+  slack: 'SLACK_BOT_TOKEN',
+};
+
+/** Per-input probe lifecycle. Stays in component state so a paste
+ *  → result → manual edit → re-probe sequence renders smoothly. */
+type ProbeSlot =
+  | { kind: 'idle' }
+  | { kind: 'probing' }
+  | { kind: 'done'; result: ChannelProbeResult };
 
 /**
  * Phase 3 · T3.2 — dynamic channel form.
@@ -75,6 +99,61 @@ export function ChannelForm({
   const [envInputs, setEnvInputs] = useState(initial.envInputs);
   const [yamlValues, setYamlValues] = useState(initial.yamlValues);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  // T-P1: per-env probe state. Only populated for env keys whose
+  // channel + key name are in `PROBE_TARGETS`. The form fires a
+  // debounced probe on input changes ≥ 12 chars (under that, every
+  // platform we support rejects as malformed anyway).
+  const [probes, setProbes] = useState<Record<string, ProbeSlot>>({});
+  const probeTimerRef = useRef<number | null>(null);
+
+  const probeEnvKey = PROBE_TARGETS[channel.id] ?? null;
+  const probeInput = probeEnvKey ? envInputs[probeEnvKey] ?? '' : '';
+
+  useEffect(() => {
+    // No probe target for this channel → nothing to do.
+    if (!probeEnvKey) return;
+    // Cancel any pending probe before kicking a new one. Stops a
+    // user mid-typing from spamming the platform's API.
+    if (probeTimerRef.current !== null) {
+      window.clearTimeout(probeTimerRef.current);
+      probeTimerRef.current = null;
+    }
+    const trimmed = probeInput.trim();
+    if (trimmed.length === 0) {
+      // Wipe the slot so the previous result doesn't shadow a
+      // brand-new (empty) field.
+      setProbes((s) => ({ ...s, [probeEnvKey]: { kind: 'idle' } }));
+      return;
+    }
+    if (trimmed.length < 12) {
+      // Too short to be any of the three target platforms' tokens
+      // (Telegram is "id:hex" ≥ 40, Discord ≥ 50, Slack `xoxb-…`).
+      // Skip the probe, keep the slot quiet so we don't render a
+      // stale ✗ during typing.
+      setProbes((s) => ({ ...s, [probeEnvKey]: { kind: 'idle' } }));
+      return;
+    }
+    probeTimerRef.current = window.setTimeout(() => {
+      setProbes((s) => ({ ...s, [probeEnvKey]: { kind: 'probing' } }));
+      hermesChannelProbeToken(channel.id, trimmed)
+        .then((result) =>
+          setProbes((s) => ({ ...s, [probeEnvKey]: { kind: 'done', result } })),
+        )
+        .catch(() => {
+          // Treat IPC errors as a non-result rather than a failure —
+          // we don't want a transport hiccup to make the user think
+          // their token is bad. The Save button still works without
+          // a positive probe.
+          setProbes((s) => ({ ...s, [probeEnvKey]: { kind: 'idle' } }));
+        });
+    }, 500);
+    return () => {
+      if (probeTimerRef.current !== null) {
+        window.clearTimeout(probeTimerRef.current);
+        probeTimerRef.current = null;
+      }
+    };
+  }, [probeEnvKey, probeInput, channel.id]);
   // T3.5 follow-up — env keys the user has marked for deletion in this
   // session. On save we send an empty string, which `write_env_key`
   // interprets as "remove this line from .env". Kept out of
@@ -217,6 +296,13 @@ export function ChannelForm({
           {k.hint_key && (
             <span className="text-fg-subtle">{t(k.hint_key)}</span>
           )}
+          {/* T-P1 — inline probe verdict. Only shown for the
+              channel's probe target env key, and only after a
+              real result lands. We keep the slot reserved during
+              `probing` so the row doesn't jump on success. */}
+          {probeEnvKey === k.name && (
+            <ProbeBadge slot={probes[k.name] ?? { kind: 'idle' }} />
+          )}
         </label>
       ))}
 
@@ -261,6 +347,52 @@ export function ChannelForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+// ───────────────────────── Probe badge ─────────────────────────
+
+/** Inline verdict pill rendered below a probeable env input. Three
+ *  states: probing (spinner), success (✓ + label), failure (✗ +
+ *  platform error). `idle` renders nothing — there's no signal
+ *  worth taking up vertical space for an empty field. */
+function ProbeBadge({ slot }: { slot: ProbeSlot }) {
+  const { t } = useTranslation();
+  if (slot.kind === 'idle') return null;
+  if (slot.kind === 'probing') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-[10px] text-fg-subtle"
+        data-testid="channel-probe-loading"
+      >
+        <Icon icon={Loader2} size="xs" className="animate-spin" />
+        {t('channels.token_probe.checking')}
+      </span>
+    );
+  }
+  const { result } = slot;
+  if (result.ok) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
+        title={result.identifier ?? undefined}
+        data-testid="channel-probe-ok"
+      >
+        <Icon icon={Check} size="xs" />
+        {t('channels.probe.ok', {
+          name: result.display_name ?? result.identifier ?? '?',
+        })}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] text-danger"
+      data-testid="channel-probe-err"
+    >
+      <Icon icon={AlertCircle} size="xs" />
+      {result.error ?? t('channels.token_probe.err')}
+    </span>
   );
 }
 

@@ -894,6 +894,11 @@
     "env_clear": "Clear this secret on save",
     "env_clear_undo": "Keep this secret",
     "list_placeholder": "one per line",
+    "token_probe": {
+      "checking": "Verifying token…",
+      "ok": "Authenticated as {{name}}",
+      "err": "Token rejected"
+    },
     "no_changes": "No changes to save.",
     "confirm_title": "Review changes",
     "confirm_save": "Apply",
