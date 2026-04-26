@@ -18,7 +18,6 @@ import {
   attachmentDelete,
   attachmentStageBlob,
   chatStream,
-  dbMessageSetUsage,
   ipcErrorMessage,
   learningIndexMessage,
   voiceTranscribe,
@@ -50,6 +49,7 @@ import { usePostSendEffects } from './usePostSendEffects';
 import { ChatHeaderActions, EmptyHero, RoutingHint } from './ChatHelpers';
 import { formatBytes } from './formatBytes';
 import { enrichHistoryWithContext } from './enrichHistory';
+import { buildStreamCallbacks, resolveAdapterId, toDto } from './useStreamCallbacks';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
 import type { VirtuosoHandle } from 'react-virtuoso';
@@ -453,28 +453,6 @@ function ChatPane({
     // pending runbook draft so a back-navigation doesn't re-seed it.
     clearPendingDraftIfSet();
 
-    // Build the wire history. Prior messages' attachments ride along
-    // too — if the user references an earlier image in the next turn
-    // ("what colour was it?"), the provider needs that image back in
-    // context. `attachments` is `undefined` on plain-text turns so the
-    // Rust adapter keeps the classic string content shape.
-    const toDto = (
-      role: 'user' | 'assistant',
-      content: string,
-      atts: UiAttachment[] | undefined,
-    ): ChatMessageDto =>
-      atts && atts.length > 0
-        ? {
-            role,
-            content,
-            attachments: atts.map((a) => ({
-              path: a.path,
-              mime: a.mime,
-              name: a.name,
-            })),
-          }
-        : { role, content };
-
     const historyForIpc: ChatMessageDto[] = [
       ...messages
         .filter((m) => !m.error && !m.pending)
@@ -543,79 +521,19 @@ function ChatPane({
     }
 
     try {
+      const callbacks = buildStreamCallbacks(
+        sessionId, pendingId, patchMessage, appendToolCall,
+        setSending, streamRef, pendingRef,
+        (pid, _text, summary) => onStreamDone(pid, trimmed, summary),
+      );
       const handle = await chatStream(
-        // Pass the effective model (per-session override, falling back to
-        // gateway default). `resolve_turn` in the Rust Hermes adapter
-        // honours `turn.model` — an older comment here incorrectly
-        // claimed Hermes ignored it, which is why the session-level
-        // override existed in the store but never actually took effect.
         {
           messages: finalHistory,
           adapter_id: activeAdapterId,
           model: effectiveModel ?? undefined,
           model_supports_vision: visionCap !== 'no',
         },
-        {
-          onDelta: (chunk) => {
-            // Read current content from store to append — avoids stale closures.
-            const sess = useChatStore.getState().sessions[sessionId];
-            const current = sess?.messages.find((m) => m.id === pendingId);
-            patchMessage(sessionId, pendingId, {
-              content: (current?.content ?? '') + chunk,
-              pending: false,
-            });
-          },
-          onReasoning: (chunk) => {
-            // Reasoning-content stream (deepseek-reasoner / o1). Same
-            // append-style update as `onDelta`; we keep it on a
-            // separate field so the main bubble body stays the final
-            // answer and the chain-of-thought renders in its own
-            // collapsible panel inside MessageBubble.
-            const sess = useChatStore.getState().sessions[sessionId];
-            const current = sess?.messages.find((m) => m.id === pendingId);
-            patchMessage(sessionId, pendingId, {
-              reasoning: (current?.reasoning ?? '') + chunk,
-              // Clear the pending spinner on the first reasoning
-              // token too — reasoning models idle before producing
-              // any content delta, and showing the spinner while
-              // the chain-of-thought is visibly streaming is
-              // confusing.
-              pending: false,
-            });
-          },
-          onTool: (progress) => {
-            appendToolCall(sessionId, pendingId, {
-              id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-              tool: progress.tool,
-              emoji: progress.emoji,
-              label: progress.label,
-              at: Date.now(),
-            });
-            // A tool event proves the stream is alive — clear the pending spinner.
-            const sess = useChatStore.getState().sessions[sessionId];
-            const current = sess?.messages.find((m) => m.id === pendingId);
-            if (current?.pending) {
-              patchMessage(sessionId, pendingId, { pending: false });
-            }
-          },
-          onDone: (summary) => {
-            patchMessage(sessionId, pendingId, { pending: false });
-            setSending(false);
-            streamRef.current = null;
-            pendingRef.current = null;
-            onStreamDone(pendingId, trimmed, summary);
-          },
-          onError: (err) => {
-            patchMessage(sessionId, pendingId, {
-              content: '',
-              pending: false,
-              error: ipcErrorMessage(err),
-            });
-            setSending(false);
-            streamRef.current = null;
-            pendingRef.current = null;
-          },
-        },
+        callbacks,
       );
       streamRef.current = handle;
     } catch (e) {
@@ -679,35 +597,19 @@ function ChatPane({
     });
 
     const historyForIpc: ChatMessageDto[] = messages
-      .slice(0, messages.length - 1) // exclude target assistant
+      .slice(0, messages.length - 1)
       .filter((m) => !m.error && !m.pending)
-      .map<ChatMessageDto>((m) =>
-        m.attachments && m.attachments.length > 0
-          ? {
-              role: m.role,
-              content: m.content,
-              attachments: m.attachments.map((a) => ({
-                path: a.path,
-                mime: a.mime,
-                name: a.name,
-              })),
-            }
-          : { role: m.role, content: m.content },
-      );
+      .map<ChatMessageDto>((m) => toDto(m.role, m.content, m.attachments));
 
-    // Mirror send()'s priority: profile pin wins over the global
-    // AgentSwitcher choice, otherwise regenerating a profile reply
-    // would silently route through the default gateway.
-    const retrySess = useChatStore.getState().sessions[sessionId];
-    const retryProfilePin = retrySess?.llmProfileId ?? null;
-    const activeAdapterId =
-      (retryProfilePin
-        ? `hermes:profile:${retryProfilePin}`
-        : useAgentsStore.getState().activeId) ?? undefined;
+    const activeAdapterId = resolveAdapterId(sessionId, messages, '');
 
     setSending(true);
     pendingRef.current = targetId;
     try {
+      const callbacks = buildStreamCallbacks(
+        sessionId, targetId, patchMessage, appendToolCall,
+        setSending, streamRef, pendingRef,
+      );
       const handle = await chatStream(
         {
           messages: historyForIpc,
@@ -715,64 +617,7 @@ function ChatPane({
           model: effectiveModel ?? undefined,
           model_supports_vision: visionCap !== 'no',
         },
-        {
-          onDelta: (chunk) => {
-            const sess = useChatStore.getState().sessions[sessionId];
-            const current = sess?.messages.find((m) => m.id === targetId);
-            patchMessage(sessionId, targetId, {
-              content: (current?.content ?? '') + chunk,
-              pending: false,
-            });
-          },
-          onReasoning: (chunk) => {
-            const sess = useChatStore.getState().sessions[sessionId];
-            const current = sess?.messages.find((m) => m.id === targetId);
-            patchMessage(sessionId, targetId, {
-              reasoning: (current?.reasoning ?? '') + chunk,
-              pending: false,
-            });
-          },
-          onTool: (progress) => {
-            appendToolCall(sessionId, targetId, {
-              id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-              tool: progress.tool,
-              emoji: progress.emoji,
-              label: progress.label,
-              at: Date.now(),
-            });
-            const sess = useChatStore.getState().sessions[sessionId];
-            const current = sess?.messages.find((m) => m.id === targetId);
-            if (current?.pending) {
-              patchMessage(sessionId, targetId, { pending: false });
-            }
-          },
-          onDone: (summary) => {
-            patchMessage(sessionId, targetId, { pending: false });
-            setSending(false);
-            streamRef.current = null;
-            pendingRef.current = null;
-            if (
-              summary.prompt_tokens !== null ||
-              summary.completion_tokens !== null
-            ) {
-              void dbMessageSetUsage({
-                messageId: targetId,
-                promptTokens: summary.prompt_tokens,
-                completionTokens: summary.completion_tokens,
-              }).catch(() => {});
-            }
-          },
-          onError: (err) => {
-            patchMessage(sessionId, targetId, {
-              content: '',
-              pending: false,
-              error: ipcErrorMessage(err),
-            });
-            setSending(false);
-            streamRef.current = null;
-            pendingRef.current = null;
-          },
-        },
+        callbacks,
       );
       streamRef.current = handle;
     } catch (e) {
