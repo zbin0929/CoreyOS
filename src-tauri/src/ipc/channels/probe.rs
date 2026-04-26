@@ -87,26 +87,62 @@ fn http_client() -> reqwest::Result<reqwest::Client> {
         .build()
 }
 
+// Telegram `getMe` returns `{ ok, description?, result: { id, username, first_name } }`.
+// Schema captures only the fields we surface.
+#[derive(serde::Deserialize)]
+struct TelegramGetMe {
+    ok: bool,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    result: Option<TelegramUser>,
+}
+#[derive(serde::Deserialize)]
+struct TelegramUser {
+    id: i64,
+    #[serde(default)]
+    username: Option<String>,
+    #[serde(default)]
+    first_name: Option<String>,
+}
+
+/// Map a parsed `getMe` body into the IPC result shape. Pulled out
+/// of the async wrapper so the projection stays unit-testable
+/// without spinning up an HTTP server.
+fn telegram_result_from(body: TelegramGetMe) -> ChannelProbeResult {
+    if !body.ok {
+        return ChannelProbeResult {
+            ok: false,
+            display_name: None,
+            identifier: None,
+            error: Some(body.description.unwrap_or_else(|| "unknown error".into())),
+        };
+    }
+    let Some(user) = body.result else {
+        // Defensive: Telegram never emits this shape, but if a
+        // future API tweak does we'd rather surface it as a probe
+        // failure than crash the IPC.
+        return ChannelProbeResult {
+            ok: false,
+            display_name: None,
+            identifier: None,
+            error: Some("getMe ok=true but result missing".into()),
+        };
+    };
+    let display_name = user
+        .username
+        .as_deref()
+        .map(|u| format!("@{u}"))
+        .or(user.first_name);
+    ChannelProbeResult {
+        ok: true,
+        display_name,
+        identifier: Some(user.id.to_string()),
+        error: None,
+    }
+}
+
 async fn probe_telegram(token: &str) -> IpcResult<ChannelProbeResult> {
-    // Telegram's `getMe` returns `{ ok: true, result: { id, username, first_name } }`
-    // on success and `{ ok: false, description: "Unauthorized" }` on
-    // an invalid token. We mirror their `ok` flag straight through.
-    #[derive(serde::Deserialize)]
-    struct Resp {
-        ok: bool,
-        #[serde(default)]
-        description: Option<String>,
-        #[serde(default)]
-        result: Option<TgUser>,
-    }
-    #[derive(serde::Deserialize)]
-    struct TgUser {
-        id: i64,
-        #[serde(default)]
-        username: Option<String>,
-        #[serde(default)]
-        first_name: Option<String>,
-    }
     let url = format!("{TELEGRAM_API}/bot{token}/getMe");
     let client = http_client().map_err(|e| IpcError::Internal {
         message: format!("http client: {e}"),
@@ -118,50 +154,57 @@ async fn probe_telegram(token: &str) -> IpcResult<ChannelProbeResult> {
         .map_err(|e| IpcError::Internal {
             message: format!("telegram probe transport: {e}"),
         })?;
-    let body: Resp = resp.json().await.map_err(|e| IpcError::Internal {
+    let body: TelegramGetMe = resp.json().await.map_err(|e| IpcError::Internal {
         message: format!("telegram probe parse: {e}"),
     })?;
-    if !body.ok {
-        return Ok(ChannelProbeResult {
+    Ok(telegram_result_from(body))
+}
+
+// Discord's `users/@me` returns `{ id, username, discriminator,
+// global_name }` for bot tokens. Errors come back as
+// `{ message: "401: Unauthorized", code }`.
+#[derive(serde::Deserialize)]
+struct DiscordMe {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    username: Option<String>,
+    #[serde(default)]
+    discriminator: Option<String>,
+    #[serde(default)]
+    global_name: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+}
+
+fn discord_result_from(body: DiscordMe, http_ok: bool, status_label: &str) -> ChannelProbeResult {
+    if !http_ok {
+        return ChannelProbeResult {
             ok: false,
             display_name: None,
             identifier: None,
-            error: Some(body.description.unwrap_or_else(|| "unknown error".into())),
-        });
+            error: Some(body.message.unwrap_or_else(|| status_label.to_string())),
+        };
     }
-    let user = body.result.ok_or_else(|| IpcError::Internal {
-        message: "telegram getMe ok=true but result missing".into(),
-    })?;
-    let display_name = user
-        .username
-        .as_deref()
-        .map(|u| format!("@{u}"))
-        .or(user.first_name);
-    Ok(ChannelProbeResult {
+    let display_name = body.global_name.or_else(|| {
+        match (body.username.as_deref(), body.discriminator.as_deref()) {
+            // Legacy Discord tag is `name#1234`; the migrated unique-
+            // username world stamps `discriminator: "0"`, in which
+            // case we drop the suffix.
+            (Some(u), Some(d)) if d != "0" => Some(format!("{u}#{d}")),
+            (Some(u), _) => Some(u.to_string()),
+            _ => None,
+        }
+    });
+    ChannelProbeResult {
         ok: true,
         display_name,
-        identifier: Some(user.id.to_string()),
+        identifier: body.id,
         error: None,
-    })
+    }
 }
 
 async fn probe_discord(token: &str) -> IpcResult<ChannelProbeResult> {
-    // Discord's `users/@me` returns `{ id, username, discriminator,
-    // global_name }` for bot tokens (auth header `Bot <token>`).
-    // Errors come back as `{ message: "401: Unauthorized", code }`.
-    #[derive(serde::Deserialize)]
-    struct Resp {
-        #[serde(default)]
-        id: Option<String>,
-        #[serde(default)]
-        username: Option<String>,
-        #[serde(default)]
-        discriminator: Option<String>,
-        #[serde(default)]
-        global_name: Option<String>,
-        #[serde(default)]
-        message: Option<String>,
-    }
     let url = format!("{DISCORD_API}/users/@me");
     let client = http_client().map_err(|e| IpcError::Internal {
         message: format!("http client: {e}"),
@@ -175,48 +218,50 @@ async fn probe_discord(token: &str) -> IpcResult<ChannelProbeResult> {
             message: format!("discord probe transport: {e}"),
         })?;
     let status = resp.status();
-    let body: Resp = resp.json().await.map_err(|e| IpcError::Internal {
+    let status_label = status.to_string();
+    let body: DiscordMe = resp.json().await.map_err(|e| IpcError::Internal {
         message: format!("discord probe parse: {e}"),
     })?;
-    if !status.is_success() {
-        return Ok(ChannelProbeResult {
+    Ok(discord_result_from(body, status.is_success(), &status_label))
+}
+
+// Slack's `auth.test` returns `{ ok: true, team, user, team_id, user_id }`
+// on success and `{ ok: false, error: "invalid_auth" }` otherwise.
+#[derive(serde::Deserialize)]
+struct SlackAuthTest {
+    ok: bool,
+    #[serde(default)]
+    team: Option<String>,
+    #[serde(default)]
+    team_id: Option<String>,
+    #[serde(default)]
+    user: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+fn slack_result_from(body: SlackAuthTest) -> ChannelProbeResult {
+    if !body.ok {
+        return ChannelProbeResult {
             ok: false,
             display_name: None,
             identifier: None,
-            error: Some(body.message.unwrap_or_else(|| status.to_string())),
-        });
+            error: Some(body.error.unwrap_or_else(|| "unknown error".into())),
+        };
     }
-    let display_name = body.global_name.or_else(|| {
-        match (body.username.as_deref(), body.discriminator.as_deref()) {
-            (Some(u), Some(d)) if d != "0" => Some(format!("{u}#{d}")),
-            (Some(u), _) => Some(u.to_string()),
-            _ => None,
-        }
-    });
-    Ok(ChannelProbeResult {
+    // Pretty label = `team` (workspace name) when present; fall
+    // back to `user` for tokens whose scope doesn't surface team
+    // info.
+    let display_name = body.team.or_else(|| body.user.clone());
+    ChannelProbeResult {
         ok: true,
         display_name,
-        identifier: body.id,
+        identifier: body.team_id,
         error: None,
-    })
+    }
 }
 
 async fn probe_slack(token: &str) -> IpcResult<ChannelProbeResult> {
-    // Slack's `auth.test` returns `{ ok: true, team, user, team_id, user_id }`
-    // on success and `{ ok: false, error: "invalid_auth" }` otherwise.
-    // Bot tokens go in the `Authorization: Bearer <token>` header.
-    #[derive(serde::Deserialize)]
-    struct Resp {
-        ok: bool,
-        #[serde(default)]
-        team: Option<String>,
-        #[serde(default)]
-        team_id: Option<String>,
-        #[serde(default)]
-        user: Option<String>,
-        #[serde(default)]
-        error: Option<String>,
-    }
     let url = format!("{SLACK_API}/auth.test");
     let client = http_client().map_err(|e| IpcError::Internal {
         message: format!("http client: {e}"),
@@ -229,25 +274,120 @@ async fn probe_slack(token: &str) -> IpcResult<ChannelProbeResult> {
         .map_err(|e| IpcError::Internal {
             message: format!("slack probe transport: {e}"),
         })?;
-    let body: Resp = resp.json().await.map_err(|e| IpcError::Internal {
+    let body: SlackAuthTest = resp.json().await.map_err(|e| IpcError::Internal {
         message: format!("slack probe parse: {e}"),
     })?;
-    if !body.ok {
-        return Ok(ChannelProbeResult {
-            ok: false,
-            display_name: None,
-            identifier: None,
-            error: Some(body.error.unwrap_or_else(|| "unknown error".into())),
-        });
+    Ok(slack_result_from(body))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper to feed JSON straight into the Telegram parser the
+    /// same way reqwest's `.json()` would. Failing to deserialize
+    /// here is itself a useful coverage signal — the structs above
+    /// have to keep up with whatever Telegram emits.
+    fn parse_telegram(json: &str) -> ChannelProbeResult {
+        let body: TelegramGetMe = serde_json::from_str(json).expect("valid JSON");
+        telegram_result_from(body)
     }
-    // Pretty label = `team` (workspace name) when present; fall
-    // back to `user` for tokens whose scope doesn't surface team
-    // info.
-    let display_name = body.team.or_else(|| body.user.clone());
-    Ok(ChannelProbeResult {
-        ok: true,
-        display_name,
-        identifier: body.team_id,
-        error: None,
-    })
+    fn parse_discord(json: &str, http_ok: bool, status: &str) -> ChannelProbeResult {
+        let body: DiscordMe = serde_json::from_str(json).expect("valid JSON");
+        discord_result_from(body, http_ok, status)
+    }
+    fn parse_slack(json: &str) -> ChannelProbeResult {
+        let body: SlackAuthTest = serde_json::from_str(json).expect("valid JSON");
+        slack_result_from(body)
+    }
+
+    #[test]
+    fn telegram_ok_with_username_renders_at_handle() {
+        let out = parse_telegram(
+            r#"{"ok": true, "result": {"id": 1234567890, "username": "MyBot", "first_name": "My Bot"}}"#,
+        );
+        assert!(out.ok);
+        assert_eq!(out.display_name.as_deref(), Some("@MyBot"));
+        assert_eq!(out.identifier.as_deref(), Some("1234567890"));
+        assert!(out.error.is_none());
+    }
+
+    #[test]
+    fn telegram_ok_without_username_falls_back_to_first_name() {
+        let out = parse_telegram(
+            r#"{"ok": true, "result": {"id": 42, "first_name": "Alice"}}"#,
+        );
+        assert!(out.ok);
+        assert_eq!(out.display_name.as_deref(), Some("Alice"));
+    }
+
+    #[test]
+    fn telegram_unauthorized_surfaces_platform_description() {
+        let out = parse_telegram(r#"{"ok": false, "description": "Unauthorized"}"#);
+        assert!(!out.ok);
+        assert_eq!(out.error.as_deref(), Some("Unauthorized"));
+        assert!(out.display_name.is_none());
+    }
+
+    #[test]
+    fn discord_legacy_user_renders_with_discriminator() {
+        let out = parse_discord(
+            r#"{"id": "987", "username": "MyBot", "discriminator": "1234"}"#,
+            true,
+            "200 OK",
+        );
+        assert!(out.ok);
+        assert_eq!(out.display_name.as_deref(), Some("MyBot#1234"));
+        assert_eq!(out.identifier.as_deref(), Some("987"));
+    }
+
+    #[test]
+    fn discord_unique_username_drops_zero_discriminator() {
+        // Post-2023 Discord users have `discriminator: "0"`.
+        let out = parse_discord(
+            r#"{"id": "1", "username": "newbot", "discriminator": "0", "global_name": "New Bot"}"#,
+            true,
+            "200 OK",
+        );
+        // global_name wins when present.
+        assert_eq!(out.display_name.as_deref(), Some("New Bot"));
+    }
+
+    #[test]
+    fn discord_http_error_surfaces_message_or_status() {
+        // Discord-style error body.
+        let out = parse_discord(
+            r#"{"message": "401: Unauthorized", "code": 0}"#,
+            false,
+            "401 Unauthorized",
+        );
+        assert!(!out.ok);
+        assert_eq!(out.error.as_deref(), Some("401: Unauthorized"));
+        // Empty body → fall back to status label.
+        let out2 = parse_discord(r#"{}"#, false, "401 Unauthorized");
+        assert_eq!(out2.error.as_deref(), Some("401 Unauthorized"));
+    }
+
+    #[test]
+    fn slack_ok_uses_team_name_with_team_id_in_identifier() {
+        let out = parse_slack(
+            r#"{"ok": true, "team": "Acme", "team_id": "T123", "user": "alice"}"#,
+        );
+        assert!(out.ok);
+        assert_eq!(out.display_name.as_deref(), Some("Acme"));
+        assert_eq!(out.identifier.as_deref(), Some("T123"));
+    }
+
+    #[test]
+    fn slack_ok_without_team_falls_back_to_user() {
+        let out = parse_slack(r#"{"ok": true, "user": "bob"}"#);
+        assert_eq!(out.display_name.as_deref(), Some("bob"));
+    }
+
+    #[test]
+    fn slack_invalid_auth_surfaces_platform_error_code() {
+        let out = parse_slack(r#"{"ok": false, "error": "invalid_auth"}"#);
+        assert!(!out.ok);
+        assert_eq!(out.error.as_deref(), Some("invalid_auth"));
+    }
 }
