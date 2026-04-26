@@ -443,7 +443,10 @@ mod tests {
             by_path.get("h2-only.md").expect("h2 row").as_deref(),
             Some("Sub heading")
         );
-        assert_eq!(by_path.get("blank-h1.md").expect("blank-h1 row").as_deref(), None);
+        assert_eq!(
+            by_path.get("blank-h1.md").expect("blank-h1 row").as_deref(),
+            None
+        );
         // Frontmatter is skipped; the body H1 wins.
         assert_eq!(
             by_path.get("fm.md").expect("fm row").as_deref(),
@@ -455,7 +458,10 @@ mod tests {
             Some("代码评审"),
         );
         assert_eq!(
-            by_path.get("fm-only-name.md").expect("fm-only-name row").as_deref(),
+            by_path
+                .get("fm-only-name.md")
+                .expect("fm-only-name row")
+                .as_deref(),
             Some("alt slug"),
         );
     }

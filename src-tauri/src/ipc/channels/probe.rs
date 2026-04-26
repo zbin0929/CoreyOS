@@ -222,7 +222,11 @@ async fn probe_discord(token: &str) -> IpcResult<ChannelProbeResult> {
     let body: DiscordMe = resp.json().await.map_err(|e| IpcError::Internal {
         message: format!("discord probe parse: {e}"),
     })?;
-    Ok(discord_result_from(body, status.is_success(), &status_label))
+    Ok(discord_result_from(
+        body,
+        status.is_success(),
+        &status_label,
+    ))
 }
 
 // Slack's `auth.test` returns `{ ok: true, team, user, team_id, user_id }`
@@ -314,9 +318,7 @@ mod tests {
 
     #[test]
     fn telegram_ok_without_username_falls_back_to_first_name() {
-        let out = parse_telegram(
-            r#"{"ok": true, "result": {"id": 42, "first_name": "Alice"}}"#,
-        );
+        let out = parse_telegram(r#"{"ok": true, "result": {"id": 42, "first_name": "Alice"}}"#);
         assert!(out.ok);
         assert_eq!(out.display_name.as_deref(), Some("Alice"));
     }
@@ -370,9 +372,8 @@ mod tests {
 
     #[test]
     fn slack_ok_uses_team_name_with_team_id_in_identifier() {
-        let out = parse_slack(
-            r#"{"ok": true, "team": "Acme", "team_id": "T123", "user": "alice"}"#,
-        );
+        let out =
+            parse_slack(r#"{"ok": true, "team": "Acme", "team_id": "T123", "user": "alice"}"#);
         assert!(out.ok);
         assert_eq!(out.display_name.as_deref(), Some("Acme"));
         assert_eq!(out.identifier.as_deref(), Some("T123"));
