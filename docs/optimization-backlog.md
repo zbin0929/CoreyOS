@@ -165,12 +165,22 @@ tauri-specta or similar codegen.
 ### P3.4 Storybook coverage for newly-extracted components
 
 **Problem**: OP-025 extracted ~15 React components from god files.
-Storybook stories are mostly missing for them; visual regression
-won't catch UI drift.
-**Fix**: One `*.stories.tsx` per extracted component. Targets:
-`LlmProfileCard`, `LlmProfileRow`, `ProfileCard`, `ServerRow`,
-`ServerForm`, `ApiKeyPanel`, `RestartBanner`, `AgentWizard*`.
-**Status**: ⏳ Open.
+Storybook stories were mostly missing; the original `.storybook/main.ts`
+explicitly excluded `src/features/**` because feature components read
+Zustand stores hydrated from IPC, which Storybook had no way to mock.
+**Fix**: Built `.storybook/withTauriIpc.tsx` — a decorator that
+installs the same in-memory `__TAURI_INTERNALS__` mock the Playwright
+suite uses (eval'd from `e2e/fixtures/tauri-mock.ts` via `new
+Function`). Loosened `main.ts` to scan `src/**/*.stories.{ts,tsx,mdx}`
+so feature stories are picked up automatically. Shipped a proof-of-
+concept `Composer.stories.tsx` covering Default / WithDraft /
+WithAttachments / DraggingFiles / Sending / VoiceRecording /
+WithWarnings — `pnpm build-storybook` passes end-to-end.
+**Status**: ✅ Decorator + first feature story landed. Remaining
+component stories (`LlmProfileCard`, `ProfileCard`, `ServerRow`,
+`ApiKeyPanel`, `RestartBanner`, `AgentWizard*`) are now mechanical
+follow-ups that any contributor can ship in a one-off PR using
+`Composer.stories.tsx` as a template.
 
 ### P3.5 Flaky `HOME` env mutation in Rust tests
 

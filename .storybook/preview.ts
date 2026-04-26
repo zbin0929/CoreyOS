@@ -5,6 +5,12 @@ import type { Preview } from '@storybook/react';
 // once per Storybook boot.
 import '../src/styles/tokens.css';
 import '../src/styles/globals.css';
+// Side-effect: i18next.init() runs on first import. Loaded here so
+// every story (UI primitives + feature components alike) has the
+// same translation context as the running app — no `t('foo.bar')`
+// echoing the key path in stories.
+import '../src/lib/i18n';
+import { withTauriIpc } from './withTauriIpc';
 
 const preview: Preview = {
   parameters: {
@@ -32,6 +38,9 @@ const preview: Preview = {
     },
   },
   decorators: [
+    // Runs FIRST so feature stories that read stores hydrated by
+    // IPC see a populated mock window before their first effect.
+    withTauriIpc,
     (Story, ctx) => {
       // Flip <html data-theme="…"> so Tailwind dark: / token variables
       // resolve the way the app does. Using the document attribute

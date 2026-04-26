@@ -3,11 +3,13 @@ import type { StorybookConfig } from '@storybook/react-vite';
 /**
  * Storybook 8 config for Caduceus.
  *
- * We deliberately scope stories to `src/components/ui/**` for now — those
- * are the pure design-system primitives (Button, Icon, Select, Empty-
- * state) that don't touch Tauri IPC, Zustand, or i18n. Feature modules
- * (`src/features/**`) stay out of Storybook until we wire a Tauri-IPC
- * decorator that can serve the same mocks the Playwright suite uses.
+ * Scope: `src/**\/*.stories.{ts,tsx,mdx}`. UI primitives live under
+ * `src/components/ui/**` and feature components under `src/features/**`.
+ * Since 2026-04-26 the `withTauriIpc` decorator (preview.ts) installs
+ * the same in-memory `__TAURI_INTERNALS__` mock the Playwright suite
+ * uses, so feature stories can render without bailing out on missing
+ * IPC. Add new commands to `e2e/fixtures/tauri-mock.ts` so both
+ * harnesses stay in lockstep.
  */
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx|mdx)'],
