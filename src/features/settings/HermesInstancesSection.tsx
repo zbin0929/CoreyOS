@@ -547,6 +547,7 @@ function HermesInstanceRow({
         hint={t('settings.hermes_instances.field_sandbox_scope_hint')}
       >
         <select
+          data-testid="hermes-instance-scope-new"
           className="rounded-md border border-border bg-bg px-2 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
           value={draft.sandbox_scope_id ?? ''}
           onChange={(e) =>
