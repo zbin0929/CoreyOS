@@ -328,6 +328,5 @@ fn guess_mime(name: &str) -> String {
     .to_string()
 }
 
-
 #[cfg(test)]
 mod tests;

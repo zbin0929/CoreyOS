@@ -243,9 +243,9 @@ pub use env::{read_env_value, write_env_key};
 // which uses `super::*` from `tests.rs` — can keep referencing the
 // helpers by their bare names (`walk_set`, `is_allowed_env_key`,
 // etc.) without learning the new module layout.
+use env::read_env_key_names;
 #[cfg(test)]
 use env::{is_allowed_env_key, line_matches_key};
-use env::read_env_key_names;
 pub use gateway::{detect, gateway_restart, gateway_start, HermesDetection};
 pub use yaml::write_channel_yaml_fields;
 #[cfg(test)]

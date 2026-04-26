@@ -328,7 +328,6 @@ pub async fn voice_transcribe(
     })
 }
 
-
 // ───────────────────────── Config CRUD ─────────────────────────
 
 #[tauri::command]

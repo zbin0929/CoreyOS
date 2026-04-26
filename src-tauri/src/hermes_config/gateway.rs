@@ -5,7 +5,6 @@
 use std::io;
 use std::path::PathBuf;
 
-
 /// First-run detection. Returns a structured view of whether Hermes is
 /// reachable from Corey: binary on PATH / known fallback, its version
 /// string (best effort), and the resolved full path.

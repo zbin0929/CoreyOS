@@ -27,9 +27,9 @@ use tokio::sync::mpsc;
 // Tests import these via `super::*`. Keeping the bindings in scope here
 // (only under cfg(test)) avoids touching the existing test suite.
 #[cfg(test)]
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-#[cfg(test)]
 use crate::adapters::ChatAttachmentRef;
+#[cfg(test)]
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 #[cfg(test)]
 use gateway::{ChatContentPart, ChatMessageContent};
 
@@ -130,7 +130,6 @@ fn resolve_turn(turn: ChatTurn, default_model: &str) -> (String, Vec<ChatMessage
         .collect();
     (model, messages)
 }
-
 
 #[async_trait]
 impl AgentAdapter for HermesAdapter {

@@ -16,8 +16,8 @@ use crate::changelog;
 use crate::hermes_profiles::{self as hp, ProfileInfo};
 
 use super::{
-    copy_then_delete, now_ms, profile_dir, read_manifest, safe_relative,
-    strip_payload_prefix, ImportPreview, ImportResult, MANIFEST_VERSION, PAYLOAD_PREFIX,
+    copy_then_delete, now_ms, profile_dir, read_manifest, safe_relative, strip_payload_prefix,
+    ImportPreview, ImportResult, MANIFEST_VERSION, PAYLOAD_PREFIX,
 };
 
 /// Parse just the manifest + tally file stats without extracting. Lets

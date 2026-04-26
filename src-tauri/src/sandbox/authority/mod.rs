@@ -12,8 +12,8 @@ use std::sync::RwLock;
 use super::denylist::{check_denylist, dirs_home};
 use super::persistence::{self, sandbox_config_path};
 use super::types::{
-    is_valid_scope_id, AccessMode, SandboxError, SandboxMode, SandboxResult,
-    SandboxScope, WorkspaceRoot, DEFAULT_SCOPE_ID,
+    is_valid_scope_id, AccessMode, SandboxError, SandboxMode, SandboxResult, SandboxScope,
+    WorkspaceRoot, DEFAULT_SCOPE_ID,
 };
 // `AccessOp` is referenced by `super::*` in tests.rs but no longer
 // in mod.rs's own bodies — keep the binding under cfg(test).
@@ -382,7 +382,6 @@ impl PathAuthority {
             .expect("poisoned")
             .remove(scope_id);
     }
-
 }
 
 impl Default for PathAuthority {

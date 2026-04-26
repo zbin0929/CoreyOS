@@ -394,7 +394,6 @@ pub struct MemoryCompactResult {
     pub learnings_entries_count: usize,
 }
 
-
 pub mod patterns;
 
 #[cfg(test)]
