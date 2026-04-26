@@ -121,17 +121,23 @@ file-size / IPC-contract / dead-code / docs-entry / clippy-baseline /
 helper-test work in one go. Remaining items below are scoped for
 follow-up PRs.
 
-### P3.1 Chat page state machine refactor — **DEFERRED**
+### P3.1 Chat page state machine refactor
 
-**Problem**: `src/features/chat/index.tsx` is still 1003 lines and
-is the single hottest path in the app. The previous mechanical-split
-attempt was rejected because the bulk is intertwined state (idle /
+**Problem**: `src/features/chat/index.tsx` was 1003 lines and the
+single hottest path in the app. A previous mechanical-split attempt
+was rejected because the bulk was intertwined state (idle /
 composing / sending / streaming / tooling / cancelling).
-**Fix**: Extract a `useChatSession` hook + `chatReducer` with an
-explicit state-machine diagram first; mechanical splits afterward.
-**Files**: `src/features/chat/index.tsx`, new `src/features/chat/state/*`
-**Status**: ⏳ Deferred to a dedicated branch — high regression risk,
-not a same-PR job.
+**Fix**: Two-phase extraction.
+  1. PR #1 (`c8abeb8`) — surgical leaf splits: `Composer` (340),
+     `useAttachments` (176), `LearningIndicator` (40). 1003 → 709.
+  2. `4b54f96` — `useChatSend` hook owning every imperative entry
+     point (send / retry / stop / voice / IME / draft / budget
+     warnings + the session-switch reset effect). 709 → 321.
+**Files**: `src/features/chat/{index,Composer,LearningIndicator,
+useAttachments,useChatSend}.tsx,ts`
+**Status**: ✅ Done — final ChatPane is 321 lines, every preserved
+invariant documented in the `useChatSend` docblock; typecheck +
+lint + 77 unit + 81 e2e all green on `4b54f96`.
 
 ### P3.2 `unwrap_used` baseline reduction
 
