@@ -67,7 +67,11 @@ pub fn topological_order(def: &WorkflowDef) -> Result<Vec<String>, String> {
         order.push(id.to_string());
         if let Some(neighbors) = adj.get(id) {
             for &n in neighbors {
-                let deg = in_degree.get_mut(n).unwrap();
+                // `in_degree` was seeded with an entry for every
+                // step id in the lookup loop above, and `n` came
+                // out of `adj.get(id)` which only contains those
+                // same ids — so the lookup is provably `Some`.
+                let deg = in_degree.get_mut(n).expect("in_degree seeded for every step id");
                 *deg -= 1;
                 if *deg == 0 {
                     queue.push_back(n);

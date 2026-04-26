@@ -66,6 +66,87 @@ const output = (res.stderr || '') + (res.stdout || '');
 const matches = output.match(/index\.html#unwrap_used/g);
 const current = matches ? matches.length : 0;
 
+// ── Production vs. test split ───────────────────────────────────
+// `unwrap()` in tests is industry-standard (panics fail tests
+// loudly); the fight is really to keep production code unwrap-free.
+// Bucket each warning by its source location: a hit in `*_tests.rs`
+// or below a `#[cfg(test)] mod tests {…}` line counts as test code.
+//
+// Detection is heuristic-but-reliable: we read each cited file once
+// and flag the LINE number against `mod tests` / `#[cfg(test)]`.
+const fileTestStarts = new Map();
+function testStartFor(file) {
+  if (fileTestStarts.has(file)) return fileTestStarts.get(file);
+  const starts = [];
+  try {
+    const fileLines = readFileSync(file, 'utf8').split('\n');
+    let inCfgTestAttr = false;
+    for (let i = 0; i < fileLines.length; i++) {
+      const l = fileLines[i];
+      // Match #[cfg(test)] AND compound forms (#[cfg(all(test,
+      // unix))], #[cfg(any(test, …))], #[cfg_attr(test, …)]) which
+      // gate Unix-only PTY tests, integration smoke tests, etc.
+      // We avoid the nested-parens pitfall by NOT trying to match
+      // the full attribute structure — just check that the line
+      // begins with `#[cfg(` (or `#[cfg_attr(`) and contains the
+      // bare token `test`. False positives (a feature literally
+      // named `test`) are not realistic in this codebase.
+      if (/^\s*#\[cfg(_attr)?\(/.test(l) && /\btest\b/.test(l)) {
+        inCfgTestAttr = true;
+        continue;
+      }
+      if (inCfgTestAttr && /^\s*(pub(\(.*\))?\s+)?mod\s+\w+/.test(l)) {
+        starts.push(i + 1);
+        inCfgTestAttr = false;
+      }
+    }
+  } catch {
+    /* file unreadable — treat all hits as production (worst case) */
+  }
+  fileTestStarts.set(file, starts);
+  return starts;
+}
+
+// Walk the clippy output once. For each unwrap_used warning, the
+// most recent `-->` line preceding the `index.html#unwrap_used`
+// helper is the primary location. We track production vs. test
+// based on whether that location is inside a `mod tests` block.
+let prod = 0;
+let test = 0;
+const outLines = output.split('\n');
+let pendingHits = [];
+for (let i = 0; i < outLines.length; i++) {
+  if (outLines[i].startsWith('warning:') || outLines[i].startsWith('error:')) {
+    pendingHits = [];
+    continue;
+  }
+  // Clippy paths are emitted relative to `src-tauri/` (the manifest
+  // dir) — they look like `src/workflow/store.rs`, not
+  // `src-tauri/src/workflow/store.rs`. Normalize back to a repo-
+  // relative path so `readFileSync` finds the file from cwd (repo
+  // root, where this script is invoked).
+  const m = /-->\s+(src\/[^:\s]+):(\d+):/.exec(outLines[i]);
+  if (m) {
+    pendingHits.push({ file: `src-tauri/${m[1]}`, line: Number(m[2]) });
+    continue;
+  }
+  if (/index\.html#unwrap_used/.test(outLines[i]) && pendingHits.length > 0) {
+    const hit = pendingHits[0]; // primary = first --> after warning:
+    const starts = testStartFor(hit.file);
+    const isTestFile = /_tests\.rs$/.test(hit.file);
+    const insideTestMod = starts.some((s) => hit.line >= s);
+    if (isTestFile || insideTestMod) {
+      test++;
+    } else {
+      prod++;
+      if (process.argv.includes('--list-prod')) {
+        console.log(`  prod: ${hit.file}:${hit.line}`);
+      }
+    }
+    pendingHits = [];
+  }
+}
+
 if (process.argv.includes('--update')) {
   writeFileSync(BASELINE_FILE, `${current}\n`);
   console.log(`[clippy-unwrap] baseline updated to ${current}`);
@@ -87,6 +168,13 @@ if (!Number.isFinite(baseline)) {
 }
 
 console.log(`[clippy-unwrap] current=${current}  baseline=${baseline}`);
+console.log(`[clippy-unwrap]   production: ${prod}  test: ${test}`);
+if (prod > 0) {
+  console.warn(
+    `[clippy-unwrap] ⚠️  ${prod} unwrap(s) in production paths — ` +
+      `prefer \`?\` or \`expect("…")\`. New code under PRs MUST be unwrap-free.`,
+  );
+}
 if (current > baseline) {
   console.error(
     `[clippy-unwrap] ❌ regression: ${current - baseline} new unwrap_used warnings.\n` +

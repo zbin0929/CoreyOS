@@ -487,7 +487,13 @@ fn walk_set(doc: &mut Value, path: &str, value: Value) {
         *cur = Value::Mapping(Mapping::new());
     }
     let map = cur.as_mapping_mut().expect("is mapping");
-    map.insert(Value::String((*segs.last().unwrap()).to_string()), value);
+    // `segs.last()` is provably `Some` here: the function returns
+    // early at the top when `segs.is_empty()`, and split('.') on a
+    // non-empty `path` always yields at least one element.
+    map.insert(
+        Value::String((*segs.last().expect("segs non-empty by guard")).to_string()),
+        value,
+    );
 }
 
 fn walk_remove(doc: &mut Value, path: &str) {
@@ -507,7 +513,11 @@ fn walk_remove(doc: &mut Value, path: &str) {
         cur = next;
     }
     if let Some(map) = cur.as_mapping_mut() {
-        map.remove(Value::String(segs.last().unwrap().to_string()));
+        // Same invariant as `walk_set` above — guarded by the
+        // `segs.is_empty()` early-return; never panics.
+        map.remove(Value::String(
+            segs.last().expect("segs non-empty by guard").to_string(),
+        ));
     }
 }
 
