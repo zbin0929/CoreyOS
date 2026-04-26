@@ -63,9 +63,7 @@ pub async fn browser_config_set(config: BrowserConfig) -> IpcResult<()> {
 #[tauri::command]
 pub async fn browser_diagnose() -> IpcResult<BrowserDiagResult> {
     tokio::task::spawn_blocking(|| {
-        let node_output = std::process::Command::new("node")
-            .arg("--version")
-            .output();
+        let node_output = std::process::Command::new("node").arg("--version").output();
         let (node_available, node_version) = match node_output {
             Ok(o) if o.status.success() => {
                 let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
