@@ -66,44 +66,48 @@ Each item is tagged P0/P1/P2. Items are done in order; CI must be green before m
 
 **Problem**: Browser automation fails silently when Node/browser/profile is missing.
 **Fix**: Settings Browser section gets "Check Environment" button that tests: Node path, browser-runner path, browser binary, profile dir.
-**Files**: `src/features/settings/BrowserSection.tsx` (new), `src-tauri/src/ipc/browser_config.rs`
-**Status**: ⏳ Pending
+**Files**: `src/features/settings/index.tsx`, `src-tauri/src/ipc/browser_config.rs`
+**Status**: ✅ Done — commit `0a79666`
 
 ### P1.5 API key validation on save
 
 **Problem**: Invalid API keys are saved without verification; user only discovers at send-time.
-**Fix**: Settings save for Hermes/LLM profiles pings `/v1/models` before committing.
-**Files**: `src/features/settings/HermesInstancesSection.tsx`, `src/features/models/LlmProfilesSection.tsx`
-**Status**: ⏳ Pending
+**Fix**: Auto-probe `/v1/models` after LLM profile save. Non-blocking; failure shows on card test indicator.
+**Files**: `src/features/models/LlmProfilesSection.tsx`
+**Status**: ✅ Done — commit `c95c59e`
 
 ### P1.6 Structured tracing on critical paths
 
 **Problem**: Rust side has <10 `tracing` calls total. Chat stream, workflow run, browser step have no structured logs.
-**Fix**: Add `tracing::info!` with structured fields to: chat_stream start/done, workflow step start/done/error, browser step start/done/error.
+**Fix**: chat_stream start/done/error with handle/adapter/model/duration_ms/tokens. Browser step start/done/error with action/url/duration_ms. Workflow step already done in P0.3.
 **Files**: `src-tauri/src/ipc/chat.rs`, `src-tauri/src/ipc/workflow.rs`, `src-tauri/src/workflow/engine.rs`
-**Status**: ⏳ Pending
+**Status**: ✅ Done — commit `8024948`
 
 ---
 
 ## P2 — Longer-term polish
 
 ### P2.1 Terminology unification
-Agent/Profile/Adapter concept boundaries. UI naming consistency.
+✅ Done — `docs/glossary.md` with 17 concept definitions, relationship map, naming rules.
 
 ### P2.2 Resource relationship visualization
-Show impact when deleting/modifying a Profile or Agent.
+✅ Done — Agent delete now checks sessions and warns with confirm dialog.
 
 ### P2.3 Agent routing decision transparency
-"Why did this go to Agent X?" explanation in chat.
+✅ Done — Routing hint tooltip shows rule name + matched pattern + target adapter.
 
 ### P2.4 Knowledge/Memory/Learning product closure
 Answer citation sources, memory write notifications, learning audit trail.
+**Status**: ⏳ Deferred — requires backend RAG layer changes for citation tracking.
 
 ### P2.5 File intelligence quality control
 Per-file-type extraction quality hints, structured result display, extraction cache.
+**Status**: ⏳ Deferred — requires Rust extraction layer improvements.
 
 ### P2.6 Document classification
 Tag docs as plan/current/changelog. Add "last verified" timestamps.
+**Status**: ✅ Done — `docs/document-index.md` with type/verified-date for all docs.
 
 ### P2.7 Development constraints & evolution rules
 Write into `.trae/rules/project_rules.md`: no logic dumping in core pages, service/hook first, contract definitions required, diagnostics required.
+**Status**: ✅ Done — `.trae/rules/project_rules.md` with AC/CS/T/N/PD rules.
