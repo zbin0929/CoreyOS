@@ -234,13 +234,6 @@ fn set_or_remove(map: &mut Mapping, key: &str, value: Option<&str>) {
     }
 }
 
-/// Read the raw value of a single `*_API_KEY` from `~/.hermes/.env`.
-///
-/// Returns `Ok(None)` if the file is missing, the key is absent, or the
-/// value is empty. Values never leave the process unless the caller (a
-/// Rust-side consumer) explicitly forwards them — the IPC boundary only
-/// ever surfaces derived booleans (`env_keys_present`).
-
 mod env;
 mod gateway;
 mod yaml;
@@ -256,7 +249,7 @@ use env::read_env_key_names;
 pub use gateway::{detect, gateway_restart, gateway_start, HermesDetection};
 pub use yaml::write_channel_yaml_fields;
 #[cfg(test)]
-use yaml::{json_to_yaml_value, walk_get, walk_remove, walk_set, yaml_to_json_value};
+use yaml::{json_to_yaml_value, walk_remove, walk_set};
 
 #[cfg(test)]
 mod tests;

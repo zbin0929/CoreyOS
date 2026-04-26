@@ -151,21 +151,10 @@ pub fn write_env_key(
     Ok(())
 }
 
-/// Write a set of YAML fields into `~/.hermes/config.yaml` under a
-/// dotted root (e.g. `channels.telegram`). Missing intermediate
-/// mappings are created; every other field in the document is
-/// preserved verbatim.
-///
-/// `updates` is keyed by dotted path RELATIVE to `root`; values are
-/// JSON (from the IPC layer) and are round-tripped through
-/// `serde_yaml::Value` so YAML-native types (sequences, nested
-/// mappings) survive unchanged.
-///
-/// A JSON `null` deletes the field (and removes now-empty ancestor
-/// mappings up to but not including `root` itself).
-///
-/// Phase 3 · T3.2 — the write counterpart to the read-only walker in
-
+/// True for env keys the UI is allowed to read/write. Today: any
+/// uppercase `*_API_KEY`, plus any env var declared by a channel
+/// spec. Locks the IPC layer down to the named providers — the
+/// surface never lets the frontend introspect arbitrary env vars.
 pub(super) fn is_allowed_env_key(key: &str) -> bool {
     if key.is_empty() {
         return false;

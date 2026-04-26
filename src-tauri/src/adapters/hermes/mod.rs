@@ -31,7 +31,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 #[cfg(test)]
 use crate::adapters::ChatAttachmentRef;
 #[cfg(test)]
-use gateway::{ChatContentPart, ChatImageUrl, ChatMessageContent};
+use gateway::{ChatContentPart, ChatMessageContent};
 
 const ADAPTER_ID: &str = "hermes";
 /// Default model when the caller doesn't override. Matches what the gateway
