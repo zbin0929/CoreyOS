@@ -6,6 +6,31 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-26 (evening) — Chat module refactoring
+
+Structural cleanup of `src/features/chat/index.tsx` (1522 → 1223 lines, **-19.6%**).
+Goal: reduce the "center file" risk identified in the quality review by extracting
+distinct concerns into dedicated hooks and helper files.
+
+### Shipped
+
+- `useChatIntentSuggestions.ts` (141 lines) — scheduler + workflow intent detection,
+  suggestion confirm/dismiss/patchStatus logic.
+- `usePostSendEffects.ts` (70 lines) — onDone post-send effects: token usage persistence,
+  auto-title generation, learning extract, skill pattern detection.
+- `ChatHelpers.tsx` (120 lines) — ChatHeaderActions, SaveAsSkillHeaderAction, EmptyHero,
+  RoutingHint components extracted from the main file.
+- `formatBytes.ts` (6 lines) — utility function in its own file for react-refresh compat.
+- `enrichHistory.ts` (93 lines) — context enrichment (TF-IDF, RAG, knowledge base,
+  learnings, user profile) extracted from send().
+
+### Remaining
+
+- `useChatSendFlow` hook (send/retry/stop core streaming logic) — planned next.
+- Settings module split (`sections/` directory) — after chat is done.
+
+---
+
 ## 2026-04-26 (afternoon) — T9.9 · Chat intent detection + SuggestionCard + QoL fixes
 
 Smart inline suggestion cards replace `window.confirm` for schedule and

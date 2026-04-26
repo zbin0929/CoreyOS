@@ -23,6 +23,23 @@
 
 Total ~11–12 weeks solo from Phase 0 through Phase 8, sequential (trimmed 2026-04-23 pm after the product audit reclassified large swathes of Phase 6/7 as SURFACE or DROP). Reclaimed ~3 weeks should go to polishing KEEP features, documentation, and user acquisition — not more features.
 
+## Post-Phase-12: Structural refactoring (2026-04-26 evening)
+
+Quality review (`docs/current-feature-quality-review-2026-04-26.md`) identified `chat/index.tsx` as the #1 refactoring priority. In progress:
+
+| Target | Status | Detail |
+|--------|--------|--------|
+| `useChatIntentSuggestions` hook | ✅ Done | scheduler + workflow intent detection + suggestion management |
+| `usePostSendEffects` hook | ✅ Done | token usage, title gen, learning, skill pattern |
+| `ChatHelpers.tsx` | ✅ Done | HeaderActions, EmptyHero, RoutingHint components |
+| `formatBytes.ts` | ✅ Done | utility function |
+| `enrichHistory.ts` | ✅ Done | context enrichment (TF-IDF, RAG, KB, learnings, user profile) |
+| `useChatSendFlow` hook | ⏳ Planned | send/retry/stop core streaming logic |
+| Settings `sections/` split | ⏳ Planned | per-section files from settings/index.tsx |
+| Workflow Rust IPC split | ⏳ Planned | workflow.rs → IPC + service + executor layers |
+
+**chat/index.tsx**: 1522 → 1134 lines (**-25.5%**), 6 new files extracted.
+
 ## Strategic positioning (reaffirmed 2026-04-23)
 
 Corey stays on the **Control Plane** axis per `00-vision.md`. After a

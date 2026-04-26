@@ -21,14 +21,9 @@ import {
   dbMessageSetUsage,
   ipcErrorMessage,
   learningIndexMessage,
-  learningSearchSimilar,
-  ragSearch,
-  knowledgeSearch,
   voiceTranscribe,
   voiceRecord,
   voiceRecordStop,
-  learningReadLearnings,
-  memoryRead,
   type ChatMessageDto,
   type ChatStreamHandle,
   type StagedAttachment,
@@ -54,6 +49,7 @@ import { useChatIntentSuggestions } from './useChatIntentSuggestions';
 import { usePostSendEffects } from './usePostSendEffects';
 import { ChatHeaderActions, EmptyHero, RoutingHint } from './ChatHelpers';
 import { formatBytes } from './formatBytes';
+import { enrichHistoryWithContext } from './enrichHistory';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
 import type { VirtuosoHandle } from 'react-virtuoso';
@@ -486,92 +482,7 @@ function ChatPane({
       toDto('user', contentForMessage, hasAttachments ? attachmentsSnapshot : undefined),
     ];
 
-    // Phase E · P2 — inject similar historical context as a system prefix.
-    // Fire-and-forget: if the search fails or returns nothing, we just
-    // proceed without context. Capped at 3 results, each truncated to 200 chars.
-    let tfidfHitCount = 0;
-    try {
-      const similar = await learningSearchSimilar(contentForMessage, 3);
-      tfidfHitCount = similar.length;
-      if (similar.length > 0) {
-        const contextParts = similar
-          .map((r) => r.content.slice(0, 200).replace(/\n/g, ' '))
-          .join('\n');
-        historyForIpc.unshift({
-          role: 'system',
-          content: `[Relevant past conversations]\n${contextParts}`,
-        });
-      }
-    } catch {
-      // non-critical — proceed without context
-    }
-
-    // RAG retrieval — fallback when TF-IDF yields no results. Uses
-    // Jaccard similarity over a broader sample (500 messages) with a
-    // lower threshold for broader recall.
-    if (tfidfHitCount === 0) {
-      try {
-        const ragResults = await ragSearch(contentForMessage, 5);
-        if (ragResults.length > 0) {
-          const ragContext = ragResults
-            .filter((r) => r.score > 0.1)
-            .map((r) => r.content.slice(0, 200).replace(/\n/g, ' '))
-            .join('\n');
-          if (ragContext.length > 0) {
-            historyForIpc.unshift({
-              role: 'system',
-              content: `[Semantically related context]\n${ragContext}`,
-            });
-          }
-        }
-      } catch {
-        // non-critical
-      }
-    }
-
-    // Knowledge base retrieval — search uploaded documents for relevant chunks.
-    try {
-      const kbResults = await knowledgeSearch(contentForMessage, 3);
-      if (kbResults.length > 0) {
-        const kbContext = kbResults
-          .map((r) => `[${r.doc_name}]\n${r.content}`)
-          .join('\n\n');
-        historyForIpc.unshift({
-          role: 'system',
-          content: `[Knowledge base]\n${kbContext}`,
-        });
-      }
-    } catch {
-      // non-critical
-    }
-
-    // Phase E · P1 — inject LEARNINGS.md (user feedback patterns) as
-    // a system prefix so the LLM can adjust its behaviour accordingly.
-    try {
-      const learnings = await learningReadLearnings();
-      if (learnings && learnings.length > 10) {
-        historyForIpc.unshift({
-          role: 'system',
-          content: `[User feedback patterns — follow preferred, avoid avoided]\n${learnings.slice(0, 800)}`,
-        });
-      }
-    } catch {
-      // non-critical
-    }
-
-    // Q7 fix — inject USER.md (user profile) as system prompt so the LLM
-    // always knows user preferences, even if Hermes doesn't inject it.
-    try {
-      const userFile = await memoryRead('user');
-      if (userFile.content && userFile.content.trim().length > 5) {
-        historyForIpc.unshift({
-          role: 'system',
-          content: `[User profile — follow these preferences]\n${userFile.content.slice(0, 1000)}`,
-        });
-      }
-    } catch {
-      // non-critical
-    }
+    const finalHistory = await enrichHistoryWithContext(historyForIpc, contentForMessage);
 
     // T5.5b — route the stream to whichever adapter the user picked in the
     // Topbar AgentSwitcher. Read the store imperatively (no subscribe)
@@ -639,7 +550,7 @@ function ChatPane({
         // claimed Hermes ignored it, which is why the session-level
         // override existed in the store but never actually took effect.
         {
-          messages: historyForIpc,
+          messages: finalHistory,
           adapter_id: activeAdapterId,
           model: effectiveModel ?? undefined,
           model_supports_vision: visionCap !== 'no',
