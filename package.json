@@ -27,7 +27,9 @@
     "check:sandbox-fs": "node scripts/check-sandbox-fs.mjs",
     "check:file-sizes": "node scripts/check-file-sizes.mjs",
     "check:ipc-contract": "node scripts/check-ipc-contract.mjs",
-    "check:clippy-unwrap": "node scripts/check-clippy-unwrap.mjs"
+    "check:clippy-unwrap": "node scripts/check-clippy-unwrap.mjs",
+    "check:rust-fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "check:all": "pnpm typecheck && pnpm lint && pnpm test && pnpm check:file-sizes && pnpm check:ipc-contract && pnpm check:rust-fmt && pnpm check:clippy-unwrap"
   },
   "dependencies": {
     "@browserbasehq/stagehand": "^3.2.1",
