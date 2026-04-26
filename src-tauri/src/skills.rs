@@ -54,6 +54,12 @@ pub struct SkillSummary {
     pub size: u64,
     /// Last-modified unix ms. UI shows "edited 3m ago" etc.
     pub updated_at_ms: i64,
+    /// First Markdown heading (`#`..`######`) line stripped of its
+    /// leading `#`s + whitespace. Lets a Markdown skill present a
+    /// human-readable Chinese / English title in the tree without
+    /// renaming the file. `None` when no heading appears in the first
+    /// ~1 KB.
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,16 +112,62 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<SkillSummary>) -> anyhow::Result<
                     Some(s)
                 }
             });
+            let description = read_h1_title(&path);
             out.push(SkillSummary {
                 path: rel_str,
                 name,
                 group,
                 size,
                 updated_at_ms,
+                description,
             });
         }
     }
     Ok(())
+}
+
+/// Read at most the first 1 KiB of `path` and pull out the leading
+/// ATX-style Markdown heading line (any of `#` through `######`),
+/// stripped of its `#`s and surrounding whitespace.
+///
+/// We deliberately cap the read so listing 100s of skills stays fast —
+/// any skill whose first heading isn't in the first kilobyte is a
+/// malformed Markdown file by anyone's standard. Returns `None` when
+/// no heading is present, the extracted title is empty, or the file
+/// fails to open (the listing itself stays best-effort: a missing
+/// description is harmless, a hard error here would block the entire
+/// tree from rendering).
+fn read_h1_title(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = fs::File::open(path).ok()?;
+    let mut buf = [0u8; 1024];
+    let n = file.read(&mut buf).ok()?;
+    // `from_utf8_lossy` (vs strict `from_utf8`) so a CJK title whose
+    // last byte falls right on the 1024 boundary doesn't blow up — we
+    // only inspect the first complete line anyway, well before the
+    // truncation point.
+    let head = String::from_utf8_lossy(&buf[..n]);
+    for line in head.lines() {
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with('#') {
+            // Stop at the first non-blank, non-heading content so we
+            // don't drag a deep `## subheading` up if the author skipped
+            // an H1 — that would be misleading.
+            if !trimmed.is_empty() {
+                return None;
+            }
+            continue;
+        }
+        // Match `#` followed by optional `#`s, a single space, then the
+        // title. ATX-style headings only — Setext (`Title\n===`) is rare
+        // enough that we ignore it.
+        let title = trimmed.trim_start_matches('#').trim();
+        if title.is_empty() {
+            return None;
+        }
+        return Some(title.to_string());
+    }
+    None
 }
 
 /// Read a skill file. Path must be a relative posix path under `skills/`;
@@ -275,6 +327,40 @@ mod tests {
         assert!(save("/abs.md", "x", false).is_err());
         assert!(save("ok/../../evil.md", "x", false).is_err());
         assert!(save("nocolon.txt", "x", false).is_err());
+    }
+
+    #[test]
+    fn description_is_extracted_from_first_h1() {
+        let tmp = tempdir();
+        let _g = HomeGuard::new(&tmp);
+        // ATX-style heading at the top, with leading whitespace + extra
+        // `#`s + trailing newline. Title is what humans actually read,
+        // independent of the file name.
+        save("daily.md", "# 每日报告 Daily Report\n\nbody…", false).unwrap();
+        // No H1 → description stays None.
+        save("plain.md", "no heading here\nstill nothing", false).unwrap();
+        // H2 is accepted too — the goal is "first human-readable
+        // title", not strict H1-only semantics. Many community skills
+        // start with `## Description` after a frontmatter block.
+        save("h2-only.md", "## Sub heading\n\nbody", false).unwrap();
+        // Empty H1 (just `#`) → None. Validates the empty-title guard.
+        save("blank-h1.md", "#\nbody", false).unwrap();
+
+        let rows = list().unwrap();
+        let by_path: std::collections::HashMap<_, _> = rows
+            .iter()
+            .map(|r| (r.path.clone(), r.description.clone()))
+            .collect();
+        assert_eq!(
+            by_path.get("daily.md").unwrap().as_deref(),
+            Some("每日报告 Daily Report"),
+        );
+        assert_eq!(by_path.get("plain.md").unwrap().as_deref(), None);
+        assert_eq!(
+            by_path.get("h2-only.md").unwrap().as_deref(),
+            Some("Sub heading")
+        );
+        assert_eq!(by_path.get("blank-h1.md").unwrap().as_deref(), None);
     }
 
     #[test]

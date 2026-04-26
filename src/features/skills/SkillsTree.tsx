@@ -59,7 +59,7 @@ export function SkillsTree({
                         type="button"
                         onClick={() => onSelect(s.path)}
                         className={cn(
-                          'flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs transition-colors',
+                          'flex w-full items-start gap-1.5 px-3 py-1.5 text-left text-xs transition-colors',
                           'hover:bg-bg-elev-2',
                           sel.kind !== 'none' &&
                             'path' in sel &&
@@ -68,10 +68,28 @@ export function SkillsTree({
                         )}
                         data-testid={`skill-row-${s.path}`}
                       >
-                        <Icon icon={FileText} size="xs" className="flex-none text-fg-subtle" />
-                        <span className="truncate">{s.name}</span>
+                        <Icon icon={FileText} size="xs" className="mt-0.5 flex-none text-fg-subtle" />
+                        <div className="min-w-0 flex-1">
+                          {/* Headline = the human-readable Markdown
+                              heading when the file has one, the file
+                              stem otherwise. Lets a `code-review.md`
+                              whose first line is `# 代码评审` show up
+                              as Chinese in the sidebar without forcing
+                              the file name to change. */}
+                          <div className="truncate text-fg">
+                            {s.description ?? s.name}
+                          </div>
+                          {/* Secondary line (only when we promoted the
+                              heading): show the path so power users can
+                              still scan by file name. */}
+                          {s.description && (
+                            <div className="truncate text-[10px] text-fg-subtle">
+                              {s.name}
+                            </div>
+                          )}
+                        </div>
                         {s.path.startsWith('auto/') && (
-                          <span className="ml-auto flex-none rounded border border-gold-500/40 bg-gold-500/10 px-1 py-0.5 text-[9px] uppercase tracking-wider text-gold-500">
+                          <span className="ml-auto mt-0.5 flex-none rounded border border-gold-500/40 bg-gold-500/10 px-1 py-0.5 text-[9px] uppercase tracking-wider text-gold-500">
                             AI
                           </span>
                         )}

@@ -70,6 +70,12 @@ export interface SkillSummary {
   group: string | null;
   size: number;
   updated_at_ms: number;
+  /** First Markdown heading from the file (`# ...` through `###### ...`),
+   *  stripped of leading `#`s. Null when the skill has no heading in
+   *  its first ~1 KB. The tree view surfaces this under the file name
+   *  so a `daily-standup.md` whose first line is `# 每日站会` reads
+   *  as Chinese in the sidebar. */
+  description: string | null;
 }
 
 export interface SkillContent {
