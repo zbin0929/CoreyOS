@@ -33,9 +33,9 @@ Each item is tagged P0/P1/P2. Items are done in order; CI must be green before m
 ### P0.4 IPC contract tests
 
 **Problem**: TS DTO types and Rust struct fields can drift silently.
-**Fix**: Add a `contract-test` that serializes a Rust DTO to JSON and compares against the TS interface definition.
-**Files**: New `src-tauri/tests/contract_tests.rs`
-**Status**: ⏳ Pending
+**Fix**: Contract tests in Rust verify JSON field names match TS expectations. Found and fixed real bug: RunStatus/StepRunStatus serialized as PascalCase ("Completed") instead of lowercase ("completed").
+**Files**: `src-tauri/src/workflow/engine.rs`, `src-tauri/src/ipc/browser_config.rs`, `src-tauri/src/adapters/hermes/gateway.rs`
+**Status**: ✅ Done — commit `dcbed78`, 4 contract tests, 262 Rust tests pass
 
 ---
 
