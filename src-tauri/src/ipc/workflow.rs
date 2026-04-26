@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use super::browser_config as browser_config_ipc;
 use crate::adapters::{ChatMessageDto, ChatTurn};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
@@ -8,7 +9,6 @@ use crate::workflow::browser_config;
 use crate::workflow::engine::{self, StepExecutor, WorkflowRun};
 use crate::workflow::model::{WorkflowDef, WorkflowSummary};
 use crate::workflow::store::{self, ValidationError};
-use super::browser_config as browser_config_ipc;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationResult {

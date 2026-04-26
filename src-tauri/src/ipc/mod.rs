@@ -1,7 +1,7 @@
 pub mod agents;
 pub mod attachments;
-pub mod budgets;
 pub mod browser_config;
+pub mod budgets;
 pub mod changelog;
 pub mod channel_status;
 pub mod channels;
