@@ -24,14 +24,17 @@ import {
   workflowRunStatus,
   workflowActiveRuns,
   workflowApprove,
+  type WorkflowDef,
   type WorkflowSummary,
   type WorkflowRunResult,
 } from '@/lib/ipc';
+import { Sparkles } from 'lucide-react';
 import { WorkflowEditor } from './Editor';
+import { WorkflowGenerateDialog } from './GenerateDialog';
 
 type Mode =
   | { kind: 'list' }
-  | { kind: 'edit'; wfId: string | null }
+  | { kind: 'edit'; wfId: string | null; seed?: WorkflowDef }
   | { kind: 'run'; wf: WorkflowSummary };
 
 export function WorkflowRoute() {
@@ -42,6 +45,11 @@ export function WorkflowRoute() {
   const [runResult, setRunResult] = useState<WorkflowRunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Conversational-generation drawer toggle. Lives at the page
+  // level (not inside the action bar) so the drawer can stay
+  // mounted across mode transitions if we ever want to preserve a
+  // half-typed prompt across "Back" presses.
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -139,7 +147,13 @@ export function WorkflowRoute() {
   };
 
   if (mode.kind === 'edit') {
-    return <WorkflowEditor workflowId={mode.wfId} onBack={() => setMode({ kind: 'list' })} />;
+    return (
+      <WorkflowEditor
+        workflowId={mode.wfId}
+        seed={mode.seed}
+        onBack={() => setMode({ kind: 'list' })}
+      />
+    );
   }
 
   if (mode.kind === 'run' && mode.wf) {
@@ -274,6 +288,14 @@ export function WorkflowRoute() {
                 {t('workflow_page.delete_selected', { count: selected.size })}
               </Button>
             )}
+            <Button
+              variant="ghost"
+              onClick={() => setGenerateOpen(true)}
+              data-testid="workflow-generate-open"
+            >
+              <Icon icon={Sparkles} size="xs" className="text-gold-500" />
+              {t('workflow_page.generate')}
+            </Button>
             <Button variant="secondary" onClick={() => setMode({ kind: 'edit', wfId: null })}>
               <Icon icon={Plus} size="xs" />
               {t('workflow_page.create')}
@@ -371,6 +393,17 @@ export function WorkflowRoute() {
           </div>
         )}
       </div>
+
+      <WorkflowGenerateDialog
+        open={generateOpen}
+        onClose={() => setGenerateOpen(false)}
+        onGenerated={(def) => {
+          // Hand the AI's draft to the editor as a seed and dismiss
+          // the drawer so the next mode transition is uncluttered.
+          setGenerateOpen(false);
+          setMode({ kind: 'edit', wfId: null, seed: def });
+        }}
+      />
     </div>
   );
 }

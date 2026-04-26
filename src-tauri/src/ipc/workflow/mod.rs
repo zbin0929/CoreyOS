@@ -1,3 +1,5 @@
+pub mod generate;
+
 use serde::{Deserialize, Serialize};
 use tauri::State;
 

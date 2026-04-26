@@ -472,6 +472,28 @@ export function browserDiagnose(): Promise<BrowserDiagResult> {
   return invoke('browser_diagnose');
 }
 
+// ──────────────────────── Workflow conversational generation ────────────────────────
+
+/** Output of `workflowGenerate`. The editor consumes `workflow`
+ *  directly; `raw_yaml` is exposed so the user can copy-paste the
+ *  source document if they want to share or hand-edit further. */
+export interface WorkflowGenerateResult {
+  workflow: WorkflowDef;
+  raw_yaml: string;
+}
+
+/** Ask the default LLM adapter to author a workflow from a plain-
+ *  language description. Throws an IpcError when the model returns
+ *  malformed YAML or a doc that fails validation — the caller
+ *  surfaces the error message verbatim, since it usually points at
+ *  what to rephrase. */
+export function workflowGenerate(
+  prompt: string,
+  locale?: string,
+): Promise<WorkflowGenerateResult> {
+  return invoke('workflow_generate', { args: { prompt, locale } });
+}
+
 export interface WorkflowRunResult {
   id: string;
   workflow_id: string;

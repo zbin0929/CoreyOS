@@ -212,6 +212,7 @@ pub fn run() {
             ipc::workflow::workflow_run,
             ipc::workflow::workflow_run_status,
             ipc::workflow::workflow_active_runs,
+            ipc::workflow::generate::workflow_generate,
             ipc::workflow_intent::workflow_extract_intent,
             ipc::workflow::workflow_approve,
             ipc::browser_config::browser_config_get,

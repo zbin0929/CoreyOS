@@ -62,10 +62,16 @@ function stepsToEdges(steps: WorkflowStep[]): Edge[] {
 
 interface Props {
   workflowId: string | null;
+  /** Optional pre-filled `WorkflowDef`, used by the "Generate from
+   *  prompt" flow to drop the user straight into the editor with
+   *  the LLM-authored draft. When provided we skip the disk fetch
+   *  AND skip the empty-template branch — `seed` IS the starting
+   *  state. */
+  seed?: WorkflowDef;
   onBack: () => void;
 }
 
-export function WorkflowEditor({ workflowId, onBack }: Props) {
+export function WorkflowEditor({ workflowId, seed, onBack }: Props) {
   const { t } = useTranslation();
   const [def, setDef] = useState<WorkflowDef | null>(null);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -73,6 +79,13 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (seed) {
+      // AI-generated draft. Don't write to disk yet — pressing
+      // Save commits, the user can also discard via Back.
+      setDef(seed);
+      setLoaded(true);
+      return;
+    }
     if (workflowId) {
       void workflowGet(workflowId).then((d) => {
         setDef(d);
@@ -90,7 +103,7 @@ export function WorkflowEditor({ workflowId, onBack }: Props) {
       });
       setLoaded(true);
     }
-  }, [workflowId]);
+  }, [workflowId, seed]);
 
   const initialNodes = useMemo(() => {
     if (!def) return [];
