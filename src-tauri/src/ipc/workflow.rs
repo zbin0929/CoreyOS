@@ -144,12 +144,16 @@ impl StepExecutor for HermesExecutor {
         let is_binary = script_path.extension().is_some_and(|e| e == "exe")
             || !script_path.extension().is_some_and(|e| e == "cjs");
 
+        tracing::info!(action = %action, url = %url, profile = %profile, "browser step start");
+
         let task = serde_json::json!({
             "action": action,
             "url": url,
             "instruction": instruction,
             "profile": if profile.is_empty() { "" } else { profile },
         });
+
+        let start = std::time::Instant::now();
 
         let mut cmd = if is_binary {
             let mut c = Command::new(&script_path);
@@ -179,9 +183,20 @@ impl StepExecutor for HermesExecutor {
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         if !output.status.success() {
+            tracing::warn!(
+                action = %action,
+                duration_ms = start.elapsed().as_millis() as u64,
+                stderr = %stderr,
+                "browser step failed"
+            );
             return Err(format!("browser-runner failed: {}{}", stdout, stderr));
         }
 
+        tracing::info!(
+            action = %action,
+            duration_ms = start.elapsed().as_millis() as u64,
+            "browser step done"
+        );
         Ok(stdout.trim().to_string())
     }
 }

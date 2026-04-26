@@ -137,13 +137,39 @@ pub async fn chat_stream_start(
     let done_event = format!("chat:done:{handle}");
     let err_event = format!("chat:error:{handle}");
     let handle_out = handle.clone();
+    let adapter_id_log = args.adapter_id.clone().unwrap_or_default();
+    let model_log = turn.model.clone().unwrap_or_default();
+    let msg_count = turn.messages.len();
+    let handle_log = handle_out.clone();
 
     tokio::spawn(async move {
+        let start = std::time::Instant::now();
+        tracing::info!(
+            handle = %handle_log,
+            adapter = %adapter_id_log,
+            model = %model_log,
+            messages = msg_count,
+            "chat_stream start"
+        );
         match adapter.chat_stream(turn, tx).await {
             Ok(done) => {
+                tracing::info!(
+                    handle = %handle_log,
+                    duration_ms = start.elapsed().as_millis() as u64,
+                    finish_reason = ?done.finish_reason,
+                    prompt_tokens = ?done.prompt_tokens,
+                    completion_tokens = ?done.completion_tokens,
+                    "chat_stream done"
+                );
                 let _ = app.emit(&done_event, done);
             }
             Err(e) => {
+                tracing::warn!(
+                    handle = %handle_log,
+                    duration_ms = start.elapsed().as_millis() as u64,
+                    error = %e,
+                    "chat_stream error"
+                );
                 let ipc_err: IpcError = e.into();
                 let _ = app.emit(&err_event, ipc_err);
             }

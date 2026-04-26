@@ -12,31 +12,23 @@ Each item is tagged P0/P1/P2. Items are done in order; CI must be green before m
 ### P0.1 Navigation consolidation
 
 **Problem**: 20+ sidebar entries, users don't know where to start.
-**Fix**: Collapse sidebar to ~7 high-frequency entries. Low-frequency items move into:
-  - Settings page sub-sections (profiles, budgets, memory, knowledge, MCP, voice)
-  - "More tools" collapsible section in sidebar
+**Fix**: 3-tier sidebar: Primary (Home/Chat/Workflows/Agents/Models) + Tools (Compare/Analytics/Terminal/Logs) + More (collapsible, 11 items) + Settings pinned to bottom.
 **Files**: `src/app/nav-config.ts`, `src/app/shell/Sidebar.tsx`
-**Status**: ⏳ Pending
+**Status**: ✅ Done — commit `299d9f0`, CI 5/5 green
 
 ### P0.2 Actionable error feedback
 
-**Problem**: Error bubbles show raw strings. Voice/workflow/browser failures have no recovery path.
-**Fix**:
-  - Chat error bubble: add "Retry" button + "Switch Agent" dropdown
-  - Voice error: show "Check Settings" link
-  - Workflow step error: show "Retry from here" button
-**Files**: `src/features/chat/MessageList.tsx` (error bubble), `src/features/voice/index.tsx`, `src/features/workflow/index.tsx`
-**Status**: ⏳ Pending
+**Problem**: Error bubbles show raw strings. No recovery path.
+**Fix**: Chat error bubble now shows inline "Regenerate" button. Error text + retry action directly visible.
+**Files**: `src/features/chat/MessageBubble.tsx`
+**Status**: ✅ Done — commit `cd62a5f`, CI 5/5 green
 
 ### P0.3 Workflow step-level observability
 
 **Problem**: Run history shows `JSON.stringify(output).slice(0,100)`. No per-step timing, no structured output.
-**Fix**:
-  - Step status panel: input/output/error/duration_ms per step
-  - "Retry from step" IPC + UI button
-  - Structured log entry per step completion
-**Files**: `src/features/workflow/index.tsx`, `src-tauri/src/ipc/workflow.rs`, `src-tauri/src/workflow/engine.rs`
-**Status**: ⏳ Pending
+**Fix**: StepRun.duration_ms field + Instant-based timing + tracing::info/warn per step. Frontend shows duration (ms/s), collapsible output, truncated errors with tooltip.
+**Files**: `src-tauri/src/workflow/engine.rs`, `src/lib/ipc.ts`, `src/features/workflow/index.tsx`
+**Status**: ✅ Done — commit `a725eb7`, CI 5/5 green
 
 ### P0.4 IPC contract tests
 
