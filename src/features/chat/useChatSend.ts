@@ -12,9 +12,6 @@ import {
   chatStream,
   ipcErrorMessage,
   learningIndexMessage,
-  voiceRecord,
-  voiceRecordStop,
-  voiceTranscribe,
   type ChatMessageDto,
   type ChatStreamDone,
   type ChatStreamHandle,
@@ -30,13 +27,14 @@ import { useAgentsStore } from '@/stores/agents';
 import { useComposerStore } from '@/stores/composer';
 import { useRoutingStore } from '@/stores/routing';
 
-import { describeBreach, evaluateBudgetGate } from './budgetGate';
 import { enrichHistoryWithContext } from './enrichHistory';
 import { canRetryLastAssistant } from './retryGuard';
 import { resolveRoutedRule } from './routing';
+import { runBudgetGate } from './runBudgetGate';
 import { pickTurnAdapter } from './turnAdapter';
 import { buildStreamCallbacks, resolveAdapterId, toDto } from './useStreamCallbacks';
 import type { useAttachments } from './useAttachments';
+import { useVoiceDraft } from './useVoiceDraft';
 
 /**
  * Surface the chat orchestration owns. Everything the composer footer
@@ -152,7 +150,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     () => useComposerStore.getState().pendingDraft ?? '',
   );
   const [sending, setSending] = useState(false);
-  const [voiceRecording, setVoiceRecording] = useState(false);
+  const { voiceRecording, onVoiceStart, onVoiceStop } = useVoiceDraft({ setDraft });
 
   // Live handle for the current stream, so Stop can cancel it.
   const streamRef = useRef<ChatStreamHandle | null>(null);
@@ -194,38 +192,14 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
 
     // T4.4b — budget gate. Runs BEFORE we commit the message to the
     // store so a blocked send leaves the composer exactly as the
-    // user typed it. `evaluateBudgetGate` fails-safe on IPC errors
-    // (returns empty verdict), so a transient db/analytics hiccup
-    // never locks the user out of chatting. `activeAdapterId` is
-    // read imperatively (same pattern as the chatStream call below)
-    // because the gate's verdict is tied to THIS send, not a
-    // subsequent switcher change. Budget-gate should scope to
-    // whichever adapter this turn will actually land on, which
-    // mirrors the send() priority order below: profile pin > global
-    // active > null.
-    const gateSess = useChatStore.getState().sessions[sessionId];
-    const gateProfilePin = gateSess?.llmProfileId ?? null;
-    const activeAdapterIdForGate =
-      (gateProfilePin
-        ? `hermes:profile:${gateProfilePin}`
-        : useAgentsStore.getState().activeId) ?? null;
-    const verdict = await evaluateBudgetGate({
-      effectiveModel,
-      activeAdapterId: activeAdapterIdForGate,
-    });
-    if (verdict.blocks.length > 0) {
-      const lines = verdict.blocks.map((b) => '  · ' + describeBreach(b)).join('\n');
-      const ok = window.confirm(t('chat_page.budget_over_cap_confirm', { lines }));
-      if (!ok) return;
-    }
-    if (verdict.warns.length > 0) {
-      // Non-blocking: surface above the chip row for the next
-      // render. We reset it once the stream starts so it's clearly
-      // tied to this single send, not stale state.
-      setBudgetWarnings(verdict.warns.map(describeBreach));
-    } else {
-      setBudgetWarnings([]);
-    }
+    // user typed it. Implementation lives in `runBudgetGate` (scopes
+    // the verdict to THIS send, fails-safe on IPC errors, mirrors
+    // the send() priority order: profile pin > global active > null).
+    const gate = await runBudgetGate({ sessionId, effectiveModel, t });
+    if (!gate.proceed) return;
+    // Warnings reset every send so the chip row is clearly tied to
+    // the current turn, not stale state from an earlier attempt.
+    setBudgetWarnings(gate.warnings);
 
     // Bake pending attachments into the user message. Snapshot
     // before we clear so a fast follow-up paste doesn't attach to
@@ -439,31 +413,6 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     if (pendingId) {
       patchMessage(sessionId, pendingId, { pending: false });
     }
-  }
-
-  function onVoiceStart() {
-    if (voiceRecording) return;
-    setVoiceRecording(true);
-    void (async () => {
-      try {
-        const base64 = await voiceRecord(120);
-        setVoiceRecording(false);
-        try {
-          const res = await voiceTranscribe(base64, 'audio/wav');
-          if (res.text) {
-            setDraft((d) => (d ? `${d} ${res.text}` : res.text));
-          }
-        } catch {
-          /* non-critical */
-        }
-      } catch {
-        setVoiceRecording(false);
-      }
-    })();
-  }
-
-  function onVoiceStop() {
-    void voiceRecordStop().catch(() => {});
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
