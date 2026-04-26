@@ -1145,6 +1145,14 @@
       "add_root": "添加到工作区"
     }
   },
+  "help_page": {
+    "title": "用户手册",
+    "subtitle": "CoreyOS 全功能详细指南",
+    "search_placeholder": "搜索章节…",
+    "clear_search": "清除搜索",
+    "open_in_github": "在 GitHub 打开",
+    "report_issue": "反馈问题"
+  },
   "workflow_page": {
     "title": "工作流",
     "subtitle": "定义多步骤、多 Agent 协同的自动化工作流",

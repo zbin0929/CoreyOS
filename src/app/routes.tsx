@@ -50,6 +50,7 @@ const KnowledgeRoute = lazyFeature(() => import('@/features/knowledge'), 'Knowle
 const VoiceRoute = lazyFeature(() => import('@/features/voice'), 'VoiceRoute');
 const McpRoute = lazyFeature(() => import('@/features/mcp'), 'McpRoute');
 const WorkflowRoute = lazyFeature(() => import('@/features/workflow'), 'WorkflowRoute');
+const HelpRoute = lazyFeature(() => import('@/features/help'), 'HelpRoute');
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -193,6 +194,12 @@ const workflowRoute = createRoute({
   component: WorkflowRoute,
 });
 
+const helpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/help',
+  component: HelpRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   chatRoute,
@@ -214,6 +221,7 @@ const routeTree = rootRoute.addChildren([
   voiceRoute,
   mcpRoute,
   workflowRoute,
+  helpRoute,
   settingsRoute,
 ]);
 

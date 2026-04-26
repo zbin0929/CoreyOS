@@ -1145,6 +1145,14 @@
       "add_root": "Add to workspace"
     }
   },
+  "help_page": {
+    "title": "User Manual",
+    "subtitle": "Comprehensive guide to every feature in CoreyOS",
+    "search_placeholder": "Filter sections…",
+    "clear_search": "Clear search",
+    "open_in_github": "Open on GitHub",
+    "report_issue": "Report an issue"
+  },
   "workflow_page": {
     "title": "Workflows",
     "subtitle": "Define multi-step, multi-agent automated workflows",

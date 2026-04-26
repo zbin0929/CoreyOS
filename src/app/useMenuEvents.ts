@@ -19,7 +19,6 @@ import { useUIStore } from '@/stores/ui';
  * Mounted inside `AppShell` because that's where the TanStack Router
  * context is available (we need `useRouter()` to navigate).
  */
-const DOCS_URL = 'https://github.com/EKKOLearnAI/hermes-ui#readme';
 const ISSUES_URL = 'https://github.com/EKKOLearnAI/hermes-ui/issues/new';
 
 const NAV_PREFIX = 'nav:';
@@ -100,7 +99,11 @@ async function dispatch(
       return;
     }
     case 'help:docs': {
-      await openExternal(DOCS_URL);
+      // In-app user manual lives at `/help` — keeps the docs in
+      // sync with the build the user is running and works offline.
+      // External GitHub link is still one click away from the
+      // help page header.
+      void router.navigate({ to: '/help' });
       return;
     }
     case 'help:issues': {
