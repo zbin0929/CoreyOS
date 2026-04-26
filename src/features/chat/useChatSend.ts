@@ -32,6 +32,7 @@ import { useRoutingStore } from '@/stores/routing';
 
 import { describeBreach, evaluateBudgetGate } from './budgetGate';
 import { enrichHistoryWithContext } from './enrichHistory';
+import { canRetryLastAssistant } from './retryGuard';
 import { resolveRoutedRule } from './routing';
 import { buildStreamCallbacks, resolveAdapterId, toDto } from './useStreamCallbacks';
 import type { useAttachments } from './useAttachments';
@@ -382,20 +383,8 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
    */
   async function retry() {
     if (sending) return;
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== 'assistant' || last.pending || last.error) return;
-    // Walk back for the turn this assistant replied to. Guarding
-    // against an assistant-first (malformed) session so we never
-    // build a history with a dangling user-less reply.
-    let userIdx = -1;
-    for (let i = messages.length - 2; i >= 0; i--) {
-      if (messages[i]!.role === 'user') {
-        userIdx = i;
-        break;
-      }
-    }
-    if (userIdx < 0) return;
-
+    if (!canRetryLastAssistant(messages)) return;
+    const last = messages[messages.length - 1]!;
     const targetId = last.id;
     // Reset the assistant row. Undefined assignments clear those
     // fields via the existing `patchMessage` spread (it merges a
