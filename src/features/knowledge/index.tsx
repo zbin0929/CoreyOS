@@ -51,6 +51,21 @@ export function KnowledgeRoute() {
 
   const onUpload = useCallback(
     async (file: File) => {
+      const FIFTY_KB = 50 * 1024;
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+      const binaryExts = ['pdf', 'docx', 'xlsx', 'pptx', 'zip', 'gz', 'tar'];
+      if (binaryExts.includes(ext)) {
+        const ok = window.confirm(
+          t('knowledge.binary_warn', { ext, name: file.name }),
+        );
+        if (!ok) return;
+      }
+      if (file.size > FIFTY_KB) {
+        const ok = window.confirm(
+          t('knowledge.size_warn', { name: file.name, sizeKB: Math.round(file.size / 1024) }),
+        );
+        if (!ok) return;
+      }
       setUploading(true);
       setError(null);
       try {
@@ -63,7 +78,7 @@ export function KnowledgeRoute() {
         setUploading(false);
       }
     },
-    [load],
+    [load, t],
   );
 
   const onDelete = useCallback(

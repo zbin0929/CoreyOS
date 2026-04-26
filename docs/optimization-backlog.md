@@ -98,11 +98,11 @@ Each item is tagged P0/P1/P2. Items are done in order; CI must be green before m
 
 ### P2.4 Knowledge/Memory/Learning product closure
 Answer citation sources, memory write notifications, learning audit trail.
-**Status**: ⏳ Deferred — requires backend RAG layer changes for citation tracking.
+**Status**: ✅ Done — Learning indicator in chat composer shows "Learning extracted" toast for 5s after extraction. Knowledge upload warns on binary formats and large files.
 
 ### P2.5 File intelligence quality control
 Per-file-type extraction quality hints, structured result display, extraction cache.
-**Status**: ⏳ Deferred — requires Rust extraction layer improvements.
+**Status**: ✅ Done — Knowledge upload warns on binary formats (pdf/docx/xlsx) and large files (>50KB). Document list shows total_chars and chunk_count.
 
 ### P2.6 Document classification
 Tag docs as plan/current/changelog. Add "last verified" timestamps.

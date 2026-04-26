@@ -107,6 +107,7 @@ interface ChatState {
   /** `true` once `hydrateFromDb` has run. Prevents the Chat view from
    *  creating a throwaway session before we know what's on disk. */
   hydrated: boolean;
+  lastLearningAt: number | null;
 
   // actions
   /** Called once on app start. Reads all sessions from SQLite into zustand. */
@@ -228,6 +229,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   sessions: {},
   orderedIds: [],
   hydrated: false,
+  lastLearningAt: null,
 
   hydrateFromDb: async () => {
     // Idempotent guard: if a previous call already completed (or is in-flight

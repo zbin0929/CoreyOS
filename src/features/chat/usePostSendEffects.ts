@@ -44,6 +44,8 @@ export function usePostSendEffects({
         void learningExtract({
           userMessage: userText,
           assistantMessage: firstAssistant,
+        }).then(() => {
+          useChatStore.setState({ lastLearningAt: Date.now() });
         }).catch(() => {});
 
         void learningDetectPattern(userText)

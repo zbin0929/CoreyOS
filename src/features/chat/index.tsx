@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { AlertTriangle, Mic, Paperclip, Send, Square, X } from 'lucide-react';
+import { AlertTriangle, Mic, Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -973,7 +973,30 @@ function ChatPane({
             )}
           </div>
         </form>
+        <LearningIndicator />
       </div>
+    </div>
+  );
+}
+
+function LearningIndicator() {
+  const { t } = useTranslation();
+  const lastLearningAt = useChatStore((s) => s.lastLearningAt);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!lastLearningAt) return;
+    setVisible(true);
+    const h = setTimeout(() => setVisible(false), 5000);
+    return () => clearTimeout(h);
+  }, [lastLearningAt]);
+
+  if (!visible) return null;
+
+  return (
+    <div className="flex items-center justify-center gap-1.5 py-1 text-[10px] text-fg-subtle">
+      <Icon icon={Sparkles} size="xs" className="text-gold-500" />
+      {t('chat_page.learning_extracted')}
     </div>
   );
 }

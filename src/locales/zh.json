@@ -77,6 +77,7 @@
     "search_match_badge": "命中",
     "retry": "重新生成",
     "retry_title": "用相同的提示重新生成回复，直接替换当前的这一条。",
+    "learning_extracted": "已从本次对话中提取学习内容",
     "export": "导出",
     "export_title": "把当前对话导出为 Markdown 或 JSON。",
     "export_disabled_hint": "还没有内容可导出 —— 先发送一条消息。",
@@ -798,7 +799,9 @@
     "chunks": "段",
     "delete": "删除",
     "empty_title": "还没有文档",
-    "empty_desc": "上传文本文件来构建你的知识库。文档会自动分段和索引。"
+    "empty_desc": "上传文本文件来构建你的知识库。文档会自动分段和索引。",
+    "binary_warn": "\"{{name}}\" 是 .{{ext}} 文件。二进制格式可能无法正确提取为纯文本。继续？",
+    "size_warn": "\"{{name}}\" 大小为 {{sizeKB}}KB。大文件可能会被截断。继续？"
   },
   "voice": {
     "title": "语音设置",
