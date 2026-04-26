@@ -2,10 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
-  Loader2,
   Plus,
   Terminal as TerminalIcon,
-  X,
 } from 'lucide-react';
 import { Icon } from '@/components/ui/icon';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -23,6 +21,10 @@ import {
   ptySpawn,
   ptyWrite,
 } from '@/lib/ipc';
+
+import { TabStrip } from './TabStrip';
+import { base64DecodeToUint8, pickNeighbour } from './helpers';
+import type { Tab, XtermBundle } from './types';
 
 /**
  * Phase 4 · T4.5 + T4.5b (multi-tab) — Web terminal.
@@ -58,34 +60,6 @@ import {
  * - WebGL renderer. Canvas is fine.
  * - Copy/paste buttons. ⌘C / ⌘V work.
  */
-interface Tab {
-  /** Stable React key + map key for `bundlesRef`. Generated once on
-   *  creation; never reused. */
-  key: string;
-  /** Human label shown in the tab strip. Defaults to `shell N` where
-   *  N counts up monotonically so killing tab 2 and opening a new
-   *  one gives `shell 3`, not `shell 2`. Less confusing in demos. */
-  label: string;
-  /** pty lifecycle state. Kept in React state so the tab pill can
-   *  render a spinner while `starting`. */
-  state: PtyState;
-}
-
-type PtyState =
-  | { kind: 'starting' }
-  | { kind: 'running'; id: string }
-  | { kind: 'error'; message: string };
-
-interface XtermBundle {
-  term: Terminal;
-  fit: FitAddon;
-  unlisten: UnlistenFn | null;
-  ro: ResizeObserver | null;
-  /** Set once `ptySpawn` returns; used by teardown to kill the
-   *  backend pty. Null while `starting`. */
-  ptyId: string | null;
-}
-
 export function TerminalRoute() {
   const { t } = useTranslation();
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -425,93 +399,3 @@ export function TerminalRoute() {
   );
 }
 
-/** Horizontal pill row: one chip per tab, each with label + ×.
- *  Active tab gets the elev-2 background so it reads as selected. */
-function TabStrip({
-  tabs,
-  activeKey,
-  onSelect,
-  onClose,
-}: {
-  tabs: Tab[];
-  activeKey: string | null;
-  onSelect: (key: string) => void;
-  onClose: (key: string) => void;
-}) {
-  return (
-    <div
-      className="mb-3 flex flex-wrap items-center gap-1"
-      data-testid="terminal-tabs"
-      role="tablist"
-    >
-      {tabs.map((tab) => {
-        const active = tab.key === activeKey;
-        return (
-          <div
-            key={tab.key}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition',
-              active
-                ? 'border-border-strong bg-bg-elev-2 text-fg'
-                : 'border-border bg-bg-elev-1 text-fg-muted hover:bg-bg-elev-2 hover:text-fg',
-            )}
-            data-testid={`terminal-tab-${tab.key}`}
-            data-active={active ? 'true' : undefined}
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => onSelect(tab.key)}
-              className="inline-flex items-center gap-1.5"
-            >
-              {tab.state.kind === 'starting' ? (
-                <Icon icon={Loader2} size="xs" className="animate-spin" />
-              ) : tab.state.kind === 'error' ? (
-                <Icon icon={AlertCircle} size="xs" className="text-danger" />
-              ) : (
-                <Icon icon={TerminalIcon} size="xs" className="text-fg-subtle" />
-              )}
-              <span className="max-w-[140px] truncate">{tab.label}</span>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose(tab.key);
-              }}
-              aria-label={`Close ${tab.label}`}
-              className="rounded p-0.5 text-fg-subtle hover:bg-bg-elev-3 hover:text-danger"
-              data-testid={`terminal-tab-close-${tab.key}`}
-            >
-              <Icon icon={X} size="xs" />
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** When the active tab closes, pick its right-neighbour (preserves
- *  tab-bar position), falling back to the left neighbour and then
- *  `null` (empty state). */
-function pickNeighbour(tabs: Tab[], removed: string): string | null {
-  const idx = tabs.findIndex((tab) => tab.key === removed);
-  if (idx < 0) return tabs[0]?.key ?? null;
-  const right = tabs[idx + 1];
-  if (right) return right.key;
-  const left = tabs[idx - 1];
-  if (left) return left.key;
-  return null;
-}
-
-// ─── helpers ──────────────────────────────────────────────────────────
-
-/** Decode a base64 string into a Uint8Array. Pure browser atob — no deps. */
-function base64DecodeToUint8(s: string): Uint8Array {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}

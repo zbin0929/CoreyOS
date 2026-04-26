@@ -1,36 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AlertCircle,
-  AlertTriangle,
-  Check,
-  Loader2,
-  PiggyBank,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { AlertCircle, Loader2, PiggyBank, Plus } from 'lucide-react';
+
 import { PageHeader } from '@/app/shell/PageHeader';
 import { InfoHint } from '@/components/ui/info-hint';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
-import { Select } from '@/components/ui/select';
-import { cn } from '@/lib/cn';
 import { FALLBACK_PRICE } from '@/features/chat/budgetGate';
 import {
   analyticsSummary,
   budgetDelete,
   budgetList,
-  budgetUpsert,
   ipcErrorMessage,
   type AnalyticsSummaryDto,
-  type BudgetAction,
-  type BudgetPeriod,
   type BudgetRow,
-  type BudgetScopeKind,
 } from '@/lib/ipc';
-import { useAgentsStore } from '@/stores/agents';
+
+import { BudgetCard } from './BudgetCard';
+import { BudgetEditor } from './BudgetEditor';
 
 /**
  * Phase 4 · T4.4 — Budgets.
@@ -53,8 +41,10 @@ import { useAgentsStore } from '@/stores/agents';
  * the feature to demo cleanly without requiring the user to guess
  * numbers. The moment we ship a real "model catalog" this table migrates
  * to settings.
+ *
+ * Subcomponents live in siblings: `BudgetCard.tsx`, `BudgetEditor.tsx`;
+ * pure formatters in `helpers.ts`.
  */
-
 
 type Mode =
   | { kind: 'list' }
@@ -183,336 +173,28 @@ export function BudgetsRoute() {
                     </div>
                   </div>
                 )}
-              <ul className="flex flex-col gap-2" data-testid="budgets-list">
-                {rows.map((b) => (
-                  <BudgetCard
-                    key={b.id}
-                    budget={b}
-                    spentCents={lifetimeCents}
-                    onEdit={() => setMode({ kind: 'edit', budget: b })}
-                    onDelete={async () => {
-                      try {
-                        await budgetDelete(b.id);
-                        await load();
-                      } catch (e) {
-                        setError(ipcErrorMessage(e));
-                      }
-                    }}
-                  />
-                ))}
-              </ul>
+                <ul className="flex flex-col gap-2" data-testid="budgets-list">
+                  {rows.map((b) => (
+                    <BudgetCard
+                      key={b.id}
+                      budget={b}
+                      spentCents={lifetimeCents}
+                      onEdit={() => setMode({ kind: 'edit', budget: b })}
+                      onDelete={async () => {
+                        try {
+                          await budgetDelete(b.id);
+                          await load();
+                        } catch (e) {
+                          setError(ipcErrorMessage(e));
+                        }
+                      }}
+                    />
+                  ))}
+                </ul>
               </>
             ))}
         </div>
       </div>
     </div>
   );
-}
-
-// ───────────────────────── Card ─────────────────────────
-
-function BudgetCard({
-  budget,
-  spentCents,
-  onEdit,
-  onDelete,
-}: {
-  budget: BudgetRow;
-  spentCents: number;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const { t } = useTranslation();
-  // Guard against malformed rows (e.g. cap_cents === 0 from a migration
-  // bug, or an upstream schema drift) — we'd otherwise render $NaN and
-  // NaN% which looks broken. Falls through as "0%" + safe totals.
-  const cap = budget.amount_cents || 0;
-  const rawPct = cap > 0 ? (spentCents / cap) * 100 : 0;
-  const pct = Math.min(100, Math.max(0, Math.round(Number.isFinite(rawPct) ? rawPct : 0)));
-  const breached = cap > 0 && spentCents >= cap;
-  const warn = !breached && pct >= 80;
-  const colorClass = breached
-    ? 'bg-danger'
-    : warn
-    ? 'bg-amber-500'
-    : 'bg-emerald-500';
-
-  return (
-    <li
-      className="flex flex-col gap-2 rounded-md border border-border bg-bg-elev-1 p-3"
-      data-testid={`budget-row-${budget.id}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-sm font-medium text-fg">
-              {scopeLabel(budget, t)}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
-              · {t(`budgets.period.${budget.period}`)}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
-              · {t(`budgets.action.${budget.action_on_breach}`)}
-            </span>
-          </div>
-          <div className="mt-0.5 text-xs text-fg-muted">
-            {formatCents(spentCents)} / {formatCents(budget.amount_cents)} ({pct}%)
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button size="sm" variant="ghost" onClick={onEdit} data-testid={`budget-edit-${budget.id}`}>
-            {t('budgets.edit')}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onDelete} data-testid={`budget-delete-${budget.id}`}>
-            <Icon icon={Trash2} size="xs" className="text-danger" />
-          </Button>
-        </div>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elev-3">
-        <div
-          className={cn('h-full transition-all', colorClass)}
-          style={{ width: `${pct}%` }}
-          data-testid={`budget-progress-${budget.id}`}
-          data-pct={pct}
-        />
-      </div>
-      {breached && (
-        <div className="flex items-center gap-1 text-[11px] text-danger" data-testid={`budget-breached-${budget.id}`}>
-          <Icon icon={AlertTriangle} size="xs" />
-          {t('budgets.breached')}
-        </div>
-      )}
-      {warn && !breached && (
-        <div className="flex items-center gap-1 text-[11px] text-amber-500" data-testid={`budget-warning-${budget.id}`}>
-          <Icon icon={AlertTriangle} size="xs" />
-          {t('budgets.warning_80')}
-        </div>
-      )}
-    </li>
-  );
-}
-
-// ───────────────────────── Editor ─────────────────────────
-
-function BudgetEditor({
-  initial,
-  onCancel,
-  onSaved,
-}: {
-  initial?: BudgetRow;
-  onCancel: () => void;
-  onSaved: () => void | Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const [scopeKind, setScopeKind] = useState<BudgetScopeKind>(initial?.scope_kind ?? 'global');
-  const [scopeValue, setScopeValue] = useState(initial?.scope_value ?? '');
-  const [amountDollars, setAmountDollars] = useState(
-    initial ? (initial.amount_cents / 100).toFixed(2) : '5.00',
-  );
-  const [period, setPeriod] = useState<BudgetPeriod>(initial?.period ?? 'month');
-  const [action, setAction] = useState<BudgetAction>(initial?.action_on_breach ?? 'notify');
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const needsScopeValue = scopeKind !== 'global';
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const cents = Math.round(parseFloat(amountDollars) * 100);
-    if (!Number.isFinite(cents) || cents <= 0 || saving) return;
-    if (needsScopeValue && !scopeValue.trim()) return;
-
-    setSaving(true);
-    setErr(null);
-    const now = Date.now();
-    const row: BudgetRow = initial
-      ? {
-          ...initial,
-          scope_kind: scopeKind,
-          scope_value: needsScopeValue ? scopeValue.trim() : null,
-          amount_cents: cents,
-          period,
-          action_on_breach: action,
-          updated_at: now,
-        }
-      : {
-          id: `bg-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-          scope_kind: scopeKind,
-          scope_value: needsScopeValue ? scopeValue.trim() : null,
-          amount_cents: cents,
-          period,
-          action_on_breach: action,
-          created_at: now,
-          updated_at: now,
-        };
-    try {
-      await budgetUpsert(row);
-      await onSaved();
-    } catch (e) {
-      setErr(ipcErrorMessage(e));
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4"
-      data-testid="budget-editor"
-    >
-      <div className="flex items-center gap-2">
-        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-          <span className="text-fg-subtle">{t('budgets.field.scope_kind')}</span>
-          <Select<BudgetScopeKind>
-            value={scopeKind}
-            onChange={setScopeKind}
-            data-testid="budget-scope-kind"
-            ariaLabel={t('budgets.field.scope_kind')}
-            options={[
-              { value: 'global', label: t('budgets.scope.global') },
-              { value: 'model', label: t('budgets.scope.model') },
-              { value: 'profile', label: t('budgets.scope.profile') },
-              { value: 'adapter', label: t('budgets.scope.adapter') },
-              { value: 'channel', label: t('budgets.scope.channel') },
-            ]}
-          />
-        </label>
-        {needsScopeValue && (
-          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-            <span className="text-fg-subtle">{t('budgets.field.scope_value')}</span>
-            <ScopeValueInput
-              scopeKind={scopeKind}
-              value={scopeValue}
-              onChange={setScopeValue}
-            />
-          </label>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-          <span className="text-fg-subtle">{t('budgets.field.amount_usd')}</span>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={amountDollars}
-            onChange={(e) => setAmountDollars(e.target.value)}
-            className="rounded border border-border bg-bg-elev-2 px-2 py-1.5 text-sm text-fg focus:border-gold-500/40 focus:outline-none"
-            data-testid="budget-amount"
-          />
-        </label>
-        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-          <span className="text-fg-subtle">{t('budgets.field.period')}</span>
-          <Select<BudgetPeriod>
-            value={period}
-            onChange={setPeriod}
-            data-testid="budget-period"
-            ariaLabel={t('budgets.field.period')}
-            options={[
-              { value: 'day', label: t('budgets.period.day') },
-              { value: 'week', label: t('budgets.period.week') },
-              { value: 'month', label: t('budgets.period.month') },
-            ]}
-          />
-        </label>
-        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-          <span className="text-fg-subtle">{t('budgets.field.action')}</span>
-          <Select<BudgetAction>
-            value={action}
-            onChange={setAction}
-            data-testid="budget-action"
-            ariaLabel={t('budgets.field.action')}
-            options={[
-              { value: 'notify', label: t('budgets.action.notify') },
-              { value: 'block', label: t('budgets.action.block') },
-              { value: 'notify_block', label: t('budgets.action.notify_block') },
-            ]}
-          />
-        </label>
-      </div>
-
-      {err && (
-        <div className="flex items-center gap-2 rounded border border-danger/40 bg-danger/5 px-2 py-1 text-xs text-danger">
-          <Icon icon={AlertCircle} size="sm" />
-          <span>{err}</span>
-        </div>
-      )}
-
-      <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
-        <Button size="sm" variant="ghost" type="button" onClick={onCancel}>
-          <Icon icon={X} size="sm" />
-          {t('budgets.cancel')}
-        </Button>
-        <Button
-          size="sm"
-          variant="primary"
-          type="submit"
-          disabled={saving}
-          data-testid="budget-save"
-        >
-          {saving ? <Icon icon={Loader2} size="sm" className="animate-spin" /> : <Icon icon={Check} size="sm" />}
-          {t('budgets.save')}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-/**
- * Input for `scope_value`. For `scope_kind === 'adapter'`, T5.6 replaces
- * the free-form text box with a `<Select>` populated from the live agent
- * registry — the persisted value is the adapter `id` (stable across
- * display-name changes), the dropdown shows the human-readable `name`.
- * Other scopes still need free-form text (model ids / profile names /
- * channel slugs are user-typed or copy-pasted).
- *
- * Graceful degradation: if the registry snapshot hasn't loaded yet OR is
- * empty (unusual — Hermes always registers), we fall back to the text
- * input so the form never wedges.
- */
-function ScopeValueInput({
-  scopeKind,
-  value,
-  onChange,
-}: {
-  scopeKind: BudgetScopeKind;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const adapters = useAgentsStore((s) => s.adapters);
-  if (scopeKind === 'adapter' && adapters && adapters.length > 0) {
-    return (
-      <Select<string>
-        value={value || adapters[0]?.id || ''}
-        onChange={onChange}
-        data-testid="budget-scope-value"
-        ariaLabel="Adapter"
-        options={adapters.map((a) => ({ value: a.id, label: a.name }))}
-      />
-    );
-  }
-  return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="e.g. gpt-4o"
-      className="rounded border border-border bg-bg-elev-2 px-2 py-1.5 text-sm text-fg focus:border-gold-500/40 focus:outline-none"
-      data-testid="budget-scope-value"
-    />
-  );
-}
-
-// ───────────────────────── Helpers ─────────────────────────
-
-function scopeLabel(b: BudgetRow, t: (k: string) => string): string {
-  if (b.scope_kind === 'global') return t('budgets.scope.global');
-  return `${t(`budgets.scope.${b.scope_kind}`)}: ${b.scope_value ?? '—'}`;
-}
-
-function formatCents(cents: number): string {
-  // Defensive: a malformed row (undefined / null / NaN) should not render
-  // "$NaN" to the user. Clamp to 0 so the bad row is visible but doesn't
-  // look like a Corey bug.
-  const v = Number.isFinite(cents) ? cents : 0;
-  return `$${(v / 100).toFixed(2)}`;
 }
