@@ -51,6 +51,7 @@
     "tts_stop": "Stop reading",
     "routing_hint": "→ {{adapter}} · rule \"{{rule}}\"",
     "routing_hint_missing": "→ {{adapter}} (not registered) · rule \"{{rule}}\"",
+    "routing_hint_tooltip": "Rule \"{{rule}}\" matches \"{{pattern}}\" → routes to {{adapter}}",
     "attach_file": "Attach file",
     "stop_generating": "Stop generating",
     "voice_start": "Hold to speak",

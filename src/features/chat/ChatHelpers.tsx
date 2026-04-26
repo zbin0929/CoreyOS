@@ -116,7 +116,11 @@ export function RoutingHint({ draft }: { draft: string }) {
           : 'border border-danger/30 bg-danger/5 text-danger',
       )}
       data-testid="chat-routing-hint"
-      title={matched.name}
+      title={t('chat_page.routing_hint_tooltip', {
+        rule: matched.name,
+        adapter: adapterLabel,
+        pattern: matched.match.value,
+      })}
     >
       {isRegistered
         ? t('chat_page.routing_hint', { adapter: adapterLabel, rule: matched.name })
