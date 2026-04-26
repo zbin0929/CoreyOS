@@ -43,9 +43,7 @@ test.describe('T6.5 — sandbox scopes', () => {
     //    via the sidebar link keeps mock state in memory.
     await page.getByRole('link', { name: /Agents/ }).first().click();
     await page.getByTestId('hermes-instances-add').click();
-    // Custom <Select> — click trigger, then click option by label.
-    await page.getByTestId('hermes-instance-scope-new').click();
-    await page.getByRole('option', { name: /Worker/ }).click();
+    await page.getByTestId('hermes-instance-scope-new').selectOption('worker');
     // T8 polish — the "Add instance" form now lives in a right-side
     // Drawer overlay. Dismiss it before nav so the backdrop doesn't
     // intercept the subsequent Settings link click.
