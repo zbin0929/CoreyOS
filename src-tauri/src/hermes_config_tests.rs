@@ -1,5 +1,16 @@
 use super::*;
 
+/// Helper — acquire the crate-wide `HOME` lock from `skills::HOME_LOCK`.
+/// `cargo test` runs in parallel, and the two tests below rewrite
+/// `$HOME` to a tempdir; without joining the same lock used by the
+/// `attachments` / `changelog` / `memory` / `skills` suites, two of
+/// them racing would silently observe each other's tempdir and flake.
+fn _home_lock() -> std::sync::MutexGuard<'static, ()> {
+    crate::skills::HOME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
 #[test]
 fn extract_model_parses_standard_layout() {
     let yaml = r#"
@@ -49,7 +60,10 @@ NOT_A_KEY=hello
     )
     .unwrap();
 
-    // Temporarily point HOME at our tempdir.
+    // Temporarily point HOME at our tempdir. Lock is held for the
+    // entire test body so a concurrent test can't observe a half-set
+    // HOME; the guard drop happens after the restore below.
+    let _lock = _home_lock();
     let original_home = std::env::var_os("HOME");
     std::env::set_var("HOME", &tmp);
 
@@ -176,6 +190,7 @@ fn write_channel_yaml_fields_round_trips_through_disk() {
     )
     .unwrap();
 
+    let _lock = _home_lock();
     let original_home = std::env::var_os("HOME");
     std::env::set_var("HOME", &tmp);
 
