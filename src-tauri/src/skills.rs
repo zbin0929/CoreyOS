@@ -126,41 +126,100 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<SkillSummary>) -> anyhow::Result<
     Ok(())
 }
 
-/// Read at most the first 1 KiB of `path` and pull out the leading
-/// ATX-style Markdown heading line (any of `#` through `######`),
-/// stripped of its `#`s and surrounding whitespace.
+/// Read at most the first 2 KiB of `path` and pull out a human-friendly
+/// title in this priority order:
 ///
-/// We deliberately cap the read so listing 100s of skills stays fast —
-/// any skill whose first heading isn't in the first kilobyte is a
+///   1. ATX Markdown heading (`# …` through `###### …`) in the body —
+///      after any leading YAML frontmatter is skipped.
+///   2. `display_name:` / `name:` from the frontmatter, if no body
+///      heading is present in the window.
+///
+/// We deliberately cap the read so listing hundreds of skills stays
+/// fast — any skill whose title isn't in the first 2 KB is a
 /// malformed Markdown file by anyone's standard. Returns `None` when
-/// no heading is present, the extracted title is empty, or the file
-/// fails to open (the listing itself stays best-effort: a missing
-/// description is harmless, a hard error here would block the entire
-/// tree from rendering).
+/// nothing usable shows up or the file fails to open (the listing
+/// itself stays best-effort: a missing description is harmless, a
+/// hard error here would block the entire tree from rendering).
 fn read_h1_title(path: &Path) -> Option<String> {
     use std::io::Read;
     let mut file = fs::File::open(path).ok()?;
-    let mut buf = [0u8; 1024];
+    // 2 KiB headroom: most community skill files (Hermes' own bundle
+    // included) carry a 10–20 line YAML frontmatter that easily eats
+    // the original 1 KiB budget on its own. 2 KiB still costs <1 ms
+    // per file on a warm cache.
+    let mut buf = [0u8; 2048];
     let n = file.read(&mut buf).ok()?;
     // `from_utf8_lossy` (vs strict `from_utf8`) so a CJK title whose
-    // last byte falls right on the 1024 boundary doesn't blow up — we
-    // only inspect the first complete line anyway, well before the
+    // last byte falls right on the buffer boundary doesn't blow up —
+    // we only inspect the first complete heading line, well before the
     // truncation point.
     let head = String::from_utf8_lossy(&buf[..n]);
-    for line in head.lines() {
+
+    // Track frontmatter `name` / `display_name` so we can fall back to
+    // it if the body inside the window has no ATX heading. Prefer
+    // `display_name` when both are present — it's the field skill
+    // authors set specifically for human display.
+    let mut fm_display: Option<String> = None;
+    let mut fm_name: Option<String> = None;
+
+    let mut lines = head.lines();
+    let first = lines.next()?;
+    // YAML frontmatter sentinel — exactly `---` (any trailing whitespace
+    // tolerated). Anything else means the body starts on line 1, no
+    // frontmatter to skip.
+    let in_frontmatter = first.trim_end() == "---";
+    if in_frontmatter {
+        for line in lines.by_ref() {
+            let trimmed = line.trim_end();
+            if trimmed == "---" || trimmed == "..." {
+                break;
+            }
+            // Cheap key:value scan — full YAML parsing is overkill for
+            // two top-level scalar fields, and the listing is not
+            // schema-aware. We accept `key: "value"` / `key: value` /
+            // `key: 'value'`. Nested structures + lists are skipped.
+            if let Some((key, value)) = trimmed.split_once(':') {
+                let k = key.trim();
+                let v = value.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+                if v.is_empty() {
+                    continue;
+                }
+                match k {
+                    "display_name" => fm_display = Some(v.to_string()),
+                    "name" => fm_name = Some(v.to_string()),
+                    _ => {}
+                }
+            }
+        }
+    } else {
+        // Re-scan from the top — `lines.next()` consumed `first`, but
+        // we need to consider it as a body line.
+        if let Some(title) = body_title(std::iter::once(first).chain(lines.by_ref())) {
+            return Some(title);
+        }
+        return fm_display.or(fm_name);
+    }
+
+    if let Some(title) = body_title(lines) {
+        return Some(title);
+    }
+    fm_display.or(fm_name)
+}
+
+/// Scan a Markdown body for the first ATX heading. `#`–`######` all
+/// count: many community skills skip an explicit H1 and start with
+/// `## Description`, and surfacing that beats showing the file stem.
+/// Stops at the first non-blank non-heading line so a deep heading
+/// further down can't be promoted into the tree spuriously.
+fn body_title<'a, I: Iterator<Item = &'a str>>(lines: I) -> Option<String> {
+    for line in lines {
         let trimmed = line.trim_start();
         if !trimmed.starts_with('#') {
-            // Stop at the first non-blank, non-heading content so we
-            // don't drag a deep `## subheading` up if the author skipped
-            // an H1 — that would be misleading.
             if !trimmed.is_empty() {
                 return None;
             }
             continue;
         }
-        // Match `#` followed by optional `#`s, a single space, then the
-        // title. ATX-style headings only — Setext (`Title\n===`) is rare
-        // enough that we ignore it.
         let title = trimmed.trim_start_matches('#').trim();
         if title.is_empty() {
             return None;
@@ -345,6 +404,30 @@ mod tests {
         save("h2-only.md", "## Sub heading\n\nbody", false).unwrap();
         // Empty H1 (just `#`) → None. Validates the empty-title guard.
         save("blank-h1.md", "#\nbody", false).unwrap();
+        // Hermes-style file: YAML frontmatter THEN an H1 in the body.
+        // The screenshot regression — without frontmatter skipping
+        // we'd bail on line 1 (`---`) and return None.
+        save(
+            "fm.md",
+            "---\nname: findmy\ndescription: Track Apple devices.\n---\n\n# Find My (Apple)\n\nbody",
+            false,
+        )
+        .unwrap();
+        // Frontmatter present but no body H1 in the window — fall
+        // back to the frontmatter's `display_name` (preferred) or
+        // `name` field.
+        save(
+            "fm-no-h1.md",
+            "---\nname: code-review\ndisplay_name: 代码评审\n---\n\nplain body, no heading\n",
+            false,
+        )
+        .unwrap();
+        save(
+            "fm-only-name.md",
+            "---\nname: alt slug\n---\n\nplain body, no heading\n",
+            false,
+        )
+        .unwrap();
 
         let rows = list().unwrap();
         let by_path: std::collections::HashMap<_, _> = rows
@@ -361,6 +444,20 @@ mod tests {
             Some("Sub heading")
         );
         assert_eq!(by_path.get("blank-h1.md").unwrap().as_deref(), None);
+        // Frontmatter is skipped; the body H1 wins.
+        assert_eq!(
+            by_path.get("fm.md").unwrap().as_deref(),
+            Some("Find My (Apple)"),
+        );
+        // No body heading: prefer `display_name` over `name`.
+        assert_eq!(
+            by_path.get("fm-no-h1.md").unwrap().as_deref(),
+            Some("代码评审"),
+        );
+        assert_eq!(
+            by_path.get("fm-only-name.md").unwrap().as_deref(),
+            Some("alt slug"),
+        );
     }
 
     #[test]
