@@ -176,7 +176,17 @@ export function MessageBubble({
           ) : msg.error ? (
             <span className="inline-flex items-start gap-2">
               <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
-              <span>{msg.error}</span>
+              <span className="flex-1">{msg.error}</span>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="ml-2 flex-none rounded-md border border-danger/30 px-2 py-0.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                >
+                  <Icon icon={RefreshCw} size="xs" className="mr-1" />
+                  {t('chat_page.retry')}
+                </button>
+              )}
             </span>
           ) : isUser ? (
             <span className="whitespace-pre-wrap">{msg.content}</span>
