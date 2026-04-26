@@ -55,6 +55,21 @@ jobs:
       - name: Bundle-size gate
         run: pnpm check:bundle-size
 
+      # File-size gate. Locks in the OP-031..034 splits — fails if any
+      # source file in src/ or src-tauri/src/ regrows past the hard cap.
+      # Soft-warn threshold prints noisy advisories without blocking.
+      # See scripts/check-file-sizes.mjs.
+      - name: File-size gate
+        run: pnpm check:file-sizes
+
+      # IPC contract drift gate. Diffs Rust `#[tauri::command]` set
+      # against `lib.rs` registrations and `src/lib/ipc.ts` invokes.
+      # Per docs/phases/c4-ipc-type-safety.md we keep the TS mirror by
+      # hand rather than introducing tauri-specta — this gate is the
+      # automated half of that bargain.
+      - name: IPC contract gate
+        run: pnpm check:ipc-contract
+
   # ────────────────────────── E2E (Playwright) ──────────────────────────
   # Runs the full browser suite against the Vite dev server with IPC mocked
   # (see e2e/fixtures/tauri-mock.ts). No Rust build needed — this is the
@@ -153,6 +168,22 @@ jobs:
 
       - name: Clippy (deny warnings)
         run: cargo clippy --lib --all-targets -- -D warnings
+
+      # `unwrap_used` baseline gate. Reports the legacy unwraps still
+      # in the tree (mostly tests + DB modules) and fails if a commit
+      # adds new ones. Bump scripts/clippy-unwrap-baseline.txt down
+      # whenever you take a chunk out. Linux-only — clippy output is
+      # platform-agnostic and we don't need to triple our minutes.
+      - name: Setup Node (for unwrap_used gate)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Clippy unwrap_used baseline
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-clippy-unwrap.mjs
 
       - name: Unit tests
         run: cargo test --lib

@@ -167,7 +167,23 @@ caduceus/
 │       │   │   └── probe.rs       # Gateway health probe
 │       │   ├── claude_code/       # Phase 5 (mock)
 │       │   └── aider/             # Phase 5 (mock)
-│       ├── db.rs                  # SQLite (rusqlite bundled) for session/message persistence
+│       ├── db/                    # SQLite persistence, split by domain (2026-04-26)
+│       │   ├── mod.rs             # `Db` struct + open/open_in_memory + re-exports
+│       │   ├── migrations.rs      # PRAGMA user_version v1..v11
+│       │   ├── sessions.rs        # SessionRow + load_all
+│       │   ├── messages.rs        # MessageRow / ToolCallRow / AttachmentRow + embedding
+│       │   ├── analytics.rs       # rollups for the Analytics page
+│       │   ├── runbooks.rs        # T4.6 runbook templates
+│       │   ├── budgets.rs         # T4.4 cost caps
+│       │   ├── skills_history.rs  # v9 skill version snapshots
+│       │   └── knowledge.rs       # knowledge_docs / knowledge_chunks
+│       ├── sandbox/               # path access control (split 2026-04-26)
+│       │   ├── mod.rs             # docs + re-exports
+│       │   ├── types.rs           # AccessMode/Op + WorkspaceRoot/Scope + SandboxError
+│       │   ├── denylist.rs        # hard + home-relative denylists
+│       │   ├── authority.rs       # PathAuthority state machine + check_scoped
+│       │   ├── persistence.rs     # sandbox.json reader/writer
+│       │   └── fs.rs              # sandbox-gated read/write helpers
 │       ├── fs_atomic.rs           # atomic writes + journal
 │       └── error.rs
 │

@@ -24,7 +24,10 @@
     "storybook": "storybook dev -p 6006 --no-open",
     "build-storybook": "storybook build",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
-    "check:sandbox-fs": "node scripts/check-sandbox-fs.mjs"
+    "check:sandbox-fs": "node scripts/check-sandbox-fs.mjs",
+    "check:file-sizes": "node scripts/check-file-sizes.mjs",
+    "check:ipc-contract": "node scripts/check-ipc-contract.mjs",
+    "check:clippy-unwrap": "node scripts/check-clippy-unwrap.mjs"
   },
   "dependencies": {
     "@browserbasehq/stagehand": "^3.2.1",

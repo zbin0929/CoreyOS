@@ -12,16 +12,6 @@ use crate::hermes_profiles as hp;
 use crate::hermes_profiles_archive as hpa;
 use crate::state::AppState;
 
-fn wrap<T, F>(state: &AppState, op: &'static str, f: F) -> IpcResult<T>
-where
-    F: FnOnce() -> std::io::Result<T>,
-{
-    let _ = state; // reserved for future plumbing
-    f().map_err(|e| IpcError::Internal {
-        message: format!("{op}: {e}"),
-    })
-}
-
 #[tauri::command]
 pub async fn hermes_profile_list(state: State<'_, AppState>) -> IpcResult<hp::ProfilesView> {
     let state = state.inner();
@@ -116,13 +106,6 @@ pub async fn hermes_profile_activate(
         .map_err(|e| IpcError::Internal {
             message: format!("profile activate: {e}"),
         })
-}
-
-// Silence the unused-helper warning when other wrappers don't use it
-// yet; keep the helper in case a non-changelog op needs it later.
-#[allow(dead_code)]
-fn _force_use(s: &AppState) {
-    let _ = wrap(s, "noop", || Ok::<(), std::io::Error>(()));
 }
 
 // ─────────────────────── tar.gz import / export ───────────────────────

@@ -47,6 +47,53 @@ Quality review (`docs/current-feature-quality-review-2026-04-26.md`) identified 
 **settings/index.tsx**: 2298 → 1451 lines (**-36.8%**), 4 new files extracted.
 **workflow.rs**: 453 → 299 lines (**-34%**), 2 new files extracted.
 
+### Round 2 — P0/P1 large-file split (2026-04-26 evening, OP-031..034)
+
+Driven by `docs/current-feature-quality-review-2026-04-26.md`'s top-5
+list. Both Rust and TS sides split by domain; every public path was
+preserved via `pub use` / barrel re-exports so zero callers needed to
+change. CI matrix is unchanged — `cargo test --lib`, `clippy
+--all-targets -D warnings`, `cargo fmt --check`, `pnpm typecheck /
+lint / test / check:bundle-size` all stay green; new files are picked
+up automatically.
+
+| Target | Before | After | New files | Verified |
+|---|---:|---:|---|---|
+| `src-tauri/src/db.rs` | **2199** | split | `db/{mod,migrations,sessions,messages,analytics,runbooks,budgets,skills_history,knowledge}.rs` | 262/262 cargo, clippy 0 |
+| `src/features/settings/index.tsx` | **1480** | **416** | `sections/{Workspace,RoutingRules,SandboxScopes,BrowserLLM,Storage}Section.tsx`, `styles.ts` | typecheck/lint/vitest |
+| `src-tauri/src/sandbox/mod.rs` | **1125** | **71** | `sandbox/{types,denylist,authority}.rs` | 262/262 cargo, clippy 0 |
+| `src/features/profiles/index.tsx` | **1122** | **520** | `{ProfileCard,ImportModal,ActivateModal}.tsx`, `{types,helpers,styles}.ts` | typecheck/lint/vitest |
+
+### Round 3 — P2 large-file split (2026-04-26 evening, OP-036..038)
+
+Continued the same pattern on the next tier of warning files. Same
+zero-caller-impact contract via barrel + `pub use` re-exports (Rust
+`#[tauri::command]` paths are the one exception — `lib.rs`'s
+`invoke_handler!` had to switch from `ipc::voice::voice_record` to
+`ipc::voice::recorder::voice_record` since Tauri's `__cmd__` helper
+doesn't follow re-exports).
+
+| Target | Before | After | New files | Verified |
+|---|---:|---:|---|---|
+| `src/features/models/index.tsx` | **935** | **413** | `{providerCatalog,styles,types}.ts`, `{shared,RestartBanner,ApiKeyPanel}.tsx` | typecheck/lint/vitest |
+| `src/features/mcp/index.tsx` | **868** | **252** | `{transport,templates}.ts`, `{ServerRow,ServerForm}.tsx` | typecheck/lint/vitest |
+| `src-tauri/src/ipc/voice.rs` | **850** | **`voice/`** | `voice/{mod,provider,recorder}.rs` | 262/262 cargo, clippy 0 |
+
+### Round 4 — final pass on remaining warns (2026-04-26 evening, OP-039)
+
+Mixed strategy: Rust files split tests via `#[cfg(test)] #[path = "..."] mod tests;`
+(less invasive than converting to a directory module), TS files split
+by component. After this round only one file remains over the 800-line
+warn threshold: `src/features/chat/index.tsx` (1003 lines), which needs
+state-machine refactoring rather than mechanical file extraction.
+
+| Target | Before | After | Extracted | Verified |
+|---|---:|---:|---|---|
+| `src-tauri/src/sandbox/authority.rs` | **824** | **561** | `authority_tests.rs` (268, via `#[path]`) | 262/262 cargo, clippy 0 |
+| `src-tauri/src/hermes_config.rs` | **993** | **747** | `hermes_config_tests.rs` (250, via `#[path]`) | 262/262 cargo, clippy 0 |
+| `src-tauri/src/adapters/hermes/mod.rs` | **861** | **614** | `mod_tests.rs` (252, via `#[path]`) | 262/262 cargo, clippy 0 |
+| `src/features/models/LlmProfilesSection.tsx` | **816** | **215** | `{LlmProfileCard,LlmProfileRow}.tsx` | typecheck/lint/vitest |
+
 ## Strategic positioning (reaffirmed 2026-04-23)
 
 Corey stays on the **Control Plane** axis per `00-vision.md`. After a

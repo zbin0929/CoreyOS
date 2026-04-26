@@ -2,6 +2,9 @@
 
 All documentation classified by type and last-verified date.
 
+> Looking for a guided entry point instead of an inventory? See
+> [`README.md`](./README.md).
+
 ## Types
 - **plan**: Planning / scope / why — describes what we intend to build
 - **current**: Current facts — describes the system as it actually is

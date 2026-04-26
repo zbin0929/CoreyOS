@@ -16,7 +16,6 @@
 //! one capability only Corey provides — a GUI browser for cron output.
 
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
@@ -264,16 +263,6 @@ pub async fn scheduler_list_runs(
     .map_err(|e| IpcError::Internal {
         message: format!("scheduler_list_runs join: {e}"),
     })?
-}
-
-// Suppress unused-import warning for `UNIX_EPOCH` / `SystemTime` during
-// CI strict builds: the helpers above may eventually need them for
-// frontmatter-parsed success/failure fields (see `last_run_ok` note).
-// Keep the imports so future reviewers see the intent.
-#[allow(dead_code)]
-fn _retain_time_imports() {
-    let _ = SystemTime::now();
-    let _ = UNIX_EPOCH;
 }
 
 #[derive(Debug, Clone, Serialize)]

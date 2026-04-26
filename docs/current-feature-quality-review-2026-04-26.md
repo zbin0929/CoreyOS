@@ -1,5 +1,7 @@
 # 当前项目新功能与代码质量评审（2026-04-26）
 
+> **2026-04-26 晚 · 评审后行动结果**：本评审中点名的"中心文件过重"问题（`db.rs` 2199 / `settings/index.tsx` 1480 / `sandbox/mod.rs` 1125 / `profiles/index.tsx` 1122）已经全部完成 P0/P1 级拆分。详见 `docs/agent/00-操作日志.md` OP-031..035，以及 `docs/05-roadmap.md` § *Round 2 — P0/P1 large-file split*。当前最大文件已从 2199 行降到 824 行（`sandbox/authority.rs`，含 14 个测试），所有外部 API 路径通过 `pub use` / barrel 重导出保留，零 caller 改动；CI 全绿（`cargo clippy -D warnings` × 3 OS、`cargo test --lib` 262/262、`pnpm typecheck/lint/test` 全部通过）。
+
 ## 评审目的
 
 本文档用于汇总对 CoreyOS 当前“最近新增功能”的文档与代码交叉分析结果，重点回答以下问题：
