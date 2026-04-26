@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod attachments;
 pub mod budgets;
+pub mod browser_config;
 pub mod changelog;
 pub mod channel_status;
 pub mod channels;
@@ -35,3 +36,4 @@ pub mod skill_hub;
 pub mod skills;
 pub mod voice;
 pub mod workflow;
+pub mod workflow_intent;
