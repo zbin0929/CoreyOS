@@ -758,4 +758,26 @@ mod tests {
             "each retry should hit the listener exactly once"
         );
     }
+
+    #[test]
+    fn contract_chat_stream_done_serializes_expected_fields() {
+        let done = ChatStreamDone {
+            finish_reason: Some("stop".into()),
+            model: "gpt-4o".into(),
+            latency_ms: 1234,
+            prompt_tokens: Some(100),
+            completion_tokens: Some(50),
+        };
+        let val = serde_json::to_value(&done).unwrap();
+        assert!(val.get("finish_reason").is_some(), "missing finish_reason");
+        assert!(val.get("model").is_some(), "missing model");
+        assert!(val.get("latency_ms").is_some(), "missing latency_ms");
+        assert!(val.get("prompt_tokens").is_some(), "missing prompt_tokens");
+        assert!(
+            val.get("completion_tokens").is_some(),
+            "missing completion_tokens"
+        );
+        assert_eq!(val["model"], "gpt-4o");
+        assert_eq!(val["latency_ms"], 1234);
+    }
 }

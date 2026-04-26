@@ -9,6 +9,7 @@ use super::model::{WorkflowDef, WorkflowStep};
 use super::planner;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum RunStatus {
     Pending,
     Running,
@@ -19,6 +20,7 @@ pub enum RunStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum StepRunStatus {
     Pending,
     Running,
@@ -523,5 +525,55 @@ mod tests {
         assert_eq!(run.status, RunStatus::Completed);
         let output = run.step_runs["a"].output.as_ref().unwrap();
         assert_eq!(output["text"], "HELLO WORLD");
+    }
+
+    #[test]
+    fn contract_step_run_serializes_expected_fields() {
+        let sr = StepRun {
+            step_id: "test-step".into(),
+            status: StepRunStatus::Completed,
+            output: Some(json!({"key": "val"})),
+            error: None,
+            duration_ms: Some(42),
+        };
+        let val = serde_json::to_value(&sr).unwrap();
+        assert!(val.get("step_id").is_some(), "missing step_id");
+        assert!(val.get("status").is_some(), "missing status");
+        assert!(val.get("output").is_some(), "missing output");
+        assert!(val.get("error").is_some(), "missing error");
+        assert!(val.get("duration_ms").is_some(), "missing duration_ms");
+        assert_eq!(val["step_id"], "test-step");
+        assert_eq!(val["status"], "completed");
+        assert_eq!(val["duration_ms"], 42);
+    }
+
+    #[test]
+    fn contract_workflow_run_serializes_expected_fields() {
+        let mut step_runs = HashMap::new();
+        step_runs.insert(
+            "s1".into(),
+            StepRun {
+                step_id: "s1".into(),
+                status: StepRunStatus::Pending,
+                output: None,
+                error: None,
+                duration_ms: None,
+            },
+        );
+        let run = WorkflowRun {
+            id: "run-1".into(),
+            workflow_id: "wf-1".into(),
+            status: RunStatus::Pending,
+            inputs: json!({}),
+            step_runs,
+            error: None,
+        };
+        let val = serde_json::to_value(&run).unwrap();
+        assert!(val.get("id").is_some(), "missing id");
+        assert!(val.get("workflow_id").is_some(), "missing workflow_id");
+        assert!(val.get("status").is_some(), "missing status");
+        assert!(val.get("inputs").is_some(), "missing inputs");
+        assert!(val.get("step_runs").is_some(), "missing step_runs");
+        assert!(val.get("error").is_some(), "missing error");
     }
 }

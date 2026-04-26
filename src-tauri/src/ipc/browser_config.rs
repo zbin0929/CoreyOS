@@ -93,3 +93,38 @@ pub async fn browser_diagnose() -> IpcResult<BrowserDiagResult> {
         message: format!("browser_diagnose join: {e}"),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contract_browser_diag_result_serializes_expected_fields() {
+        let diag = BrowserDiagResult {
+            node_available: true,
+            node_version: Some("v20.0.0".into()),
+            runner_found: false,
+            runner_path: Some("/path/to/runner".into()),
+            browser_config_set: true,
+            browser_model_set: true,
+        };
+        let val = serde_json::to_value(&diag).unwrap();
+        assert!(
+            val.get("node_available").is_some(),
+            "missing node_available"
+        );
+        assert!(val.get("node_version").is_some(), "missing node_version");
+        assert!(val.get("runner_found").is_some(), "missing runner_found");
+        assert!(val.get("runner_path").is_some(), "missing runner_path");
+        assert!(
+            val.get("browser_config_set").is_some(),
+            "missing browser_config_set"
+        );
+        assert!(
+            val.get("browser_model_set").is_some(),
+            "missing browser_model_set"
+        );
+        assert_eq!(val["node_available"], true);
+        assert_eq!(val["runner_found"], false);
+    }
+}

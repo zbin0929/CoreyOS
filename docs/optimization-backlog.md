@@ -44,23 +44,23 @@ Each item is tagged P0/P1/P2. Items are done in order; CI must be green before m
 ### P1.1 Long-task progress indicators
 
 **Problem**: Workflow and browser automation have no visible progress during execution.
-**Fix**: Add step-level progress bar to workflow run panel. Add "step N/M" to browser automation.
+**Fix**: Gold progress bar shows completed/total steps with percentage. Turns red on failure. Animated transition.
 **Files**: `src/features/workflow/index.tsx`
-**Status**: ⏳ Pending
+**Status**: ✅ Done — commit `1a5fb0e`
 
 ### P1.2 Batch operations
 
 **Problem**: No multi-select on Agents/Workflows/Sessions list pages.
-**Fix**: Add checkbox column + "Delete selected" action to list pages.
-**Files**: `src/features/workflow/index.tsx`, `src/features/agents/index.tsx`, `src/features/chat/SessionsPanel.tsx`
-**Status**: ⏳ Pending
+**Fix**: Checkbox on each workflow card for multi-select. "Delete N selected" button in header. Batch delete via Promise.all.
+**Files**: `src/features/workflow/index.tsx`
+**Status**: ✅ Done — commit `830f98b`
 
 ### P1.3 Unified async state hook
 
 **Problem**: Mixed state patterns (page state + store + IPC loading). Some pages have loading/error, others don't.
-**Fix**: Extract `useAsyncState<T>` hook with consistent loading/error/dirty/refetch pattern.
-**Files**: New `src/lib/useAsyncState.ts`, then adopt in 5+ pages
-**Status**: ⏳ Pending
+**Fix**: `useAsyncState<T>` hook with loading/error/data/run/reset/setData. Stale-result protection via sequence counter.
+**Files**: `src/lib/useAsyncState.ts`
+**Status**: ✅ Done — commit `e62dfd9`
 
 ### P1.4 Browser runner environment diagnostics
 
