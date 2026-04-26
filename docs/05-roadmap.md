@@ -34,15 +34,18 @@ Quality review (`docs/current-feature-quality-review-2026-04-26.md`) identified 
 | `ChatHelpers.tsx` | ✅ Done | HeaderActions, EmptyHero, RoutingHint components |
 | `formatBytes.ts` | ✅ Done | utility function |
 | `enrichHistory.ts` | ✅ Done | context enrichment (TF-IDF, RAG, KB, learnings, user profile) |
+| `useStreamCallbacks` | ✅ Done | shared stream callbacks factory (onDelta/onReasoning/onTool/onDone/onError) |
+| `resolveAdapterId` + `toDto` | ✅ Done | adapter priority resolution + message-to-DTO conversion |
 | Settings: `AppearanceSection` | ✅ Done | theme + language section |
 | Settings: `HermesInstancesSection` | ✅ Done | 714-line section + card + row components |
 | Settings: `shared.tsx` | ✅ Done | Section + Field reusable components |
-| `useChatSendFlow` hook | ⏳ Planned | send/retry/stop core streaming logic |
-| Settings `sections/` split | ⏳ Planned | per-section files from settings/index.tsx |
-| Workflow Rust IPC split | ⏳ Planned | workflow.rs → IPC + service + executor layers |
+| Workflow Rust: `workflow_intent.rs` | ✅ Done | intent detection + keyword matching |
+| Workflow Rust: `browser_config.rs` | ✅ Done | browser runner discovery + config IPC |
+| E2E fix: sandbox-scopes | ✅ Done | native select `selectOption` + missing testid |
 
-**chat/index.tsx**: 1522 → 1134 lines (**-25.5%**), 6 new files extracted.
+**chat/index.tsx**: 1522 → 979 lines (**-35.7%**), 8 new files extracted.
 **settings/index.tsx**: 2298 → 1451 lines (**-36.8%**), 4 new files extracted.
+**workflow.rs**: 453 → 299 lines (**-34%**), 2 new files extracted.
 
 ## Strategic positioning (reaffirmed 2026-04-23)
 

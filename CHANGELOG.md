@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-26 (late night) — Full-stack refactoring round 2
+
+Structural cleanup across 3 modules. Quality review identified "center file" risk;
+second pass reduces all 3 below the 1000-line danger threshold.
+
+### Shipped
+
+- `useStreamCallbacks.ts` (130 lines) — shared stream callbacks factory:
+  `buildStreamCallbacks()`, `resolveAdapterId()`, `toDto()`. Eliminates ~100 lines
+  of duplicated onDelta/onReasoning/onTool/onDone/onError logic between send/retry.
+- **chat/index.tsx**: 1522 → 979 lines (**-35.7%**), 8 new files total.
+- **settings/index.tsx**: 2298 → 1451 lines (**-36.8%**), 4 new files.
+  - `HermesInstancesSection.tsx` (630 lines) — agent instances CRUD + card + row.
+  - `AppearanceSection.tsx` (78 lines) — theme + language section.
+  - `shared.tsx` (41 lines) — reusable Section + Field components.
+- **workflow.rs** (Rust IPC): 453 → 299 lines (**-34%**), 2 new files.
+  - `workflow_intent.rs` (111 lines) — intent detection + keyword matching.
+  - `browser_config.rs` (50 lines) — browser runner discovery + config IPC.
+
+### Fixed
+
+- E2E `sandbox-scopes` test: HermesInstancesSection scope select was missing
+  `data-testid`; native `<select>` needs `selectOption()` not `getByRole('option')`.
+- E2E timeout increased to 45s for CI slow environments.
+
+### All CI green
+
+5/5 jobs passing: Frontend (~50s), Rust macOS (~1m45s), Rust Ubuntu (~1m30s),
+Rust Windows (~2m30s), E2E (~1m30s). 258 Rust tests, 81 Playwright specs.
+
+---
+
 ## 2026-04-26 (evening) — Chat module refactoring
 
 Structural cleanup of `src/features/chat/index.tsx` (1522 → 1223 lines, **-19.6%**).
@@ -24,10 +56,9 @@ distinct concerns into dedicated hooks and helper files.
 - `enrichHistory.ts` (93 lines) — context enrichment (TF-IDF, RAG, knowledge base,
   learnings, user profile) extracted from send().
 
-### Remaining
+### Completed in round 2
 
-- `useChatSendFlow` hook (send/retry/stop core streaming logic) — planned next.
-- Settings module split (`sections/` directory) — after chat is done.
+- `useStreamCallbacks.ts` (130 lines) — see "late night" entry above.
 
 ---
 
