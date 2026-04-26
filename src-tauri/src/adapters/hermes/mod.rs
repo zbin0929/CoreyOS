@@ -604,7 +604,6 @@ impl AgentAdapter for HermesAdapter {
 
 // ───────────────────────── T1.5b unit tests ─────────────────────────
 
-
 // Tests live in `mod_tests.rs` so the implementation file stays
 // under the 800-line guideline (see `scripts/check-file-sizes.mjs`).
 // `#[path]` is used (rather than a sibling `tests/` dir) so the
