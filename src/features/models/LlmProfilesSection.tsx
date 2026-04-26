@@ -447,6 +447,16 @@ function LlmProfileRow({
         api_key_env: envName || null,
       });
       await onSaved(saved);
+      try {
+        await modelProviderProbe({
+          baseUrl: saved.base_url,
+          apiKey: null,
+          envKey: saved.api_key_env,
+        });
+      } catch {
+        // Non-blocking: the profile was saved successfully; the probe
+        // failure is shown on the card's test indicator.
+      }
     } catch (e) {
       setErr(ipcErrorMessage(e));
     } finally {
