@@ -17,6 +17,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { useChatStore } from '@/stores/chat';
 import {
   hermesInstanceDelete,
   hermesInstanceList,
@@ -415,6 +416,22 @@ function HermesInstanceRow({
     if (!deleteArmed) {
       setDeleteArmed(true);
       return;
+    }
+    const store = useChatStore.getState();
+    const affected = Object.values(store.sessions).filter(
+      (s) => s && s.adapterId === draft.id,
+    );
+    if (affected.length > 0) {
+      const ok = window.confirm(
+        t('settings.hermes_instances.delete_confirm_sessions', {
+          count: affected.length,
+          name: draft.label || draft.id,
+        }),
+      );
+      if (!ok) {
+        setDeleteArmed(false);
+        return;
+      }
     }
     setSaving(true);
     setErr(null);

@@ -604,7 +604,8 @@
       "test_ok": "Healthy · {{ms}} ms",
       "save": "Save",
       "create": "Create",
-      "confirm_delete": "Delete instance \"{{id}}\"? Its sessions remain in history but can no longer send new turns."
+      "confirm_delete": "Delete instance \"{{id}}\"? Its sessions remain in history but can no longer send new turns.",
+      "delete_confirm_sessions": "{{count}} session(s) use agent \"{{name}}\". Delete anyway?"
     },
     "sandbox_scopes": {
       "title": "Sandbox scopes",

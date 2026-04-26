@@ -604,7 +604,8 @@
       "test_ok": "健康 · {{ms}} ms",
       "save": "保存",
       "create": "创建",
-      "confirm_delete": "删除实例“{{id}}”？其已有会话仍保留在历史中，但无法再发送新消息。"
+      "confirm_delete": "删除实例“{{id}}”？其已有会话仍保留在历史中，但无法再发送新消息。",
+      "delete_confirm_sessions": "{{count}} 个会话正在使用 Agent \\u201c{{name}}\\u201d。确定删除？"
     },
     "sandbox_scopes": {
       "title": "沙箱范围",
