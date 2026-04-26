@@ -395,15 +395,15 @@ mod tests {
         // ATX-style heading at the top, with leading whitespace + extra
         // `#`s + trailing newline. Title is what humans actually read,
         // independent of the file name.
-        save("daily.md", "# 每日报告 Daily Report\n\nbody…", false).unwrap();
+        save("daily.md", "# 每日报告 Daily Report\n\nbody…", false).expect("seed daily");
         // No H1 → description stays None.
-        save("plain.md", "no heading here\nstill nothing", false).unwrap();
+        save("plain.md", "no heading here\nstill nothing", false).expect("seed plain");
         // H2 is accepted too — the goal is "first human-readable
         // title", not strict H1-only semantics. Many community skills
         // start with `## Description` after a frontmatter block.
-        save("h2-only.md", "## Sub heading\n\nbody", false).unwrap();
+        save("h2-only.md", "## Sub heading\n\nbody", false).expect("seed h2-only");
         // Empty H1 (just `#`) → None. Validates the empty-title guard.
-        save("blank-h1.md", "#\nbody", false).unwrap();
+        save("blank-h1.md", "#\nbody", false).expect("seed blank-h1");
         // Hermes-style file: YAML frontmatter THEN an H1 in the body.
         // The screenshot regression — without frontmatter skipping
         // we'd bail on line 1 (`---`) and return None.
@@ -412,7 +412,7 @@ mod tests {
             "---\nname: findmy\ndescription: Track Apple devices.\n---\n\n# Find My (Apple)\n\nbody",
             false,
         )
-        .unwrap();
+        .expect("seed fm.md");
         // Frontmatter present but no body H1 in the window — fall
         // back to the frontmatter's `display_name` (preferred) or
         // `name` field.
@@ -421,41 +421,41 @@ mod tests {
             "---\nname: code-review\ndisplay_name: 代码评审\n---\n\nplain body, no heading\n",
             false,
         )
-        .unwrap();
+        .expect("seed fm-no-h1.md");
         save(
             "fm-only-name.md",
             "---\nname: alt slug\n---\n\nplain body, no heading\n",
             false,
         )
-        .unwrap();
+        .expect("seed fm-only-name.md");
 
-        let rows = list().unwrap();
+        let rows = list().expect("list skills");
         let by_path: std::collections::HashMap<_, _> = rows
             .iter()
             .map(|r| (r.path.clone(), r.description.clone()))
             .collect();
         assert_eq!(
-            by_path.get("daily.md").unwrap().as_deref(),
+            by_path.get("daily.md").expect("daily.md row").as_deref(),
             Some("每日报告 Daily Report"),
         );
-        assert_eq!(by_path.get("plain.md").unwrap().as_deref(), None);
+        assert_eq!(by_path.get("plain.md").expect("plain row").as_deref(), None);
         assert_eq!(
-            by_path.get("h2-only.md").unwrap().as_deref(),
+            by_path.get("h2-only.md").expect("h2 row").as_deref(),
             Some("Sub heading")
         );
-        assert_eq!(by_path.get("blank-h1.md").unwrap().as_deref(), None);
+        assert_eq!(by_path.get("blank-h1.md").expect("blank-h1 row").as_deref(), None);
         // Frontmatter is skipped; the body H1 wins.
         assert_eq!(
-            by_path.get("fm.md").unwrap().as_deref(),
+            by_path.get("fm.md").expect("fm row").as_deref(),
             Some("Find My (Apple)"),
         );
         // No body heading: prefer `display_name` over `name`.
         assert_eq!(
-            by_path.get("fm-no-h1.md").unwrap().as_deref(),
+            by_path.get("fm-no-h1.md").expect("fm-no-h1 row").as_deref(),
             Some("代码评审"),
         );
         assert_eq!(
-            by_path.get("fm-only-name.md").unwrap().as_deref(),
+            by_path.get("fm-only-name.md").expect("fm-only-name row").as_deref(),
             Some("alt slug"),
         );
     }
