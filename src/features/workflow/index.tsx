@@ -163,6 +163,26 @@ export function WorkflowRoute() {
               {runResult.error && (
                 <p className="text-sm text-red-500">{runResult.error}</p>
               )}
+              {(() => {
+                const runs = Object.values(runResult.step_runs);
+                const total = runs.length;
+                const done = runs.filter((s) => s.status === 'completed' || s.status === 'failed' || s.status === 'skipped').length;
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                return (
+                  <div className="flex items-center gap-3">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-bg-elev-2">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all duration-300',
+                          runResult.status === 'failed' ? 'bg-red-500' : 'bg-gold-500',
+                        )}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-fg-subtle">{done}/{total} ({pct}%)</span>
+                  </div>
+                );
+              })()}
               <div className="space-y-2">
                 {Object.values(runResult.step_runs).map((sr) => (
                   <div
