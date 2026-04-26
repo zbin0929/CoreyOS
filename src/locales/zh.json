@@ -552,6 +552,7 @@
     "browser_llm_model": "模型",
     "browser_llm_api_key": "API Key",
     "browser_llm_base_url": "自定义 Base URL",
+    "browser_diag": "检查环境",
     "routing_rules": {
       "title": "路由规则",
       "desc": "当输入的消息匹配某条规则时，下一轮对话将发送到规则指定的适配器，而不是当前激活的适配器。按列表顺序取第一条启用的匹配；列表为空即路由关闭。",

@@ -552,6 +552,7 @@
     "browser_llm_model": "Model",
     "browser_llm_api_key": "API Key",
     "browser_llm_base_url": "Custom Base URL",
+    "browser_diag": "Check Environment",
     "routing_rules": {
       "title": "Routing rules",
       "desc": "When the composed message matches a rule, the next turn is sent to the rule's target adapter instead of whichever one is active. First enabled match in list order wins; an empty list means routing is off.",

@@ -2065,6 +2065,19 @@ export function browserConfigSet(config: BrowserLLMConfig): Promise<void> {
   return invoke('browser_config_set', { config });
 }
 
+export interface BrowserDiagResult {
+  node_available: boolean;
+  node_version: string | null;
+  runner_found: boolean;
+  runner_path: string | null;
+  browser_config_set: boolean;
+  browser_model_set: boolean;
+}
+
+export function browserDiagnose(): Promise<BrowserDiagResult> {
+  return invoke('browser_diagnose');
+}
+
 export interface WorkflowRunResult {
   id: string;
   workflow_id: string;

@@ -215,6 +215,7 @@ pub fn run() {
             ipc::workflow::workflow_approve,
             ipc::browser_config::browser_config_get,
             ipc::browser_config::browser_config_set,
+            ipc::browser_config::browser_diagnose,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");

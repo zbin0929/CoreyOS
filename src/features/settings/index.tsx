@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
+  Stethoscope,
   Trash2,
   Wand2,
   Wifi,
@@ -38,6 +39,7 @@ import {
   ipcErrorMessage,
   browserConfigGet,
   browserConfigSet,
+  browserDiagnose,
   type BrowserLLMConfig,
   learningSuggestRouting,
   routingRuleDelete,
@@ -1303,6 +1305,8 @@ function BrowserLLMSection() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diag, setDiag] = useState<Awaited<ReturnType<typeof browserDiagnose>> | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
   useEffect(() => {
     void browserConfigGet().then(setCfg).catch(() => {});
@@ -1372,6 +1376,18 @@ function BrowserLLMSection() {
             {saving ? <Icon icon={Loader2} size="xs" className="animate-spin" /> : <Icon icon={Save} size="xs" />}
             {saving ? t('settings.saving') : t('settings.save')}
           </Button>
+          <Button
+            variant="ghost"
+            disabled={diagLoading}
+            onClick={async () => {
+              setDiagLoading(true);
+              try { setDiag(await browserDiagnose()); } catch { setDiag(null); }
+              setDiagLoading(false);
+            }}
+          >
+            {diagLoading ? <Icon icon={Loader2} size="xs" className="animate-spin" /> : <Icon icon={Stethoscope} size="xs" />}
+            {t('settings.browser_diag')}
+          </Button>
           {saved && (
             <span className="flex items-center gap-1 text-xs text-green-500">
               <Icon icon={Check} size="xs" /> {t('settings.saved')}
@@ -1379,6 +1395,19 @@ function BrowserLLMSection() {
           )}
           {error && <span className="text-xs text-red-500">{error}</span>}
         </div>
+        {diag && (
+          <div className="flex flex-col gap-1 rounded-md border border-border bg-bg-elev-2 p-3 text-xs">
+            <div className={diag.node_available ? 'text-green-500' : 'text-red-500'}>
+              Node.js: {diag.node_available ? `✓ ${diag.node_version}` : '✗ 未找到'}
+            </div>
+            <div className={diag.runner_found ? 'text-green-500' : 'text-red-500'}>
+              Browser Runner: {diag.runner_found ? '✓ 已找到' : '✗ 未找到'}
+            </div>
+            <div className={diag.browser_config_set ? 'text-green-500' : 'text-yellow-500'}>
+              LLM 配置: {diag.browser_config_set ? '✓ 已设置' : '⚠ 未设置'}
+            </div>
+          </div>
+        )}
       </div>
     </Section>
   );
