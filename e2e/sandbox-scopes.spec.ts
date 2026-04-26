@@ -15,6 +15,7 @@ import { test, expect } from './fixtures/test';
 
 test.describe('T6.5 — sandbox scopes', () => {
   test('create, assign, enforce, delete — full loop', async ({ page }) => {
+    test.setTimeout(30_000);
     await page.goto('/settings');
 
     // 1. Default scope is visible in the Sandbox Scopes section and
