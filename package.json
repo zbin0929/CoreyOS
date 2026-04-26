@@ -5,6 +5,9 @@
   "type": "module",
   "description": "A premium, cross-platform control plane for AI agents.",
   "scripts": {
+    "sync:help": "node scripts/sync-help-manual.mjs",
+    "predev": "node scripts/sync-help-manual.mjs",
+    "prebuild": "node scripts/sync-help-manual.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

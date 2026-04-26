@@ -8,6 +8,7 @@ import { PageHeader } from '@/app/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { highlightCode } from '@/features/chat/highlight';
 
 // Markdown source bundled via Vite's `?raw` import. The user manual
 // lives under `docs/user/` because that's where SETUP.md and friends
@@ -163,6 +164,47 @@ export function HelpRoute() {
                 h2: (props) => <h2 id={slug(toString(props.children))} {...props} />,
                 h3: (props) => <h3 id={slug(toString(props.children))} {...props} />,
                 h4: (props) => <h4 id={slug(toString(props.children))} {...props} />,
+                // Reuse the chat module's highlight pipeline. Same
+                // grammar registry, same github-dark palette — no
+                // duplicate bundling.
+                code: ({ className, children, ...rest }) => {
+                  const match = /language-([\w+-]+)/.exec(className ?? '');
+                  // Fenced block: matched info-string OR multi-line content.
+                  // Inline `code` shows up as a single line and falls through
+                  // to the unstyled branch below.
+                  if (match || /\n/.test(String(children))) {
+                    const raw = Array.isArray(children)
+                      ? children.join('')
+                      : String(children ?? '');
+                    const { html, language } = highlightCode(
+                      raw.replace(/\n$/, ''),
+                      match?.[1],
+                    );
+                    return (
+                      <code
+                        className={cn(
+                          'hljs block overflow-x-auto rounded-md bg-[#0d1117] px-3 py-2 font-mono text-xs text-[#e6edf3]',
+                          language && `language-${language}`,
+                        )}
+                        dangerouslySetInnerHTML={{ __html: html }}
+                        {...rest}
+                      />
+                    );
+                  }
+                  // Inline code keeps the markdown's small-pill look.
+                  return (
+                    <code
+                      className="rounded bg-bg-elev-2 px-1 py-[1px] font-mono text-[0.85em]"
+                      {...rest}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+                // Strip the prose wrapper's default `<pre>` margin so
+                // the highlighted code block carries the rounded-md
+                // background edge-to-edge.
+                pre: ({ children }) => <pre className="my-3">{children}</pre>,
               }}
             >
               {manualZh}
