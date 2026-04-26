@@ -18,10 +18,10 @@ function entryVisible(entry: NavEntry, caps: AdapterCapabilities | null): boolea
 export function Sidebar() {
   const { t } = useTranslation();
   const { location } = useRouterState();
-  const [manageExpanded, setManageExpanded] = useState<boolean>(
-    () => localStorage.getItem('corey:sidebar:manage-expanded') === 'true',
+  const [moreExpanded, setMoreExpanded] = useState<boolean>(
+    () => localStorage.getItem('corey:sidebar:more-expanded') === 'true',
   );
-  const [manageUserCollapsed, setManageUserCollapsed] = useState(false);
+  const [moreUserCollapsed, setMoreUserCollapsed] = useState(false);
 
   const adapters = useAgentsStore((s) => s.adapters);
   const activeId = useAgentsStore((s) => s.activeId);
@@ -36,24 +36,25 @@ export function Sidebar() {
   const caps = activeEntry?.capabilities ?? null;
 
   const visible = NAV.filter((n) => entryVisible(n, caps));
-  const core = visible.filter((n) => n.group === 'core');
+  const primary = visible.filter((n) => n.group === 'primary');
   const tools = visible.filter((n) => n.group === 'tools');
-  const manage = visible.filter((n) => n.group === 'manage');
+  const more = visible.filter((n) => n.group === 'more');
+  const settingsEntries = visible.filter((n) => n.group === 'settings');
 
-  const manageHasActive = manage.some(
+  const moreHasActive = more.some(
     (entry) => isActive(location.pathname, entry.path),
   );
-  const effectiveManageExpanded = (manageExpanded || manageHasActive) && !manageUserCollapsed;
+  const effectiveMoreExpanded = (moreExpanded || moreHasActive) && !moreUserCollapsed;
 
   useEffect(() => {
-    if (manageHasActive) setManageUserCollapsed(false);
-  }, [manageHasActive]);
+    if (moreHasActive) setMoreUserCollapsed(false);
+  }, [moreHasActive]);
 
-  const toggleManage = useCallback(() => {
-    setManageExpanded((v) => {
+  const toggleMore = useCallback(() => {
+    setMoreExpanded((v) => {
       const next = !v;
-      localStorage.setItem('corey:sidebar:manage-expanded', String(next));
-      setManageUserCollapsed(!next ? true : false);
+      localStorage.setItem('corey:sidebar:more-expanded', String(next));
+      setMoreUserCollapsed(!next ? true : false);
       return next;
     });
   }, []);
@@ -74,8 +75,8 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2 mt-2">
-        <SectionLabel>{t('nav.section_core')}</SectionLabel>
-        {core.map((entry) => (
+        <SectionLabel>{t('nav.section_primary')}</SectionLabel>
+        {primary.map((entry) => (
           <NavItem
             key={entry.id}
             to={entry.path}
@@ -98,12 +99,12 @@ export function Sidebar() {
           </NavItem>
         ))}
 
-        {manage.length > 0 && (
+        {more.length > 0 && (
           <>
             <button
               type="button"
-              onClick={toggleManage}
-              aria-expanded={effectiveManageExpanded}
+              onClick={toggleMore}
+              aria-expanded={effectiveMoreExpanded}
               className={cn(
                 'mt-4 flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle',
                 'hover:text-fg-muted transition-colors duration-fast',
@@ -114,13 +115,13 @@ export function Sidebar() {
                 size="xs"
                 className={cn(
                   'transition-transform duration-fast',
-                  effectiveManageExpanded && 'rotate-90',
+                  effectiveMoreExpanded && 'rotate-90',
                 )}
               />
-              {t('nav.section_manage')}
+              {t('nav.section_more')}
             </button>
 
-            {effectiveManageExpanded && manage.map((entry) => (
+            {effectiveMoreExpanded && more.map((entry) => (
               <NavItem
                 key={entry.id}
                 to={entry.path}
@@ -134,9 +135,22 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="border-t border-border p-3 text-[10px] text-fg-subtle">
-        <div className="font-mono">{t('app.name')} v{__APP_VERSION__}</div>
-      </div>
+      {settingsEntries.map((entry) => (
+        <Link
+          key={entry.id}
+          to={entry.path}
+          className={cn(
+            'group flex h-10 items-center gap-2.5 border-t border-border px-4 text-sm',
+            'transition-colors duration-fast ease-enter',
+            isActive(location.pathname, entry.path)
+              ? 'text-fg'
+              : 'text-fg-muted hover:text-fg',
+          )}
+        >
+          <Icon icon={entry.icon} size="md" />
+          <span className="flex-1 truncate">{t(entry.labelKey)}</span>
+        </Link>
+      ))}
     </aside>
   );
 }

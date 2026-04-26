@@ -32,7 +32,7 @@ export type NavCapability =
   | 'trajectory_export'
   | 'memory';
 
-export type NavGroup = 'core' | 'tools' | 'manage';
+export type NavGroup = 'primary' | 'tools' | 'more' | 'settings';
 
 export interface NavEntry {
   id: string;
@@ -46,27 +46,28 @@ export interface NavEntry {
 }
 
 export const NAV: NavEntry[] = [
-  { id: 'home', path: '/', labelKey: 'nav.home', icon: Home, group: 'core', phase: 0, shortcut: ['mod', '0'] },
-  { id: 'chat', path: '/chat', labelKey: 'nav.chat', icon: MessageSquare, group: 'core', phase: 1, shortcut: ['mod', '1'] },
-  { id: 'compare', path: '/compare', labelKey: 'nav.compare', icon: Columns3, group: 'core', phase: 4, shortcut: ['mod', '2'] },
-  { id: 'skills', path: '/skills', labelKey: 'nav.skills', icon: Wand2, group: 'core', phase: 4, shortcut: ['mod', '3'], requires: 'skills' },
-  { id: 'trajectory', path: '/trajectory', labelKey: 'nav.trajectory', icon: GitBranch, group: 'core', phase: 4, shortcut: ['mod', '4'], requires: 'trajectory_export' },
+  { id: 'home', path: '/', labelKey: 'nav.home', icon: Home, group: 'primary', phase: 0, shortcut: ['mod', '0'] },
+  { id: 'chat', path: '/chat', labelKey: 'nav.chat', icon: MessageSquare, group: 'primary', phase: 1, shortcut: ['mod', '1'] },
+  { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'primary', phase: 9, shortcut: ['mod', '2'] },
+  { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot, group: 'primary', phase: 2 },
+  { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'primary', phase: 2 },
 
-  { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'tools', phase: 2, shortcut: ['mod', '5'] },
+  { id: 'compare', path: '/compare', labelKey: 'nav.compare', icon: Columns3, group: 'tools', phase: 4, shortcut: ['mod', '3'] },
+  { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'tools', phase: 2, shortcut: ['mod', '4'] },
+  { id: 'terminal', path: '/terminal', labelKey: 'nav.terminal', icon: Terminal, group: 'tools', phase: 4, shortcut: ['mod', '5'], requires: 'terminal' },
   { id: 'logs', path: '/logs', labelKey: 'nav.logs', icon: ScrollText, group: 'tools', phase: 2, shortcut: ['mod', '6'], requires: 'logs' },
-  { id: 'terminal', path: '/terminal', labelKey: 'nav.terminal', icon: Terminal, group: 'tools', phase: 4, shortcut: ['mod', '7'], requires: 'terminal' },
-  { id: 'channels', path: '/channels', labelKey: 'nav.channels', icon: Radio, group: 'tools', phase: 3, shortcut: ['mod', '8'], requires: 'channels' },
-  { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'tools', phase: 2 },
-  { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot, group: 'tools', phase: 2 },
-  { id: 'settings', path: '/settings', labelKey: 'nav.settings', icon: Settings, group: 'tools', phase: 2, shortcut: ['mod', ','] },
 
-  { id: 'scheduler', path: '/scheduler', labelKey: 'nav.scheduler', icon: Clock, group: 'manage', phase: 2, requires: 'scheduler' },
-  { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree, group: 'manage', phase: 2 },
-  { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked, group: 'manage', phase: 4 },
-  { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank, group: 'manage', phase: 4 },
-  { id: 'memory', path: '/memory', labelKey: 'nav.memory', icon: Brain, group: 'manage', phase: 7 },
-  { id: 'knowledge', path: '/knowledge', labelKey: 'nav.knowledge', icon: BookOpen, group: 'manage', phase: 7 },
-  { id: 'voice', path: '/voice', labelKey: 'nav.voice', icon: Mic, group: 'manage', phase: 8 },
-  { id: 'mcp', path: '/mcp', labelKey: 'nav.mcp', icon: Plug, group: 'manage', phase: 7 },
-  { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'manage', phase: 9 },
+  { id: 'skills', path: '/skills', labelKey: 'nav.skills', icon: Wand2, group: 'more', phase: 4, requires: 'skills' },
+  { id: 'trajectory', path: '/trajectory', labelKey: 'nav.trajectory', icon: GitBranch, group: 'more', phase: 4, requires: 'trajectory_export' },
+  { id: 'channels', path: '/channels', labelKey: 'nav.channels', icon: Radio, group: 'more', phase: 3, requires: 'channels' },
+  { id: 'scheduler', path: '/scheduler', labelKey: 'nav.scheduler', icon: Clock, group: 'more', phase: 2, requires: 'scheduler' },
+  { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree, group: 'more', phase: 2 },
+  { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked, group: 'more', phase: 4 },
+  { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank, group: 'more', phase: 4 },
+  { id: 'memory', path: '/memory', labelKey: 'nav.memory', icon: Brain, group: 'more', phase: 7 },
+  { id: 'knowledge', path: '/knowledge', labelKey: 'nav.knowledge', icon: BookOpen, group: 'more', phase: 7 },
+  { id: 'voice', path: '/voice', labelKey: 'nav.voice', icon: Mic, group: 'more', phase: 8 },
+  { id: 'mcp', path: '/mcp', labelKey: 'nav.mcp', icon: Plug, group: 'more', phase: 7 },
+
+  { id: 'settings', path: '/settings', labelKey: 'nav.settings', icon: Settings, group: 'settings', phase: 2, shortcut: ['mod', ','] },
 ];

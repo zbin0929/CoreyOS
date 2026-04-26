@@ -26,8 +26,10 @@
     "agents": "Agents",
     "settings": "Settings",
     "section_core": "Core",
+    "section_primary": "Core",
     "section_tools": "Tools",
-    "section_manage": "Manage"
+    "section_manage": "Manage",
+    "section_more": "More"
   },
   "agents_page": {
     "title": "Agents",

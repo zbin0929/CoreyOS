@@ -26,8 +26,10 @@
     "agents": "Agents",
     "settings": "设置",
     "section_core": "核心",
+    "section_primary": "核心",
     "section_tools": "工具",
-    "section_manage": "管理"
+    "section_manage": "管理",
+    "section_more": "更多"
   },
   "agents_page": {
     "title": "Agents",
