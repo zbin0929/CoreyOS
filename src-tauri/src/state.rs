@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
 use std::collections::HashMap;
@@ -51,6 +52,15 @@ pub struct AppState {
     /// drops it from the map so the OS resources free immediately.
     pub ptys: Arc<Mutex<HashMap<String, Arc<Pty>>>>,
     pub workflow_runs: Arc<Mutex<HashMap<String, crate::workflow::engine::WorkflowRun>>>,
+    /// Per-run cancellation flags. The executor's `should_cancel`
+    /// hook reads from here on every step boundary; flipping the
+    /// `AtomicBool` makes the engine exit at the next step. The
+    /// flag is allocated by `spawn_run_executor` when the run
+    /// starts and cleaned up when the run reaches a terminal state
+    /// — but we don't bother garbage-collecting flags for
+    /// long-completed runs since they're a few bytes each and the
+    /// HashMap's lifetime is bounded by the app session anyway.
+    pub workflow_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     // 2026-04-23 pm (T6.8): removed the `scheduler: Option<Arc<Scheduler>>`
     // field. Hermes' gateway owns cron scheduling now; Corey only
     // reads/writes `~/.hermes/cron/jobs.json`. See `hermes_cron.rs`.
@@ -81,6 +91,7 @@ impl AppState {
             channel_status,
             ptys: Arc::new(Mutex::new(HashMap::new())),
             workflow_runs: Arc::new(Mutex::new(HashMap::new())),
+            workflow_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

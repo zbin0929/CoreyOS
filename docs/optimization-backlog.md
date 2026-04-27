@@ -37,6 +37,24 @@ Each item is tagged P0/P1/P2. Items are done in order; CI must be green before m
 **Files**: `src-tauri/src/workflow/engine.rs`, `src-tauri/src/ipc/browser_config.rs`, `src-tauri/src/adapters/hermes/gateway.rs`
 **Status**: ✅ Done — commit `dcbed78`, 4 contract tests, 262 Rust tests pass
 
+### P0.5 Workflow lifecycle completion (audit-grade)
+
+**Problem**: Workflow demoed schema-lock + approval gates but the surrounding lifecycle was missing — runs lived in a `HashMap`, lost on quit; an approval-paused run had no way to resume across restart; agent steps blocked the UI for 30s+ with no progress; rejection had no reason field; there was no run history; no way to stop a runaway run.
+
+**Fix**: Full lifecycle pass to make `workflow` the audit-grade primitive its positioning doc claims it is. Eight sub-fixes:
+
+1. **Persistence (v12 schema)** — `workflow_runs` + `workflow_step_runs` SQLite tables; step-end hook writes through on every state transition. `db::workflows::{upsert_workflow_run, load_active_workflow_runs, list_workflow_history, get_workflow_run, delete_workflow_run}`.
+2. **Auto-resume after restart** — `lib.rs` setup loads non-terminal runs from SQLite; `running` step rows are demoted to `pending` (mid-flight kills can't trust partial output) and the engine is re-spawned via `spawn_run_executor`.
+3. **Step-end + step-progress hooks** — engine `execute_with_hooks(…, on_step_end, on_step_progress, should_cancel)`; the IPC layer takes the run OUT of the in-memory map for the duration of execution and lets the hooks sync back at every step boundary, so `workflow_run_status` polls don't block on a 30s agent step.
+4. **Streaming agent steps** — `StepExecutor::execute_agent_streaming(prompt, &dyn Fn(&str))` default-impl falls back to `execute_agent`; HermesExecutor overrides with `chat_stream` + 50ms-throttled progress callback. Frontend renders `output.partial` (last 6 lines + blinking caret).
+5. **Run history UI** — new `features/workflow/History.tsx` (list + detail panel + delete + JSON/Markdown export). IPC: `workflow_history_list`, `workflow_run_get`, `workflow_run_delete`.
+6. **Manual cancel** — `workflow_run_cancel` IPC + per-run `Arc<AtomicBool>` flag + engine `should_cancel` check on every ready dispatch. Honored at step boundary (no mid-stream abort to avoid double-billing).
+7. **Reject reason dialog + LLM Profile picker** — modal collects rejection reason → `workflow_runs.error` for audit; `PropertyPanel` agent step routes through any saved LLM profile via `agent_id = "hermes:profile:<id>"`.
+8. **MCP tools `list_workflows` + `run_workflow`** — chat agent can enumerate user-authored workflows and trigger them by id, returning the run_id for the user to follow in the History UI.
+
+**Files**: `src-tauri/src/workflow/engine/mod.rs`, `src-tauri/src/db/{migrations.rs,workflows.rs,mod.rs}`, `src-tauri/src/ipc/workflow/mod.rs`, `src-tauri/src/state.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/mcp_server/tools.rs`, `src-tauri/src/ipc/hermes_memory.rs`, `src/features/workflow/{index.tsx,History.tsx,Editor.tsx,InputsEditor.tsx,PropertyPanel.tsx}`, `src/features/settings/sections/MemorySection.tsx`, `src/lib/ipc/{runtime.ts,hermes-config.ts}`, `src/locales/{zh,en}.json`.
+**Status**: ✅ Done — 13 new unit tests (engine hooks ×5, db round-trip ×5, log-parsing ×3); auto-resume verified end-to-end with hot kill.
+
 ---
 
 ## P1 — Quality improvements (do next)

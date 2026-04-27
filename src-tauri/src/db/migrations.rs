@@ -283,6 +283,56 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v12 — Workflow run persistence. Before this, runs lived in
+    // `state.workflow_runs` (in-memory HashMap), so a Corey crash /
+    // quit erased all approval history, paused runs, and audit reports
+    // — a fatal hole given that workflow's pitch is exactly
+    // "schema-locked outputs + human approval + audit + strict order".
+    //
+    // Two tables: `workflow_runs` is the run header (one row per
+    // execution); `workflow_step_runs` stores per-step state with a
+    // composite (run_id, step_id) PK. Both are upserted from
+    // `workflow_approve` / executor entry-points whenever state
+    // mutates. Rehydration on boot reads non-terminal runs back into
+    // the in-memory map so paused approvals survive across launches.
+    //
+    // `inputs` / `output` are stored as JSON blobs (TEXT) — the run's
+    // shape is workflow-defined and we don't want a schema migration
+    // every time someone edits a yaml. CASCADE on step rows so
+    // deleting a run wipes its steps without an extra IPC call.
+    if version < 12 {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS workflow_runs (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                inputs TEXT NOT NULL,
+                error TEXT,
+                started_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow
+                ON workflow_runs(workflow_id, started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_workflow_runs_status
+                ON workflow_runs(status, updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS workflow_step_runs (
+                run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+                step_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                output TEXT,
+                error TEXT,
+                duration_ms INTEGER,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (run_id, step_id)
+            );
+
+            PRAGMA user_version = 12;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 

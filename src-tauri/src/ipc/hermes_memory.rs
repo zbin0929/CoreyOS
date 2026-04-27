@@ -13,6 +13,7 @@
 //! not "type a SQL row by hand".
 
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -222,10 +223,8 @@ fn read_db_stats(path: &std::path::Path) -> rusqlite::Result<DbStats> {
     })?;
 
     let mut top_categories = Vec::new();
-    for r in rows {
-        if let Ok(c) = r {
-            top_categories.push(c);
-        }
+    for c in rows.flatten() {
+        top_categories.push(c);
     }
 
     Ok(DbStats {
@@ -243,4 +242,159 @@ fn user_md_path() -> std::io::Result<PathBuf> {
     Ok(hermes_config::hermes_dir()?
         .join("memories")
         .join("USER.md"))
+}
+
+// ───────────────────────── Auto-compression stats ─────────────────────────
+//
+// Surface evidence that Hermes' built-in `compression:` subsystem
+// (see Settings → Context) is actually doing something. Without
+// this, users who flip the slider have no visible feedback until
+// they accidentally notice their long sessions don't OOM anymore.
+//
+// We don't store our own counter — Hermes already logs each
+// compression event to `~/.hermes/logs/agent.log`. We just scan
+// the log on demand and aggregate.
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct CompressionStats {
+    /// Total `Context compression triggered` events seen since the
+    /// log file's first entry. Hermes rotates `agent.log` only
+    /// manually, so this is effectively "since user installed
+    /// Hermes" or "since they last cleared the log".
+    pub total_compressions: u32,
+    /// Cumulative `tokens saved` reported by `Compressed: ... ~N
+    /// tokens saved` lines. Approximate — Hermes' counter rounds
+    /// to the nearest 100 tokens — but accurate enough for "did
+    /// auto-compress save me anything".
+    pub total_tokens_saved: u64,
+    /// ISO 8601 timestamp of the most recent compression event,
+    /// `None` if no events have ever happened. Useful for the
+    /// "last triggered: 2 days ago" copy.
+    pub last_triggered_at: Option<String>,
+    /// Absolute path the IPC scanned. Surfaced to the UI both as
+    /// reassurance ("here's where the data came from") and so a
+    /// curious user can grep it manually.
+    pub log_path: String,
+    /// `true` if the log file existed and was readable. `false`
+    /// when Hermes hasn't been run yet, log was deleted, or
+    /// permissions denied. Distinct from `total_compressions=0`
+    /// (= log exists but no events yet).
+    pub log_present: bool,
+}
+
+#[tauri::command]
+pub async fn hermes_compression_stats() -> IpcResult<CompressionStats> {
+    tokio::task::spawn_blocking(read_compression_stats)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("hermes_compression_stats join: {e}"),
+        })?
+}
+
+fn read_compression_stats() -> IpcResult<CompressionStats> {
+    let log_path = match hermes_config::hermes_dir() {
+        Ok(d) => d.join("logs").join("agent.log"),
+        Err(_) => {
+            return Ok(CompressionStats::default());
+        }
+    };
+    let log_path_str = log_path.to_string_lossy().into_owned();
+
+    let file = match fs::File::open(&log_path) {
+        Ok(f) => f,
+        Err(_) => {
+            return Ok(CompressionStats {
+                log_path: log_path_str,
+                log_present: false,
+                ..CompressionStats::default()
+            });
+        }
+    };
+
+    let mut total_compressions: u32 = 0;
+    let mut total_tokens_saved: u64 = 0;
+    let mut last_triggered_at: Option<String> = None;
+
+    // Hermes log format: "YYYY-MM-DD HH:MM:SS,mmm INFO module: msg"
+    // — a leading space-separated date+time gives us the timestamp.
+    // We grep + parse line-by-line; the file is typically 1-50 MB,
+    // BufReader streams in O(filesize) wall time without spiking
+    // memory, well within the few-hundred-ms budget for an IPC.
+    let reader = BufReader::new(file);
+    for line_res in reader.lines() {
+        let Ok(line) = line_res else { continue };
+        if line.contains("Context compression triggered") {
+            total_compressions += 1;
+            // Timestamp is the first 19 chars: "2026-04-27 14:23:45".
+            // The comma+millis is dropped — date precision is more than
+            // enough for the UI's "Last triggered: ..." copy.
+            if line.len() >= 19 {
+                last_triggered_at = Some(line[..19].to_string());
+            }
+        } else if let Some(saved) = extract_tokens_saved(&line) {
+            total_tokens_saved = total_tokens_saved.saturating_add(saved as u64);
+        }
+    }
+
+    Ok(CompressionStats {
+        total_compressions,
+        total_tokens_saved,
+        last_triggered_at,
+        log_path: log_path_str,
+        log_present: true,
+    })
+}
+
+/// Parse the integer N out of `Compressed: A -> B messages (~N tokens
+/// saved, P%)`. Returns `None` for any other shape. We deliberately
+/// avoid pulling in the `regex` crate — this is one fixed format and
+/// a tiny scanner is faster + 0 deps.
+fn extract_tokens_saved(line: &str) -> Option<u32> {
+    let marker = "tokens saved";
+    let pos = line.find(marker)?;
+    // Walk backward from `marker` past whitespace to find the digit
+    // run. Format: "~12345 tokens saved", or rarely "12345 tokens
+    // saved" if Hermes ever drops the tilde.
+    let prefix = line[..pos].trim_end();
+    let digits: String = prefix
+        .chars()
+        .rev()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    if digits.is_empty() {
+        return None;
+    }
+    digits.parse::<u32>().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_tokens_saved_with_tilde() {
+        assert_eq!(
+            extract_tokens_saved(
+                "2026-04-27 14:23:45,123 INFO agent.context_compressor: Compressed: 12 -> 6 messages (~4500 tokens saved, 35%)"
+            ),
+            Some(4500)
+        );
+    }
+
+    #[test]
+    fn parses_tokens_saved_without_tilde() {
+        assert_eq!(
+            extract_tokens_saved("Compressed: 12 -> 6 messages (12345 tokens saved, 80%)"),
+            Some(12345)
+        );
+    }
+
+    #[test]
+    fn ignores_unrelated_lines() {
+        assert_eq!(extract_tokens_saved("INFO: gateway started"), None);
+        assert_eq!(extract_tokens_saved("tokens saved without number"), None);
+    }
 }

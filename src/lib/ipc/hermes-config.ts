@@ -246,6 +246,28 @@ export function hermesUserMdWrite(content: string): Promise<HermesMemoryStatus> 
 }
 
 /**
+ * Aggregate stats for Hermes' built-in `compression:` subsystem.
+ *
+ * The data is scanned out of `~/.hermes/logs/agent.log` on every
+ * call (no Corey-side counter). That keeps the source-of-truth
+ * single — Hermes itself decides what counts as a compression —
+ * but means the IPC reads ~MB of log per invocation; it's still
+ * cheap enough to call from a Settings page.
+ */
+export interface HermesCompressionStats {
+  total_compressions: number;
+  total_tokens_saved: number;
+  /** "YYYY-MM-DD HH:MM:SS" of most recent compression, or null. */
+  last_triggered_at: string | null;
+  log_path: string;
+  log_present: boolean;
+}
+
+export function hermesCompressionStats(): Promise<HermesCompressionStats> {
+  return invoke<HermesCompressionStats>('hermes_compression_stats');
+}
+
+/**
  * Upsert or delete a `*_API_KEY` entry in `~/.hermes/.env`. Pass `null` or
  * an empty string to remove. Only `*_API_KEY` suffixes are permitted
  * server-side. Returns the refreshed config view.

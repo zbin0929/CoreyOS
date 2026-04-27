@@ -156,16 +156,96 @@ impl HermesGateway {
             stream: false,
         };
 
-        let mut req = self.http.post(self.api_url("chat/completions")).json(&body);
-        if let Some(key) = &self.api_key {
-            req = req.bearer_auth(key);
-        }
+        let url = self.api_url("chat/completions");
+        let body_json = serde_json::to_vec(&body).map_err(|e| AdapterError::Internal {
+            source: anyhow::anyhow!("serialize chat body: {e}"),
+        })?;
+
+        // T-debug: build the request explicitly so we can re-issue it on
+        // retry without consuming `req`. `RequestBuilder` is single-use
+        // (its `.send()` takes self), and the workflow path was hitting
+        // a stable "error sending request" that we couldn't introspect
+        // because we only kept the outermost reqwest error.
+        let send_once = || async {
+            let mut r = self
+                .http
+                .post(&url)
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(body_json.clone());
+            if let Some(key) = &self.api_key {
+                r = r.bearer_auth(key);
+            }
+            r.send().await
+        };
 
         let started = Instant::now();
-        let resp = req.send().await.map_err(|e| AdapterError::Unreachable {
-            endpoint: self.base_url.clone(),
-            source: anyhow::anyhow!(e),
-        })?;
+        let prompt_size = body_json.len();
+        // Belt-and-suspenders: tracing::info! AND a raw eprintln. The
+        // workflow path involves cargo run → tauri dev → multi-pipe
+        // buffer chains that have been observed to delay tracing
+        // output by minutes; eprintln writes directly to the
+        // process's stderr file descriptor, immune to tracing
+        // subscriber buffering. We accept the duplication for the
+        // diagnostic value: when chat_once is suspected of hanging,
+        // we need a definitive "the call WAS reached" signal.
+        eprintln!(
+            "[corey] hermes chat_once: dispatching url={} model={} messages={} bytes={}",
+            url, model, body.messages.len(), prompt_size
+        );
+        tracing::info!(
+            url = %url,
+            model = %model,
+            messages = body.messages.len(),
+            prompt_bytes = prompt_size,
+            "hermes chat_once: dispatching"
+        );
+        let resp = match send_once().await {
+            Ok(r) => r,
+            Err(e) => {
+                // Most "error sending request" failures we've seen are
+                // (a) a server-side-closed keep-alive socket the pool
+                // handed back to us, or (b) a gateway restart racing
+                // our request. Both heal on a single immediate retry
+                // since reqwest will then dial a fresh TCP connection.
+                let connect_class = e.is_connect()
+                    || e.is_request()
+                    || e.is_timeout()
+                    || e.is_body();
+                let chain = format_error_chain(&e);
+                tracing::warn!(
+                    url = %url,
+                    is_connect = e.is_connect(),
+                    is_timeout = e.is_timeout(),
+                    is_request = e.is_request(),
+                    is_body = e.is_body(),
+                    is_decode = e.is_decode(),
+                    chain = %chain,
+                    "hermes chat_once: first attempt failed, will retry once"
+                );
+                if !connect_class {
+                    return Err(AdapterError::Unreachable {
+                        endpoint: self.base_url.clone(),
+                        source: anyhow::anyhow!("{chain}"),
+                    });
+                }
+                tokio::time::sleep(Duration::from_millis(250)).await;
+                match send_once().await {
+                    Ok(r) => r,
+                    Err(e2) => {
+                        let chain2 = format_error_chain(&e2);
+                        tracing::error!(
+                            url = %url,
+                            chain = %chain2,
+                            "hermes chat_once: retry also failed"
+                        );
+                        return Err(AdapterError::Unreachable {
+                            endpoint: self.base_url.clone(),
+                            source: anyhow::anyhow!("{chain2}"),
+                        });
+                    }
+                }
+            }
+        };
 
         let status = resp.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -190,6 +270,20 @@ impl HermesGateway {
             resp.json().await.map_err(|e| AdapterError::Protocol {
                 detail: format!("malformed chat completion body: {e}"),
             })?;
+
+        let total_ms = started.elapsed().as_millis() as u64;
+        eprintln!(
+            "[corey] hermes chat_once: returned total_ms={} model={}",
+            total_ms, parsed.model
+        );
+        tracing::info!(
+            url = %url,
+            model = %parsed.model,
+            total_ms = total_ms,
+            prompt_tokens = ?parsed.usage.as_ref().map(|u| u.prompt_tokens),
+            completion_tokens = ?parsed.usage.as_ref().map(|u| u.completion_tokens),
+            "hermes chat_once: returned"
+        );
 
         let first = parsed
             .choices
@@ -234,6 +328,16 @@ impl HermesGateway {
         // just fail the same way on the next attempt.
         let started = Instant::now();
         let resp = self.connect_chat_stream(&body).await?;
+        // T-coldstart: split the stream lifecycle into measurable
+        // stages so we can finally answer "where does the 3-minute
+        // first-message latency go?". Without this every reasoning-
+        // model request looked like a single opaque blob.
+        let connect_ms = started.elapsed().as_millis() as u64;
+        tracing::info!(
+            model = %model,
+            connect_ms = connect_ms,
+            "hermes chat_stream: connection established (HTTP head received)"
+        );
 
         let status = resp.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -265,6 +369,14 @@ impl HermesGateway {
         // (e.g. reasoning models that idle before emitting, or any upstream
         // that forgets to send a proper `[DONE]` sentinel).
         let mut received_any_delta = false;
+        // T-coldstart timing markers. We log the first occurrence of
+        // each event class once, so chat_stream_done can summarize the
+        // whole lifetime as connect / first-byte / first-reasoning /
+        // first-delta / done. None of these allocate beyond a u64 each.
+        let mut first_event_at: Option<u64> = None;
+        let mut first_reasoning_at: Option<u64> = None;
+        let mut first_delta_at: Option<u64> = None;
+        let mut first_tool_at: Option<u64> = None;
 
         while let Some(event) = byte_stream.next().await {
             let event = match event {
@@ -281,6 +393,20 @@ impl HermesGateway {
                 }
             };
             let data = event.data;
+            // Stamp first-event-from-server time once. This is "TTFB"
+            // for the SSE stream — the gap between connect_ms and this
+            // is the model's pre-stream thinking time (reasoning
+            // models idle here for the bulk of cold-start latency).
+            if first_event_at.is_none() {
+                let ms = started.elapsed().as_millis() as u64;
+                first_event_at = Some(ms);
+                tracing::info!(
+                    model = %model,
+                    elapsed_ms = ms,
+                    since_connect_ms = ms.saturating_sub(connect_ms),
+                    "hermes chat_stream: first SSE event received"
+                );
+            }
             if data == "[DONE]" {
                 break;
             }
@@ -308,6 +434,15 @@ impl HermesGateway {
                             prompt_tokens,
                             completion_tokens,
                         });
+                    }
+                    if first_tool_at.is_none() {
+                        let ms = started.elapsed().as_millis() as u64;
+                        first_tool_at = Some(ms);
+                        tracing::info!(
+                            model = %model,
+                            elapsed_ms = ms,
+                            "hermes chat_stream: first tool progress event"
+                        );
                     }
                     // A tool event is proof the upstream is alive enough to
                     // count the session as partial-success if it drops now.
@@ -339,6 +474,15 @@ impl HermesGateway {
                         // SSE chunk carries both fields.
                         if let Some(reasoning) = choice.delta.reasoning_content {
                             if !reasoning.is_empty() {
+                                if first_reasoning_at.is_none() {
+                                    let ms = started.elapsed().as_millis() as u64;
+                                    first_reasoning_at = Some(ms);
+                                    tracing::info!(
+                                        model = %model,
+                                        elapsed_ms = ms,
+                                        "hermes chat_stream: first reasoning chunk"
+                                    );
+                                }
                                 if tx
                                     .send(ChatStreamEvent::Reasoning(reasoning))
                                     .await
@@ -357,6 +501,15 @@ impl HermesGateway {
                         }
                         if let Some(delta_content) = choice.delta.content {
                             if !delta_content.is_empty() {
+                                if first_delta_at.is_none() {
+                                    let ms = started.elapsed().as_millis() as u64;
+                                    first_delta_at = Some(ms);
+                                    tracing::info!(
+                                        model = %model,
+                                        elapsed_ms = ms,
+                                        "hermes chat_stream: first content delta (TTFT)"
+                                    );
+                                }
                                 if tx
                                     .send(ChatStreamEvent::Delta(delta_content))
                                     .await
@@ -381,10 +534,27 @@ impl HermesGateway {
             }
         }
 
+        let total_ms = started.elapsed().as_millis() as u64;
+        // Single-line breakdown so one grep on the dev console can
+        // tell you exactly which stage owned the cold-start latency.
+        // All stage values are millis since the request was issued;
+        // subtract the previous stage to see the gap.
+        tracing::info!(
+            model = %resolved_model,
+            connect_ms = connect_ms,
+            first_event_ms = ?first_event_at,
+            first_reasoning_ms = ?first_reasoning_at,
+            first_delta_ms = ?first_delta_at,
+            first_tool_ms = ?first_tool_at,
+            total_ms = total_ms,
+            prompt_tokens = ?prompt_tokens,
+            completion_tokens = ?completion_tokens,
+            "hermes chat_stream: lifecycle"
+        );
         Ok(ChatStreamDone {
             finish_reason,
             model: resolved_model,
-            latency_ms: started.elapsed().as_millis() as u32,
+            latency_ms: total_ms as u32,
             prompt_tokens,
             completion_tokens,
         })
@@ -450,6 +620,22 @@ impl HermesGateway {
             source: anyhow::anyhow!(err),
         })
     }
+}
+
+/// Walk the `std::error::Error::source()` chain into a single string.
+/// reqwest's outer Display ("error sending request for url ...") hides
+/// the actual cause (broken pipe / connection reset / dns error / ...);
+/// chasing the chain is the only way to see the real OS-level reason.
+fn format_error_chain<E: std::error::Error>(err: &E) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("{err}"));
+    let mut src: Option<&dyn std::error::Error> = err.source();
+    while let Some(s) = src {
+        out.push_str("  <- ");
+        out.push_str(&format!("{s}"));
+        src = s.source();
+    }
+    out
 }
 
 mod types;

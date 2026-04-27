@@ -24,9 +24,11 @@ import {
   workflowGet,
   workflowSave,
   type WorkflowDef,
+  type WorkflowInput,
   type WorkflowStep,
   type WorkflowTrigger,
 } from '@/lib/ipc';
+import { InputsEditor } from './InputsEditor';
 
 const nodeTypes: NodeTypes = { step: StepNode };
 
@@ -208,6 +210,10 @@ export function WorkflowEditor({ workflowId, seed, onBack }: Props) {
     setSelectedStepId(null);
   };
 
+  const handleInputsChange = (inputs: WorkflowInput[]) => {
+    setDef((prev) => (prev ? { ...prev, inputs } : prev));
+  };
+
   const handleDefFieldChange = (field: 'name' | 'description' | 'trigger_type', value: string) => {
     setDef((prev) => {
       if (!prev) return prev;
@@ -273,6 +279,15 @@ export function WorkflowEditor({ workflowId, seed, onBack }: Props) {
               placeholder={t('workflow_page.wf_desc_placeholder')}
             />
           </label>
+          {/* Run-time parameter editor. Folds when there are 0
+              inputs so the rare case (workflow without params)
+              doesn't waste vertical space. The runtime InputsPrompt
+              dialog reads exactly this list. */}
+          <InputsEditor
+            inputs={def.inputs}
+            onChange={handleInputsChange}
+          />
+
           <div className="rounded-md border border-border p-3">
             <p className="mb-2 text-xs font-medium text-fg-subtle">{t('workflow_page.help_title')}</p>
             <ul className="space-y-1 text-[11px] text-fg-subtle">

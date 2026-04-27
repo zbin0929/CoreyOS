@@ -400,8 +400,68 @@ export function workflowRunStatus(runId: string): Promise<WorkflowRunResult | nu
   return invoke('workflow_run_status', { runId });
 }
 
+/**
+ * Manually stop an in-flight workflow run.
+ *
+ * Honor cadence: cancellation lands at the next step boundary. An
+ * in-flight 30-second `chat_stream` finishes its current call before
+ * the engine exits — we don't abort mid-stream because hermes still
+ * bills for the partial response. Worst case: one extra agent step
+ * runs after the click; usually that's <30 s.
+ *
+ * For paused (awaiting-approval) and pending runs the IPC flips
+ * status synchronously, so the UI sees `cancelled` on the next poll.
+ */
+export function workflowRunCancel(runId: string): Promise<boolean> {
+  return invoke('workflow_run_cancel', { runId });
+}
+
 export function workflowActiveRuns(): Promise<WorkflowRunResult[]> {
   return invoke('workflow_active_runs');
+}
+
+/**
+ * MRU-first list of every persisted workflow run (terminal + active),
+ * optionally filtered to one workflow id. Used by the History view.
+ *
+ * `step_count` / `completed_count` / `failed_count` are precomputed
+ * by the DB layer so the UI can render "5/6 done" without a second
+ * round-trip per row.
+ */
+export interface WorkflowRunSummary {
+  id: string;
+  workflow_id: string;
+  status: string;
+  error?: string;
+  started_at: number;
+  updated_at: number;
+  step_count: number;
+  completed_count: number;
+  failed_count: number;
+}
+
+export function workflowHistoryList(
+  workflowId?: string,
+  limit?: number,
+): Promise<WorkflowRunSummary[]> {
+  return invoke('workflow_history_list', {
+    workflowId: workflowId ?? null,
+    limit: limit ?? null,
+  });
+}
+
+/** Fetch one full historical run (header + every step's persisted
+ *  state). Returns `null` when `runId` is unknown — used by the
+ *  "view past audit trail" affordance in History. */
+export function workflowRunGet(runId: string): Promise<WorkflowRunResult | null> {
+  return invoke('workflow_run_get', { runId });
+}
+
+/** Hard-delete a run + its step rows from the audit trail. Also
+ *  evicts the active-runs map so a paused-and-trashed run doesn't
+ *  resurrect on the next poll. */
+export function workflowRunDelete(runId: string): Promise<boolean> {
+  return invoke('workflow_run_delete', { runId });
 }
 
 export interface WorkflowIntent {

@@ -13,9 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
+  hermesCompressionStats,
   hermesMemoryStatus,
   hermesUserMdWrite,
   ipcErrorMessage,
+  type HermesCompressionStats,
   type HermesMemoryStatus,
 } from '@/lib/ipc';
 
@@ -58,15 +60,23 @@ type SaveState =
 export function MemorySection() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<HermesMemoryStatus | null>(null);
+  const [compression, setCompression] = useState<HermesCompressionStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'idle' });
 
   const refresh = async () => {
     try {
-      const s = await hermesMemoryStatus();
+      const [s, c] = await Promise.all([
+        hermesMemoryStatus(),
+        // Compression stats are best-effort — log might not exist
+        // (fresh install) or be unreadable (permissions). Failure
+        // shouldn't block the rest of the page from rendering.
+        hermesCompressionStats().catch(() => null),
+      ]);
       setStatus(s);
       setDraft(s.user_md_content);
+      setCompression(c);
       setError(null);
     } catch (e) {
       setError(ipcErrorMessage(e));
@@ -185,6 +195,57 @@ export function MemorySection() {
           </>
         )}
       </div>
+
+      {/* Auto-compression effectiveness panel. Reads aggregate
+          stats out of `~/.hermes/logs/agent.log`. Renders even
+          when count=0 — it's the "compression is on, just hasn't
+          fired yet" tutorial moment. */}
+      {compression && compression.log_present && (
+        <div className="rounded-md border border-border bg-bg-elev-1 p-3 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Icon icon={Sparkles} size="sm" className="text-gold-500" />
+            <div className="text-sm font-medium text-fg">
+              {t('settings.memory.compression_title', { defaultValue: '自动上下文压缩' })}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Stat
+              label={t('settings.memory.compression_count', { defaultValue: '已触发次数' })}
+              value={
+                compression.total_compressions === 0
+                  ? '0'
+                  : formatCount(compression.total_compressions)
+              }
+              hint={
+                compression.total_compressions === 0
+                  ? t('settings.memory.compression_count_zero_hint', {
+                      defaultValue: '上下文未达到阈值，尚未触发。聊得更长后会自动压缩。',
+                    })
+                  : undefined
+              }
+            />
+            <Stat
+              label={t('settings.memory.compression_saved', { defaultValue: '累计节省' })}
+              value={
+                compression.total_tokens_saved === 0
+                  ? '—'
+                  : `${formatCount(compression.total_tokens_saved)} tok`
+              }
+              hint={
+                compression.last_triggered_at
+                  ? t('settings.memory.compression_last', {
+                      defaultValue: '最近：{{at}}',
+                      at: compression.last_triggered_at,
+                    })
+                  : undefined
+              }
+            />
+          </div>
+          <div className="text-[11px] text-fg-subtle font-mono break-all">
+            {compression.log_path}
+          </div>
+        </div>
+      )}
 
       {/* USER.md editor */}
       <div className="flex flex-col gap-2">

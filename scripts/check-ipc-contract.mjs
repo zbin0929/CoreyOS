@@ -88,16 +88,39 @@ function collectRustCommands() {
 
 /** L: scan lib.rs for the `invoke_handler` list. Rough but reliable —
  *  the list is a flat sequence of `ipc::module::name,` entries inside
- *  a `tauri::generate_handler!` invocation. */
+ *  a `tauri::generate_handler!` invocation.
+ *
+ *  We isolate the macro body first, then match `ipc::...::name`
+ *  inside it. Without this scoping, ANY `crate::ipc::module::fn(...)`
+ *  call elsewhere in lib.rs (e.g. helper invocations from the boot
+ *  rehydrate path) would be falsely flagged as a registered handler. */
 function collectLibRsRegistered() {
   const set = new Set();
   const src = readFileSync(LIB_RS, 'utf8');
-  // Match `ipc::...::name,` patterns. We don't try to be precise about
-  // which is the handler block — the pattern is specific enough that
-  // false positives are vanishingly unlikely.
+  // Find `tauri::generate_handler!` and grab everything between
+  // its opening `[` and matching closing `]`. The body is the only
+  // place handler names live — outside it, similar-shaped paths
+  // are just regular function calls.
+  const macroIdx = src.search(/tauri::generate_handler!\s*\[/);
+  if (macroIdx < 0) return set;
+  const startBracket = src.indexOf('[', macroIdx);
+  let depth = 0;
+  let endBracket = -1;
+  for (let i = startBracket; i < src.length; i++) {
+    if (src[i] === '[') depth += 1;
+    else if (src[i] === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        endBracket = i;
+        break;
+      }
+    }
+  }
+  if (endBracket < 0) return set;
+  const body = src.slice(startBracket + 1, endBracket);
   const re = /\bipc::(?:[a-z_0-9]+::)+([a-z_0-9]+)/g;
   let m;
-  while ((m = re.exec(src)) !== null) set.add(m[1]);
+  while ((m = re.exec(body)) !== null) set.add(m[1]);
   return set;
 }
 

@@ -128,11 +128,9 @@ steps:
 
     活动：{{inputs.campaign_name}}
     SKU：{{inputs.sku_ids}}
-    折扣率：{{inputs.discount_rate}}（{{validate.output.parsed.discount_pct}}% off）
+    折扣率：{{inputs.discount_rate}}
     起止：{{inputs.promo_start_at}} ~ {{inputs.promo_end_at}}
     申请人：{{inputs.requested_by}}
-
-    校验结果：{{validate.output}}
 
     ⚠️ 折扣 > 30% 视为大额，请仔细核对货源 / 库存 / 财务影响。
     不通过将中止整个流程，已发出的通知不会撤回。

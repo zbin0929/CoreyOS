@@ -8,11 +8,12 @@
 //!
 //! Tools available today
 //! ---------------------
-//!   - `corey_native.notify`       — desktop notification (toast).
-//!   - `corey_native.pick_file`    — native Finder file picker (single).
-//!   - `corey_native.pick_folder`  — native Finder folder picker.
-//!   - `corey_native.open_settings`— deep-link the GUI to a Settings
-//!                                    panel by id.
+//!   - `corey_native.notify`         — desktop notification (toast).
+//!   - `corey_native.pick_file`      — native Finder file picker (single).
+//!   - `corey_native.pick_folder`    — native Finder folder picker.
+//!   - `corey_native.open_settings`  — deep-link the GUI to a Settings panel.
+//!   - `corey_native.list_workflows` — enumerate user-defined workflows.
+//!   - `corey_native.run_workflow`   — trigger a workflow run by id, returns run_id.
 //!
 //! The `corey_native.` prefix is a namespacing convention picked up by
 //! Hermes' tool selector so users can scope-disable us with one tag
@@ -139,6 +140,60 @@ pub fn manifest() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "list_workflows",
+            "description": "List the user's saved Corey workflows. \
+                Returns each workflow's id, name, description, and \
+                declared inputs (so the agent can decide whether to \
+                ask the user for parameters before running). \n\n\
+                Trigger when the user asks: \"what workflows do I \
+                have\", \"list my automations\", \"what can I run\", \
+                \"show workflows\"; or in Chinese: \"有哪些工作流\", \
+                \"我的自动化\", \"列出 workflow\", \"我能跑什么\". \n\n\
+                Also use proactively when a user request matches a \
+                multi-step procedure shape (\"促销审批\", \"代码 \
+                review\", \"日报汇总\") — list first, then call \
+                `run_workflow` with the matched id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        }),
+        json!({
+            "name": "run_workflow",
+            "description": "Start a Corey workflow run by id. Returns \
+                immediately with the new run's id; execution \
+                continues asynchronously and the user watches it in \
+                the Workflow page. \n\n\
+                Trigger when the user explicitly names a workflow \
+                (\"run the promo approval flow\", \"跑一下电商促销 \
+                审批\") OR when their goal cleanly matches one of \
+                the workflows returned by `list_workflows` (audit \
+                trail + human approval semantics imply the user \
+                wants a workflow, not raw chat). \n\n\
+                Pass the workflow's declared inputs as a flat object \
+                under `inputs`. If the user didn't specify required \
+                fields, ASK in chat first — workflows that pause on \
+                an empty input render confusing approval cards.\n\n\
+                NOT for one-off chats; for those, just answer in chat \
+                directly. Workflows are for repeatable, audited \
+                procedures.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "workflow_id": {
+                        "type": "string",
+                        "description": "The workflow id from `list_workflows` (e.g. \"ecommerce-promotion-approval\"). Case-sensitive; must match exactly."
+                    },
+                    "inputs": {
+                        "type": "object",
+                        "description": "Run-time inputs declared by the workflow's `inputs:` section. Pass {} when the workflow takes no inputs.",
+                        "additionalProperties": true
+                    }
+                },
+                "required": ["workflow_id"]
+            }
+        }),
+        json!({
             "name": "open_settings",
             "description": "Deep-link the Corey desktop GUI to a \
                 specific Settings panel. The user's window will \
@@ -185,6 +240,8 @@ pub async fn call(app: AppHandle, params: &Value) -> Result<Value, (i32, String)
         "pick_file" => pick_file(app, args).await?,
         "pick_folder" => pick_folder(app, args).await?,
         "open_settings" => open_settings(app, args).await?,
+        "list_workflows" => list_workflows(app).await?,
+        "run_workflow" => run_workflow(app, args).await?,
         _ => return Err((-32601, format!("unknown tool: {name}"))),
     };
 
@@ -301,6 +358,135 @@ async fn pick_folder(app: AppHandle, args: Value) -> Result<String, (i32, String
 #[derive(Debug, Deserialize)]
 struct OpenSettingsArgs {
     panel: String,
+}
+
+// ───────────────────────── workflow tools ─────────────────────────
+//
+// Bridge MCP → the workflow IPC layer. We DON'T re-invoke `tauri::command`
+// handlers from here — those route through Tauri's IPC pipe and need
+// State<'_> bindings that aren't available in the axum context. Instead
+// we reach into AppState directly via `app.state::<AppState>()` and call
+// the same backend primitives the IPC handlers wrap.
+
+async fn list_workflows(app: AppHandle) -> Result<String, (i32, String)> {
+    use crate::state::AppState;
+    use tauri::Manager;
+
+    // We don't actually need AppState here — `store::list` reads
+    // straight from `~/.hermes/workflows/`. But we keep the Manager
+    // import + state lookup for symmetry with `run_workflow`, so
+    // future changes that need state (e.g. filter by user) don't
+    // have to thread it back in.
+    let _state = app.state::<AppState>();
+    let payload = tokio::task::spawn_blocking(|| -> Result<Value, String> {
+        let defs = crate::workflow::store::list().map_err(|e| format!("list: {e}"))?;
+        let items: Vec<Value> = defs
+            .into_iter()
+            .map(|d| {
+                let inputs: Vec<Value> = d
+                    .inputs
+                    .iter()
+                    .map(|i| {
+                        json!({
+                            "name": i.name,
+                            "label": i.label,
+                            "type": i.input_type,
+                            "required": i.required,
+                            "default": i.default,
+                        })
+                    })
+                    .collect();
+                json!({
+                    "id": d.id,
+                    "name": d.name,
+                    "description": d.description,
+                    "inputs": inputs,
+                })
+            })
+            .collect();
+        Ok(json!({ "workflows": items }))
+    })
+    .await
+    .map_err(|e| (-32603, format!("list_workflows join: {e}")))?
+    .map_err(|e| (-32603, e))?;
+
+    Ok(payload.to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct RunWorkflowArgs {
+    workflow_id: String,
+    #[serde(default)]
+    inputs: Option<Value>,
+}
+
+async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
+    use crate::state::AppState;
+    use crate::workflow::engine;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use tauri::Manager;
+
+    let args: RunWorkflowArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid run_workflow args: {e}")))?;
+    let workflow_id = args.workflow_id.clone();
+    let inputs = args.inputs.unwrap_or(Value::Object(Default::default()));
+
+    let state = app.state::<AppState>();
+    let runs = state.workflow_runs.clone();
+    let adapters = state.adapters.clone();
+    let db = state.db.clone();
+    let cancel_flags = state.workflow_cancel_flags.clone();
+
+    // Same shape as `workflow_run` IPC: load def, allocate run +
+    // cancel flag, persist initial state, then hand off to the
+    // shared executor spawn helper. We do this off the axum task's
+    // current thread so a slow disk read doesn't park other MCP
+    // requests behind us.
+    let (run_id, def) = tokio::task::spawn_blocking({
+        let workflow_id = workflow_id.clone();
+        move || -> Result<(String, crate::workflow::model::WorkflowDef), String> {
+            let def = crate::workflow::store::get(&workflow_id)
+                .map_err(|e| format!("workflow not found: {e}"))?;
+            Ok((uuid::Uuid::new_v4().to_string(), def))
+        }
+    })
+    .await
+    .map_err(|e| (-32603, format!("run_workflow join: {e}")))?
+    .map_err(|e| (-32602, e))?;
+
+    let (mut run, ctx) = engine::create_initial_run(&def, inputs);
+    // Override the engine's freshly-minted UUID with our own so the
+    // run_id we report to the agent matches what ends up in SQLite.
+    run.id = run_id.clone();
+    let mut owned_run = run;
+    // Stamp the initial state to disk before kicking the executor.
+    if let Some(db) = db.as_ref() {
+        owned_run.updated_at_ms = chrono::Utc::now().timestamp_millis();
+        let _ = db.upsert_workflow_run(&owned_run);
+    }
+    runs.lock().insert(run_id.clone(), owned_run);
+
+    let cancel_flag: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    cancel_flags.lock().insert(run_id.clone(), cancel_flag.clone());
+
+    crate::ipc::workflow::spawn_run_executor(
+        runs,
+        adapters,
+        db,
+        def,
+        run_id.clone(),
+        ctx,
+        cancel_flag,
+    );
+
+    Ok(json!({
+        "run_id": run_id,
+        "workflow_id": workflow_id,
+        "status": "started",
+        "ui_path": "/workflow",
+    })
+    .to_string())
 }
 
 async fn open_settings(app: AppHandle, args: Value) -> Result<String, (i32, String)> {

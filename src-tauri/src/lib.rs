@@ -106,6 +106,7 @@ pub fn run() {
             ipc::hermes_config::hermes_env_set_key,
             ipc::hermes_memory::hermes_memory_status,
             ipc::hermes_memory::hermes_user_md_write,
+            ipc::hermes_memory::hermes_compression_stats,
             ipc::hermes_config::hermes_gateway_restart,
             ipc::hermes_config::hermes_gateway_start,
             ipc::hermes_config::hermes_detect,
@@ -232,7 +233,11 @@ pub fn run() {
             ipc::workflow::workflow_validate,
             ipc::workflow::workflow_run,
             ipc::workflow::workflow_run_status,
+            ipc::workflow::workflow_run_cancel,
             ipc::workflow::workflow_active_runs,
+            ipc::workflow::workflow_history_list,
+            ipc::workflow::workflow_run_get,
+            ipc::workflow::workflow_run_delete,
             ipc::workflow::generate::workflow_generate,
             ipc::workflow_intent::workflow_extract_intent,
             ipc::workflow::workflow_approve,
@@ -410,7 +415,115 @@ pub fn run() {
                 Err(e) => tracing::error!(error = %e, "workflow templates install failed"),
             }
 
+            // Rehydrate any non-terminal workflow runs from the DB
+            // back into `state.workflow_runs`. Without this, a Corey
+            // restart wipes paused approval gates — workflow's whole
+            // "audit + human approval + strict order" pitch falls
+            // apart the moment the user closes the app.
+            //
+            // Beyond rehydrating, we also AUTO-RESUME any run whose
+            // last persisted state was `pending` or `running`. Reason:
+            // those mean "the engine was driving this run when Corey
+            // died", and there's no IPC that triggers a resume
+            // otherwise — the user would see a step parked at
+            // `running` forever. Steps that were mid-execution
+            // (status=Running) are demoted to Pending so the engine's
+            // resume bootstrap re-runs them; partial agent output
+            // from before the kill is discarded (it's not safe to
+            // assume a half-streamed answer was correct).
+            //
+            // `paused` runs are NOT auto-resumed: those wait on a
+            // human approval, and the resume is initiated by
+            // `workflow_approve`. Terminal runs (completed / failed
+            // / cancelled) stay in SQLite as history but don't pin
+            // engine memory.
+            let mut to_resume: Vec<(String, String)> = Vec::new();
+            if let Some(db) = app_state.db.as_ref() {
+                match db.load_active_workflow_runs() {
+                    Ok(runs) => {
+                        let n = runs.len();
+                        if n > 0 {
+                            let mut map = app_state.workflow_runs.lock();
+                            for mut r in runs {
+                                let needs_resume = matches!(
+                                    r.status,
+                                    workflow::engine::RunStatus::Running
+                                        | workflow::engine::RunStatus::Pending
+                                );
+                                if needs_resume {
+                                    // Demote any half-executed step
+                                    // to Pending so the engine reruns
+                                    // it. Without this the resume
+                                    // bootstrap would skip the step
+                                    // (it only marks-completed steps
+                                    // as `Completed`) but the planner
+                                    // would also not re-add it to
+                                    // `ready` — fatal for the run.
+                                    for sr in r.step_runs.values_mut() {
+                                        if sr.status == workflow::engine::StepRunStatus::Running {
+                                            sr.status = workflow::engine::StepRunStatus::Pending;
+                                            sr.error = None;
+                                            sr.duration_ms = None;
+                                            sr.output = None;
+                                        }
+                                    }
+                                    to_resume.push((r.id.clone(), r.workflow_id.clone()));
+                                }
+                                map.insert(r.id.clone(), r);
+                            }
+                            info!(n, "rehydrated active workflow runs from SQLite");
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "workflow run rehydrate failed; starting empty");
+                    }
+                }
+            }
+
+            // Snap a few clones BEFORE app.manage moves app_state. We
+            // can't reach into AppState by handle until after manage,
+            // and we need these to spawn the resume tasks below.
+            let runs_for_resume = app_state.workflow_runs.clone();
+            let adapters_for_resume = app_state.adapters.clone();
+            let db_for_resume = app_state.db.clone();
+            let cancel_flags_for_resume = app_state.workflow_cancel_flags.clone();
+
             app.manage(app_state);
+
+            // Now spawn the resume executors. We do this AFTER manage
+            // so the shared state pointers are stable for the full
+            // lifetime of the workflow.
+            for (run_id, workflow_id) in to_resume {
+                let runs = runs_for_resume.clone();
+                let adapters = adapters_for_resume.clone();
+                let db = db_for_resume.clone();
+                let cancel_flags = cancel_flags_for_resume.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let def = match workflow::store::get(&workflow_id) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            tracing::warn!(workflow_id = %workflow_id, error = %e, "rehydrate resume: cannot load def, skipping");
+                            return;
+                        }
+                    };
+                    let inputs = runs
+                        .lock()
+                        .get(&run_id)
+                        .map(|r| r.inputs.clone())
+                        .unwrap_or(serde_json::Value::Null);
+                    let ctx = workflow::context::RunContext::new(&def.id, &run_id, inputs);
+                    // Allocate a fresh cancel flag for the resumed run.
+                    // The user can `workflow_run_cancel` it just like
+                    // a fresh run.
+                    let flag: std::sync::Arc<std::sync::atomic::AtomicBool> =
+                        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                    cancel_flags.lock().insert(run_id.clone(), flag.clone());
+                    info!(run_id = %run_id, workflow_id = %workflow_id, "auto-resuming workflow run after restart");
+                    crate::ipc::workflow::spawn_run_executor(
+                        runs, adapters, db, def, run_id, ctx, flag,
+                    );
+                });
+            }
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();

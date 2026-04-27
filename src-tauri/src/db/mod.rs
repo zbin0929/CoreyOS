@@ -26,6 +26,7 @@ mod migrations;
 mod runbooks;
 mod sessions;
 mod skills_history;
+mod workflows;
 
 // Public surface — every name listed here was also a direct child of
 // `crate::db::` before the split, so existing imports resolve verbatim.
@@ -41,6 +42,7 @@ pub use runbooks::RunbookRow;
 #[allow(unused_imports)]
 pub use sessions::{MessageWithTools, SessionRow, SessionWithMessages};
 pub use skills_history::{SkillVersion, SkillVersionSummary};
+pub use workflows::WorkflowRunSummary;
 
 pub struct Db {
     // Visible to every submodule in this crate::db tree so each

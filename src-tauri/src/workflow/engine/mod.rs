@@ -34,7 +34,7 @@ pub enum StepRunStatus {
     AwaitingApproval,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepRun {
     pub step_id: String,
     pub status: StepRunStatus,
@@ -43,7 +43,7 @@ pub struct StepRun {
     pub duration_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowRun {
     pub id: String,
     pub workflow_id: String,
@@ -51,10 +51,22 @@ pub struct WorkflowRun {
     pub inputs: serde_json::Value,
     pub step_runs: HashMap<String, StepRun>,
     pub error: Option<String>,
+    /// Wall-clock millis when the run was created. Stamped once and
+    /// never mutated. Used by the History view (sort by recency) and
+    /// by audit reports that quote a verifiable start time.
+    #[serde(default)]
+    pub started_at_ms: i64,
+    /// Last time any field on this run changed (status flip, step
+    /// transition, approval). Updated by the persistence layer on
+    /// every `upsert_workflow_run` call. Used by the History view's
+    /// MRU sort and to avoid noisy DB writes when nothing changed.
+    #[serde(default)]
+    pub updated_at_ms: i64,
 }
 
 impl WorkflowRun {
     pub fn new(workflow_id: &str, inputs: serde_json::Value) -> Self {
+        let now = chrono::Utc::now().timestamp_millis();
         Self {
             id: Uuid::new_v4().to_string(),
             workflow_id: workflow_id.to_string(),
@@ -62,6 +74,8 @@ impl WorkflowRun {
             inputs,
             step_runs: HashMap::new(),
             error: None,
+            started_at_ms: now,
+            updated_at_ms: now,
         }
     }
 }
@@ -99,6 +113,30 @@ pub fn create_initial_run(
 
 pub trait StepExecutor: Send + Sync {
     fn execute_agent(&self, agent_id: &str, prompt: &str) -> Result<String, String>;
+
+    /// Streaming variant: identical contract to `execute_agent`
+    /// (returns the final assistant content) but the implementation
+    /// MAY call `progress` with cumulative partial content as it
+    /// streams in. The engine wires `progress` through to the
+    /// step-progress hook so the UI can show "Hermes is thinking…"
+    /// text in real time during a 30-second agent call.
+    ///
+    /// `progress` receives the FULL accumulated text so far (not the
+    /// delta chunk) — saves the engine + UI from doing their own
+    /// reassembly.
+    ///
+    /// Default impl falls back to `execute_agent`, so trait users
+    /// that don't care about live UX (tests, simulator) don't have
+    /// to write a streaming method.
+    fn execute_agent_streaming(
+        &self,
+        agent_id: &str,
+        prompt: &str,
+        _progress: &dyn Fn(&str),
+    ) -> Result<String, String> {
+        self.execute_agent(agent_id, prompt)
+    }
+
     fn execute_browser(
         &self,
         action: &str,
@@ -135,6 +173,34 @@ pub fn execute_with_executor(
     run: &mut WorkflowRun,
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
+) {
+    execute_with_hooks(def, run, ctx, executor, &|_| {}, &|_, _| {}, &|| false);
+}
+
+/// Step-end hook variant. The hook is called with a borrow of the
+/// (mutating) run **after every step state transition** — completion,
+/// failure, or pause-on-approval — so the IPC layer can:
+///
+///   1. Snapshot the run back into `state.workflow_runs` while we're
+///      not inside the engine's hot loop, so concurrent
+///      `workflow_run_status` polls can read fresh state without
+///      waiting for the whole workflow to finish.
+///   2. Persist the snapshot to SQLite at the same boundary so a
+///      crash mid-workflow survives with up-to-date state, not just
+///      the boundary at the executor's outermost return.
+///
+/// The hook fires AT MOST once per step transition, never inside an
+/// agent step's blocking `chat_once`. That's the whole point: the
+/// agent step is the slow thing, and we want to NOT be holding
+/// state's mutex while it runs.
+pub fn execute_with_hooks(
+    def: &WorkflowDef,
+    run: &mut WorkflowRun,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+    on_step_end: &dyn Fn(&WorkflowRun),
+    on_step_progress: &dyn Fn(&str, &str),
+    should_cancel: &dyn Fn() -> bool,
 ) {
     let mut plan = planner::build_plan(def);
 
@@ -174,6 +240,21 @@ pub fn execute_with_executor(
     }
 
     while !ready.is_empty() {
+        // Honor cancellation at the START of each scheduling pass.
+        // We deliberately do NOT abort an in-flight `execute_step_live`
+        // — interrupting a chat_stream mid-token would leave hermes
+        // billing for content the user threw away. Instead we let
+        // the current step finish, then short-circuit before
+        // dispatching the next batch. Worst case: one extra agent
+        // step runs after the user clicks Cancel; usually that's
+        // single-digit seconds.
+        if should_cancel() {
+            run.status = RunStatus::Cancelled;
+            run.error = Some("Cancelled by user".into());
+            tracing::info!(run_id = %run.id, "workflow run cancelled by user");
+            on_step_end(run);
+            return;
+        }
         let mut next_ready = Vec::new();
 
         for step_id in &ready {
@@ -209,18 +290,37 @@ pub fn execute_with_executor(
                     }
                     run.status = RunStatus::Paused;
                     tracing::info!(step_id = %step_id, "workflow paused awaiting approval");
+                    on_step_end(run);
                     return;
                 }
                 // Already approved on a prior call — skip.
                 continue;
             }
 
+            // Snapshot Running BEFORE we enter execute_step_live so
+            // the UI can show "X is running" during the (possibly
+            // 30 s+) agent call. Without this hook the run's
+            // visible state would jump straight from Pending to
+            // Completed when the agent finally returns.
             if let Some(sr) = run.step_runs.get_mut(step_id) {
                 sr.status = StepRunStatus::Running;
             }
+            on_step_end(run);
 
             let step_start = std::time::Instant::now();
-            match execute_step_live(step, ctx, executor) {
+            // For agent steps we route through the streaming variant
+            // and forward partial content to the progress hook.
+            // Other step types (tool/browser/branch/loop/parallel)
+            // don't have a meaningful "partial" concept — the
+            // engine just runs them through the legacy path.
+            let exec_result = if step.step_type == "agent" {
+                execute_agent_step_streaming(step, ctx, executor, &|partial| {
+                    on_step_progress(step_id, partial);
+                })
+            } else {
+                execute_step_live(step, ctx, executor)
+            };
+            match exec_result {
                 Ok(output) => {
                     let elapsed = step_start.elapsed().as_millis() as u64;
                     ctx.set_step_output(step_id, output.clone());
@@ -232,6 +332,7 @@ pub fn execute_with_executor(
                     tracing::info!(step_id = %step_id, duration_ms = elapsed, "workflow step completed");
                     let newly = planner::mark_completed(&mut plan.remaining, step_id);
                     next_ready.extend(newly);
+                    on_step_end(run);
                 }
                 Err(e) => {
                     let elapsed = step_start.elapsed().as_millis() as u64;
@@ -243,6 +344,7 @@ pub fn execute_with_executor(
                     tracing::warn!(step_id = %step_id, duration_ms = elapsed, error = %e, "workflow step failed");
                     run.status = RunStatus::Failed;
                     run.error = Some(e);
+                    on_step_end(run);
                     return;
                 }
             }
@@ -254,6 +356,7 @@ pub fn execute_with_executor(
     if run.status != RunStatus::Failed {
         run.status = RunStatus::Completed;
     }
+    on_step_end(run);
 }
 
 #[allow(dead_code)]
@@ -291,10 +394,36 @@ fn execute_agent_step_live(
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
 ) -> Result<serde_json::Value, String> {
+    // Non-streaming entry point. Used by the legacy
+    // `execute_with_executor` path (no progress hook) and by
+    // parallel/loop sub-steps where threading a progress callback
+    // through nested children isn't worth the complexity.
     let prompt = step.prompt.as_deref().ok_or("agent step missing prompt")?;
     let rendered = ctx.render_template(prompt);
     let agent_id = step.agent_id.as_deref().unwrap_or("hermes-default");
     let text = executor.execute_agent(agent_id, &rendered)?;
+    Ok(json!({
+        "text": text,
+        "agent_id": agent_id,
+    }))
+}
+
+fn execute_agent_step_streaming(
+    step: &WorkflowStep,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+    progress: &dyn Fn(&str),
+) -> Result<serde_json::Value, String> {
+    // Streaming-aware version. The executor MAY call `progress` with
+    // cumulative partial text as the agent's output streams in;
+    // that text is then forwarded to the engine's step-progress hook
+    // by the caller. If the executor's default impl is in use,
+    // `progress` is never called and the behaviour matches the
+    // non-streaming path.
+    let prompt = step.prompt.as_deref().ok_or("agent step missing prompt")?;
+    let rendered = ctx.render_template(prompt);
+    let agent_id = step.agent_id.as_deref().unwrap_or("hermes-default");
+    let text = executor.execute_agent_streaming(agent_id, &rendered, progress)?;
     Ok(json!({
         "text": text,
         "agent_id": agent_id,
