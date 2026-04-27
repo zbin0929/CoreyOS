@@ -80,12 +80,36 @@
 
 ### 安装 Hermes（必需）
 
-打开 [hermes-agent.nousresearch.com/docs/quickstart](https://hermes-agent.nousresearch.com/docs/quickstart)，按你平台的 brew/scoop/curl 命令安装。
+Hermes 是 Python 包（`pip install hermes-agent`），上游不发布预编译二进制，所以**不会和 Corey 一起打包**——你需要单独装。
 
-CoreyOS 会自动检测：
-- ✅ 二进制存在 `$PATH` 或 `~/.local/bin/hermes`
-- ✅ 网关运行在 `127.0.0.1:8642`
-- ✅ `~/.hermes/config.yaml` 可读写
+#### 一键引导
+
+CoreyOS 启动后如果检测不到 Hermes，**Home 页自动弹「Hermes 未安装」红色卡片**，里面包含：
+
+1. **环境预检**（自动跑）—— 显示 Python 版本 + pip 是否就绪
+   - 🟢 「Ready to install. Detected Python 3.11.x with pip available.」
+   - 🟡 缺 Python：「Python is not installed」 → 先装 [python.org](https://python.org) 3.11+
+   - 🟡 有 Python 没 pip：「Python OK, but pip is missing」 → 先跑 `python3 -m ensurepip --upgrade`
+   - 🟡 Python 太老：「Detected Python 3.10, but Hermes requires 3.11+」 → 升级 Python
+2. **安装命令** — 平台特定，一键复制：
+   - macOS：`brew install nousresearch/hermes/hermes-agent`
+   - Windows / Linux：`pip install hermes-agent`
+3. 装完点 **重新检查** 按钮 → Corey 重新探测
+
+#### 自动检测路径
+
+CoreyOS 按这个顺序找 hermes 二进制：
+- `$PATH` 上的 `hermes` / `hermes.exe`
+- macOS / Linux：`~/.local/bin/hermes`
+- Windows：`%LOCALAPPDATA%\Programs\Hermes\hermes.exe`
+
+#### 版本兼容性
+
+CoreyOS 测试范围：**Hermes v0.10.x**。
+
+如果你装了更新版本（如 v0.11+），Home 页会**黄色 banner 提示「未经测试」**——大部分功能还能用，但 Hermes 端配置 schema 可能漂移，配置写入可能失败。建议升级 Corey 或临时回退 Hermes。
+
+如果版本太旧（< 0.10），**红色 banner 提示「版本过旧」**——auto-compress / memory store 等功能依赖较新的 Hermes。
 
 如果未装 Hermes，CoreyOS 会进入**只读 stub 模式**——能浏览界面但不能真聊天。
 
@@ -232,7 +256,8 @@ CoreyOS 会自动检测：
 #### 步骤
 1. 点 Compare 页
 2. 默认 2 个 lane（最多 4 个）
-3. 每个 lane 用 ModelPicker 选不同模型 / Profile
+3. 每个 lane 选不同 **LLM Profile**（Settings → Models 里建的 deepseek / glm / minimax 等）
+   - 没建过 profile 时页面会提示「先去 Settings → Models 创建至少 2 个不同 provider 的 profile」
 4. 顶部输入框写 prompt → 一键 **Run All**
 5. 所有 lane 并行流式输出
 6. 看完后选"赢家" lane → 系统记录在 SQLite 用于后续分析
@@ -626,6 +651,31 @@ Runbook = 带 `{{参数}}` 占位符的命名 prompt 模板。
 - 删除旧的 [auto] 段落
 - 保留人手编辑部分
 
+#### Settings → 记忆/学习 子页面
+
+`/settings` 页有专门 section 显示**Hermes 记忆系统状态**，比 `/memory` 页更全面：
+
+##### Memory provider 状态
+- 当前 provider（hermes-memory-store 全息插件 / 仅内置 USER.md）
+- 自动抽取开关 + 时间衰减半衰期
+- **fact 总数** + 最近 7 天新增（来自 `~/.hermes/memory_store.db`）
+- Top 类别直方图（事实按 category 分组）
+
+##### 自动上下文压缩统计
+- **已触发次数**（从 `~/.hermes/logs/agent.log` grep 得到）
+- **累计节省 tokens**
+- **最近一次触发时间**
+- 触发前显示「上下文未达到阈值，尚未触发」
+
+##### Hermes 历史会话占用面板
+Hermes 内部除了 `state.db` 还会写 legacy `~/.hermes/sessions/*.jsonl` 文件，长期堆积。Corey 提供：
+- **文件数 / 总占用 / 最旧文件年龄** 三栏统计
+- **「清理 30 天前的会话」** 按钮 → 安全删除超过 30 天的 transcript 文件，保留 sessions.json 索引
+- 文件目录路径透明显示，便于手工排查
+
+##### USER.md 编辑器
+就在这个 section 里直接改，不用跳页面。
+
 #### 注意事项
 
 - 直接在编辑器里改，不会触发 git；要版本控制请自行 `git init` 当前目录
@@ -725,15 +775,15 @@ Runbook = 带 `{{参数}}` 占位符的命名 prompt 模板。
 
 #### 概念
 
-**Workflow** = DAG（有向无环图）形式的多步多 agent 自动化流程。
+**Workflow** = DAG（有向无环图）形式的多步多 agent 自动化流程。和 Chat 的对话式 agent 互补——chat 适合"问一次答一次"，workflow 适合**严格可重复 + 人工审批 + 事后审计**的运营自动化。
 
 每个节点是一个 step，类型有：
-- **agent** — 调 LLM，输出文本/JSON/Markdown
+- **agent** — 调 LLM，可选择走哪个 LLM Profile（DeepSeek / GLM / MiniMax 等），输出文本/JSON/Markdown，**支持流式实时显示**
 - **tool** — 调具体工具（telegram_send / http_request / shell …）
 - **parallel** — 并行执行子 step
 - **condition** — 分支
 - **loop** — 循环执行直到 exit_condition
-- **approval** — 人工审批
+- **approval** — 人工审批门，运行时暂停等用户决定
 - **browser** — 浏览器自动化（headless）
 
 Step 间通过 `after: [step_id]` 声明依赖，输出引用 `{{step_id.output}}`。
@@ -741,8 +791,6 @@ Step 间通过 `after: [step_id]` 声明依赖，输出引用 `{{step_id.output}
 #### 三种创建方式
 
 ##### 1. ✨ 用对话生成（推荐）
-
-> **新功能**（2026-04-27）
 
 1. 点右上角 ✨ **用对话生成**
 2. 抽屉滑出，输入框写白话需求：
@@ -754,33 +802,53 @@ Step 间通过 `after: [step_id]` 声明依赖，输出引用 `{{step_id.output}
 4. 自动跳进可视化编辑器，DAG 已铺好
 5. 审核 / 微调 → **保存**
 
-##### 2. 从模板（6 个内置）
+##### 2. 从模板（内置）
 
-- `ai-comic-pipeline.yaml` — AI 漫画流水线
-- `code-review-pipeline.yaml` — 代码评审
-- `competitor-price-monitor.yaml` — 竞品监控
-- `daily-news-digest.yaml` — 每日新闻摘要
-- `douyin-hot-videos.yaml` — 抖音热门
-- `ups-tracking.yaml` — 快递追踪
+当前内置 1 个完整 demo：
+- `ecommerce-promotion-approval.yaml` — 电商促销审批与上下架（5 步，含 2 个人工审批门，演示完整 workflow 能力）
 
 ##### 3. 从零开始（可视化编辑器）
 
 - 拖拽节点到画布
 - 连线建立依赖
 - 点击节点编辑属性面板
+  - **Agent step**：可选 LLM Profile（默认 Hermes Agent / 你创建的 DeepSeek / GLM 等）
+- **Inputs 编辑**：右侧 InputsEditor 定义运行时参数（name / 类型 / 必填 / 默认值 / 选项）
 
 #### 运行
 
 - 点工作流卡 **▶ Run**
-- 弹窗填 inputs（如 `topic="AI"`）
-- 实时显示每个 step 状态：⏳ pending / 🔄 running / ✅ done / ❌ failed
-- approval 节点会暂停 → **Approve** / **Reject**
+- 弹窗填 inputs（如 `campaign_name`、`discount_rate`）
+- 实时显示每个 step 状态：⏳ 待执行 / � 执行中（带秒级计时器） / ✅ 已完成 / ❌ 失败 / 🟡 待审批 / ⏹️ 已取消
+- agent step 执行中显示**最后 6 行流式输出 + 闪烁光标**——能看到 LLM 边写边出
+- approval 节点暂停 → 顶部弹「通过」/「驳回」按钮
+  - **驳回**会弹文本框收集理由，理由写入审计报告
+- **停止运行**按钮（仅 running / paused 时显示，红色，二次确认）→ 立即停止
+
+#### 关闭重启
+
+- 工作流跑到一半关闭 Corey → 重新打开 → **自动续跑**未完成的 run
+- 中断的 step 自动重置为 pending 重跑（不信任半截 LLM 输出）
+- 暂停在审批的 run → 重启后 UI 仍停在审批门，等用户决定
+
+#### 历史 + 导出（审计闭环）
+
+- 工作流列表页右上「**历史**」按钮 → 查看所有过往 run
+- 详情面板显示完整 step audit trail（每步 status / duration / error / output）
+- 导出格式：
+  - **JSON** — 完整原始数据，便于程序化处理
+  - **Markdown** — 人类可读，便于贴到工单或邮件
+- 一键删除（同步清掉 corey + hermes 两边的 run 记录）
+
+#### Chat 触发 workflow
+
+Chat 里说「跑一下电商促销审批」/ "run the promo approval flow" → AI 通过 MCP tool `corey_native.run_workflow` 直接触发，返回 run_id。AI 也能调 `list_workflows` 查你有哪些工作流可跑。
 
 #### 持久化
 
-- 工作流定义：`~/.hermes/workflows/<id>.yaml`
-- 每次 run 输出：`~/.hermes/workflow-runs/<run-id>.json`
-- Manual run 不限次；cron 触发的有自动归档
+- **工作流定义**：`~/.hermes/workflows/<id>.yaml`（Hermes 共享，Corey 和 Hermes 同时可见）
+- **运行记录**：Corey 自己的 SQLite `caduceus.db` 的 `workflow_runs` + `workflow_step_runs` 表
+  - Hermes 端独立的 session 文件（`~/.hermes/sessions/*.jsonl`）由 Hermes 维护，与 Corey 工作流记录是两份不同维度的数据，互不干扰
 
 #### 与 Scheduler 的区别
 
@@ -1075,7 +1143,14 @@ CoreyOS 内置一个**简化的 token 价格表**（`FALLBACK_PRICE`），覆盖
 - 同 `/agents` 页（另一种视图）
 - 列表 + 编辑
 
-##### Sandbox Scopes（重要安全功能）
+##### Sandbox（两层独立的权限系统）
+
+> **重要**：Corey 沙箱和 Hermes 工具权限**是两个独立的系统**，分别管不同事情。这个 section 把两者并排展示，避免混淆。
+
+###### 第一层：Corey 文件访问（按路径）
+
+管的是 **Corey 自己的 IPC**：附件上传、知识库扫描、文件选择器、skill_hub_exec 写文件。
+这一层**不管 Hermes shell 工具**——你看到 chat 里 agent 跑 `ls ~/Desktop` 即使路径不在白名单也能成功，那是 Hermes 端的事，归下面第二层管。
 
 每个 agent 默认只能访问**白名单路径**：
 
@@ -1093,6 +1168,20 @@ CoreyOS 内置一个**简化的 token 价格表**（`FALLBACK_PRICE`），覆盖
 会话期 grant：
 - agent 请求一次性访问超出 scope 的路径
 - 弹窗征求同意 → 同意后该路径在本会话有效，重启失效
+
+###### 第二层：Hermes 工具权限（按命令模式）
+
+管的是 **Hermes agent 通过 shell / read_file 等内置工具访问系统**时的策略。Hermes 不按路径管，按**命令模式 + LLM 风险判定**：
+
+- **审批模式** — `manual` / `auto` / `yolo`
+  - 🟢 **manual**（推荐）：危险命令弹用户审批
+  - 🟡 **auto**：辅助 LLM 判断，只对真正高危才弹窗
+  - 🔴 **yolo**：完全放行（仅沙箱环境用）
+- **审批超时**（默认 60 秒）
+- **Cron 任务遇危险命令**：deny / ask / allow（cron 没有用户在场，默认 deny 最稳）
+- **永久允许的命令模式**：glob-ish（`git status` / `npm install` / `ls *`），匹配中的免审批
+
+这些设置**直接写 `~/.hermes/config.yaml`**，跟其他 Hermes GUI / CLI 共享，下次工具调用立即生效（不需要重启 Hermes gateway）。
 
 ##### Routing Rules
 

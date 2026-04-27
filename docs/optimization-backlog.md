@@ -55,6 +55,30 @@ Each item is tagged P0/P1/P2. Items are done in order; CI must be green before m
 **Files**: `src-tauri/src/workflow/engine/mod.rs`, `src-tauri/src/db/{migrations.rs,workflows.rs,mod.rs}`, `src-tauri/src/ipc/workflow/mod.rs`, `src-tauri/src/state.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/mcp_server/tools.rs`, `src-tauri/src/ipc/hermes_memory.rs`, `src/features/workflow/{index.tsx,History.tsx,Editor.tsx,InputsEditor.tsx,PropertyPanel.tsx}`, `src/features/settings/sections/MemorySection.tsx`, `src/lib/ipc/{runtime.ts,hermes-config.ts}`, `src/locales/{zh,en}.json`.
 **Status**: ✅ Done — 13 new unit tests (engine hooks ×5, db round-trip ×5, log-parsing ×3); auto-resume verified end-to-end with hot kill.
 
+### P0.6 Hermes-as-shared-backend polish
+
+**Problem**: Several misalignments between Corey's UI and Hermes's actual model surfaced post-P0.5:
+- Sidebar `/agents` lived in primary nav even though the AgentSwitcher was hidden after the Hermes-as-default pivot.
+- `Settings → Sandbox` only managed Corey's own IPC paths. Users assumed it also restricted Hermes shell tools and reported "sandbox failed" when `ls ~/Desktop` succeeded — Hermes's command-pattern approval policy was hidden in `~/.hermes/config.yaml`.
+- Compare picker pulled from the active adapter's `/v1/models` (= just `hermes-agent` after Hermes-as-default), making cross-model compare impossible.
+- Hermes legacy `~/.hermes/sessions/*.jsonl` accumulated indefinitely with no UI handle. `state.db` rewrite + co-existing JSON sidecar = 3 stores, none of which Corey owned.
+- No version compatibility signal: a future Hermes minor would silently break config-yaml writes, OpenClaw-style.
+- No onboarding signal for "I copy-pasted `pip install` and it failed" — Python / pip mismatch is the #1 first-run blocker.
+- "Hermes binary bundle" code path (resolve-bundled lookups, `fetch-hermes-binary.mjs`, `binaries/*` resource) was a 260-line ghost — Hermes is Python and upstream releases ship source-only, so the bundle was always empty.
+
+**Fix**:
+1. **Nav cleanup** — `/agents` moved from primary to More group; AgentSwitcher comment-deleted from Topbar.
+2. **`Settings → Sandbox` second section: Hermes 工具权限** — new `HermesToolPermissionsSection` writes `approvals.mode` / `approvals.timeout` / `approvals.cron_mode` / `command_allowlist` straight into `~/.hermes/config.yaml`. Backend: `HermesSecuritySection`, `extract_security`, `write_security`, IPC `hermes_config_write_security`.
+3. **Compare → LLM Profile picker** — synthetic `profile:<id>` ModelInfo so existing chip / lane testids line up; chatStream routes through `hermes:profile:<id>` adapter. Empty-state guides users to Settings → Models when no profile exists.
+4. **Hermes session disk panel** — backend `hermes_session_usage` + `hermes_session_cleanup` IPCs scan `~/.hermes/sessions/` and remove `session_*` files older than N days (preserving `sessions.json` index). UI panel in MemorySection shows file count / total bytes / oldest file age + one-click 30-day cleanup.
+5. **Version compatibility banner** — `HermesCompatibility::{Supported, Untested, TooOld, Unknown}` enum from version-string parse; `HERMES_MIN_SUPPORTED = (0, 10)`, `HERMES_MAX_TESTED = (0, 10)`. Home page renders red ("too old") / yellow ("untested") banner accordingly.
+6. **Install preflight** — `hermes_install_preflight` IPC checks Python ≥ 3.11 + pip via `python3 -m pip --version`. NotInstalledCard auto-runs it on mount, replacing the generic "copy and run" hint with precise "缺 Python 3.11+" / "缺 pip" guidance.
+7. **Drop ghost binary-bundle path** — deleted `scripts/fetch-hermes-binary.mjs`, `src-tauri/binaries/`, `tauri.conf.json: resources["binaries/*"]`, `release-windows.yml` fetch step, and the bundled-lookup tier of `resolve_hermes_binary`. -260 lines that always no-op'd anyway.
+8. **Cancel button actually visible** — `workflow_run_cancel` IPC now flips `RunStatus::Cancelled` immediately regardless of current state; `step_end_hook` reads the cancel flag to keep the snap published to the in-memory map / SQLite consistent. Earlier behaviour: Stop click looked unresponsive because the in-flight 30s `chat_stream` finished before the engine reached its next `should_cancel` check.
+
+**Files**: `src-tauri/src/hermes_config/{mod.rs,gateway.rs}`, `src-tauri/src/ipc/{hermes_config.rs,hermes_memory.rs,workflow/mod.rs}`, `src-tauri/src/lib.rs`, `src-tauri/src/mcp_server/tools.rs`, `src/app/nav-config.ts`, `src/features/settings/sections/{HermesToolPermissionsSection.tsx,MemorySection.tsx}`, `src/features/settings/index.tsx`, `src/features/compare/index.tsx`, `src/features/home/HermesInstallCard.tsx`, `src/features/help/manual.zh.md`, `src/lib/ipc/hermes-config.ts`, `e2e/{compare.spec.ts,sandbox-scopes.spec.ts,logs.spec.ts,fixtures/tauri-mock.ts}`, `src/locales/{zh,en}.json`.
+**Status**: ✅ Done — 7 new unit tests (Python/Hermes version parsing × 5, install_preflight × 2); CI 5/5 green.
+
 ---
 
 ## P1 — Quality improvements (do next)
