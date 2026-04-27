@@ -1,0 +1,318 @@
+id: ecommerce-promotion-approval
+name: 电商促销审批与上下架
+description: 营销同事提报促销 → 大额折扣需经理审批 → 通过后上架 → 到期下架并出具 JSON 审计报告。展示 workflow 的四大差异化：schema-lock 输出 / 人工审批门 / 完整 audit / 严格步骤顺序。
+version: 1
+trigger:
+  type: manual
+inputs:
+- name: campaign_name
+  label: 活动名称
+  type: string
+  default: 春季限时促销 2026Q2
+  required: true
+  options: null
+- name: sku_ids
+  label: 参与商品 SKU（逗号分隔）
+  type: string
+  default: SKU-1001,SKU-1002,SKU-1015
+  required: true
+  options: null
+- name: discount_rate
+  label: 折扣率 (0..1，例如 0.25 表示 25% off)
+  type: string
+  default: '0.25'
+  required: true
+  options: null
+- name: promo_start_at
+  label: 上架时间（ISO 8601）
+  type: string
+  default: '2026-05-01T00:00:00+08:00'
+  required: true
+  options: null
+- name: promo_end_at
+  label: 下架时间（ISO 8601）
+  type: string
+  default: '2026-05-07T23:59:59+08:00'
+  required: true
+  options: null
+- name: requested_by
+  label: 申请人
+  type: string
+  default: marketing@example.com
+  required: true
+  options: null
+steps:
+
+# Step 1：校验输入。LLM 检查 SKU 形态、折扣范围、时间序，
+# 输出严格 JSON：{ valid: bool, errors: string[], parsed: {…} }。
+# 后续步骤通过 {{validate.output}} 引用，schema-lock 是 demo 的核心
+# 卖点之一。
+- id: validate
+  name: 校验输入
+  type: agent
+  after: []
+  agent_id: hermes-default
+  prompt: |
+    你是电商促销审批系统的输入校验器。检查以下字段并输出严格 JSON
+    （不要 markdown 包裹、不要 ``` 代码块）：
+
+    输入：
+      campaign_name = "{{inputs.campaign_name}}"
+      sku_ids       = "{{inputs.sku_ids}}"
+      discount_rate = "{{inputs.discount_rate}}"
+      promo_start_at = "{{inputs.promo_start_at}}"
+      promo_end_at   = "{{inputs.promo_end_at}}"
+      requested_by  = "{{inputs.requested_by}}"
+
+    校验规则：
+      1. campaign_name 非空
+      2. sku_ids 至少 1 个、用 "," 分隔、每个匹配 ^SKU-\d{4,}$
+      3. discount_rate 是 0..1 之间的小数
+      4. promo_start_at < promo_end_at（ISO 8601）
+      5. requested_by 看着像 email
+
+    输出 JSON 结构（必须严格匹配）：
+    {
+      "valid": <bool>,
+      "errors": [<string>, …],            // valid=false 时必填，每条 1 句
+      "parsed": {
+        "campaign_name": <string>,
+        "sku_ids": [<string>, …],
+        "discount_pct": <number>,         // 折扣率 × 100
+        "promo_start_at": <string>,
+        "promo_end_at": <string>,
+        "requested_by": <string>,
+        "duration_hours": <number>,        // (promo_end - promo_start) / 3600
+        "high_discount": <bool>            // discount_rate > 0.30 即触发审批
+      }
+    }
+  skills: null
+  model: null
+  tool_name: null
+  tool_args: null
+  branches: null
+  conditions: null
+  max_iterations: null
+  body: null
+  exit_condition: null
+  after_done: null
+  timeout_minutes: null
+  approval_message: null
+  output_format: json
+  browser_profile: null
+
+# Step 2：审批门。无条件出现 — 但 approval_message 让审批人能看清楚
+# 是不是高折扣需要严格审；低折扣也走流程留痕，符合 audit 诉求。
+# 审批 step 是 workflow 真正的差异化能力（Hermes agent loop 没有
+# native pause-for-human-action 概念）。
+- id: manager_approval
+  name: 经理审批
+  type: approval
+  after:
+  - validate
+  agent_id: null
+  prompt: null
+  skills: null
+  model: null
+  tool_name: null
+  tool_args: null
+  branches: null
+  conditions: null
+  max_iterations: null
+  body: null
+  exit_condition: null
+  after_done: null
+  timeout_minutes: 4320
+  approval_message: |
+    请审批以下促销活动。
+
+    活动：{{inputs.campaign_name}}
+    SKU：{{inputs.sku_ids}}
+    折扣率：{{inputs.discount_rate}}（{{validate.output.parsed.discount_pct}}% off）
+    起止：{{inputs.promo_start_at}} ~ {{inputs.promo_end_at}}
+    申请人：{{inputs.requested_by}}
+
+    校验结果：{{validate.output}}
+
+    ⚠️ 折扣 > 30% 视为大额，请仔细核对货源 / 库存 / 财务影响。
+    不通过将中止整个流程，已发出的通知不会撤回。
+  output_format: null
+  browser_profile: null
+
+# Step 3：上架。生产环境会调电商平台 API；demo 里让 LLM 假装调用、
+# 输出严格 JSON 上架结果，让用户能跑通完整流程看到产物。
+- id: apply_promotion
+  name: 上架（执行促销）
+  type: agent
+  after:
+  - manager_approval
+  agent_id: hermes-default
+  prompt: |
+    审批已通过。现在「执行」促销上架（demo 环境模拟，输出严格 JSON）。
+
+    活动信息：{{validate.output.parsed}}
+    审批信息：{{manager_approval.output}}
+
+    输出 JSON（严格匹配）：
+    {
+      "step": "apply_promotion",
+      "executed_at": <ISO 8601 timestamp 字符串>,
+      "platform_calls": [
+        { "sku": "SKU-…", "platform": "main", "status": "ok", "new_price": <number>, "original_price": <number> }
+      ],
+      "summary": {
+        "total_skus": <number>,
+        "succeeded": <number>,
+        "failed": <number>
+      }
+    }
+
+    生产环境替换 prompt 为真实 API 调用（如 tool_name=POST /api/promotions），
+    本步保留作为骨架。
+  skills: null
+  model: null
+  tool_name: null
+  tool_args: null
+  branches: null
+  conditions: null
+  max_iterations: null
+  body: null
+  exit_condition: null
+  after_done: null
+  timeout_minutes: null
+  approval_message: null
+  output_format: json
+  browser_profile: null
+
+# Step 4：到期下架审批门。设计上是「促销结束时回来 approve 一下，
+# 触发下架」。在没有 cron-trigger-mid-workflow 的版本，这是把
+# 「等到 X 时间」表达成审批暂停的最干净方式。审批人只负责确认时间到
+# 了 + 同意正常下架（拒绝可用于异常下架，比如紧急召回）。
+- id: end_of_promo_signal
+  name: 到期下架确认
+  type: approval
+  after:
+  - apply_promotion
+  agent_id: null
+  prompt: null
+  skills: null
+  model: null
+  tool_name: null
+  tool_args: null
+  branches: null
+  conditions: null
+  max_iterations: null
+  body: null
+  exit_condition: null
+  after_done: null
+  timeout_minutes: 43200
+  approval_message: |
+    促销「{{inputs.campaign_name}}」预计于 {{inputs.promo_end_at}} 结束。
+
+    点「同意」表示到期正常下架；
+    点「拒绝」表示异常下架（如违规 / 货源问题），将记录在审计报告里。
+  output_format: null
+  browser_profile: null
+
+# Step 5：下架 + 恢复原价。Demo 模拟。
+- id: revert_promotion
+  name: 下架（恢复原价）
+  type: agent
+  after:
+  - end_of_promo_signal
+  agent_id: hermes-default
+  prompt: |
+    促销结束确认已完成。现在执行下架并恢复原价（demo 环境模拟）。
+
+    上架记录：{{apply_promotion.output}}
+    下架信号：{{end_of_promo_signal.output}}
+
+    输出 JSON（严格匹配）：
+    {
+      "step": "revert_promotion",
+      "reverted_at": <ISO 8601 timestamp>,
+      "platform_calls": [
+        { "sku": "SKU-…", "platform": "main", "status": "ok", "restored_price": <number> }
+      ],
+      "summary": {
+        "total_skus": <number>,
+        "succeeded": <number>,
+        "failed": <number>
+      }
+    }
+  skills: null
+  model: null
+  tool_name: null
+  tool_args: null
+  branches: null
+  conditions: null
+  max_iterations: null
+  body: null
+  exit_condition: null
+  after_done: null
+  timeout_minutes: null
+  approval_message: null
+  output_format: json
+  browser_profile: null
+
+# Step 6：输出最终审计报告。这是 schema-lock 的最大体现 —
+# 整个 run 的全部输入、审批轨迹、执行结果都收敛到一份格式严格的
+# JSON 文档，运营/财务/合规可以直接用代码消费。
+- id: audit_report
+  name: 生成审计报告
+  type: agent
+  after:
+  - revert_promotion
+  agent_id: hermes-default
+  prompt: |
+    根据以下整个 run 的轨迹，生成最终审计报告（严格 JSON，不带 markdown）：
+
+    输入：{{validate.output.parsed}}
+    审批：{{manager_approval.output}}
+    上架：{{apply_promotion.output}}
+    到期信号：{{end_of_promo_signal.output}}
+    下架：{{revert_promotion.output}}
+
+    输出 schema：
+    {
+      "campaign_id": <string>,             // 用 campaign_name 派生 slug，如 "spring-2026q2"
+      "campaign_name": <string>,
+      "approved_by": <string>,             // manager_approval 里的审批人；未知填 "unknown"
+      "approved_at": <ISO 8601>,
+      "skus_affected": <number>,
+      "discount_pct": <number>,
+      "promo_window": {
+        "start": <ISO 8601>,
+        "end":   <ISO 8601>,
+        "duration_hours": <number>
+      },
+      "execution": {
+        "applied_at":  <ISO 8601>,
+        "reverted_at": <ISO 8601>,
+        "succeeded_skus": <number>,
+        "failed_skus":    <number>
+      },
+      "audit_log": [
+        { "step": "validate",          "at": <ISO 8601>, "status": "ok" },
+        { "step": "manager_approval",  "at": <ISO 8601>, "status": "approved"|"rejected" },
+        { "step": "apply_promotion",   "at": <ISO 8601>, "status": "ok"|"partial" },
+        { "step": "end_of_promo_signal","at": <ISO 8601>, "status": "approved"|"rejected" },
+        { "step": "revert_promotion",  "at": <ISO 8601>, "status": "ok"|"partial" }
+      ]
+    }
+
+    这份 JSON 是合规 / 财务对账的源头，请保持字段名一致。
+  skills: null
+  model: null
+  tool_name: null
+  tool_args: null
+  branches: null
+  conditions: null
+  max_iterations: null
+  body: null
+  exit_condition: null
+  after_done: null
+  timeout_minutes: null
+  approval_message: null
+  output_format: json
+  browser_profile: null
