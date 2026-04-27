@@ -32,6 +32,7 @@ import { HermesInstancesSection } from './HermesInstancesSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
 import { ContextSection } from './sections/ContextSection';
 import { LicenseSection } from './sections/LicenseSection';
+import { MemorySection } from './sections/MemorySection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
 import { StorageSection } from './sections/StorageSection';
@@ -67,6 +68,7 @@ const SETTINGS_ANCHORS = [
   { id: 'settings-gateway', labelKey: 'settings.gateway.title' },
   { id: 'settings-model', labelKey: 'settings.model.title' },
   { id: 'settings-context', labelKey: 'settings.context.title' },
+  { id: 'settings-memory', labelKey: 'settings.memory.title' },
   { id: 'settings-routing', labelKey: 'settings.routing_rules.title' },
   { id: 'settings-sandbox', labelKey: 'settings.sandbox.title' },
   { id: 'settings-scopes', labelKey: 'settings.sandbox_scopes.title' },
@@ -333,6 +335,13 @@ export function SettingsRoute() {
               user wants to tune after picking a model is "how does the
               context get managed". */}
           <ContextSection />
+
+          {/* v9 — Memory provider status + USER.md editor. Sits next to
+              ContextSection because they're conceptually a pair: one
+              shrinks the active context, the other persists the
+              long-term memory across sessions. Both are powered by
+              Hermes infrastructure that Corey doesn't own. */}
+          <MemorySection />
 
           {/* T6.4 — routing rules. Sits next to Hermes instances since
               routing most commonly picks between them. */}

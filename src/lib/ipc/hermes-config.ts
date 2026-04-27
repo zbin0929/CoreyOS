@@ -188,6 +188,63 @@ export function hermesConfigWriteCompression(
   return invoke<HermesConfigView>('hermes_config_write_compression', { compression });
 }
 
+// ───────────────────────── Memory provider state ─────────────────────────
+
+/**
+ * Top-N category histogram entry for the holographic memory store.
+ * Populated by `SELECT category, count(*) FROM facts GROUP BY category`.
+ */
+export interface CategoryCount {
+  category: string;
+  count: number;
+}
+
+/**
+ * Snapshot of the Hermes memory subsystem.
+ *
+ * Surfaces enough state to render the Settings → Memory panel without
+ * a second IPC round-trip:
+ *   - which provider is active (or `null` for built-in only)
+ *   - the holographic plugin's two non-default knobs
+ *     (`auto_extract`, `temporal_decay_half_life`)
+ *   - the SQLite DB stats (fact count, recent additions, category mix)
+ *   - the current `USER.md` content and file path
+ *
+ * Counts are nullable (not 0) so the UI can distinguish "DB doesn't
+ * exist yet" from "DB exists but contains zero facts".
+ */
+export interface HermesMemoryStatus {
+  provider: string | null;
+  auto_extract: boolean | null;
+  temporal_decay_days: number | null;
+  db_path: string;
+  db_present: boolean;
+  fact_count: number | null;
+  recent_fact_count: number | null;
+  top_categories: CategoryCount[];
+  user_md_path: string;
+  user_md_content: string;
+  user_md_present: boolean;
+}
+
+/** One-shot snapshot of memory subsystem state. */
+export function hermesMemoryStatus(): Promise<HermesMemoryStatus> {
+  return invoke<HermesMemoryStatus>('hermes_memory_status');
+}
+
+/**
+ * Atomically write `~/.hermes/memories/USER.md`. Returns the refreshed
+ * status so the UI can confirm the new content stuck.
+ *
+ * USER.md is the user-facing half of Hermes' built-in memory pair
+ * (the other half is MEMORY.md, which the agent itself writes; we
+ * deliberately don't expose that one for human edit because it'd
+ * encourage tampering with the agent's own learnings).
+ */
+export function hermesUserMdWrite(content: string): Promise<HermesMemoryStatus> {
+  return invoke<HermesMemoryStatus>('hermes_user_md_write', { content });
+}
+
 /**
  * Upsert or delete a `*_API_KEY` entry in `~/.hermes/.env`. Pass `null` or
  * an empty string to remove. Only `*_API_KEY` suffixes are permitted
