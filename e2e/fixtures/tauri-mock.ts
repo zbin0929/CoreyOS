@@ -1243,6 +1243,26 @@ export const tauriMockInitScript = /* js */ `
       case 'budget_delete':
         state.budgets = state.budgets.filter((b) => b.id !== args.id);
         return;
+
+      // T9 — License gate. The hydration call lives in Providers and
+      // every page mounts it; without these handlers the gate would
+      // see an "invalid" verdict and overlay the activation modal,
+      // blocking every other E2E selector. Returning \`dev_mode: true\`
+      // keeps the (production) gate component hidden entirely while
+      // preserving its dismissable banner for the few specs that
+      // touch the Settings → License section.
+      case 'license_status':
+      case 'license_install':
+        return { verdict: { kind: 'valid', payload: {
+          user: 'e2e@test',
+          issued: new Date().toISOString(),
+          features: [],
+          machine_id: '00000000-0000-0000-0000-000000000000',
+        } }, dev_mode: true };
+      case 'license_clear':
+        return null;
+      case 'license_machine_id':
+        return '00000000-0000-0000-0000-000000000000';
     }
 
     // Anything we don't recognise is a real bug in the test — surface it loudly.
