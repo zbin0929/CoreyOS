@@ -108,6 +108,8 @@ pub fn run() {
             ipc::hermes_memory::hermes_memory_status,
             ipc::hermes_memory::hermes_user_md_write,
             ipc::hermes_memory::hermes_compression_stats,
+            ipc::hermes_memory::hermes_session_usage,
+            ipc::hermes_memory::hermes_session_cleanup,
             ipc::hermes_config::hermes_gateway_restart,
             ipc::hermes_config::hermes_gateway_start,
             ipc::hermes_config::hermes_detect,

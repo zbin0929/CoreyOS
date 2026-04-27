@@ -15,10 +15,13 @@ import { cn } from '@/lib/cn';
 import {
   hermesCompressionStats,
   hermesMemoryStatus,
+  hermesSessionCleanup,
+  hermesSessionUsage,
   hermesUserMdWrite,
   ipcErrorMessage,
   type HermesCompressionStats,
   type HermesMemoryStatus,
+  type HermesSessionUsage,
 } from '@/lib/ipc';
 
 import { Section } from '../shared';
@@ -61,22 +64,27 @@ export function MemorySection() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<HermesMemoryStatus | null>(null);
   const [compression, setCompression] = useState<HermesCompressionStats | null>(null);
+  const [sessionUsage, setSessionUsage] = useState<HermesSessionUsage | null>(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'idle' });
 
   const refresh = async () => {
     try {
-      const [s, c] = await Promise.all([
+      const [s, c, u] = await Promise.all([
         hermesMemoryStatus(),
         // Compression stats are best-effort — log might not exist
         // (fresh install) or be unreadable (permissions). Failure
         // shouldn't block the rest of the page from rendering.
         hermesCompressionStats().catch(() => null),
+        hermesSessionUsage().catch(() => null),
       ]);
       setStatus(s);
       setDraft(s.user_md_content);
       setCompression(c);
+      setSessionUsage(u);
       setError(null);
     } catch (e) {
       setError(ipcErrorMessage(e));
@@ -247,6 +255,86 @@ export function MemorySection() {
         </div>
       )}
 
+      {/* Hermes session disk usage. Hermes still writes legacy
+          `session_*.json` / `.jsonl` files alongside its newer
+          state.db backend; they pile up indefinitely and Corey
+          deliberately doesn't auto-GC (it's not our data). This
+          panel surfaces the count + total size + oldest-file age
+          and offers an opt-in cleanup. The 30-day default is
+          conservative enough that anyone running an active
+          workflow keeps everything they care about. */}
+      {sessionUsage && sessionUsage.present && sessionUsage.file_count > 0 && (
+        <div className="rounded-md border border-border bg-bg-elev-1 p-3 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Icon icon={Sparkles} size="sm" className="text-gold-500" />
+            <div className="text-sm font-medium text-fg">
+              {t('settings.memory.session_disk_title', { defaultValue: 'Hermes 历史会话' })}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Stat
+              label={t('settings.memory.session_files', { defaultValue: '文件数' })}
+              value={String(sessionUsage.file_count)}
+            />
+            <Stat
+              label={t('settings.memory.session_size', { defaultValue: '总占用' })}
+              value={formatBytes(sessionUsage.total_bytes)}
+            />
+            <Stat
+              label={t('settings.memory.session_oldest', { defaultValue: '最旧' })}
+              value={formatAge(sessionUsage.oldest_mtime_ms)}
+            />
+          </div>
+          <p className="text-[11px] text-fg-subtle">
+            {t('settings.memory.session_disk_hint', {
+              defaultValue:
+                '这些是 Hermes 自己的会话文件（不归 Corey 管理）。一键清理 30 天前的可释放空间，但不会影响最近会话或 Hermes 的 state.db。',
+            })}
+          </p>
+          <div className="flex items-center justify-between gap-2">
+            <code className="text-[10px] text-fg-subtle font-mono break-all">
+              {sessionUsage.sessions_dir}
+            </code>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={cleanupBusy}
+              onClick={async () => {
+                if (cleanupBusy) return;
+                setCleanupBusy(true);
+                setCleanupResult(null);
+                try {
+                  const removed = await hermesSessionCleanup(30);
+                  setCleanupResult(
+                    t('settings.memory.session_cleanup_done', {
+                      defaultValue: '已清理 {{n}} 个文件',
+                      n: removed,
+                    }),
+                  );
+                  // Refresh the usage card so users see the new
+                  // smaller numbers without manual re-open.
+                  await refresh();
+                } catch (e) {
+                  setCleanupResult(ipcErrorMessage(e));
+                } finally {
+                  setCleanupBusy(false);
+                }
+              }}
+            >
+              {cleanupBusy ? (
+                <Icon icon={Loader2} size="xs" className="animate-spin" />
+              ) : null}
+              {t('settings.memory.session_cleanup', {
+                defaultValue: '清理 30 天前的会话',
+              })}
+            </Button>
+          </div>
+          {cleanupResult && (
+            <div className="text-[11px] text-fg-subtle">{cleanupResult}</div>
+          )}
+        </div>
+      )}
+
       {/* USER.md editor */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
@@ -368,4 +456,28 @@ function CategoryHistogram({
       </div>
     </div>
   );
+}
+
+/** 1234567 → "1.2 MB". Compact unit ladder, two sig figs. Used by
+ *  the session-disk panel; intentionally lighter than a generic
+ *  formatBytes utility because we only need MB/KB resolution and
+ *  want zero deps. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+/** Unix-ms timestamp → human age ("3d", "2w", "5mo"). 0 = no
+ *  files, surfaced as a dash. We collapse to whole units because
+ *  precision below "this is old enough to delete" is noise. */
+function formatAge(ms: number): string {
+  if (ms <= 0) return '—';
+  const secs = (Date.now() - ms) / 1000;
+  if (secs < 86400) return '<1d';
+  const days = Math.floor(secs / 86400);
+  if (days < 14) return `${days}d`;
+  if (days < 60) return `${Math.floor(days / 7)}w`;
+  return `${Math.floor(days / 30)}mo`;
 }

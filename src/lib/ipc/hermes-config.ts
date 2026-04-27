@@ -316,6 +316,40 @@ export function hermesCompressionStats(): Promise<HermesCompressionStats> {
 }
 
 /**
+ * Disk-usage report for `~/.hermes/sessions/` — Hermes's legacy
+ * per-session JSON/JSONL backend (the newer `state.db` is the
+ * source of truth, but Hermes still writes these for compatibility,
+ * and they pile up). Surfaced in Settings → Memory so users see
+ * what Corey's NOT cleaning.
+ */
+export interface HermesSessionUsage {
+  file_count: number;
+  total_bytes: number;
+  /** Unix ms of the oldest file's mtime, 0 when empty. */
+  oldest_mtime_ms: number;
+  sessions_dir: string;
+  /** `true` if the directory existed; `false` on fresh installs
+   *  where Hermes has never run. */
+  present: boolean;
+}
+
+export function hermesSessionUsage(): Promise<HermesSessionUsage> {
+  return invoke<HermesSessionUsage>('hermes_session_usage');
+}
+
+/**
+ * Delete every `session_*` file older than the given threshold
+ * (in days). Returns the number of files actually removed.
+ *
+ * Conservative on the backend side: only files whose name starts
+ * with `session_` are considered, and `sessions.json` (Hermes's
+ * own index sidecar) is preserved regardless.
+ */
+export function hermesSessionCleanup(olderThanDays: number): Promise<number> {
+  return invoke<number>('hermes_session_cleanup', { olderThanDays });
+}
+
+/**
  * Upsert or delete a `*_API_KEY` entry in `~/.hermes/.env`. Pass `null` or
  * an empty string to remove. Only `*_API_KEY` suffixes are permitted
  * server-side. Returns the refreshed config view.

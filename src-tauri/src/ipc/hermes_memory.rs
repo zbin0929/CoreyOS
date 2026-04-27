@@ -352,6 +352,156 @@ fn read_compression_stats() -> IpcResult<CompressionStats> {
     })
 }
 
+// ───────────────────────── Session disk usage ─────────────────────────
+//
+// `~/.hermes/sessions/` accumulates one JSON file per agent session
+// (Hermes' own legacy backend, kept alongside the newer state.db
+// for compatibility). Corey doesn't manage these files — they're
+// owned by Hermes — but we surface the count + total size in the
+// Memory settings panel so users can spot-check disk usage and
+// trigger an opt-in cleanup when the directory has grown unwieldy.
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct HermesSessionUsage {
+    /// Number of `session_*.json` (or `.jsonl`) files present.
+    pub file_count: u32,
+    /// Total bytes summed across all session files.
+    pub total_bytes: u64,
+    /// Earliest mtime (unix ms) seen, or 0 when empty. Lets the UI
+    /// answer "how old is the oldest session?" without a second
+    /// IPC.
+    pub oldest_mtime_ms: i64,
+    /// Absolute path scanned. Same reassurance as compression_stats.
+    pub sessions_dir: String,
+    /// `true` if the directory existed.
+    pub present: bool,
+}
+
+#[tauri::command]
+pub async fn hermes_session_usage() -> IpcResult<HermesSessionUsage> {
+    tokio::task::spawn_blocking(read_session_usage)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("hermes_session_usage join: {e}"),
+        })?
+}
+
+fn read_session_usage() -> IpcResult<HermesSessionUsage> {
+    let dir = match hermes_config::hermes_dir() {
+        Ok(d) => d.join("sessions"),
+        Err(_) => return Ok(HermesSessionUsage::default()),
+    };
+    let dir_str = dir.to_string_lossy().into_owned();
+    let entries = match fs::read_dir(&dir) {
+        Ok(it) => it,
+        Err(_) => {
+            return Ok(HermesSessionUsage {
+                sessions_dir: dir_str,
+                present: false,
+                ..HermesSessionUsage::default()
+            });
+        }
+    };
+
+    let mut count: u32 = 0;
+    let mut bytes: u64 = 0;
+    let mut oldest: i64 = i64::MAX;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        // Two formats coexist: `session_<id>.json` (Hermes index
+        // sidecar) and `session_<ts>_<id>.jsonl` (per-session
+        // transcript). We count both — they're all noise the user
+        // might want to GC.
+        if !name.starts_with("session_") {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        count = count.saturating_add(1);
+        bytes = bytes.saturating_add(meta.len());
+        if let Ok(modified) = meta.modified() {
+            if let Ok(dur) = modified.duration_since(std::time::UNIX_EPOCH) {
+                let ms = dur.as_millis() as i64;
+                if ms < oldest {
+                    oldest = ms;
+                }
+            }
+        }
+    }
+    Ok(HermesSessionUsage {
+        file_count: count,
+        total_bytes: bytes,
+        oldest_mtime_ms: if count == 0 { 0 } else { oldest },
+        sessions_dir: dir_str,
+        present: true,
+    })
+}
+
+/// Delete every `session_*` file in `~/.hermes/sessions/` whose
+/// mtime is older than `older_than_days`. Returns the number of
+/// files actually removed.
+///
+/// Conservative: we only touch files matching the `session_`
+/// prefix so a stray user file in the dir isn't hit. We also
+/// preserve `sessions.json` (the index sidecar) — deleting that
+/// would break Hermes's own bookkeeping.
+#[tauri::command]
+pub async fn hermes_session_cleanup(older_than_days: u32) -> IpcResult<u32> {
+    tokio::task::spawn_blocking(move || cleanup_sessions(older_than_days))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("hermes_session_cleanup join: {e}"),
+        })?
+}
+
+fn cleanup_sessions(older_than_days: u32) -> IpcResult<u32> {
+    let dir = hermes_config::hermes_dir()
+        .map_err(|e| IpcError::Internal {
+            message: format!("resolve hermes dir: {e}"),
+        })?
+        .join("sessions");
+    if !dir.exists() {
+        return Ok(0);
+    }
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(
+            (older_than_days as u64) * 24 * 3600,
+        ))
+        .unwrap_or(std::time::UNIX_EPOCH);
+
+    let entries = fs::read_dir(&dir).map_err(|e| IpcError::Internal {
+        message: format!("read sessions dir: {e}"),
+    })?;
+    let mut removed: u32 = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy().into_owned();
+        // sessions.json (no `_` after the stem) is Hermes's own
+        // index — leaving it alone keeps Hermes happy.
+        if !name.starts_with("session_") {
+            continue;
+        }
+        if name == "sessions.json" {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        let Ok(modified) = meta.modified() else { continue };
+        if modified > cutoff {
+            continue;
+        }
+        if fs::remove_file(entry.path()).is_ok() {
+            removed = removed.saturating_add(1);
+        }
+    }
+    Ok(removed)
+}
+
 /// Parse the integer N out of `Compressed: A -> B messages (~N tokens
 /// saved, P%)`. Returns `None` for any other shape. We deliberately
 /// avoid pulling in the `regex` crate — this is one fixed format and
