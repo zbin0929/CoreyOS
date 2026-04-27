@@ -337,7 +337,12 @@ fn migrate_v7_scheduler_to_hermes_json(conn: &Connection) -> rusqlite::Result<()
         Ok(crate::hermes_cron::HermesJob {
             id,
             name: Some(name),
-            schedule: cron_expression,
+            // Legacy `scheduler_jobs.cron_expression` was always a
+            // string; wrap as `Value::String` to match the
+            // post-Hermes-0.10 field type. See `hermes_cron::HermesJob`
+            // doc comment for why the field is `Value` (handles both
+            // legacy string and new `{kind, expr, display}` shapes).
+            schedule: serde_json::Value::String(cron_expression),
             prompt,
             paused: !enabled,
             corey_created_at: Some(created_at),
