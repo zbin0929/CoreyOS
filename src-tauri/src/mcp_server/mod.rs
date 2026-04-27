@@ -123,10 +123,10 @@ struct McpState {
 pub fn start(app: AppHandle) {
     let state = McpState { app };
     let router = Router::new()
-        // MCP discovery probes sometimes hit `GET /` to check liveness
-        // before opening a real JSON-RPC session; reply with a tiny
-        // banner so a curl from the user is self-explanatory.
-        .route("/", get(banner).post(rpc_handler))
+        // GET → 405 for MCP clients (Accept: text/event-stream),
+        //      banner JSON for everyone else. See `handle_get`.
+        // POST → JSON-RPC dispatch.
+        .route("/", get(handle_get).post(rpc_handler))
         .with_state(Arc::new(state));
 
     tauri::async_runtime::spawn(async move {
@@ -348,7 +348,38 @@ fn current_url_matches(expected: &str) -> bool {
     entry.get("url").and_then(|v| v.as_str()) == Some(expected)
 }
 
-async fn banner() -> Json<Value> {
+/// GET handler. Spec-compliant per the Streamable HTTP transport:
+///
+///   - If the client asks for SSE (Accept includes `text/event-stream`,
+///     which the official MCP Python SDK does to maintain a server-
+///     initiated message stream), we MUST either return an actual SSE
+///     stream OR `405 Method Not Allowed`. We don't have any
+///     server-to-client traffic to push, so 405 is the honest answer.
+///     This is the hot fix for the cascading reconnect bug — Hermes'
+///     anyio TaskGroup raised on getting `200 application/json` here
+///     because its SSE parser choked, the whole client Task died, and
+///     Hermes auto-reconnected. With 405 the SDK simply marks this
+///     server as "no server-push support" and keeps the POST channel
+///     alive across the entire process lifetime.
+///
+///   - Otherwise (browser / curl / any non-MCP probe), serve the JSON
+///     banner so a human poking at the URL gets something readable.
+async fn handle_get(headers: HeaderMap) -> Response {
+    let wants_sse = headers
+        .get("accept")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.contains("text/event-stream"))
+        .unwrap_or(false);
+
+    if wants_sse {
+        return (
+            StatusCode::METHOD_NOT_ALLOWED,
+            [("Allow", "POST")],
+            "Server-initiated SSE not supported. Use POST for JSON-RPC.",
+        )
+            .into_response();
+    }
+
     Json(json!({
         "name": "corey-native",
         "protocol": "mcp",
@@ -356,6 +387,22 @@ async fn banner() -> Json<Value> {
         "doc": "POST JSON-RPC 2.0 envelopes to this URL. See \
                 docs/mcp-server.md."
     }))
+    .into_response()
+}
+
+/// Session ID returned from `initialize` and required on subsequent
+/// requests per the Streamable HTTP spec. We use a single static
+/// session for the process — the spec lets us choose the policy, and
+/// keeping a single session means Hermes' client (or any other) only
+/// has to handshake once even across reconnects, instead of paying
+/// the `initialize → notifications/initialized → tools/list` round
+/// every chat completion. Re-using a UUID generated at module init
+/// keeps the value stable for the process lifetime; restarts get a
+/// fresh ID, which matches what the spec calls "session expired".
+static SESSION_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+fn session_id() -> &'static str {
+    SESSION_ID.get_or_init(|| uuid::Uuid::new_v4().to_string())
 }
 
 async fn rpc_handler(
@@ -403,8 +450,17 @@ async fn rpc_handler(
 
     let result = dispatch(&state, &req.method, &req.params).await;
 
+    // For notifications: 202 Accepted, no body, but DO include
+    // session header — the client may be sending its
+    // `notifications/initialized` immediately after `initialize` and
+    // expects the same session.
     if is_notification {
-        return StatusCode::ACCEPTED.into_response();
+        let mut resp = StatusCode::ACCEPTED.into_response();
+        resp.headers_mut().insert(
+            "MCP-Session-Id",
+            session_id().parse().expect("ASCII session id"),
+        );
+        return resp;
     }
 
     let id = req.id.unwrap_or(Value::Null);
@@ -426,11 +482,18 @@ async fn rpc_handler(
             }),
         },
     };
-    // 200 OK with Content-Type: application/json. Spec allows either
-    // application/json or text/event-stream; for non-streaming
-    // responses (which is all we emit today) JSON is the simpler
-    // and equally-valid choice. Clients MUST support both per spec.
-    Json(body).into_response()
+    // 200 OK with Content-Type: application/json + MCP-Session-Id.
+    // Spec: client MUST echo the session id back on every subsequent
+    // request once it sees one in the InitializeResult. By emitting
+    // it on EVERY response (not just initialize) we make sure clients
+    // that miss it on initialize can still pick it up on a later
+    // turn — defensive against quirky clients.
+    let mut resp = Json(body).into_response();
+    resp.headers_mut().insert(
+        "MCP-Session-Id",
+        session_id().parse().expect("ASCII session id"),
+    );
+    resp
 }
 
 /// Streamable HTTP spec security gate. Allows local-context Origins
@@ -465,14 +528,19 @@ async fn dispatch(
     params: &Value,
 ) -> Result<Value, (i32, String)> {
     match method {
+        // Capabilities advertise ONLY what we actually serve. Earlier
+        // draft included `resources: {}` and `prompts: {}` "for forward
+        // compat", but the MCP spec treats key-presence as
+        // capability-supported — so Hermes saw two empty capabilities
+        // and auto-injected 3 phantom client tools (`list_prompts`,
+        // `get_prompt`, `list_resources`) into every chat completion
+        // prompt. Each adds ~100+ tokens for zero user benefit. Drop
+        // them; we'll add `resources`/`prompts` keys back the day we
+        // genuinely implement those features.
         "initialize" => Ok(json!({
             "protocolVersion": "2024-11-05",
             "capabilities": {
                 "tools": {},
-                // Resources / prompts deliberately empty — see module
-                // docstring for why.
-                "resources": {},
-                "prompts": {},
             },
             "serverInfo": {
                 "name": "corey-native",
