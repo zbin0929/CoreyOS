@@ -173,7 +173,7 @@ ARGS=(--user "$USER_ID")
 # off stderr on a warm cache; on a cold cache the user still sees the
 # build line, which is fine.
 TOKEN="$(cargo run --quiet --manifest-path "$REPO_ROOT/src-tauri/Cargo.toml" \
-  --bin mint_license -- "${ARGS[@]}")"
+  --features cli --bin mint_license -- "${ARGS[@]}")"
 
 # Pretty output. Stdout is the token by itself so callers can pipe;
 # stderr gets the "ready to send" decoration so it doesn't pollute
