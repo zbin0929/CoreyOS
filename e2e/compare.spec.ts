@@ -3,10 +3,17 @@ import { test, expect } from './fixtures/test';
 /**
  * Phase 4 · T4.1 — Multi-model compare.
  *
- * The mock fixture ships only one model (`hermes-agent`). These tests
- * seed additional mock models via an `addInitScript` that runs AFTER the
- * tauri-mock IIFE has populated `__CADUCEUS_MOCK__` but BEFORE React
- * mounts the route, so the first `model_list` call returns all lanes.
+ * Compare's picker now reads from `llm_profile_list` (the prior
+ * `model_list` source meant lanes only saw the active adapter's
+ * models, which after the Hermes-as-default pivot meant a single
+ * model — useless for cross-model compare). These tests seed four
+ * synthetic LLM Profiles via `addInitScript`, which runs after the
+ * tauri-mock IIFE has populated `__CADUCEUS_MOCK__` but before
+ * React mounts.
+ *
+ * Each profile maps to a synthetic ModelInfo with id `profile:<p.id>`
+ * inside Compare, so the existing chip / option testids
+ * (`compare-add-option-profile:hermes` etc.) line up.
  */
 
 test.describe('compare', () => {
@@ -14,43 +21,17 @@ test.describe('compare', () => {
     await page.addInitScript(() => {
       const mock = (
         window as unknown as {
-          __CADUCEUS_MOCK__?: { state: { models: unknown[] } };
+          __CADUCEUS_MOCK__?: { state: { llmProfiles: unknown[] } };
         }
       ).__CADUCEUS_MOCK__;
       if (!mock) return;
-      mock.state.models = [
-        {
-          id: 'hermes-agent',
-          provider: 'hermes',
-          display_name: 'Hermes',
-          context_window: 200000,
-          is_default: true,
-          capabilities: { vision: false, tool_use: true, reasoning: true },
-        },
-        {
-          id: 'gpt-4o',
-          provider: 'openai',
-          display_name: 'GPT-4o',
-          context_window: 128000,
-          is_default: false,
-          capabilities: { vision: true, tool_use: true, reasoning: false },
-        },
-        {
-          id: 'claude-sonnet',
-          provider: 'anthropic',
-          display_name: 'Claude Sonnet',
-          context_window: 200000,
-          is_default: false,
-          capabilities: { vision: true, tool_use: true, reasoning: true },
-        },
-        {
-          id: 'gemini-flash',
-          provider: 'google',
-          display_name: 'Gemini Flash',
-          context_window: 1000000,
-          is_default: false,
-          capabilities: { vision: true, tool_use: false, reasoning: false },
-        },
+      // The shape mirrors `LlmProfile` in src-tauri/src/llm_profiles.rs.
+      // Only fields the picker reads are required.
+      mock.state.llmProfiles = [
+        { id: 'hermes', label: 'Hermes', provider: 'hermes', base_url: '', model: 'hermes-agent', vision: false },
+        { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai', base_url: '', model: 'gpt-4o', vision: true },
+        { id: 'claude-sonnet', label: 'Claude Sonnet', provider: 'anthropic', base_url: '', model: 'claude-sonnet', vision: true },
+        { id: 'gemini-flash', label: 'Gemini Flash', provider: 'google', base_url: '', model: 'gemini-flash', vision: true },
       ];
     });
   });
@@ -61,12 +42,14 @@ test.describe('compare', () => {
     await page.goto('/compare');
 
     // Hermes is seeded by default. Add the other three so we have 4 lanes.
-    for (const id of ['gpt-4o', 'claude-sonnet', 'gemini-flash']) {
+    // Compare's picker uses synthetic ids `profile:<p.id>`, so the
+    // testids embed the prefix.
+    for (const id of ['profile:gpt-4o', 'profile:claude-sonnet', 'profile:gemini-flash']) {
       await page.getByTestId('compare-add-model').click();
       await page.getByTestId(`compare-add-option-${id}`).click();
     }
     // Chip for each selected model is visible in the picker.
-    for (const id of ['hermes-agent', 'gpt-4o', 'claude-sonnet', 'gemini-flash']) {
+    for (const id of ['profile:hermes', 'profile:gpt-4o', 'profile:claude-sonnet', 'profile:gemini-flash']) {
       await expect(page.getByTestId(`compare-model-chip-${id}`)).toBeVisible();
     }
 
@@ -75,14 +58,24 @@ test.describe('compare', () => {
 
     // All four lanes finish; each ends with a reply that echoes its
     // own model id (mock behavior added in T4.1).
-    for (const id of ['hermes-agent', 'gpt-4o', 'claude-sonnet', 'gemini-flash']) {
-      const lane = page.getByTestId(`compare-lane-${id}`);
+    // Lane-id ↔ underlying model-name mapping. The lane's testid
+    // uses the synthetic `profile:` id (Compare's source of truth
+    // for selection); the reply echoes the WIRE model name (Hermes
+    // gets `model=<profile.model>` not `<profile.id>` on the IPC).
+    const laneByModel: Array<[string, string]> = [
+      ['profile:hermes', 'hermes-agent'],
+      ['profile:gpt-4o', 'gpt-4o'],
+      ['profile:claude-sonnet', 'claude-sonnet'],
+      ['profile:gemini-flash', 'gemini-flash'],
+    ];
+    for (const [laneId, wireModel] of laneByModel) {
+      const lane = page.getByTestId(`compare-lane-${laneId}`);
       await expect(lane).toBeVisible();
-      await expect(lane.getByText(`[model=${id}]`, { exact: false })).toBeVisible({
+      await expect(lane.getByText(`[model=${wireModel}]`, { exact: false })).toBeVisible({
         timeout: 3000,
       });
-      await expect(page.getByTestId(`compare-lane-latency-${id}`)).toBeVisible();
-      await expect(page.getByTestId(`compare-lane-tokens-${id}`)).toBeVisible();
+      await expect(page.getByTestId(`compare-lane-latency-${laneId}`)).toBeVisible();
+      await expect(page.getByTestId(`compare-lane-tokens-${laneId}`)).toBeVisible();
     }
 
     // Diff footer lights up after ≥2 lanes finish.
@@ -94,7 +87,7 @@ test.describe('compare', () => {
     await page.goto('/compare');
     // Add two more so we have 3 lanes (enough to cancel one + observe the
     // rest). Starting state already has hermes-agent selected.
-    for (const id of ['gpt-4o', 'claude-sonnet']) {
+    for (const id of ['profile:gpt-4o', 'profile:claude-sonnet']) {
       await page.getByTestId('compare-add-model').click();
       await page.getByTestId(`compare-add-option-${id}`).click();
     }
@@ -140,14 +133,14 @@ test.describe('compare', () => {
     await page.getByTestId('compare-run').click();
 
     // Cancel gpt-4o mid-stream. The lane flips to cancelled; others finish.
-    await page.getByTestId('compare-lane-cancel-gpt-4o').click();
-    await expect(page.getByTestId('compare-lane-cancelled-gpt-4o')).toBeVisible();
+    await page.getByTestId('compare-lane-cancel-profile:gpt-4o').click();
+    await expect(page.getByTestId('compare-lane-cancelled-profile:gpt-4o')).toBeVisible();
 
     // The other two lanes still finish (latency pills appear).
-    await expect(page.getByTestId('compare-lane-latency-hermes-agent')).toBeVisible({
+    await expect(page.getByTestId('compare-lane-latency-profile:hermes')).toBeVisible({
       timeout: 3000,
     });
-    await expect(page.getByTestId('compare-lane-latency-claude-sonnet')).toBeVisible({
+    await expect(page.getByTestId('compare-lane-latency-profile:claude-sonnet')).toBeVisible({
       timeout: 3000,
     });
 
@@ -160,19 +153,19 @@ test.describe('compare', () => {
   }) => {
     await page.goto('/compare');
 
-    for (const id of ['gpt-4o', 'claude-sonnet', 'gemini-flash']) {
+    for (const id of ['profile:gpt-4o', 'profile:claude-sonnet', 'profile:gemini-flash']) {
       await page.getByTestId('compare-add-model').click();
       await page.getByTestId(`compare-add-option-${id}`).click();
     }
     // 4 chips, at cap → Add-button disabled.
     await expect(page.getByTestId('compare-add-model')).toBeDisabled();
 
-    // Remove hermes-agent's chip → its chip vanishes.
+    // Remove hermes profile's chip → its chip vanishes.
     await page
-      .getByTestId('compare-model-chip-hermes-agent')
+      .getByTestId('compare-model-chip-profile:hermes')
       .getByRole('button')
       .click();
-    await expect(page.getByTestId('compare-model-chip-hermes-agent')).toHaveCount(0);
+    await expect(page.getByTestId('compare-model-chip-profile:hermes')).toHaveCount(0);
 
     // Now 3 chips → Add button re-enabled.
     await expect(page.getByTestId('compare-add-model')).toBeEnabled();

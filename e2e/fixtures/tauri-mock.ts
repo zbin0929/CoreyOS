@@ -268,6 +268,23 @@ export const tauriMockInitScript = /* js */ `
         provider: 'deepseek',
         base_url: 'https://api.deepseek.com/v1',
       },
+      // Defaults that match the backend extract_compression /
+      // extract_security "all-None" outputs. Without these
+      // sub-objects, the ContextSection / HermesToolPerms
+      // components throw on mount and take the whole Settings
+      // route down with them.
+      compression: {
+        enabled: null,
+        threshold: null,
+        target_ratio: null,
+        protect_last_n: null,
+      },
+      security: {
+        approval_mode: null,
+        approval_timeout_s: null,
+        cron_mode: null,
+        command_allowlist: [],
+      },
       env_keys_present: ['DEEPSEEK_API_KEY'],
     },
     models: [

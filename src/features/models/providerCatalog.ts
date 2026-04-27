@@ -15,7 +15,12 @@ export const PROVIDER_CATALOG: Array<{
     label: 'DeepSeek',
     envKey: 'DEEPSEEK_API_KEY',
     baseUrl: 'https://api.deepseek.com/v1',
-    sampleModels: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-reasoner', 'deepseek-chat'],
+    // Keep `deepseek-reasoner` at index 0 — it's still the most
+    // popular pick and the Models page uses `[0]` as the input
+    // placeholder. Putting v4-* first changed the placeholder
+    // and broke the e2e Models→Logs spec which targets the
+    // input by placeholder regex.
+    sampleModels: ['deepseek-reasoner', 'deepseek-chat', 'deepseek-v4-pro', 'deepseek-v4-flash'],
   },
   {
     slug: 'openai',
