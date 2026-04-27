@@ -64,10 +64,8 @@ pub async fn hermes_config_write_security(
     state: State<'_, AppState>,
 ) -> IpcResult<HermesConfigView> {
     let journal = state.changelog_path.clone();
-    hermes_config::write_security(&security, Some(&journal)).map_err(|e| {
-        IpcError::Internal {
-            message: format!("write hermes security: {e}"),
-        }
+    hermes_config::write_security(&security, Some(&journal)).map_err(|e| IpcError::Internal {
+        message: format!("write hermes security: {e}"),
     })?;
     hermes_config::read_view().map_err(|e| IpcError::Internal {
         message: format!("re-read hermes config: {e}"),

@@ -71,19 +71,17 @@ pub struct HermesCompressionSection {
 /// gives users one screen for both halves of the permission story.
 ///
 /// Field semantics (from `hermes-agent/tools/approval.py`):
-///   - `approval_mode`        "manual" / "auto" / "yolo".
-///                            manual = ask user for risky commands
-///                            auto   = LLM auto-judges; user only
-///                                     sees the catastrophic ones
-///                            yolo   = bypass all approvals (DANGEROUS)
-///   - `approval_timeout_s`   how long to wait before auto-rejecting
-///                            an approval prompt (default 60)
-///   - `cron_mode`            "deny" / "ask" / "allow" — what to do
-///                            when a cron-triggered run hits a risky
-///                            command. Cron has no human at the keyboard,
-///                            so default is "deny"
-///   - `command_allowlist`    glob-ish patterns that skip approval
-///                            entirely (e.g. "git status", "npm install")
+/// - `approval_mode` — "manual" / "auto" / "yolo".
+///   manual = ask user for risky commands.
+///   auto   = LLM auto-judges; user only sees the catastrophic ones.
+///   yolo   = bypass all approvals (DANGEROUS).
+/// - `approval_timeout_s` — wait before auto-rejecting an approval
+///   prompt (default 60).
+/// - `cron_mode` — "deny" / "ask" / "allow"; what to do when a
+///   cron-triggered run hits a risky command. Cron has no human
+///   at the keyboard, so default is "deny".
+/// - `command_allowlist` — glob-ish patterns that skip approval
+///   entirely (e.g. "git status", "npm install").
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HermesSecuritySection {
     #[serde(default)]
@@ -312,10 +310,7 @@ fn extract_security(root: &Value) -> HermesSecuritySection {
 /// `write_compression`: each `Some(_)` overwrites; `None` is
 /// untouched. `command_allowlist` is replaced wholesale (it's a
 /// flat list, partial-update doesn't make sense here).
-pub fn write_security(
-    new: &HermesSecuritySection,
-    journal_path: Option<&Path>,
-) -> io::Result<()> {
+pub fn write_security(new: &HermesSecuritySection, journal_path: Option<&Path>) -> io::Result<()> {
     use std::collections::HashMap;
 
     // approvals.* updates go into one batched yaml write.

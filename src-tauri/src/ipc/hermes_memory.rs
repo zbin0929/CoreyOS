@@ -491,7 +491,9 @@ fn cleanup_sessions(older_than_days: u32) -> IpcResult<u32> {
         if !meta.is_file() {
             continue;
         }
-        let Ok(modified) = meta.modified() else { continue };
+        let Ok(modified) = meta.modified() else {
+            continue;
+        };
         if modified > cutoff {
             continue;
         }
