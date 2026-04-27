@@ -1,0 +1,92 @@
+name: Release (macOS universal)
+
+# Builds a universal-apple-darwin .dmg that runs on both Intel and
+# Apple Silicon Macs. macOS runners on GitHub-hosted Actions are
+# 10× pricier per minute than Linux/Windows, so this workflow is
+# manually-triggered only — bump version + create a draft Release
+# matching the tag, then dispatch this workflow with that tag as
+# `release_tag`.
+#
+# Cost model (private repo, GitHub Pro):
+#   macOS rate: ~$0.08/min × 25min build ≈ $2.00 per run.
+#   3000 Linux-min/mo == 300 macOS-min/mo == ~12 universal builds
+#   before pay-as-you-go kicks in. Plenty for a release every
+#   couple of weeks; we still build locally for day-to-day dev.
+#
+# What this builds:
+#   - Universal `Corey.app` (Intel x86_64 + arm64 fat binary)
+#   - `Corey_<version>_universal.dmg` mounted installer
+#   - Signed updater artifacts (`.zip` + `.sig`) — read by the
+#     Tauri updater plugin from the GitHub Release `latest.json`
+#     endpoint.
+#
+# What this does NOT do:
+#   - Apple Developer ID signing / notarization. Users will see the
+#     Gatekeeper "unidentified developer" prompt on first open and
+#     need to right-click → Open. Buying an Apple Developer
+#     account ($99/yr) + threading the cert through GitHub
+#     Actions secrets would close that gap; we punt that until a
+#     real customer asks.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag to attach the .dmg to (e.g. v0.1.0). Must already exist.'
+        required: true
+        type: string
+
+jobs:
+  build-macos-universal:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      # Universal binary needs both targets installed even when
+      # the host is one of them (the linker has to know about both
+      # ABIs to weave the fat binary).
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: macos-universal
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      # Tauri-action's `args` flag passes the universal target
+      # through to `tauri build`. Output lands at
+      # `src-tauri/target/universal-apple-darwin/release/bundle/`.
+      - name: Build + attach to release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ inputs.release_tag }}
+          releaseName: 'Corey ${{ inputs.release_tag }}'
+          releaseDraft: true
+          prerelease: false
+          args: --target universal-apple-darwin
