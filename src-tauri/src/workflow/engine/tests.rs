@@ -271,11 +271,7 @@ impl StepExecutor for RecordingExecutor {
             progress(cumul);
             self.progress_calls.lock().unwrap().push(cumul.clone());
         }
-        Ok(self
-            .progress_script
-            .last()
-            .cloned()
-            .unwrap_or_default())
+        Ok(self.progress_script.last().cloned().unwrap_or_default())
     }
 }
 
@@ -300,7 +296,15 @@ fn execute_with_hooks_calls_step_end_for_each_transition() {
     let on_progress = |_: &str, _: &str| {};
     let no_cancel = || false;
 
-    execute_with_hooks(&def, &mut run, &mut ctx, &executor, &on_end, &on_progress, &no_cancel);
+    execute_with_hooks(
+        &def,
+        &mut run,
+        &mut ctx,
+        &executor,
+        &on_end,
+        &on_progress,
+        &no_cancel,
+    );
 
     // We expect at least 3 fires: Running flip → Completed flip →
     // final-after-loop flush. More is fine (e.g. an extra fire if
@@ -340,11 +344,23 @@ fn execute_with_hooks_streams_progress_only_for_agent_steps() {
     let on_end = |_: &WorkflowRun| {};
     let no_cancel = || false;
 
-    execute_with_hooks(&def, &mut run, &mut ctx, &executor, &on_end, &on_progress, &no_cancel);
+    execute_with_hooks(
+        &def,
+        &mut run,
+        &mut ctx,
+        &executor,
+        &on_end,
+        &on_progress,
+        &no_cancel,
+    );
 
     let calls = progress_seen.borrow();
     // Three scripted progress emits, all for the only agent step.
-    assert_eq!(calls.len(), 3, "expected one progress call per scripted chunk");
+    assert_eq!(
+        calls.len(),
+        3,
+        "expected one progress call per scripted chunk"
+    );
     assert!(calls.iter().all(|(id, _)| id == "a"));
     assert_eq!(calls[0].1, "He");
     assert_eq!(calls[2].1, "Hello world");
@@ -382,9 +398,21 @@ fn execute_with_hooks_skips_progress_for_tool_step() {
     let on_end = |_: &WorkflowRun| {};
     let no_cancel = || false;
 
-    execute_with_hooks(&def, &mut run, &mut ctx, &executor, &on_end, &on_progress, &no_cancel);
+    execute_with_hooks(
+        &def,
+        &mut run,
+        &mut ctx,
+        &executor,
+        &on_end,
+        &on_progress,
+        &no_cancel,
+    );
 
-    assert_eq!(*progress_calls.borrow(), 0, "tool steps must not fire progress");
+    assert_eq!(
+        *progress_calls.borrow(),
+        0,
+        "tool steps must not fire progress"
+    );
     assert_eq!(run.status, RunStatus::Completed);
 }
 
@@ -418,12 +446,22 @@ fn execute_with_hooks_pauses_on_approval_with_step_end_fire() {
             .get("gate")
             .map(|sr| format!("{:?}", sr.status))
             .unwrap_or_default();
-        end_seen.borrow_mut().push((approval_status, r.status.clone()));
+        end_seen
+            .borrow_mut()
+            .push((approval_status, r.status.clone()));
     };
     let on_progress = |_: &str, _: &str| {};
     let no_cancel = || false;
 
-    execute_with_hooks(&def, &mut run, &mut ctx, &executor, &on_end, &on_progress, &no_cancel);
+    execute_with_hooks(
+        &def,
+        &mut run,
+        &mut ctx,
+        &executor,
+        &on_end,
+        &on_progress,
+        &no_cancel,
+    );
 
     let calls = end_seen.borrow();
     // Last hook fire should reflect the parked state.
@@ -473,7 +511,15 @@ fn execute_with_hooks_cancels_at_step_boundary() {
     };
     let on_progress = |_: &str, _: &str| {};
 
-    execute_with_hooks(&def, &mut run, &mut ctx, &executor, &on_end, &on_progress, &should_cancel);
+    execute_with_hooks(
+        &def,
+        &mut run,
+        &mut ctx,
+        &executor,
+        &on_end,
+        &on_progress,
+        &should_cancel,
+    );
 
     assert_eq!(run.status, RunStatus::Cancelled);
     assert_eq!(run.step_runs["a"].status, StepRunStatus::Completed);

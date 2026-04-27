@@ -643,9 +643,11 @@ pub async fn workflow_approve(
             tracing::error!(error = %e, "workflow_approve: cannot reload def to resume");
             return Ok(true);
         }
-        Err(e) => return Err(IpcError::Internal {
-            message: format!("workflow_approve def load join: {e}"),
-        }),
+        Err(e) => {
+            return Err(IpcError::Internal {
+                message: format!("workflow_approve def load join: {e}"),
+            })
+        }
     };
     let inputs_for_ctx = runs
         .lock()
@@ -663,7 +665,15 @@ pub async fn workflow_approve(
         .entry(run_id.clone())
         .or_insert_with(|| Arc::new(AtomicBool::new(false)))
         .clone();
-    spawn_run_executor(runs.clone(), adapters, db.clone(), def, run_id.clone(), ctx, cancel_flag);
+    spawn_run_executor(
+        runs.clone(),
+        adapters,
+        db.clone(),
+        def,
+        run_id.clone(),
+        ctx,
+        cancel_flag,
+    );
     tracing::info!(run_id = %run_id, "workflow_approve: resume task spawned");
 
     Ok(true)
@@ -679,10 +689,7 @@ pub async fn workflow_approve(
 /// the engine exits. We deliberately don't abort mid-stream because
 /// hermes would still bill for the partial response.
 #[tauri::command]
-pub async fn workflow_run_cancel(
-    state: State<'_, AppState>,
-    run_id: String,
-) -> IpcResult<bool> {
+pub async fn workflow_run_cancel(state: State<'_, AppState>, run_id: String) -> IpcResult<bool> {
     let runs = state.workflow_runs.clone();
     let flags = state.workflow_cancel_flags.clone();
     let db = state.db.clone();
@@ -766,9 +773,10 @@ pub async fn workflow_run_get(
         let Some(db) = db else {
             return Ok(None);
         };
-        db.get_workflow_run(&run_id).map_err(|e| IpcError::Internal {
-            message: format!("get workflow run: {e}"),
-        })
+        db.get_workflow_run(&run_id)
+            .map_err(|e| IpcError::Internal {
+                message: format!("get workflow run: {e}"),
+            })
     })
     .await
     .map_err(|e| IpcError::Internal {
@@ -781,10 +789,7 @@ pub async fn workflow_run_get(
 /// the History view's trash affordance. Also evicts the run from the
 /// in-memory active-runs map so a re-open doesn't surface a ghost.
 #[tauri::command]
-pub async fn workflow_run_delete(
-    state: State<'_, AppState>,
-    run_id: String,
-) -> IpcResult<bool> {
+pub async fn workflow_run_delete(state: State<'_, AppState>, run_id: String) -> IpcResult<bool> {
     let runs = state.workflow_runs.clone();
     let db = state.db.clone();
     tokio::task::spawn_blocking(move || -> IpcResult<()> {
@@ -792,9 +797,10 @@ pub async fn workflow_run_delete(
         // can't briefly resurrect what we're about to delete.
         runs.lock().remove(&run_id);
         if let Some(db) = db {
-            db.delete_workflow_run(&run_id).map_err(|e| IpcError::Internal {
-                message: format!("delete workflow run: {e}"),
-            })?;
+            db.delete_workflow_run(&run_id)
+                .map_err(|e| IpcError::Internal {
+                    message: format!("delete workflow run: {e}"),
+                })?;
         }
         Ok(())
     })

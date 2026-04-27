@@ -428,9 +428,15 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
         let job0 = &v.as_array().unwrap()[0];
         let sched = job0.get("schedule").unwrap();
-        assert!(sched.is_object(), "schedule must round-trip as object, got {sched}");
+        assert!(
+            sched.is_object(),
+            "schedule must round-trip as object, got {sched}"
+        );
         assert_eq!(sched.get("kind").and_then(|v| v.as_str()), Some("cron"));
-        assert_eq!(sched.get("expr").and_then(|v| v.as_str()), Some("0 8 * * *"));
+        assert_eq!(
+            sched.get("expr").and_then(|v| v.as_str()),
+            Some("0 8 * * *")
+        );
     }
 
     #[test]

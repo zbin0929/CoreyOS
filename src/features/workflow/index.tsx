@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
@@ -34,7 +34,13 @@ import {
 import { Sparkles } from 'lucide-react';
 import { WorkflowEditor } from './Editor';
 import { WorkflowGenerateDialog } from './GenerateDialog';
-import { WorkflowHistoryRoute } from './History';
+// History view loaded on-demand. The route is rare (most users
+// don't open it on every visit) and the file is ~400 lines + pulls
+// in `lucide-react` icons not used elsewhere — splitting it out
+// keeps the workflow main chunk under the bundle-size budget.
+const WorkflowHistoryRoute = lazy(() =>
+  import('./History').then((m) => ({ default: m.WorkflowHistoryRoute })),
+);
 
 type Mode =
   | { kind: 'list' }
@@ -367,7 +373,17 @@ export function WorkflowRoute() {
   }
 
   if (mode.kind === 'history') {
-    return <WorkflowHistoryRoute onBack={() => setMode({ kind: 'list' })} />;
+    return (
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center text-fg-subtle">
+            <Icon icon={Loader2} size="md" className="animate-spin" />
+          </div>
+        }
+      >
+        <WorkflowHistoryRoute onBack={() => setMode({ kind: 'list' })} />
+      </Suspense>
+    );
   }
 
   if (mode.kind === 'run' && mode.wf) {

@@ -145,31 +145,29 @@ pub fn start(app: AppHandle) {
         // the cost of a gateway-config drift the user has to live
         // with for that session.
         const PREFERRED_PORT: u16 = 8649;
-        let listener = match tokio::net::TcpListener::bind(SocketAddr::from((
-            [127, 0, 0, 1],
-            PREFERRED_PORT,
-        )))
-        .await
-        {
-            Ok(l) => l,
-            Err(_) => {
-                let fallback: SocketAddr = ([127, 0, 0, 1], 0).into();
-                match tokio::net::TcpListener::bind(fallback).await {
-                    Ok(l) => {
-                        warn!(
-                            preferred = PREFERRED_PORT,
-                            "MCP server: preferred port busy; falling back to random. \
+        let listener =
+            match tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], PREFERRED_PORT)))
+                .await
+            {
+                Ok(l) => l,
+                Err(_) => {
+                    let fallback: SocketAddr = ([127, 0, 0, 1], 0).into();
+                    match tokio::net::TcpListener::bind(fallback).await {
+                        Ok(l) => {
+                            warn!(
+                                preferred = PREFERRED_PORT,
+                                "MCP server: preferred port busy; falling back to random. \
                              Hermes gateway will need a restart for it to see the new URL."
-                        );
-                        l
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "MCP server: bind failed; native bridge disabled");
-                        return;
+                            );
+                            l
+                        }
+                        Err(e) => {
+                            warn!(error = %e, "MCP server: bind failed; native bridge disabled");
+                            return;
+                        }
                     }
                 }
-            }
-        };
+            };
         let bound = match listener.local_addr() {
             Ok(a) => a,
             Err(e) => {
@@ -279,9 +277,7 @@ fn register_with_hermes(port: u16) {
     let entry = serde_json::json!({ "url": url });
     let mut updates: HashMap<String, serde_json::Value> = HashMap::new();
     updates.insert(MCP_NAME.into(), entry);
-    if let Err(e) =
-        crate::hermes_config::write_channel_yaml_fields("mcp_servers", &updates, None)
-    {
+    if let Err(e) = crate::hermes_config::write_channel_yaml_fields("mcp_servers", &updates, None) {
         warn!(
             error = %e,
             "MCP: failed to update ~/.hermes/config.yaml; native bridge \
@@ -522,11 +518,7 @@ fn is_local_origin(origin: &str) -> bool {
 /// JSON-RPC `result`, or `Err((code, message))` to be wrapped in
 /// `error`. JSON-RPC error codes:
 ///   -32601 method not found, -32602 invalid params, -32603 internal.
-async fn dispatch(
-    state: &McpState,
-    method: &str,
-    params: &Value,
-) -> Result<Value, (i32, String)> {
+async fn dispatch(state: &McpState, method: &str, params: &Value) -> Result<Value, (i32, String)> {
     match method {
         // Capabilities advertise ONLY what we actually serve. Earlier
         // draft included `resources: {}` and `prompts: {}` "for forward

@@ -215,10 +215,7 @@ pub fn write_compression(
         );
     }
     if let Some(v) = new.protect_last_n {
-        updates.insert(
-            "protect_last_n".into(),
-            serde_json::Value::Number(v.into()),
-        );
+        updates.insert("protect_last_n".into(), serde_json::Value::Number(v.into()));
     }
     if updates.is_empty() {
         return Ok(()); // no-op, caller passed all `None`s

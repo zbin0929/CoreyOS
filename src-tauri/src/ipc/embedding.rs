@@ -225,13 +225,15 @@ pub fn hybrid_search(db: &Db, query: &str, limit: usize) -> Vec<HybridSearchResu
 
     search_knowledge_chunks_jaccard(db, &query_tokens, limit)
         .into_iter()
-        .map(|(_, doc_name, content, chunk_index, score)| HybridSearchResult {
-            doc_name,
-            content,
-            chunk_index,
-            score,
-            source: "keyword".into(),
-        })
+        .map(
+            |(_, doc_name, content, chunk_index, score)| HybridSearchResult {
+                doc_name,
+                content,
+                chunk_index,
+                score,
+                source: "keyword".into(),
+            },
+        )
         .collect()
 }
 

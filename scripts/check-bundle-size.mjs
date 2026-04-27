@@ -24,9 +24,15 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-/** Current main chunk (2026-04-26 post-file-extraction + NVIDIA NIM)
- *  sits at ~289 KB gzip. Budget gives ~10% headroom. */
-const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 300);
+/** Current main chunk (2026-04-27 post-workflow-lifecycle pass)
+ *  sits at ~308 KB gzip. The bump from 289 → 308 KB came from the
+ *  P0.5 workflow lifecycle work: streaming hooks, History route,
+ *  cancel + reject + LLM-profile UI, audit export. History.tsx is
+ *  already lazy-imported; the rest is on the workflow main route
+ *  (running visualization, hooks plumbing) and lives on the hot
+ *  path. Budget set 12 KB above current to give the next two-three
+ *  features headroom before the next code-split round. */
+const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 320);
 const DIST_ASSETS = resolve(process.cwd(), 'dist', 'assets');
 
 function gzipKb(buf) {

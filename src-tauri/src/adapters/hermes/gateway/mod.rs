@@ -190,7 +190,10 @@ impl HermesGateway {
         // we need a definitive "the call WAS reached" signal.
         eprintln!(
             "[corey] hermes chat_once: dispatching url={} model={} messages={} bytes={}",
-            url, model, body.messages.len(), prompt_size
+            url,
+            model,
+            body.messages.len(),
+            prompt_size
         );
         tracing::info!(
             url = %url,
@@ -207,10 +210,8 @@ impl HermesGateway {
                 // handed back to us, or (b) a gateway restart racing
                 // our request. Both heal on a single immediate retry
                 // since reqwest will then dial a fresh TCP connection.
-                let connect_class = e.is_connect()
-                    || e.is_request()
-                    || e.is_timeout()
-                    || e.is_body();
+                let connect_class =
+                    e.is_connect() || e.is_request() || e.is_timeout() || e.is_body();
                 let chain = format_error_chain(&e);
                 tracing::warn!(
                     url = %url,

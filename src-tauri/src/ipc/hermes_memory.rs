@@ -115,10 +115,17 @@ fn read_status() -> IpcResult<HermesMemoryStatus> {
     // `HermesConfigView` shape with niche fields only this page needs.
     let (provider, auto_extract, decay) = read_memory_yaml_fields().unwrap_or((None, None, None));
 
-    let db_path = memory_db_path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    let db_path = memory_db_path()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let (db_present, fact_count, recent_fact_count, top_categories) = match memory_db_path() {
         Ok(p) if p.exists() => match read_db_stats(&p) {
-            Ok(s) => (true, Some(s.fact_count), Some(s.recent_fact_count), s.top_categories),
+            Ok(s) => (
+                true,
+                Some(s.fact_count),
+                Some(s.recent_fact_count),
+                s.top_categories,
+            ),
             // DB exists but schema query failed — treat as "present
             // but unreadable" (None counts) so the UI can show
             // "Hermes hasn't extracted any facts yet" rather than a

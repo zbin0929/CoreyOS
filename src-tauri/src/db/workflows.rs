@@ -57,8 +57,7 @@ impl Db {
             .ok()
             .and_then(|v| v.as_str().map(|s| s.to_string()))
             .unwrap_or_else(|| "unknown".into());
-        let inputs_json =
-            serde_json::to_string(&run.inputs).unwrap_or_else(|_| "null".to_string());
+        let inputs_json = serde_json::to_string(&run.inputs).unwrap_or_else(|_| "null".to_string());
 
         txn.execute(
             "INSERT INTO workflow_runs
@@ -140,10 +139,11 @@ impl Db {
                 let error: Option<String> = r.get(4)?;
                 let started_at_ms: i64 = r.get(5)?;
                 let updated_at_ms: i64 = r.get(6)?;
-                let status: RunStatus = serde_json::from_value(serde_json::Value::String(status_str))
-                    .unwrap_or(RunStatus::Pending);
-                let inputs: serde_json::Value = serde_json::from_str(&inputs_str)
-                    .unwrap_or(serde_json::Value::Null);
+                let status: RunStatus =
+                    serde_json::from_value(serde_json::Value::String(status_str))
+                        .unwrap_or(RunStatus::Pending);
+                let inputs: serde_json::Value =
+                    serde_json::from_str(&inputs_str).unwrap_or(serde_json::Value::Null);
                 Ok(WorkflowRun {
                     id,
                     workflow_id,
@@ -310,10 +310,9 @@ impl Db {
                     let error: Option<String> = r.get(4)?;
                     let started_at_ms: i64 = r.get(5)?;
                     let updated_at_ms: i64 = r.get(6)?;
-                    let status: RunStatus = serde_json::from_value(serde_json::Value::String(
-                        status_str,
-                    ))
-                    .unwrap_or(RunStatus::Pending);
+                    let status: RunStatus =
+                        serde_json::from_value(serde_json::Value::String(status_str))
+                            .unwrap_or(RunStatus::Pending);
                     let inputs: serde_json::Value =
                         serde_json::from_str(&inputs_str).unwrap_or(serde_json::Value::Null);
                     Ok(WorkflowRun {

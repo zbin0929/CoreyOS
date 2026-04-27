@@ -384,7 +384,8 @@ fn execute_step_live(
         // Reaching here would mean the loop forgot to short-circuit
         // (a bug); be loud rather than silently auto-approving.
         "approval" => Err("approval step reached execute_step_live; \
-                          should have been intercepted by the run loop".into()),
+                          should have been intercepted by the run loop"
+            .into()),
         other => Err(format!("Unknown step type: {other}")),
     }
 }

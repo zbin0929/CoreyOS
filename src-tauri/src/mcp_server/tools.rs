@@ -259,8 +259,8 @@ struct NotifyArgs {
 }
 
 async fn notify(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
-    let args: NotifyArgs = serde_json::from_value(args)
-        .map_err(|e| (-32602, format!("invalid notify args: {e}")))?;
+    let args: NotifyArgs =
+        serde_json::from_value(args).map_err(|e| (-32602, format!("invalid notify args: {e}")))?;
 
     let mut builder = app.notification().builder().title(args.title.clone());
     if let Some(body) = args.body.as_deref().filter(|b| !b.is_empty()) {
@@ -468,7 +468,9 @@ async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, Strin
     runs.lock().insert(run_id.clone(), owned_run);
 
     let cancel_flag: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
-    cancel_flags.lock().insert(run_id.clone(), cancel_flag.clone());
+    cancel_flags
+        .lock()
+        .insert(run_id.clone(), cancel_flag.clone());
 
     crate::ipc::workflow::spawn_run_executor(
         runs,
