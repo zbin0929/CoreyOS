@@ -61,7 +61,7 @@ impl SchedulerJobView {
         Self {
             id: job.id.clone(),
             name: job.display_name().to_string(),
-            cron_expression: job.schedule.clone(),
+            cron_expression: job.schedule_display(),
             prompt: job.prompt.clone(),
             adapter_id: "hermes".into(),
             enabled: !job.paused,
@@ -193,7 +193,7 @@ pub async fn scheduler_upsert_job(
         // Apply the UI patch.
         job.id = id.clone();
         job.name = Some(args.name.clone());
-        job.schedule = args.cron_expression.clone();
+        job.set_schedule_str(args.cron_expression.clone());
         job.prompt = args.prompt.clone();
         job.paused = !args.enabled;
         job.corey_created_at = job.corey_created_at.or(Some(now));

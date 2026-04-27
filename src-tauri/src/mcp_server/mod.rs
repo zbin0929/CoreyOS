@@ -64,6 +64,10 @@ static BOUND_PORT: OnceCell<u16> = OnceCell::const_new();
 
 /// Fetch the MCP server's bound port. `None` until `start()` has run
 /// to completion — callers that hit this during boot should retry.
+/// Currently used only by `register_with_hermes` (via the bind result),
+/// but kept `pub` so an upcoming `mcp_status` IPC command can surface
+/// the live URL in Settings without re-walking the listener state.
+#[allow(dead_code)]
 pub fn bound_port() -> Option<u16> {
     BOUND_PORT.get().copied()
 }

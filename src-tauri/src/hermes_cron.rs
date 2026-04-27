@@ -73,8 +73,15 @@ pub struct HermesJob {
     /// from the prompt's first 60 chars if absent.
     #[serde(default)]
     pub name: Option<String>,
-    /// Accepts cron, `"30m"`, `"every 2h"`, ISO 8601 timestamps.
-    pub schedule: String,
+    /// Schedule. Accepts BOTH legacy (cron string like `"0 8 * * *"`,
+    /// `"30m"`, ISO timestamp) AND the structured form Hermes >= 0.10
+    /// emits: `{"kind": "cron", "expr": "0 8 * * *", "display": "0 8 * * *"}`.
+    /// Stored as raw `Value` so a `load → save` cycle preserves whichever
+    /// shape Hermes wrote — touching it would risk corrupting jobs the
+    /// user didn't even open. Use `schedule_display()` for the
+    /// human-readable string.
+    #[serde(default)]
+    pub schedule: serde_json::Value,
     pub prompt: String,
     #[serde(default)]
     pub skills: Vec<String>,
@@ -87,10 +94,13 @@ pub struct HermesJob {
     /// `true` means the job is paused. Hermes's default is `false`.
     #[serde(default)]
     pub paused: bool,
-    /// Cap on how many times the job should fire before auto-disabling.
-    /// Hermes treats `None` as unlimited.
+    /// Repeat policy. Legacy form: a bare `u32` cap. Hermes >= 0.10 emits
+    /// `{"times": null|u32, "completed": u32}`. We don't currently model
+    /// either side; the field is preserved as-is for round-trip safety
+    /// and accessor methods can be added when the UI starts surfacing
+    /// run counts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub repeat: Option<u32>,
+    pub repeat: Option<serde_json::Value>,
 
     // ── Corey-side convenience fields (preserved in jobs.json) ───────
     /// Seconds since epoch when Corey created the record. Hermes ignores
@@ -121,6 +131,38 @@ impl HermesJob {
                 .fold((0usize, ""), |(len, _), w| (len + w.len(), w))
                 .1
         })
+    }
+
+    /// Best-effort string for the schedule, regardless of which shape
+    /// Hermes wrote.
+    ///
+    ///   - String form: returned verbatim (`"0 8 * * *"`, `"30m"`).
+    ///   - Object form: prefer the `display` field (Hermes's intended
+    ///     human label), then `expr`. Falls back to `""` if neither is
+    ///     present (which would be a malformed record — log only, no
+    ///     panic, so the rest of the job list still renders).
+    pub fn schedule_display(&self) -> String {
+        match &self.schedule {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Object(map) => map
+                .get("display")
+                .or_else(|| map.get("expr"))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or_default(),
+            // `Null` is the serde-default for a missing field; treat
+            // as "no schedule" rather than crashing.
+            serde_json::Value::Null => String::new(),
+            other => other.to_string(),
+        }
+    }
+
+    /// Replace the schedule with a fresh string from the UI. Stores
+    /// as a `Value::String` — Hermes parses the string form on its
+    /// next read regardless of what shape it last wrote (verified
+    /// against the upstream `hermes cron edit` CLI behaviour).
+    pub fn set_schedule_str(&mut self, expr: impl Into<String>) {
+        self.schedule = serde_json::Value::String(expr.into());
     }
 }
 
@@ -318,7 +360,7 @@ mod tests {
         let jobs = parse_jobs(raw).unwrap();
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].id, "a");
-        assert_eq!(jobs[0].schedule, "0 0 9 * * *");
+        assert_eq!(jobs[0].schedule_display(), "0 0 9 * * *");
         assert_eq!(jobs[0].prompt, "hi");
         assert!(!jobs[0].paused);
     }
@@ -328,7 +370,7 @@ mod tests {
         let raw = r#"{"jobs":[{"id":"b","schedule":"every 2h","prompt":"yo"}]}"#;
         let jobs = parse_jobs(raw).unwrap();
         assert_eq!(jobs.len(), 1);
-        assert_eq!(jobs[0].schedule, "every 2h");
+        assert_eq!(jobs[0].schedule_display(), "every 2h");
     }
 
     #[test]
@@ -387,7 +429,7 @@ mod tests {
     fn display_name_falls_back_to_prompt_head() {
         let mut job = HermesJob {
             id: "x".into(),
-            schedule: "30m".into(),
+            schedule: serde_json::Value::String("30m".into()),
             prompt: "Summarise the latest AI news from HN and post to Telegram".into(),
             ..HermesJob::default()
         };
