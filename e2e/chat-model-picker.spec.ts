@@ -61,13 +61,19 @@ test.describe('chat · model picker', () => {
     // Default from mock hermesConfig.model.default.
     await expect(trigger).toContainText('deepseek-chat');
 
-    // Open the picker and confirm all three models render.
+    // Open the picker and confirm two of the three seeded models
+    // render. `hermes-agent` is intentionally filtered out by
+    // ActiveLLMBadge — it's a meta-model alias for "use the default"
+    // and would create a duplicate entry against the "Use default"
+    // sentinel row at the top.
     await trigger.click();
     const list = page.getByTestId('chat-model-picker-list');
     await expect(list).toBeVisible();
-    await expect(page.getByTestId('chat-model-picker-option-hermes-agent')).toBeVisible();
     await expect(page.getByTestId('chat-model-picker-option-gpt-4o')).toBeVisible();
     await expect(page.getByTestId('chat-model-picker-option-claude-sonnet')).toBeVisible();
+    // Confirm the meta-model is NOT shown — the dedup was the
+    // entire reason the filter exists.
+    await expect(page.getByTestId('chat-model-picker-option-hermes-agent')).toHaveCount(0);
 
     // Pick non-default → badge flips to override state.
     await page.getByTestId('chat-model-picker-option-gpt-4o').click();
@@ -102,17 +108,19 @@ test.describe('chat · model picker', () => {
     await page.keyboard.press('ArrowDown');
     await expect(page.getByTestId('chat-model-picker-list')).toBeVisible();
 
-    // Start on the "Use default" sentinel (-1). ↓ once → hermes-agent (idx 0).
+    // Start on the "Use default" sentinel (-1). ↓ once → gpt-4o
+    // (idx 0 after `hermes-agent` is filtered out — see picker
+    // logic in ActiveLLMBadge.tsx).
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('chat-model-picker-list')).toBeHidden();
-    await expect(trigger).toContainText('hermes-agent');
+    await expect(trigger).toContainText('gpt-4o');
     await expect(trigger).toHaveAttribute('data-overridden', 'true');
 
     // Re-open + Esc closes without further mutation.
     await trigger.click();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('chat-model-picker-list')).toBeHidden();
-    await expect(trigger).toContainText('hermes-agent');
+    await expect(trigger).toContainText('gpt-4o');
   });
 });
