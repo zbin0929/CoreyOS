@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
@@ -180,14 +180,48 @@ pub fn start(app: AppHandle) {
         let _ = BOUND_PORT.set(bound.port());
         info!(port = bound.port(), "MCP server: listening on 127.0.0.1");
 
+        // Spawn axum::serve onto its OWN tokio task so we can move on
+        // to writing config.yaml + restarting Hermes without waiting.
+        // Critically, this means by the time `register_with_hermes`
+        // finishes patching config.yaml and triggers a gateway
+        // restart, axum has already entered its `accept()` loop —
+        // so the new Hermes process's first MCP connect attempt
+        // hits a listener that's not just bound but actively
+        // accepting.
+        //
+        // Earlier draft awaited `axum::serve` inline, before
+        // `register_with_hermes`. That was wrong: the gateway
+        // restart triggers an MCP discovery handshake against us
+        // immediately on Hermes startup, and if there's any
+        // race between bind and accept the new Hermes' Python
+        // anyio TaskGroup raises and the corey-native server
+        // gets marked permanently dead until the next restart.
+        let serve_task = tauri::async_runtime::spawn(async move {
+            if let Err(e) = axum::serve(listener, router).await {
+                warn!(error = %e, "MCP server: axum::serve exited");
+            }
+        });
+
+        // Yield once so the spawned task gets scheduled and at
+        // least starts polling the accept loop before we go off
+        // and bounce Hermes. Belt-and-braces — modern tokio
+        // already spawns onto a worker thread, but a single
+        // `yield_now` is cheap insurance against pathological
+        // schedulers.
+        tokio::task::yield_now().await;
+
         // Self-register with Hermes by patching ~/.hermes/config.yaml's
         // `mcp_servers:` section. Synchronous + cheap (one read +
         // atomic write), so we don't bother spawning. Failure is
         // logged inside; the bridge keeps serving regardless.
         register_with_hermes(bound.port());
 
-        if let Err(e) = axum::serve(listener, router).await {
-            warn!(error = %e, "MCP server: axum::serve exited");
+        // Hold the serve task by awaiting it; Tauri's runtime keeps
+        // the task alive even if we drop the handle, but awaiting
+        // here surfaces termination errors at the original spawn
+        // site rather than dropping silently.
+        if let Err(e) = serve_task.await {
+            warn!(error = %e, "MCP server: serve task join error");
         }
     });
 }
@@ -326,11 +360,38 @@ async fn banner() -> Json<Value> {
 
 async fn rpc_handler(
     State(state): State<Arc<McpState>>,
+    headers: HeaderMap,
     Json(req): Json<JsonRpcRequest>,
 ) -> Response {
-    // Notifications (no `id`) get a 204 with no body — we still want to
-    // honor side effects (e.g. `notifications/initialized` toggling
-    // session state), but JSON-RPC says no envelope back.
+    // 1. Origin validation. Streamable HTTP spec REQUIRES servers to
+    //    reject foreign origins to prevent DNS rebinding attacks
+    //    against local MCP servers. We allow:
+    //      - missing Origin (curl, server-to-server, MCP CLI clients)
+    //      - 127.0.0.1 / localhost / null
+    //    Anything else → 403. Hermes runs on the same box; its
+    //    Origin header (if present) will pass.
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        if !is_local_origin(origin) {
+            warn!(origin = %origin, "MCP rpc rejected: foreign Origin");
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32600,
+                        "message": format!("foreign Origin not allowed: {origin}"),
+                    }
+                })),
+            )
+                .into_response();
+        }
+    }
+
+    // 2. Notifications (no `id`) — spec: respond with 202 Accepted, no
+    //    body. We previously returned 204 No Content, which is also a
+    //    valid 2xx but spec-non-compliant; some MCP clients (e.g. the
+    //    Python SDK Hermes uses) parse the status code strictly and
+    //    fail handshake on anything other than 202. Switch to 202.
     let is_notification = req.id.is_none();
 
     // Log every method call at INFO so problems like "Hermes never
@@ -343,7 +404,7 @@ async fn rpc_handler(
     let result = dispatch(&state, &req.method, &req.params).await;
 
     if is_notification {
-        return StatusCode::NO_CONTENT.into_response();
+        return StatusCode::ACCEPTED.into_response();
     }
 
     let id = req.id.unwrap_or(Value::Null);
@@ -365,7 +426,33 @@ async fn rpc_handler(
             }),
         },
     };
+    // 200 OK with Content-Type: application/json. Spec allows either
+    // application/json or text/event-stream; for non-streaming
+    // responses (which is all we emit today) JSON is the simpler
+    // and equally-valid choice. Clients MUST support both per spec.
     Json(body).into_response()
+}
+
+/// Streamable HTTP spec security gate. Allows local-context Origins
+/// only — anything from a real domain implies a malicious page is
+/// trying to talk to our loopback server via DNS rebinding. Schemes
+/// other than http/https (e.g. tauri://, file://) are also allowed
+/// because Hermes / Tauri / Electron / curl can show up that way.
+fn is_local_origin(origin: &str) -> bool {
+    // Cheap allow list. We don't bother parsing the URL because the
+    // patterns we accept are exact prefixes.
+    const LOCAL_PREFIXES: &[&str] = &[
+        "http://127.0.0.1",
+        "http://localhost",
+        "https://127.0.0.1",
+        "https://localhost",
+        "http://[::1]",
+        "https://[::1]",
+        "tauri://",
+        "file://",
+        "null",
+    ];
+    LOCAL_PREFIXES.iter().any(|p| origin.starts_with(p))
 }
 
 /// Method dispatch. Returns `Ok(result_value)` to be wrapped in a
