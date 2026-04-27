@@ -25,6 +25,11 @@ mod hermes_profiles_archive;
 mod ipc;
 mod license;
 mod llm_profiles;
+// mcp_server — Tauri-side MCP server exposing native desktop
+// capabilities (file pickers, notifications, Settings deep-link, …)
+// to Hermes Agent. Hermes connects as an MCP client. See module
+// docstring for protocol + transport details.
+mod mcp_server;
 mod menu;
 mod paths;
 mod pty;
@@ -74,6 +79,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        // Native desktop notifications — used both by the in-app
+        // Notification Center widget and by the MCP-server bridge
+        // (`corey_native.notify` tool, see `mcp_server::tools`).
+        .plugin(tauri_plugin_notification::init())
         // Auto-update. The plugin inspects `plugins.updater` in
         // tauri.conf.json (endpoints + pubkey) and fetches the latest
         // manifest when the frontend calls `check()`. Wiring from the
@@ -402,6 +411,16 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
             }
+
+            // Spin up the MCP-over-HTTP bridge that exposes desktop-
+            // native tools (file picker, notification, deep-link to
+            // Settings) to Hermes Agent. Bound to 127.0.0.1 on a port
+            // chosen by the OS — Hermes connects via
+            // `hermes mcp add corey-native --url http://127.0.0.1:<port>/`.
+            // Failure inside `start()` only logs at WARN; Corey stays
+            // fully usable, Hermes just doesn't gain the native
+            // tools. See `mcp_server` module docstring.
+            mcp_server::start(app.handle().clone());
 
             // Native menubar. Build + install once at setup; the menu is
             // app-wide on macOS (single NSMenu) and per-window elsewhere

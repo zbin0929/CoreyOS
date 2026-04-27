@@ -31,7 +31,14 @@ tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 # Native folder picker for Settings › Workspace. Wired into the sandbox
 # "Add root" form so users don't hand-type `/Users/…/Projects` paths.
+# Also reused by the MCP-server bridge (`mcp_server::tools::pick_*`) so
+# Hermes can ask the user for a file/folder via a native Finder dialog.
 tauri-plugin-dialog = "2"
+# macOS / Windows / Linux native notifications — used by the MCP-server
+# bridge so Hermes can post desktop notifications via
+# `corey_native.notify` (e.g. when a long delegation finishes while the
+# user is in another app).
+tauri-plugin-notification = "2"
 # In-app auto-update via GitHub Release manifests. Wired through
 # `plugins.updater` in tauri.conf.json (endpoints + pubkey). The plugin
 # is a no-op when the app was built without TAURI_SIGNING_PRIVATE_KEY
@@ -54,6 +61,16 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "gzip", "multipart"] }
 eventsource-stream = "0.2"
+
+# HTTP server for the MCP-over-HTTP bridge (`src/mcp_server`). Hermes
+# Agent connects to this endpoint as an MCP client (registered via
+# `hermes mcp add corey-native --url http://127.0.0.1:<port>/`) and gains
+# tools backed by the desktop process: native file/folder pickers,
+# desktop notifications, deep-links into Settings, etc. Bound to
+# 127.0.0.1 only — never exposed off-device. axum keeps the surface
+# small (one POST handler implementing JSON-RPC 2.0) and reuses the
+# tokio runtime Tauri already has.
+axum = "0.7"
 
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
