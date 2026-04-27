@@ -71,10 +71,18 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
   {
     id: 'deepseek',
     label: 'DeepSeek',
-    description: 'deepseek-chat + deepseek-reasoner. Cheap and capable.',
+    description: 'deepseek-chat / reasoner / v4-pro / v4-flash. Cheap and capable.',
     baseUrl: 'https://api.deepseek.com/v1',
     envKey: 'DEEPSEEK_API_KEY',
-    suggestedModels: ['deepseek-chat', 'deepseek-reasoner'],
+    // v4 family lands at the top — newer + the recommended default for
+    // most users; legacy chat / reasoner stay listed for sessions that
+    // pinned them explicitly.
+    suggestedModels: [
+      'deepseek-v4-pro',
+      'deepseek-v4-flash',
+      'deepseek-chat',
+      'deepseek-reasoner',
+    ],
     setupUrl: 'https://platform.deepseek.com/api_keys',
   },
   // ───────── Domestic (CN) providers ─────────

@@ -58,7 +58,14 @@ export function HermesInstallCard() {
       // IPC itself errors, treat it as "not installed" + surface the
       // detail in the console.
       console.warn('hermes_detect failed:', ipcErrorMessage(e));
-      setDetection({ installed: false, path: null, version: null });
+      setDetection({
+        installed: false,
+        path: null,
+        version: null,
+        version_parsed: null,
+        compatibility: 'unknown',
+        compatibility_detail: 'detection failed',
+      });
     } finally {
       setChecking(false);
     }
@@ -87,7 +94,26 @@ export function HermesInstallCard() {
   //      which is the exact UX bug reported on 2026-04-27.
   //   2. Probe is done and says installed (but gateway is offline) —
   //      covered by the GatewayOfflineCard render below.
-  if (gateway === 'online') return null;
+  //
+  // Exception: a `untested` / `too_old` Hermes still warrants a
+  // visible banner even when the gateway is online — the banner
+  // protects FUTURE writes (config-yaml schema drift), not current
+  // connectivity, so suppressing it on green = silent breakage.
+  if (
+    gateway === 'online' &&
+    (!detection ||
+      detection.compatibility === 'supported' ||
+      detection.compatibility === 'unknown')
+  ) {
+    return null;
+  }
+  if (
+    gateway === 'online' &&
+    detection &&
+    (detection.compatibility === 'untested' || detection.compatibility === 'too_old')
+  ) {
+    return <CompatibilityBanner detection={detection} />;
+  }
   if (detection?.installed) {
     // fall through — render the offline-gateway card below
   } else if (checking && !detection) {
@@ -330,4 +356,63 @@ function installCommandForPlatform(): string {
   if (ua.includes('mac')) return 'brew install nousresearch/hermes/hermes-agent';
   if (ua.includes('win')) return 'pip install hermes-agent';
   return 'pip install hermes-agent';
+}
+
+/**
+ * Banner shown on Home when the running Hermes is outside the
+ * version range Corey was tested against.
+ *
+ * Two distinct shapes:
+ *   - `untested` (Hermes too NEW): yellow. Most things still work
+ *     but config-yaml writes might hit unknown schema. Recommend
+ *     updating Corey or pinning Hermes back.
+ *   - `too_old` (Hermes too OLD): red. Memory store / auto-compress
+ *     features need ≥ MIN_SUPPORTED. Recommend `hermes self-update`.
+ *
+ * Both copy the verbatim `compatibility_detail` from the backend
+ * (English; the wrapping headline is localized). Click-through link
+ * jumps to the Hermes upgrade docs.
+ */
+function CompatibilityBanner({ detection }: { detection: HermesDetection }) {
+  const { t } = useTranslation();
+  const isTooOld = detection.compatibility === 'too_old';
+  return (
+    <section
+      className={cn(
+        'flex flex-col gap-2 rounded-lg border p-4',
+        isTooOld
+          ? 'border-danger/40 bg-danger/5'
+          : 'border-amber-500/40 bg-amber-500/5',
+      )}
+      data-testid={isTooOld ? 'home-hermes-too-old' : 'home-hermes-untested'}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            'flex h-9 w-9 flex-none items-center justify-center rounded-full border',
+            isTooOld
+              ? 'border-danger/40 bg-danger/10 text-danger'
+              : 'border-amber-500/40 bg-amber-500/10 text-amber-500',
+          )}
+        >
+          <Icon icon={AlertTriangle} size="sm" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-fg">
+            {isTooOld
+              ? t('home.hermes_too_old_title', { defaultValue: 'Hermes 版本过旧' })
+              : t('home.hermes_untested_title', { defaultValue: 'Hermes 版本未经测试' })}
+          </h3>
+          <p className="mt-0.5 text-xs text-fg-muted break-words">
+            {detection.compatibility_detail}
+          </p>
+          {detection.version && (
+            <code className="mt-1 block truncate text-[10px] text-fg-subtle">
+              {detection.version}
+            </code>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }

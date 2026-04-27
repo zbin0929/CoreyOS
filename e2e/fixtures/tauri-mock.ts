@@ -816,7 +816,12 @@ export const tauriMockInitScript = /* js */ `
           state.hermesDetection ?? {
             installed: true,
             path: '/usr/local/bin/hermes',
-            version: 'hermes 0.42.0',
+            // Match the canonical real-Hermes banner so the
+            // compatibility parser sees a green-light version.
+            version: 'Hermes Agent v0.10.0 (2026.4.16)',
+            version_parsed: [0, 10, 0],
+            compatibility: 'supported',
+            compatibility_detail: 'Hermes v0.10.x — supported.',
           }
         );
       case 'hermes_gateway_start':

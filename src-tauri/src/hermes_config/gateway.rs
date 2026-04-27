@@ -5,6 +5,39 @@
 use std::io;
 use std::path::PathBuf;
 
+/// Hermes version range Corey is built against. Bump these when
+/// you've actually tested against a newer Hermes — the `untested`
+/// banner protects users from silent OpenClaw-style breakage when
+/// upstream schemas drift (e.g. Hermes renames `compression:` →
+/// `context_compress:` and Corey's "save" button writes the old
+/// shape Hermes can no longer parse).
+///
+/// Format: `(major, minor)` — patch is forward-compat by convention,
+/// minor changes are the boundary. v0.10.x = supported (this is
+/// what every IPC + yaml writer in `hermes_config/` was tested
+/// against).
+const HERMES_MIN_SUPPORTED: (u32, u32) = (0, 10);
+const HERMES_MAX_TESTED: (u32, u32) = (0, 10);
+
+/// Compatibility verdict between the running Hermes binary and what
+/// Corey was built/tested against. Drives the Home-page banner.
+#[derive(Debug, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HermesCompatibility {
+    /// Within the tested range — green light.
+    Supported,
+    /// Newer than what we tested. Most config writes will still
+    /// work but schema drift CAN bite. Show a yellow banner.
+    Untested,
+    /// Older than the supported floor. Some Corey features (memory
+    /// store, auto-compress, MCP server) require ≥ MIN. Show red.
+    TooOld,
+    /// Couldn't parse the version string at all (e.g. forked
+    /// binary with custom version banner). Treat as untested but
+    /// with a different banner copy.
+    Unknown,
+}
+
 /// First-run detection. Returns a structured view of whether Hermes is
 /// reachable from Corey: binary on PATH / known fallback, its version
 /// string (best effort), and the resolved full path.
@@ -23,6 +56,13 @@ pub struct HermesDetection {
     /// Best-effort `hermes --version` output. Absent when the version
     /// probe failed (binary exists but is broken / permissions wrong).
     pub version: Option<String>,
+    /// Parsed semver tuple from `version`, when extractable.
+    pub version_parsed: Option<(u32, u32, u32)>,
+    /// Verdict against the (MIN, MAX) range Corey was built for.
+    pub compatibility: HermesCompatibility,
+    /// Diagnostic copy for the UI banner. Locale-neutral English;
+    /// the frontend wraps it in a localized prefix.
+    pub compatibility_detail: String,
 }
 
 /// Locate the Hermes binary + probe its version. Never blocks the
@@ -33,6 +73,9 @@ pub fn detect() -> HermesDetection {
             installed: false,
             path: None,
             version: None,
+            version_parsed: None,
+            compatibility: HermesCompatibility::Unknown,
+            compatibility_detail: "Hermes not installed".into(),
         };
     };
     let version = std::process::Command::new(&path)
@@ -46,10 +89,128 @@ pub fn detect() -> HermesDetection {
                 None
             }
         });
+    let version_parsed = version.as_deref().and_then(parse_hermes_version);
+    let (compatibility, compatibility_detail) = match version_parsed {
+        Some((maj, min, _patch)) => evaluate_compat(maj, min),
+        None => (
+            HermesCompatibility::Unknown,
+            "Could not parse Hermes version string; assuming compatible.".into(),
+        ),
+    };
     HermesDetection {
         installed: true,
         path: Some(path.display().to_string()),
         version,
+        version_parsed,
+        compatibility,
+        compatibility_detail,
+    }
+}
+
+/// Pull the first `vX.Y.Z` triple from a `hermes --version` line.
+/// Hermes's banner is `Hermes Agent v0.10.0 (2026.4.16)` — we just
+/// scan for the first digit-dot-digit-dot-digit run after a `v`.
+fn parse_hermes_version(banner: &str) -> Option<(u32, u32, u32)> {
+    let bytes = banner.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        // Locate `v` followed by a digit (avoids false positive on
+        // `version` literal etc.).
+        if (bytes[i] == b'v' || bytes[i] == b'V')
+            && i + 1 < bytes.len()
+            && bytes[i + 1].is_ascii_digit()
+        {
+            let rest = &banner[i + 1..];
+            // Take digits + dots only, then split.
+            let token: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == '.')
+                .collect();
+            let parts: Vec<&str> = token.split('.').collect();
+            if parts.len() >= 3 {
+                let maj = parts[0].parse::<u32>().ok()?;
+                let min = parts[1].parse::<u32>().ok()?;
+                let patch = parts[2].parse::<u32>().ok()?;
+                return Some((maj, min, patch));
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Compare a parsed `(major, minor)` against the Corey-tested range.
+/// Patch versions are treated as forward-compat (Hermes promises
+/// not to break schema in patch releases).
+fn evaluate_compat(maj: u32, min: u32) -> (HermesCompatibility, String) {
+    let cur = (maj, min);
+    if cur < HERMES_MIN_SUPPORTED {
+        (
+            HermesCompatibility::TooOld,
+            format!(
+                "Detected Hermes v{}.{}.x; Corey requires ≥ v{}.{}. Please upgrade Hermes (`hermes self-update` or reinstall) — the memory store and auto-compress features need the newer agent.",
+                maj, min, HERMES_MIN_SUPPORTED.0, HERMES_MIN_SUPPORTED.1
+            ),
+        )
+    } else if cur > HERMES_MAX_TESTED {
+        (
+            HermesCompatibility::Untested,
+            format!(
+                "Detected Hermes v{}.{}.x; Corey was tested against v{}.{}.x. Most things should still work, but config-yaml writes may hit unknown schema fields. If something breaks, fall back to v{}.{} or update Corey.",
+                maj, min, HERMES_MAX_TESTED.0, HERMES_MAX_TESTED.1, HERMES_MAX_TESTED.0, HERMES_MAX_TESTED.1
+            ),
+        )
+    } else {
+        (
+            HermesCompatibility::Supported,
+            format!("Hermes v{}.{}.x — supported.", maj, min),
+        )
+    }
+}
+
+#[cfg(test)]
+mod compat_tests {
+    use super::*;
+
+    #[test]
+    fn parses_canonical_banner() {
+        assert_eq!(
+            parse_hermes_version("Hermes Agent v0.10.0 (2026.4.16)"),
+            Some((0, 10, 0))
+        );
+    }
+
+    #[test]
+    fn parses_double_digit_minor() {
+        assert_eq!(parse_hermes_version("v1.23.456"), Some((1, 23, 456)));
+    }
+
+    #[test]
+    fn rejects_no_v_prefix() {
+        assert_eq!(parse_hermes_version("0.10.0"), None);
+    }
+
+    #[test]
+    fn rejects_two_segment() {
+        assert_eq!(parse_hermes_version("v0.10"), None);
+    }
+
+    #[test]
+    fn supported_when_in_range() {
+        let (c, _) = evaluate_compat(0, 10);
+        assert_eq!(c, HermesCompatibility::Supported);
+    }
+
+    #[test]
+    fn too_old_when_below_floor() {
+        let (c, _) = evaluate_compat(0, 9);
+        assert_eq!(c, HermesCompatibility::TooOld);
+    }
+
+    #[test]
+    fn untested_when_above_ceiling() {
+        let (c, _) = evaluate_compat(0, 11);
+        assert_eq!(c, HermesCompatibility::Untested);
     }
 }
 

@@ -34,6 +34,7 @@ import { ContextSection } from './sections/ContextSection';
 import { LicenseSection } from './sections/LicenseSection';
 import { MemorySection } from './sections/MemorySection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
+import { HermesToolPermissionsSection } from './sections/HermesToolPermissionsSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
 import { StorageSection } from './sections/StorageSection';
 import { WorkspaceSection } from './sections/WorkspaceSection';
@@ -72,6 +73,7 @@ const SETTINGS_ANCHORS = [
   { id: 'settings-routing', labelKey: 'settings.routing_rules.title' },
   { id: 'settings-sandbox', labelKey: 'settings.sandbox.title' },
   { id: 'settings-scopes', labelKey: 'settings.sandbox_scopes.title' },
+  { id: 'settings-hermes-tools', labelKey: 'settings.hermes_security.title' },
   { id: 'settings-storage', labelKey: 'settings.storage.title' },
 ] as const;
 
@@ -355,6 +357,14 @@ export function SettingsRoute() {
               default-scope workspace section so users see the "global
               roots" and "named scopes" as adjacent affordances. */}
           <SandboxScopesSection />
+
+          {/* The OTHER half of the permission story: Hermes' own
+              command-pattern + approval gate. Lives next to the
+              path-based sandbox so users see "Corey path policy"
+              and "Hermes command policy" as siblings, not as one
+              vs the other. Killed the "I locked sandbox but Hermes
+              still ran ls ~/Desktop" confusion the v9 audit logged. */}
+          <HermesToolPermissionsSection />
 
           <BrowserLLMSection />
 

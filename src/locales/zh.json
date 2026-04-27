@@ -712,6 +712,37 @@
       "root_count_other": "{{count}} 个根目录",
       "confirm_delete": "删除范围“{{id}}”？所有指向它的实例会回落到默认范围。"
     },
+    "hermes_security": {
+      "title": "Hermes 工具权限",
+      "description": "Hermes agent 通过 shell / read_file 等工具访问系统时的权限。与上方 Corey 沙箱独立——Corey 沙箱按路径管 Corey 自己的 IPC，这里按命令模式管 Hermes 工具。",
+      "mode_legend": "审批模式",
+      "mode_manual": {
+        "title": "手动审批（推荐）",
+        "detail": "危险命令弹窗等用户确认。最稳，但每次都要点"
+      },
+      "mode_auto": {
+        "title": "自动判断",
+        "detail": "辅助 LLM 判定危险性，只有真正高危才弹窗。日常顺手"
+      },
+      "mode_yolo": {
+        "title": "完全放行（危险）",
+        "detail": "所有命令直接执行，跳过审批。仅推荐沙箱环境用"
+      },
+      "timeout_label": "审批超时（秒）",
+      "timeout_hint": "超时未操作时按拒绝处理。默认 60。",
+      "cron_label": "Cron 任务遇到危险命令",
+      "cron_hint": "Cron 没有用户在场，默认拒绝最稳。",
+      "cron_deny": "拒绝（推荐）",
+      "cron_ask": "排队审批（用户上线后处理）",
+      "cron_allow": "放行（不推荐）",
+      "allowlist_title": "永久允许的命令模式",
+      "allowlist_desc": "匹配到的命令直接放行，不弹审批。每行一条 glob-ish 模式（例：git status、npm install、ls *）。",
+      "allowlist_empty": "空 — 所有非白名单的危险命令都会按上方「审批模式」处理。",
+      "allowlist_placeholder": "git status / npm install / ls *",
+      "allowlist_add": "添加",
+      "saved": "已保存（下次工具调用立即生效）",
+      "save": "保存"
+    },
     "model": {
       "title": "默认语言模型",
       "desc": "Hermes Agent 在会话未指定时使用的默认模型。单个会话可在输入栏覆盖。",

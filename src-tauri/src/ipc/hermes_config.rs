@@ -7,7 +7,9 @@
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
-use crate::hermes_config::{self, HermesCompressionSection, HermesConfigView, HermesModelSection};
+use crate::hermes_config::{
+    self, HermesCompressionSection, HermesConfigView, HermesModelSection, HermesSecuritySection,
+};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -45,6 +47,26 @@ pub async fn hermes_config_write_compression(
     hermes_config::write_compression(&compression, Some(&journal)).map_err(|e| {
         IpcError::Internal {
             message: format!("write hermes compression: {e}"),
+        }
+    })?;
+    hermes_config::read_view().map_err(|e| IpcError::Internal {
+        message: format!("re-read hermes config: {e}"),
+    })
+}
+
+/// Persist `approvals.*` + `command_allowlist`. Mirrors
+/// `hermes_config_write_compression`: each `Some(_)` field on
+/// `security` overwrites; `None` is left as-is on disk.
+/// `command_allowlist` is replaced wholesale (it's a flat list).
+#[tauri::command]
+pub async fn hermes_config_write_security(
+    security: HermesSecuritySection,
+    state: State<'_, AppState>,
+) -> IpcResult<HermesConfigView> {
+    let journal = state.changelog_path.clone();
+    hermes_config::write_security(&security, Some(&journal)).map_err(|e| {
+        IpcError::Internal {
+            message: format!("write hermes security: {e}"),
         }
     })?;
     hermes_config::read_view().map_err(|e| IpcError::Internal {

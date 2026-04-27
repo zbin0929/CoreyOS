@@ -61,6 +61,41 @@ pub struct HermesCompressionSection {
     pub protect_last_n: Option<u32>,
 }
 
+/// Hermes' tool-permission knobs (`approvals:` block + the
+/// top-level `command_allowlist:` array).
+///
+/// Important: Hermes' security model is **command-pattern based**,
+/// not path-based. Corey's own `PathAuthority` (sandbox.json) only
+/// gates Corey's own IPC; Hermes-side tools (`shell`, `read_file`)
+/// look at the keys here. Surfacing them in `Settings → Sandbox`
+/// gives users one screen for both halves of the permission story.
+///
+/// Field semantics (from `hermes-agent/tools/approval.py`):
+///   - `approval_mode`        "manual" / "auto" / "yolo".
+///                            manual = ask user for risky commands
+///                            auto   = LLM auto-judges; user only
+///                                     sees the catastrophic ones
+///                            yolo   = bypass all approvals (DANGEROUS)
+///   - `approval_timeout_s`   how long to wait before auto-rejecting
+///                            an approval prompt (default 60)
+///   - `cron_mode`            "deny" / "ask" / "allow" — what to do
+///                            when a cron-triggered run hits a risky
+///                            command. Cron has no human at the keyboard,
+///                            so default is "deny"
+///   - `command_allowlist`    glob-ish patterns that skip approval
+///                            entirely (e.g. "git status", "npm install")
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HermesSecuritySection {
+    #[serde(default)]
+    pub approval_mode: Option<String>,
+    #[serde(default)]
+    pub approval_timeout_s: Option<u32>,
+    #[serde(default)]
+    pub cron_mode: Option<String>,
+    #[serde(default)]
+    pub command_allowlist: Vec<String>,
+}
+
 /// Aggregated view for the LLMs page.
 #[derive(Debug, Clone, Serialize)]
 pub struct HermesConfigView {
@@ -73,6 +108,9 @@ pub struct HermesConfigView {
     /// Current `compression.*` values. Always present (defaults
     /// resolved to `None` when the YAML is missing the section).
     pub compression: HermesCompressionSection,
+    /// Current `approvals.*` + `command_allowlist` view. Same null
+    /// semantics — empty struct when the YAML omits the section.
+    pub security: HermesSecuritySection,
     /// API-key env vars detected in `~/.hermes/.env`. We return the KEY NAMES
     /// only, never the values — so the UI can show "DEEPSEEK_API_KEY ✓ set"
     /// without exposing secrets over IPC.
@@ -100,15 +138,21 @@ pub fn read_view() -> io::Result<HermesConfigView> {
     let config_path = config_path()?;
     let path_str = config_path.to_string_lossy().to_string();
 
-    let (present, model, compression) = match fs::read_to_string(&config_path) {
+    let (present, model, compression, security) = match fs::read_to_string(&config_path) {
         Ok(raw) => {
             let root: Value = serde_yaml::from_str(&raw).unwrap_or(Value::Null);
-            (true, extract_model(&root), extract_compression(&root))
+            (
+                true,
+                extract_model(&root),
+                extract_compression(&root),
+                extract_security(&root),
+            )
         }
         Err(_) => (
             false,
             HermesModelSection::default(),
             HermesCompressionSection::default(),
+            HermesSecuritySection::default(),
         ),
     };
 
@@ -119,6 +163,7 @@ pub fn read_view() -> io::Result<HermesConfigView> {
         present,
         model,
         compression,
+        security,
         env_keys_present,
     })
 }
@@ -221,6 +266,90 @@ pub fn write_compression(
         return Ok(()); // no-op, caller passed all `None`s
     }
     yaml::write_channel_yaml_fields("compression", &updates, journal_path)
+}
+
+fn extract_security(root: &Value) -> HermesSecuritySection {
+    let map = match root.as_mapping() {
+        Some(m) => m,
+        None => return HermesSecuritySection::default(),
+    };
+    let approvals = map
+        .get(Value::String("approvals".into()))
+        .and_then(|v| v.as_mapping());
+    let approval_mode = approvals
+        .and_then(|m| m.get(Value::String("mode".into())))
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
+    let approval_timeout_s = approvals
+        .and_then(|m| m.get(Value::String("timeout".into())))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+    let cron_mode = approvals
+        .and_then(|m| m.get(Value::String("cron_mode".into())))
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
+    // command_allowlist sits at the document root, not under
+    // approvals (matches Hermes' yaml shape).
+    let command_allowlist = map
+        .get(Value::String("command_allowlist".into()))
+        .and_then(|v| v.as_sequence())
+        .map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    HermesSecuritySection {
+        approval_mode,
+        approval_timeout_s,
+        cron_mode,
+        command_allowlist,
+    }
+}
+
+/// Persist the `approvals:` mapping + the top-level
+/// `command_allowlist:` array. Same semantics as
+/// `write_compression`: each `Some(_)` overwrites; `None` is
+/// untouched. `command_allowlist` is replaced wholesale (it's a
+/// flat list, partial-update doesn't make sense here).
+pub fn write_security(
+    new: &HermesSecuritySection,
+    journal_path: Option<&Path>,
+) -> io::Result<()> {
+    use std::collections::HashMap;
+
+    // approvals.* updates go into one batched yaml write.
+    let mut approval_updates: HashMap<String, serde_json::Value> = HashMap::new();
+    if let Some(v) = &new.approval_mode {
+        approval_updates.insert("mode".into(), serde_json::Value::String(v.clone()));
+    }
+    if let Some(v) = new.approval_timeout_s {
+        approval_updates.insert("timeout".into(), serde_json::Value::Number(v.into()));
+    }
+    if let Some(v) = &new.cron_mode {
+        approval_updates.insert("cron_mode".into(), serde_json::Value::String(v.clone()));
+    }
+    if !approval_updates.is_empty() {
+        yaml::write_channel_yaml_fields("approvals", &approval_updates, journal_path)?;
+    }
+
+    // command_allowlist sits at the doc root. We always write it
+    // (even when empty) because the UI's source of truth IS the
+    // edited list — letting `None` mean "leave alone" would make
+    // "delete the last entry" impossible from the GUI.
+    let mut root_updates: HashMap<String, serde_json::Value> = HashMap::new();
+    root_updates.insert(
+        "command_allowlist".into(),
+        serde_json::Value::Array(
+            new.command_allowlist
+                .iter()
+                .map(|s| serde_json::Value::String(s.clone()))
+                .collect(),
+        ),
+    );
+    yaml::write_channel_yaml_fields("", &root_updates, journal_path)?;
+
+    Ok(())
 }
 
 /// Write just the `model` subsection. All other fields in the YAML are

@@ -49,8 +49,13 @@ export const NAV: NavEntry[] = [
   { id: 'home', path: '/', labelKey: 'nav.home', icon: Home, group: 'primary', phase: 0, shortcut: ['mod', '0'] },
   { id: 'chat', path: '/chat', labelKey: 'nav.chat', icon: MessageSquare, group: 'primary', phase: 1, shortcut: ['mod', '1'] },
   { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'primary', phase: 9, shortcut: ['mod', '2'] },
-  { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot, group: 'primary', phase: 2 },
   { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'primary', phase: 2 },
+  // `agents` route lives in /more (kept for power-users who want to
+  // see the live AdapterRegistry / health pills) but no longer in
+  // the primary group: post the Hermes-as-default pivot (Topbar
+  // AgentSwitcher hidden in the same change), there's a single
+  // active backend so the page is informational, not navigational.
+  { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot, group: 'more', phase: 2 },
 
   { id: 'compare', path: '/compare', labelKey: 'nav.compare', icon: Columns3, group: 'tools', phase: 4, shortcut: ['mod', '3'] },
   { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'tools', phase: 2, shortcut: ['mod', '4'] },

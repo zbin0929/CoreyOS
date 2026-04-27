@@ -23,7 +23,7 @@ export type VisionSupport = 'yes' | 'no' | 'unknown';
 // names that loosely pattern-match an allow entry (e.g. `deepseek-chat`
 // contains no "vl" but we still want to treat it as text-only).
 const DENY_LIST: RegExp[] = [
-  /^deepseek-(reasoner|chat|coder)/i,
+  /^deepseek-(reasoner|chat|coder|v4-pro|v4-flash)/i,
   /^gpt-3\.5/i,
   /^text-/i, // text-embedding-* etc.
   /-instruct$/i,

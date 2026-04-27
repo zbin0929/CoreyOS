@@ -103,6 +103,7 @@ pub fn run() {
             ipc::hermes_config::hermes_config_read,
             ipc::hermes_config::hermes_config_write_model,
             ipc::hermes_config::hermes_config_write_compression,
+            ipc::hermes_config::hermes_config_write_security,
             ipc::hermes_config::hermes_env_set_key,
             ipc::hermes_memory::hermes_memory_status,
             ipc::hermes_memory::hermes_user_md_write,

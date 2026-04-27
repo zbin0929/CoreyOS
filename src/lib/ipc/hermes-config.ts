@@ -114,6 +114,26 @@ export interface HermesModelSection {
  * Settings → Context so users can switch presets without hand-editing
  * YAML.
  */
+/**
+ * Hermes' tool-permission knobs. See backend's
+ * `HermesSecuritySection` doc for field semantics.
+ *
+ * Important: this is the **command-pattern** half of the permission
+ * story. Path-based access (Corey's own IPC) lives in
+ * `sandbox_*` / `sandbox_scope_*` and is independent.
+ */
+export interface HermesSecuritySection {
+  /** "manual" | "auto" | "yolo". null = use Hermes default ("manual"). */
+  approval_mode?: string | null;
+  /** Seconds. null = use Hermes default (60). */
+  approval_timeout_s?: number | null;
+  /** "deny" | "ask" | "allow". null = use Hermes default ("deny"). */
+  cron_mode?: string | null;
+  /** Glob-ish patterns that bypass the approval prompt. Always
+   *  written wholesale (replaces the on-disk list). */
+  command_allowlist: string[];
+}
+
 export interface HermesCompressionSection {
   enabled?: boolean | null;
   /** 0..1 ratio of context-window-fill that triggers compression. */
@@ -131,6 +151,7 @@ export interface HermesConfigView {
   present: boolean;
   model: HermesModelSection;
   compression: HermesCompressionSection;
+  security: HermesSecuritySection;
   /** Names of `*_API_KEY` env vars with non-empty values in ~/.hermes/.env. */
   env_keys_present: string[];
 }
@@ -140,6 +161,12 @@ export function hermesConfigRead(): Promise<HermesConfigView> {
   return invoke<HermesConfigView>('hermes_config_read');
 }
 
+/** Verdict from comparing the running Hermes against the version
+ *  range Corey was tested against. The Home page wires this into a
+ *  banner so users see schema-drift warnings BEFORE a config write
+ *  silently breaks them — see `gateway.rs` for the bump policy. */
+export type HermesCompatibility = 'supported' | 'untested' | 'too_old' | 'unknown';
+
 /** Result of the first-run Hermes detection probe. `installed === false`
  *  means the `hermes` CLI isn't on PATH / at the canonical install path
  *  — the Home page renders an install CTA in that case. */
@@ -147,6 +174,11 @@ export interface HermesDetection {
   installed: boolean;
   path: string | null;
   version: string | null;
+  /** [major, minor, patch] tuple parsed from `version`, or null. */
+  version_parsed: [number, number, number] | null;
+  compatibility: HermesCompatibility;
+  /** English diagnostic copy. UI wraps in localized prefix. */
+  compatibility_detail: string;
 }
 
 /** Detect whether the Hermes CLI is installed locally. Cheap — one
@@ -186,6 +218,22 @@ export function hermesConfigWriteCompression(
   compression: HermesCompressionSection,
 ): Promise<HermesConfigView> {
   return invoke<HermesConfigView>('hermes_config_write_compression', { compression });
+}
+
+/**
+ * Persist the `approvals:` mapping + `command_allowlist:` array.
+ * Same Some/None semantics as compression for the approval fields;
+ * `command_allowlist` is always written wholesale.
+ *
+ * UX hook: after this write, the change takes effect on the NEXT
+ * tool call — no gateway restart needed for the approvals knobs
+ * (Hermes reads them lazily). Surface that as "Saved · effective
+ * immediately" rather than the compression-style "needs restart".
+ */
+export function hermesConfigWriteSecurity(
+  security: HermesSecuritySection,
+): Promise<HermesConfigView> {
+  return invoke<HermesConfigView>('hermes_config_write_security', { security });
 }
 
 // ───────────────────────── Memory provider state ─────────────────────────

@@ -37,6 +37,8 @@ describe('visionSupport', () => {
       'deepseek-reasoner',
       'deepseek-chat',
       'deepseek-coder',
+      'deepseek-v4-pro',
+      'deepseek-v4-flash',
       'gpt-3.5-turbo',
       'text-embedding-3-small',
       'mistral-7b-instruct',

@@ -712,6 +712,37 @@
       "root_count": "{{count}} roots",
       "confirm_delete": "Delete scope \"{{id}}\"? Any instance pointed at it will fall back to the default scope."
     },
+    "hermes_security": {
+      "title": "Hermes tool permissions",
+      "description": "Permissions for Hermes agent's own tools (shell / read_file / write_file). Independent from Corey's sandbox above — the sandbox gates Corey's IPC by path; this section gates Hermes tools by command pattern.",
+      "mode_legend": "Approval mode",
+      "mode_manual": {
+        "title": "Manual (recommended)",
+        "detail": "Risky commands prompt you for approval. Safest, but you click a lot."
+      },
+      "mode_auto": {
+        "title": "Auto",
+        "detail": "An auxiliary LLM judges risk; only the truly catastrophic ones surface. Smoother daily flow."
+      },
+      "mode_yolo": {
+        "title": "Bypass everything (dangerous)",
+        "detail": "All commands run without approval. Only safe in disposable sandbox environments."
+      },
+      "timeout_label": "Approval timeout (s)",
+      "timeout_hint": "After this, an unanswered prompt counts as rejected. Default 60.",
+      "cron_label": "Risky command in cron job",
+      "cron_hint": "Cron has no human at the keyboard. Default deny is safest.",
+      "cron_deny": "Deny (recommended)",
+      "cron_ask": "Queue for approval (handled when user is back)",
+      "cron_allow": "Allow (not recommended)",
+      "allowlist_title": "Permanently allowed command patterns",
+      "allowlist_desc": "Commands matching one of these run directly, no prompt. One glob-ish pattern per line (e.g. git status, npm install, ls *).",
+      "allowlist_empty": "Empty — every risky command goes through the Approval mode above.",
+      "allowlist_placeholder": "git status / npm install / ls *",
+      "allowlist_add": "Add",
+      "saved": "Saved (effective on the next tool call)",
+      "save": "Save"
+    },
     "model": {
       "title": "Default language model",
       "desc": "Which LLM the Hermes agent uses when a chat doesn't specify one. Individual chats can override this from the composer.",

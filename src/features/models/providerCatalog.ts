@@ -15,7 +15,7 @@ export const PROVIDER_CATALOG: Array<{
     label: 'DeepSeek',
     envKey: 'DEEPSEEK_API_KEY',
     baseUrl: 'https://api.deepseek.com/v1',
-    sampleModels: ['deepseek-reasoner', 'deepseek-chat'],
+    sampleModels: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-reasoner', 'deepseek-chat'],
   },
   {
     slug: 'openai',
