@@ -81,7 +81,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .filter(|s| !s.is_empty());
             }
             "-h" | "--help" => {
-                println!("{}", include_str!("mint_license_help.txt"));
+                // Help text used to live next to this file as
+                // `src/bin/mint_license_help.txt`, but Tauri 2's
+                // universal-apple-darwin bundler scans `src/bin/`
+                // and treats every basename as a [[bin]] target,
+                // then fails the build when it can't `lipo` a
+                // file ending in `.txt`. We moved the help blob
+                // to a sibling cli-help/ directory so the bundler
+                // never sees it. include_str! is compile-time only
+                // so this has no runtime cost.
+                println!("{}", include_str!("../../cli-help/mint_license_help.txt"));
                 return Ok(());
             }
             other => return Err(format!("unknown flag {other}").into()),
