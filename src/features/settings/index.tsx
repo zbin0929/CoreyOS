@@ -30,6 +30,7 @@ import {
 import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
+import { ContextSection } from './sections/ContextSection';
 import { LicenseSection } from './sections/LicenseSection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
@@ -65,6 +66,7 @@ const SETTINGS_ANCHORS = [
   { id: 'settings-appearance', labelKey: 'settings.appearance.title' },
   { id: 'settings-gateway', labelKey: 'settings.gateway.title' },
   { id: 'settings-model', labelKey: 'settings.model.title' },
+  { id: 'settings-context', labelKey: 'settings.context.title' },
   { id: 'settings-routing', labelKey: 'settings.routing_rules.title' },
   { id: 'settings-sandbox', labelKey: 'settings.sandbox.title' },
   { id: 'settings-scopes', labelKey: 'settings.sandbox_scopes.title' },
@@ -324,6 +326,13 @@ export function SettingsRoute() {
           {/* T8 — Hermes instances moved to a top-level /agents tab.
               Settings keeps the primary gateway only; the Agents page
               lists additional instances and opens the wizard. */}
+
+          {/* v9 — Auto-context-compression knobs. Lives between gateway
+              and routing because it's a Hermes-config concern (same
+              YAML file as the model section) and the next thing a
+              user wants to tune after picking a model is "how does the
+              context get managed". */}
+          <ContextSection />
 
           {/* T6.4 — routing rules. Sits next to Hermes instances since
               routing most commonly picks between them. */}

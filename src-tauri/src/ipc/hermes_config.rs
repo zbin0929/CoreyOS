@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
-use crate::hermes_config::{self, HermesConfigView, HermesModelSection};
+use crate::hermes_config::{self, HermesCompressionSection, HermesConfigView, HermesModelSection};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -27,6 +27,26 @@ pub async fn hermes_config_write_model(
         message: format!("write hermes config: {e}"),
     })?;
     // Return the refreshed view so the UI can reconcile immediately.
+    hermes_config::read_view().map_err(|e| IpcError::Internal {
+        message: format!("re-read hermes config: {e}"),
+    })
+}
+
+/// Write the `compression:` section in `~/.hermes/config.yaml`. Each
+/// `Some(_)` field gets persisted; `None` fields are left as-is on
+/// disk. Returns the refreshed view so the UI can reconcile in one
+/// round-trip — same shape as `hermes_config_write_model`.
+#[tauri::command]
+pub async fn hermes_config_write_compression(
+    compression: HermesCompressionSection,
+    state: State<'_, AppState>,
+) -> IpcResult<HermesConfigView> {
+    let journal = state.changelog_path.clone();
+    hermes_config::write_compression(&compression, Some(&journal)).map_err(|e| {
+        IpcError::Internal {
+            message: format!("write hermes compression: {e}"),
+        }
+    })?;
     hermes_config::read_view().map_err(|e| IpcError::Internal {
         message: format!("re-read hermes config: {e}"),
     })

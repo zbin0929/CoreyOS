@@ -37,6 +37,30 @@ pub struct HermesModelSection {
     pub base_url: Option<String>,
 }
 
+/// Auto-context-compression section (`compression:` in config.yaml).
+///
+/// Hermes ships with this on by default — the v9 audit found that and
+/// elected to expose it through Corey's Settings → Context page rather
+/// than make users hand-edit YAML. Each field is `Option<…>` so the
+/// UI distinguishes "unset (Hermes default)" from "explicit value".
+///
+/// Field semantics (from `agent/context_compressor.py`):
+///   - `enabled`             on/off the whole subsystem
+///   - `threshold`           0..1 ratio of context-window-fill that triggers
+///   - `target_ratio`        0..1 ratio to compress DOWN to
+///   - `protect_last_n`      most-recent N messages excluded from the squash
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HermesCompressionSection {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub threshold: Option<f64>,
+    #[serde(default)]
+    pub target_ratio: Option<f64>,
+    #[serde(default)]
+    pub protect_last_n: Option<u32>,
+}
+
 /// Aggregated view for the LLMs page.
 #[derive(Debug, Clone, Serialize)]
 pub struct HermesConfigView {
@@ -46,6 +70,9 @@ pub struct HermesConfigView {
     pub present: bool,
     /// Current `model.*` values.
     pub model: HermesModelSection,
+    /// Current `compression.*` values. Always present (defaults
+    /// resolved to `None` when the YAML is missing the section).
+    pub compression: HermesCompressionSection,
     /// API-key env vars detected in `~/.hermes/.env`. We return the KEY NAMES
     /// only, never the values — so the UI can show "DEEPSEEK_API_KEY ✓ set"
     /// without exposing secrets over IPC.
@@ -73,13 +100,16 @@ pub fn read_view() -> io::Result<HermesConfigView> {
     let config_path = config_path()?;
     let path_str = config_path.to_string_lossy().to_string();
 
-    let (present, model) = match fs::read_to_string(&config_path) {
+    let (present, model, compression) = match fs::read_to_string(&config_path) {
         Ok(raw) => {
             let root: Value = serde_yaml::from_str(&raw).unwrap_or(Value::Null);
-            let model = extract_model(&root);
-            (true, model)
+            (true, extract_model(&root), extract_compression(&root))
         }
-        Err(_) => (false, HermesModelSection::default()),
+        Err(_) => (
+            false,
+            HermesModelSection::default(),
+            HermesCompressionSection::default(),
+        ),
     };
 
     let env_keys_present = read_env_key_names().unwrap_or_default();
@@ -88,6 +118,7 @@ pub fn read_view() -> io::Result<HermesConfigView> {
         config_path: path_str,
         present,
         model,
+        compression,
         env_keys_present,
     })
 }
@@ -116,6 +147,83 @@ fn extract_model(root: &Value) -> HermesModelSection {
             .and_then(Value::as_str)
             .map(str::to_owned),
     }
+}
+
+fn extract_compression(root: &Value) -> HermesCompressionSection {
+    let Some(map) = root.as_mapping() else {
+        return HermesCompressionSection::default();
+    };
+    let Some(comp) = map
+        .get(Value::String("compression".into()))
+        .and_then(|v| v.as_mapping())
+    else {
+        return HermesCompressionSection::default();
+    };
+    HermesCompressionSection {
+        enabled: comp
+            .get(Value::String("enabled".into()))
+            .and_then(Value::as_bool),
+        threshold: comp
+            .get(Value::String("threshold".into()))
+            .and_then(Value::as_f64),
+        target_ratio: comp
+            .get(Value::String("target_ratio".into()))
+            .and_then(Value::as_f64),
+        protect_last_n: comp
+            .get(Value::String("protect_last_n".into()))
+            .and_then(Value::as_u64)
+            .map(|v| v as u32),
+    }
+}
+
+/// Persist the `compression:` section. Each `Some(_)` field is written
+/// (or overwritten); each `None` is left as-is on disk so a partial
+/// update from the UI doesn't accidentally erase fields the user
+/// hasn't touched. To explicitly remove a field, the caller can
+/// hand-edit `~/.hermes/config.yaml` (rare; the UI doesn't expose a
+/// "delete" affordance because the safe default is "let Hermes pick").
+///
+/// Like `write_model`, this preserves every other YAML field. The
+/// underlying mechanism is the generic `walk_set` from `yaml.rs`,
+/// reused so we never re-implement YAML traversal.
+///
+/// `journal_path`, when provided, gets one `hermes.config.compression`
+/// changelog entry with before/after JSON. Pass `None` in tests.
+pub fn write_compression(
+    new: &HermesCompressionSection,
+    journal_path: Option<&Path>,
+) -> io::Result<()> {
+    use std::collections::HashMap;
+    let mut updates: HashMap<String, serde_json::Value> = HashMap::new();
+    if let Some(v) = new.enabled {
+        updates.insert("enabled".into(), serde_json::Value::Bool(v));
+    }
+    if let Some(v) = new.threshold {
+        updates.insert(
+            "threshold".into(),
+            serde_json::Number::from_f64(v)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
+        );
+    }
+    if let Some(v) = new.target_ratio {
+        updates.insert(
+            "target_ratio".into(),
+            serde_json::Number::from_f64(v)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
+        );
+    }
+    if let Some(v) = new.protect_last_n {
+        updates.insert(
+            "protect_last_n".into(),
+            serde_json::Value::Number(v.into()),
+        );
+    }
+    if updates.is_empty() {
+        return Ok(()); // no-op, caller passed all `None`s
+    }
+    yaml::write_channel_yaml_fields("compression", &updates, journal_path)
 }
 
 /// Write just the `model` subsection. All other fields in the YAML are

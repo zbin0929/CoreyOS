@@ -589,6 +589,37 @@
     "browser_llm_title": "浏览器自动化 LLM",
     "browser_llm_desc": "配置用于浏览器自动化的 AI 模型。Stagehand 需要 LLM 来理解网页内容并执行操作。只需 token 费用，推荐使用 DeepSeek（最便宜）或本地 Ollama（免费）。",
     "browser_diag": "检查环境",
+    "context": {
+      "title": "上下文管理",
+      "description": "Hermes 在对话越聊越长时自动总结早期消息，避免上下文窗口爆炸。下面三档预设涵盖大多数场景；如要精细调节请展开「高级」。",
+      "enabled_label": "自动压缩历史",
+      "enabled_hint": "session 累积达到阈值时，用辅助 LLM 把早期对话压缩成总结。",
+      "preset_legend": "策略",
+      "preset_aggressive": {
+        "title": "省 token",
+        "detail": "上下文用到 {{threshold}}% 触发 → 压到 {{target}}% · 保留最近 {{protect}} 条原文"
+      },
+      "preset_balanced": {
+        "title": "平衡（推荐）",
+        "detail": "上下文用到 {{threshold}}% 触发 → 压到 {{target}}% · 保留最近 {{protect}} 条原文"
+      },
+      "preset_conservative": {
+        "title": "保留更多原文",
+        "detail": "上下文用到 {{threshold}}% 触发 → 压到 {{target}}% · 保留最近 {{protect}} 条原文"
+      },
+      "custom_active": "当前为自定义参数（不匹配任一预设）。可选预设以重置。",
+      "advanced_label": "高级",
+      "threshold_label": "触发阈值（threshold）",
+      "threshold_hint": "0..1。上下文窗口被填到这个比例就开始压缩。默认 0.5。",
+      "target_label": "目标比例（target_ratio）",
+      "target_hint": "0..1。压缩后留下的目标占比。默认 0.2。",
+      "protect_label": "保护最近 N 条（protect_last_n）",
+      "protect_hint": "最近 N 条对话原文不动。默认 20。",
+      "save": "保存",
+      "saved": "已保存",
+      "needs_restart": "已保存。需要重启 Hermes 才能生效。",
+      "restart_now": "立即重启 Hermes"
+    },
     "routing_rules": {
       "title": "路由规则",
       "desc": "当输入的消息匹配某条规则时，下一轮对话将发送到规则指定的适配器，而不是当前激活的适配器。按列表顺序取第一条启用的匹配；列表为空即路由关闭。",

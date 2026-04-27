@@ -106,12 +106,31 @@ export interface HermesModelSection {
   base_url?: string | null;
 }
 
+/**
+ * Auto-context-compression knobs from `~/.hermes/config.yaml` →
+ * `compression:`. Each field is `null` when the YAML omits it (Hermes
+ * applies its own defaults: enabled=true, threshold=0.5,
+ * target_ratio=0.2, protect_last_n=20). v9 audit: surface these in
+ * Settings → Context so users can switch presets without hand-editing
+ * YAML.
+ */
+export interface HermesCompressionSection {
+  enabled?: boolean | null;
+  /** 0..1 ratio of context-window-fill that triggers compression. */
+  threshold?: number | null;
+  /** 0..1 ratio to compress DOWN to. */
+  target_ratio?: number | null;
+  /** Most-recent N messages excluded from the squash. */
+  protect_last_n?: number | null;
+}
+
 export interface HermesConfigView {
   /** Absolute path on disk, for display + error messages. */
   config_path: string;
   /** `true` if the file existed and parsed. */
   present: boolean;
   model: HermesModelSection;
+  compression: HermesCompressionSection;
   /** Names of `*_API_KEY` env vars with non-empty values in ~/.hermes/.env. */
   env_keys_present: string[];
 }
@@ -153,6 +172,20 @@ export function hermesConfigWriteModel(
   model: HermesModelSection,
 ): Promise<HermesConfigView> {
   return invoke<HermesConfigView>('hermes_config_write_model', { model });
+}
+
+/**
+ * Persist a partial `compression` section. Each non-null field gets
+ * written; nulls are left as-is on disk. Returns the refreshed view.
+ *
+ * NOTE: Like `hermesConfigWriteModel`, the gateway does NOT hot-reload
+ * — call `hermesGatewayRestart` (or surface a "restart required"
+ * banner) so the new threshold actually takes effect.
+ */
+export function hermesConfigWriteCompression(
+  compression: HermesCompressionSection,
+): Promise<HermesConfigView> {
+  return invoke<HermesConfigView>('hermes_config_write_compression', { compression });
 }
 
 /**
