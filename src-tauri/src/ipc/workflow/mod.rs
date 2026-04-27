@@ -413,7 +413,7 @@ pub fn spawn_run_executor(
     let wf_id_for_log = def.id.clone();
     tokio::task::spawn_blocking(move || {
         let executor = HermesExecutor { adapters };
-        let hook = make_step_end_hook(runs.clone(), db.clone(), run_id.clone());
+        let hook = make_step_end_hook(runs.clone(), db.clone(), run_id.clone(), cancel_flag.clone());
         let progress_hook = make_step_progress_hook(runs.clone(), run_id.clone());
         let should_cancel = {
             let flag = cancel_flag.clone();
@@ -499,22 +499,45 @@ fn make_step_end_hook(
     runs: std::sync::Arc<parking_lot::Mutex<std::collections::HashMap<String, WorkflowRun>>>,
     db: Option<Arc<Db>>,
     run_id: String,
+    cancel_flag: Arc<AtomicBool>,
 ) -> impl Fn(&WorkflowRun) {
     move |r: &WorkflowRun| {
         // Step 1: refresh in-memory copy so pollers see live state.
         // Acquire-and-release in a tight scope so the hot loop doesn't
         // sit on the lock during the upcoming SQLite write.
+        //
+        // If the user clicked Cancel while the engine was mid-step
+        // (chat_stream, etc.), the IPC handler set the in-memory
+        // status to Cancelled but the engine's owned `r` is still
+        // Running (engine hasn't reached its next `should_cancel`
+        // check yet). Without override-protection, this hook would
+        // happily clobber Cancelled with Running on its next fire.
+        // We snap the clone we publish back to the map / SQLite to
+        // Cancelled when the cancel flag is set, so the UI's
+        // optimistic flip stays sticky and the next poll confirms.
+        let cancel_requested = cancel_flag.load(Ordering::Relaxed);
+        let mut snap = r.clone();
+        if cancel_requested && !matches!(
+            snap.status,
+            engine::RunStatus::Cancelled
+                | engine::RunStatus::Failed
+                | engine::RunStatus::Completed
+        ) {
+            snap.status = engine::RunStatus::Cancelled;
+            if snap.error.is_none() {
+                snap.error = Some("Cancelled by user".into());
+            }
+        }
         {
             let mut map = runs.lock();
             // `insert` (rather than `get_mut + clone_from`) keeps the
             // semantics simple: even if the run was evicted by a
             // concurrent delete, we re-insert to reflect that the
             // executor is still authoritatively driving it.
-            map.insert(run_id.clone(), r.clone());
+            map.insert(run_id.clone(), snap.clone());
         }
         // Step 2: persist to SQLite outside the in-memory lock. Best-
         // effort: a flaky disk shouldn't stop the engine.
-        let mut snap = r.clone();
         snap.updated_at_ms = chrono::Utc::now().timestamp_millis();
         if let Some(db) = db.as_ref() {
             if let Err(e) = db.upsert_workflow_run(&snap) {
@@ -701,19 +724,38 @@ pub async fn workflow_run_cancel(state: State<'_, AppState>, run_id: String) -> 
         if let Some(flag) = flags.lock().get(&rid) {
             flag.store(true, Ordering::Relaxed);
         }
-        // 2. For runs in `Paused` (awaiting approval, no executor
-        //    running) or `Pending` (queued, executor hasn't started),
-        //    the engine isn't going to revisit a step boundary — flip
-        //    the run status manually + persist.
+        // 2. ALWAYS flip status to Cancelled immediately, regardless
+        //    of current state. Earlier draft only did this for
+        //    Paused/Pending runs (with the rationale that the engine
+        //    would handle Running runs at the next step boundary).
+        //    Problem: an in-flight 30 s `chat_stream` is a step
+        //    boundary that's 30 seconds away — the user clicked
+        //    Stop, saw nothing happen, assumed cancellation was
+        //    broken, and complained.
+        //
+        //    Now we set Cancelled in-memory + persist immediately
+        //    so the next status poll shows it. The engine still
+        //    finishes the current step's chat_stream (hermes already
+        //    billed for it; aborting wastes the tokens), then sees
+        //    `should_cancel = true` on the next dispatch and exits
+        //    cleanly. The terminal `on_step_end` fire will not
+        //    overwrite Cancelled because the engine's terminal
+        //    transitions only set Completed when status != Failed,
+        //    and the cancel branch sets it to Cancelled before
+        //    returning.
         let mut map = runs.lock();
         let Some(run) = map.get_mut(&rid) else {
             return had_flag;
         };
-        let needs_manual_terminate = matches!(
+        // Already terminal — no-op so we don't overwrite Failed /
+        // Completed with Cancelled.
+        let already_terminal = matches!(
             run.status,
-            engine::RunStatus::Paused | engine::RunStatus::Pending
+            engine::RunStatus::Cancelled
+                | engine::RunStatus::Failed
+                | engine::RunStatus::Completed
         );
-        if needs_manual_terminate {
+        if !already_terminal {
             run.status = engine::RunStatus::Cancelled;
             run.error = Some("Cancelled by user".into());
             run.updated_at_ms = chrono::Utc::now().timestamp_millis();
@@ -723,6 +765,7 @@ pub async fn workflow_run_cancel(state: State<'_, AppState>, run_id: String) -> 
                 }
             }
         }
+        tracing::info!(run_id = %rid, "workflow run cancelled (status=Cancelled, executor will exit at next step boundary)");
         true
     })
     .await
