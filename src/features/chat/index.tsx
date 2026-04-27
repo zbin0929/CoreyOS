@@ -10,6 +10,7 @@ import { useChatIntentSuggestions } from './useChatIntentSuggestions';
 import { usePostSendEffects } from './usePostSendEffects';
 import { ChatHeaderActions, EmptyHero } from './ChatHelpers';
 import { Composer } from './Composer';
+import { GatewayStatusBanner } from './GatewayStatusBanner';
 import { LearningIndicator } from './LearningIndicator';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
@@ -289,6 +290,7 @@ function ChatPane({
         </div>
       )}
 
+      <GatewayStatusBanner />
       <Composer
         draft={chat.draft}
         sending={chat.sending}

@@ -34,6 +34,25 @@ interface AppStatusState {
    *  missing or Hermes isn't installed. Runbooks use this to filter
    *  their list by `scope_profile`. */
   activeProfile: string | null;
+  /**
+   * v9 — first time the gateway flipped to `online` since the app
+   * launched, as a wall-clock millisecond timestamp. Stays at the
+   * earliest known good time across subsequent offline blips.
+   *
+   * Used by the chat surface to distinguish:
+   *   - "Hermes never reached" (cold-start bar shown indefinitely)
+   *   - "Hermes was reachable once; transient blip" (no bar — user
+   *     can keep typing, the next probe will recover)
+   *
+   * `null` until we get our first successful `/health` round-trip.
+   */
+  bootedReadyAt: number | null;
+  /** Wall-clock timestamp recorded at the very first
+   *  `startBackgroundRefresh` call, so the gateway banner can decide
+   *  whether to suppress the "connecting…" copy for the first
+   *  ~600 ms (instant boots shouldn't flicker text the user can't
+   *  read). */
+  bootStartedAt: number | null;
 
   /** Explicit setter — called by Settings/LLMs pages after the user saves. */
   setCurrentModel: (m: string | null) => void;
@@ -64,6 +83,8 @@ export const useAppStatusStore = create<AppStatusState>()((set, get) => ({
   gateway: 'unknown',
   gatewayLatencyMs: null,
   activeProfile: null,
+  bootedReadyAt: null,
+  bootStartedAt: null,
 
   setCurrentModel: (m) => set({ currentModel: m && m.trim() ? m : null }),
 
@@ -105,7 +126,18 @@ export const useAppStatusStore = create<AppStatusState>()((set, get) => ({
       // Reuse `config_test` with the already-saved config to probe /health.
       const cfg = await configGet();
       const probe = await configTest(cfg);
-      set({ gateway: 'online', gatewayLatencyMs: probe.latency_ms });
+      // First success since boot — stamp `bootedReadyAt` so the
+      // chat surface can drop the cold-start banner. Subsequent
+      // successes leave the value untouched (we want the EARLIEST
+      // ready time, not a moving target across reconnects). Doing
+      // this in the store rather than in `Providers.tsx` keeps the
+      // logic colocated with the state it stamps.
+      const wasReady = get().bootedReadyAt !== null;
+      set({
+        gateway: 'online',
+        gatewayLatencyMs: probe.latency_ms,
+        bootedReadyAt: wasReady ? get().bootedReadyAt : Date.now(),
+      });
     } catch {
       set({ gateway: 'offline', gatewayLatencyMs: null });
     }
@@ -113,6 +145,13 @@ export const useAppStatusStore = create<AppStatusState>()((set, get) => ({
 
   startBackgroundRefresh: () => {
     // One-shot immediate refresh so the UI doesn't sit on "unknown" for long.
+    if (get().bootStartedAt === null) {
+      // Stamp on the very first call. StrictMode double-mounts call
+      // this twice; we only want the FIRST timestamp because the
+      // banner uses it to decide "have we been waiting long enough
+      // to bother showing the user a cold-start hint".
+      set({ bootStartedAt: Date.now() });
+    }
     void get().refreshModel();
     void get().refreshGateway();
     void get().refreshActiveProfile();
