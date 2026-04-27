@@ -16,9 +16,10 @@ import { cn } from '@/lib/cn';
 import {
   chatStream,
   ipcErrorMessage,
-  modelList,
+  llmProfileList,
   type ChatMessageDto,
   type ChatStreamHandle,
+  type LlmProfile,
   type ModelInfo,
 } from '@/lib/ipc';
 import { useAgentsStore } from '@/stores/agents';
@@ -64,16 +65,45 @@ export function CompareRoute() {
   const handlesRef = useRef<Map<string, ChatStreamHandle>>(new Map());
   const anyStreaming = lanes.some((l) => l.state.kind === 'streaming');
 
-  // ───────────────────────── Model list fetch ─────────────────────────
+  // ───────────────────────── LLM Profile list fetch ─────────────────────────
+  // Compare's job is "same prompt → multiple LLMs side-by-side", which only
+  // makes sense across DIFFERENT models (deepseek-v4 vs glm-5.1 vs minimax).
+  // The single active adapter's `/v1/models` doesn't help — Hermes-as-default
+  // means it only advertises hermes-agent, so all lanes would be the same
+  // backend.
+  //
+  // We pull from `llm_profile_list` instead. Each profile is a saved
+  // `{provider, base_url, model, api_key_env}` bundle that registers itself
+  // as `hermes:profile:<id>` adapter. Picking three profiles → three lanes
+  // → three different LLM houses replying to one prompt.
+  //
+  // Each profile is materialised as a synthetic ModelInfo so the existing
+  // ModelPicker / LanePanel renderers don't need a rewrite.
+  const profilesRef = useRef<Map<string, LlmProfile>>(new Map());
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await modelList();
+        const view = await llmProfileList();
         if (cancelled) return;
-        setModels(rows);
-        // Seed with the first model so the page isn't dead-empty.
-        const first = rows[0];
+        // Index by id for the chatStream → adapter_id lookup later.
+        const map = new Map<string, LlmProfile>();
+        for (const p of view.profiles) map.set(p.id, p);
+        profilesRef.current = map;
+        const synthetic: ModelInfo[] = view.profiles.map((p) => ({
+          // Compose a stable surface id that doesn't collide if two
+          // profiles target the same backing model name. The `profile:`
+          // prefix is only seen by the picker; chatStream gets the real
+          // model name out of `profilesRef`.
+          id: `profile:${p.id}`,
+          provider: p.provider,
+          display_name: profileDisplay(p),
+          context_window: 0,
+          is_default: false,
+          capabilities: { vision: !!p.vision, tool_use: true, reasoning: false },
+        }));
+        setModels(synthetic);
+        const first = synthetic[0];
         if (first && selectedIds.length === 0) {
           setSelectedIds([first.id]);
         }
@@ -129,8 +159,24 @@ export function CompareRoute() {
     await Promise.all(
       freshLanes.map(async (lane) => {
         try {
+          // The synthetic id is `profile:<id>` — strip and resolve
+          // back to the actual LLM Profile so we can route through
+          // its dedicated adapter (`hermes:profile:<id>`) and use
+          // its real model name on the wire. Falling back to the
+          // active adapter / lane.model.id keeps things working in
+          // the unlikely case the user picked something not in the
+          // ref (e.g. profile deleted between picker render and
+          // run click).
+          const profileId = lane.model.id.startsWith('profile:')
+            ? lane.model.id.slice('profile:'.length)
+            : null;
+          const profile = profileId ? profilesRef.current.get(profileId) : null;
+          const wireAdapterId = profile
+            ? `hermes:profile:${profile.id}`
+            : activeAdapterId;
+          const wireModel = profile?.model ?? lane.model.id;
           const handle = await chatStream(
-            { messages: [msg], model: lane.model.id, adapter_id: activeAdapterId },
+            { messages: [msg], model: wireModel, adapter_id: wireAdapterId },
             {
               onDelta: (chunk) => {
                 setLanes((prev) =>
@@ -296,6 +342,17 @@ export function CompareRoute() {
                 {modelsError}
               </div>
             )}
+            {!modelsError && models.length === 0 && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-fg-muted">
+                <Icon icon={AlertCircle} size="sm" className="flex-none text-amber-500" />
+                <span>
+                  {t('compare.no_profiles_hint', {
+                    defaultValue:
+                      '还没有任何 LLM Profile。先去 Settings → Models 创建至少 2 个不同 provider 的 profile，才能横向对比。',
+                  })}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -347,4 +404,12 @@ export function CompareRoute() {
       </div>
     </div>
   );
+}
+
+/** Pretty label for the picker chip. "label · model" when both are
+ *  set, falling back to id so we always have *something* to show. */
+function profileDisplay(p: LlmProfile): string {
+  const lbl = (p.label || p.id).trim();
+  const m = (p.model || '').trim();
+  return m ? `${lbl} · ${m}` : lbl;
 }
