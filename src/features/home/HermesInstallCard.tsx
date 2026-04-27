@@ -16,8 +16,10 @@ import { cn } from '@/lib/cn';
 import {
   hermesDetect,
   hermesGatewayStart,
+  hermesInstallPreflight,
   ipcErrorMessage,
   type HermesDetection,
+  type HermesInstallPreflight,
 } from '@/lib/ipc';
 import { useAppStatusStore } from '@/stores/appStatus';
 
@@ -174,6 +176,28 @@ function NotInstalledCard({
 }) {
   const { t } = useTranslation();
   const cmd = installCommandForPlatform();
+  const [preflight, setPreflight] = useState<HermesInstallPreflight | null>(null);
+  const [preflightChecking, setPreflightChecking] = useState(false);
+
+  // Auto-run pre-flight on mount so the "your environment isn't
+  // ready" callout is visible BEFORE the user hits Copy. Failure
+  // silently leaves preflight=null — the install copy block still
+  // works.
+  useEffect(() => {
+    let cancelled = false;
+    setPreflightChecking(true);
+    hermesInstallPreflight()
+      .then((r) => {
+        if (!cancelled) setPreflight(r);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPreflightChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function copy() {
     try {
@@ -206,6 +230,32 @@ function NotInstalledCard({
           </p>
         </div>
       </div>
+
+      {/* Pre-flight status: tells the user whether their machine
+          even has the prerequisites for the install command below.
+          Three states:
+            - loading: light-grey "checking…"
+            - ready (Python 3.11+ + pip): green "ready to install"
+            - missing something: amber + actionable hint
+          Surfacing this before the copy block prevents the most
+          common "I copy-pasted and it broke" support thread. */}
+      {(preflightChecking || preflight) && (
+        <div
+          className={cn(
+            'rounded-md border px-3 py-2 text-xs',
+            preflightChecking
+              ? 'border-border bg-bg-elev-2/50 text-fg-subtle'
+              : preflight && preflight.python_ok && preflight.pip_ok
+                ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
+                : 'border-amber-500/40 bg-amber-500/5 text-fg-muted',
+          )}
+          data-testid="home-hermes-preflight"
+        >
+          {preflightChecking
+            ? t('home.preflight_checking', { defaultValue: '正在检查 Python / pip…' })
+            : preflight?.summary}
+        </div>
+      )}
 
       {/* Copy-paste command block — the primary affordance. */}
       <div className="flex items-stretch gap-2 rounded-md border border-border bg-bg font-mono text-xs">

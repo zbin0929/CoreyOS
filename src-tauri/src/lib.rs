@@ -113,6 +113,7 @@ pub fn run() {
             ipc::hermes_config::hermes_gateway_restart,
             ipc::hermes_config::hermes_gateway_start,
             ipc::hermes_config::hermes_detect,
+            ipc::hermes_config::hermes_install_preflight,
             ipc::changelog::changelog_list,
             ipc::changelog::changelog_revert,
             ipc::db::db_load_all,

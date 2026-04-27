@@ -139,6 +139,148 @@ fn parse_hermes_version(banner: &str) -> Option<(u32, u32, u32)> {
     None
 }
 
+// ───────────────────────── Install pre-flight ─────────────────────────
+//
+// Hermes is `pip install hermes-agent` on Python 3.11+. The number-one
+// "I followed the docs and it still doesn't work" cause is `pip install`
+// failing because:
+//   1. user has only Python 2 / 3.9 / 3.10 (Hermes hard-requires 3.11+)
+//   2. `pip` isn't on PATH (Linux distros split `python` and `python3-pip`)
+//   3. `python --version` exists but `python3 --version` doesn't (or vice
+//      versa) — pip command varies per platform
+//
+// This IPC checks all three before the user runs the install command,
+// so the Home-page "not installed" card can replace the generic
+// suggestion with a precise "you're missing X" callout. A genuine
+// "install for me" button isn't here — running pip with sudo from a GUI
+// is a security can of worms, and most users want to see what's
+// happening anyway.
+
+#[derive(Debug, serde::Serialize)]
+pub struct HermesInstallPreflight {
+    /// Resolved Python interpreter path (`python3` or `python` on PATH),
+    /// or null if neither is callable.
+    pub python_path: Option<String>,
+    /// Trimmed `--version` line as Python printed it.
+    pub python_version: Option<String>,
+    /// Parsed `(major, minor)` for the recommendation logic.
+    pub python_version_parsed: Option<(u32, u32)>,
+    /// Whether the resolved Python is ≥ 3.11 (Hermes' floor).
+    pub python_ok: bool,
+    /// Whether `pip --version` returned 0 from the resolved
+    /// interpreter (`<python> -m pip --version`).
+    pub pip_ok: bool,
+    /// One-line summary the UI can show as a status pill.
+    pub summary: String,
+}
+
+/// Probe Python + pip availability. Cheap (two short subprocess
+/// invocations); safe to call from a Home-page card on every
+/// re-check click.
+pub fn install_preflight() -> HermesInstallPreflight {
+    // Try `python3` first (Hermes docs use it; macOS / most Linuxes
+    // expect it). Fall back to `python` for Windows / older mac
+    // which alias differently.
+    let (python_path, version_str) = ["python3", "python"]
+        .iter()
+        .find_map(|cmd| {
+            let out = std::process::Command::new(cmd)
+                .arg("--version")
+                .output()
+                .ok()?;
+            if !out.status.success() {
+                return None;
+            }
+            let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            // Some pythons print version to stderr.
+            let v = if v.is_empty() {
+                String::from_utf8_lossy(&out.stderr).trim().to_string()
+            } else {
+                v
+            };
+            Some((cmd.to_string(), v))
+        })
+        .map(|(p, v)| (Some(p), Some(v)))
+        .unwrap_or((None, None));
+
+    let python_version_parsed = version_str.as_deref().and_then(parse_python_version);
+    let python_ok = matches!(python_version_parsed, Some((maj, min)) if maj >= 3 && min >= 11);
+
+    // pip check via `<python> -m pip --version` (avoids pip-vs-pip3 PATH
+    // games). Skip if Python itself was missing.
+    let pip_ok = python_path
+        .as_deref()
+        .map(|cmd| {
+            std::process::Command::new(cmd)
+                .args(["-m", "pip", "--version"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false);
+
+    let summary = match (python_ok, pip_ok) {
+        (true, true) => format!(
+            "Ready to install. Detected {} with pip available.",
+            version_str.as_deref().unwrap_or("Python 3.11+")
+        ),
+        (true, false) => "Python OK, but pip is missing. Install pip first (e.g. `python3 -m ensurepip --upgrade`) before running the install command above.".into(),
+        (false, _) if python_path.is_none() => {
+            "Python is not installed (or not on PATH). Install Python 3.11+ from https://python.org first.".into()
+        }
+        (false, _) => format!(
+            "Detected {}, but Hermes requires Python 3.11+. Upgrade Python before running pip install.",
+            version_str.as_deref().unwrap_or("an older Python")
+        ),
+    };
+
+    HermesInstallPreflight {
+        python_path,
+        python_version: version_str,
+        python_version_parsed,
+        python_ok,
+        pip_ok,
+        summary,
+    }
+}
+
+/// Pull `(major, minor)` from `Python 3.11.15` / `Python 3.12.0a1` /
+/// similar. Returns None when Python's `--version` shape changed
+/// out from under us (very rare).
+fn parse_python_version(banner: &str) -> Option<(u32, u32)> {
+    // `Python 3.11.15` → take the first three digit-dot run.
+    let body = banner.strip_prefix("Python ").unwrap_or(banner).trim();
+    let token: String = body
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let maj = parts[0].parse::<u32>().ok()?;
+    let min = parts[1].parse::<u32>().ok()?;
+    Some((maj, min))
+}
+
+#[cfg(test)]
+mod preflight_tests {
+    use super::*;
+
+    #[test]
+    fn parses_canonical_python_banner() {
+        assert_eq!(parse_python_version("Python 3.11.15"), Some((3, 11)));
+        assert_eq!(parse_python_version("Python 3.12.0a1"), Some((3, 12)));
+        assert_eq!(parse_python_version("Python 2.7.18"), Some((2, 7)));
+    }
+
+    #[test]
+    fn rejects_garbage() {
+        assert_eq!(parse_python_version("nothing here"), None);
+        assert_eq!(parse_python_version(""), None);
+    }
+}
+
 /// Compare a parsed `(major, minor)` against the Corey-tested range.
 /// Patch versions are treated as forward-compat (Hermes promises
 /// not to break schema in patch releases).

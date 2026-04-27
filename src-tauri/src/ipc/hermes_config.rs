@@ -127,6 +127,20 @@ pub async fn hermes_gateway_start() -> IpcResult<String> {
 /// First-run detection: is the Hermes binary present on PATH / at
 /// `~/.local/bin/hermes`? Non-blocking; returns a structured view
 /// the frontend can branch on without parsing error messages.
+/// Pre-flight check for the Hermes install: detect Python 3.11+
+/// and pip. Surfaces structured "you're missing X" output so the
+/// Home install card can give precise guidance instead of the
+/// generic copy-paste command. Cheap (2 short subprocess calls);
+/// safe to call on every Re-check click.
+#[tauri::command]
+pub async fn hermes_install_preflight() -> IpcResult<hermes_config::HermesInstallPreflight> {
+    tokio::task::spawn_blocking(hermes_config::install_preflight)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("hermes_install_preflight join: {e}"),
+        })
+}
+
 #[tauri::command]
 pub async fn hermes_detect() -> IpcResult<hermes_config::HermesDetection> {
     tokio::task::spawn_blocking(hermes_config::detect)

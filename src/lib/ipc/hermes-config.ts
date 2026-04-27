@@ -187,6 +187,24 @@ export function hermesDetect(): Promise<HermesDetection> {
   return invoke<HermesDetection>('hermes_detect');
 }
 
+/** Pre-flight: does the user have Python 3.11+ and pip ready to go?
+ *  Used by the Home install card to surface "你缺 Python" / "你缺
+ *  pip" before the user tries to copy-paste the install command and
+ *  hits a confusing error. */
+export interface HermesInstallPreflight {
+  python_path: string | null;
+  python_version: string | null;
+  python_version_parsed: [number, number] | null;
+  python_ok: boolean;
+  pip_ok: boolean;
+  /** One-line English summary the UI can show as a status pill. */
+  summary: string;
+}
+
+export function hermesInstallPreflight(): Promise<HermesInstallPreflight> {
+  return invoke<HermesInstallPreflight>('hermes_install_preflight');
+}
+
 /** `hermes gateway start` — used by Home's "Start gateway" button
  *  when the binary is present but the /health probe fails. */
 export function hermesGatewayStart(): Promise<string> {
