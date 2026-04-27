@@ -278,7 +278,16 @@ export function Composer({
               // ceiling enforced in the parent's useLayoutEffect.
               // `max-h` is kept as a CSS safety net in case the JS
               // never runs (SSR, error boundaries).
-              'min-h-[44px] max-h-[132px] flex-1 resize-none rounded-xl border border-border',
+              // Default `<textarea>` keeps a scrollbar gutter
+              // visible on macOS / WebKit even when there's
+              // nothing to scroll, leaving a vertical "|" line
+              // hugging the right edge of the empty composer.
+              // We hide overflow by default; the auto-resize
+              // useLayoutEffect in `chat/index.tsx` caps height
+              // at ~132 px so users typing more than ~5 lines
+              // hit `overflow-y-auto` instead and the scrollbar
+              // reappears on demand.
+              'min-h-[44px] max-h-[132px] flex-1 resize-none rounded-xl border border-border overflow-y-hidden',
               'bg-bg-elev-1 px-4 py-3 text-sm text-fg placeholder:text-fg-subtle',
               'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
               'disabled:opacity-60',

@@ -228,7 +228,15 @@ function ChatPane({
     if (!el) return;
     const MAX = 132; // ~3× the 44px min-height
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, MAX)}px`;
+    const next = Math.min(el.scrollHeight, MAX);
+    el.style.height = `${next}px`;
+    // Composer.tsx default-hides the scrollbar gutter so empty
+    // textareas don't show a phantom "|" line on macOS WebKit.
+    // Once the user has typed past the ceiling, we DO need the
+    // scrollbar back so they can read what they've already
+    // written. Toggle here rather than driving it from CSS so
+    // the threshold matches the cap exactly.
+    el.style.overflowY = el.scrollHeight > MAX ? 'auto' : 'hidden';
   }, [chat.draft]);
 
 
