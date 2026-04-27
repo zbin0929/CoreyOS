@@ -186,7 +186,24 @@ const MCP_NAME: &str = "corey-native";
 /// pipeline (atomic, locked, validation-aware), which is the contract
 /// upstream documents.
 async fn register_with_hermes(port: u16) {
+    use std::process::Stdio;
     use tokio::process::Command;
+
+    // Helper: every hermes invocation here MUST nuke stdio. Without this
+    // the cargo/tauri-dev parent's stdin (a tty in dev, a pipe under
+    // launchd in prod) gets inherited; hermes-agent's prompt_toolkit
+    // boot path then tries to attach a kqueue reader to that fd,
+    // crashes with `OSError: [Errno 22] Invalid argument`, and falls
+    // through to its default `cmd_chat` REPL — which is what surfaced
+    // in the dev console as a giant ASCII banner + Goodbye traceback
+    // instead of "MCP: registered with Hermes". `Stdio::null()` on
+    // stdin and piped on stdout/stderr (so we can still read the
+    // result) keeps every spawn purely batch.
+    fn batch(cmd: &mut Command) -> &mut Command {
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+    }
 
     // Resolve the hermes binary the SAME way the rest of Corey does
     // (bundled-with-Corey paths first, then $PATH). A previous draft
@@ -213,8 +230,7 @@ async fn register_with_hermes(port: u16) {
     let url = format!("http://127.0.0.1:{port}/");
 
     // 1. Check if already registered with the same URL.
-    let listing = Command::new(&hermes)
-        .args(["mcp", "list"])
+    let listing = batch(Command::new(&hermes).args(["mcp", "list"]))
         .output()
         .await;
     let already_correct = match listing {
@@ -250,14 +266,12 @@ async fn register_with_hermes(port: u16) {
 
     // 2. Remove any stale entry. Failure is fine — most likely cause
     // is "no such server", which is exactly the state we want.
-    let _ = Command::new(&hermes)
-        .args(["mcp", "remove", MCP_NAME])
+    let _ = batch(Command::new(&hermes).args(["mcp", "remove", MCP_NAME]))
         .output()
         .await;
 
     // 3. Add fresh.
-    let add = Command::new(&hermes)
-        .args(["mcp", "add", MCP_NAME, "--url", &url])
+    let add = batch(Command::new(&hermes).args(["mcp", "add", MCP_NAME, "--url", &url]))
         .output()
         .await;
     match add {
