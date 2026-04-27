@@ -116,21 +116,32 @@ pub fn write_override(dir: Option<&Path>) -> io::Result<PathBuf> {
 /// canonical Windows app-data tree (not the user-profile root). On
 /// macOS/Linux we keep `~/.hermes` — installed bases already have it,
 /// and moving it would orphan every profile in the field.
+///
+/// **`HOME` overrides everything.** Many tests in this crate (skills,
+/// hermes_config, …) point `HOME` at a `tempdir()` to isolate disk
+/// state; treating `HOME` as authoritative when explicitly set keeps
+/// that pattern working on Windows too. Windows itself does not set
+/// `HOME` by default (it sets `USERPROFILE`), so production behaviour
+/// on Windows is still "use `LOCALAPPDATA`" — only test code that
+/// explicitly sets `HOME` deviates.
 fn platform_default() -> io::Result<PathBuf> {
+    if let Some(home) = std::env::var_os("HOME") {
+        if !home.is_empty() {
+            return Ok(PathBuf::from(home).join(HERMES_DIR));
+        }
+    }
     #[cfg(target_os = "windows")]
     {
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
             return Ok(PathBuf::from(local).join("Corey").join("hermes"));
         }
     }
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "neither $HOME nor %USERPROFILE% set",
-            )
-        })?;
+    let home = std::env::var_os("USERPROFILE").ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "neither $HOME nor %USERPROFILE% set",
+        )
+    })?;
     Ok(PathBuf::from(home).join(HERMES_DIR))
 }
 
