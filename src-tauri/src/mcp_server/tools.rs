@@ -42,20 +42,45 @@ pub fn manifest() -> Vec<Value> {
     vec![
         json!({
             "name": "notify",
-            "description": "Show a native OS notification (toast). Use \
-                this when the user is likely in another application and \
-                a long-running task just finished, or when an event \
-                deserves attention but not a chat message.",
+            // Description tuned for bilingual tool-selection. The
+            // earlier draft said "Show a native OS notification" and
+            // DeepSeek-zh consistently misread Chinese requests like
+            // "发个通知" / "提醒我一下" as "draft a notification
+            // document" rather than "trigger a system toast", because
+            // 通知 is overloaded in Chinese (notification vs memo).
+            // Three rhetorical moves fix this:
+            //   1. Lead with the *physical effect* ("Pop a desktop
+            //      toast on the user's screen") so the model sees
+            //      this is a system call, not a writing task.
+            //   2. Enumerate trigger phrases EN + ZH so token-by-
+            //      token attention has direct anchors.
+            //   3. Anti-list ("NOT for...") to suppress the
+            //      doc-drafting interpretation explicitly.
+            "description": "Pop a native desktop notification \
+                (system toast) on the user's screen. The user sees a \
+                small banner outside the chat window, like a Slack \
+                ping or macOS Calendar reminder. \n\n\
+                Trigger when the user asks to: \"send a desktop \
+                notification\", \"show a toast\", \"ping me\", \"alert \
+                me when X is done\", \"remind me\"; or in Chinese: \
+                \"发个桌面通知\", \"弹个系统通知\", \"提醒我\", \
+                \"在桌面提示我\", \"通知我一下\", \"任务完成时叫我\". \n\n\
+                NOT for drafting announcement text, writing a memo, \
+                or composing a notification document — for those, \
+                just reply with the drafted content in chat. This \
+                tool only fires the OS-level banner.\n\n\
+                Example: user says \"任务完成时通知我\" → call \
+                `notify(title=\"任务完成\", body=\"...\")`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Short headline (e.g. \"调研完成\"). Max ~40 chars before OS truncates."
+                        "description": "Short headline shown in bold (e.g. \"调研完成\" / \"Build OK\"). Max ~40 chars before the OS truncates."
                     },
                     "body": {
                         "type": "string",
-                        "description": "One-line detail. Optional. Max ~200 chars."
+                        "description": "Optional one-line detail under the title. Max ~200 chars."
                     }
                 },
                 "required": ["title"]
@@ -63,55 +88,75 @@ pub fn manifest() -> Vec<Value> {
         }),
         json!({
             "name": "pick_file",
-            "description": "Show a native file-open dialog and return \
-                the absolute path the user picked. Returns \
-                `{path: null}` if the user cancelled. Use this when you \
-                need a file from the user that's hard to describe in \
-                chat, or when the path likely lives outside any \
-                workspace root.",
+            // Bilingual triggers + clarification that this is a
+            // BLOCKING dialog (model should not call it without a
+            // user-facing reason — e.g. mid-monologue surprises).
+            "description": "Open the native OS file-picker dialog and \
+                return the absolute path the user selects. Returns \
+                `{path: null, cancelled: true}` if the user cancels. \n\n\
+                Trigger when the user asks to: \"pick a file\", \
+                \"choose a file\", \"open file dialog\", \"browse for \
+                a file\", \"let me select...\"; or in Chinese: \
+                \"选个文件\", \"打开文件选择器\", \"让我选个文件\", \
+                \"挑一个 X 文件\". \n\n\
+                Also use proactively when you need a file from the \
+                user that's hard to describe in chat (e.g. \"the PDF \
+                you mentioned\"), or when the path likely lives \
+                outside any workspace root the agent already knows.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Dialog title. Optional. macOS hides this; Windows / Linux show it."
+                        "description": "Dialog title (e.g. \"Choose your resume\" / \"选择简历\"). Optional. macOS hides this; Windows/Linux show it."
                     },
                     "extensions": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Restrict to extensions (e.g. [\"png\",\"jpg\"]). Empty = any."
+                        "description": "Restrict to file extensions, no leading dot (e.g. [\"png\",\"jpg\"] or [\"pdf\"]). Empty/omitted = any file type."
                     }
                 }
             }
         }),
         json!({
             "name": "pick_folder",
-            "description": "Show a native folder-open dialog and return \
-                the absolute path the user picked. Returns \
-                `{path: null}` if the user cancelled.",
+            "description": "Open the native OS folder-picker dialog \
+                and return the absolute path the user selects. \
+                Returns `{path: null, cancelled: true}` if the user \
+                cancels.\n\n\
+                Trigger when the user asks to: \"pick a folder\", \
+                \"choose a directory\", \"select working directory\"; \
+                or in Chinese: \"选个文件夹\", \"打开目录选择器\", \
+                \"让我选个工作目录\".",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Dialog title. Optional."
+                        "description": "Dialog title (e.g. \"Pick a project root\" / \"选择项目根目录\"). Optional."
                     }
                 }
             }
         }),
         json!({
             "name": "open_settings",
-            "description": "Switch the Corey GUI to a specific Settings \
-                panel. Use when the agent has determined the user must \
-                configure something to proceed (e.g. add an API key, \
-                enable a channel). The panel id corresponds to the \
-                `id` of an entry in the Settings sidebar.",
+            "description": "Deep-link the Corey desktop GUI to a \
+                specific Settings panel. The user's window will \
+                switch to that panel immediately.\n\n\
+                Trigger when the agent determines the user must \
+                configure something to proceed: missing API key, \
+                disabled channel, sandbox scope needs adjustment, \
+                profile not set up, etc. \n\n\
+                Phrase examples — EN: \"open settings\", \"go to \
+                model config\", \"take me to channel settings\". \
+                ZH: \"打开设置\", \"跳到模型配置\", \"去渠道设置\", \
+                \"打开沙盒页面\".",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "panel": {
                         "type": "string",
-                        "description": "Panel id. Known: \"models\", \"channels\", \"sandbox\", \"agents\", \"profile\", \"about\"."
+                        "description": "Panel id matching a Settings sidebar entry. Known values: \"models\" (LLM providers/keys), \"channels\" (input/output channels), \"sandbox\" (filesystem scopes), \"agents\" (Hermes adapters), \"profile\" (user info), \"about\"."
                     }
                 },
                 "required": ["panel"]
