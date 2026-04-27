@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import {
   hermesConfigRead,
@@ -139,9 +140,27 @@ export function HermesToolPermissionsSection() {
       title={t('settings.hermes_security.title', { defaultValue: 'Hermes 工具权限' })}
       description={t('settings.hermes_security.description', {
         defaultValue:
-          'Hermes agent 通过 shell / read_file 等工具访问系统时的权限。与上方 Corey 沙箱独立——Corey 沙箱按路径管 Corey 自己的 IPC，这里按命令模式管 Hermes 工具。',
+          'Hermes agent 跑 shell 命令时的权限策略。与上方 Corey 沙箱独立——Corey 沙箱按路径管 Corey 自己的 IPC，这里按命令模式管 Hermes shell。',
       })}
     >
+      {/* Crucial honesty about the scope: this section ONLY gates
+          the `shell` tool. Structured file ops (delete_file,
+          write_file, edit_file, etc.) go through Hermes's own
+          file_operations API which doesn't pass through the
+          DANGEROUS_PATTERNS approval layer — they're considered
+          first-class API calls, not arbitrary commands. Without
+          this callout users test with "delete this file", see
+          the agent succeed without a prompt, and assume the whole
+          system is broken (it's not — it just doesn't apply
+          here). To gate file ops, lock the `read_write` Corey
+          sandbox scope above instead. */}
+      <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-fg-muted">
+        ⚠️ {t('settings.hermes_security.scope_note', {
+          defaultValue:
+            '审批仅对 agent 跑的 shell 命令生效（`rm -rf /tmp` 这类）。Hermes 内置的结构化文件工具（delete_file / write_file / edit_file 等）走另一套 API，不经过这里——要限制文件读写请到上方 Corey 沙箱配置路径白名单。',
+        })}
+      </div>
+
       {error && (
         <div className="rounded-md border border-danger/40 bg-danger/5 p-2.5 text-xs text-danger flex items-start gap-2">
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
@@ -211,17 +230,12 @@ export function HermesToolPermissionsSection() {
             defaultValue: 'Cron 没有用户在场，默认拒绝最稳。',
           })}
         >
-          <select
-            className={inputCls}
+          <Select
             value={cronMode}
-            onChange={(e) => setCronMode(e.target.value)}
-          >
-            {CRON_MODES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {t(m.i18nKey)}
-              </option>
-            ))}
-          </select>
+            onChange={setCronMode}
+            options={CRON_MODES.map((m) => ({ value: m.value, label: t(m.i18nKey) }))}
+            ariaLabel={t('settings.hermes_security.cron_label', { defaultValue: 'Cron 任务遇到危险命令' })}
+          />
         </Field>
       </div>
 
