@@ -188,10 +188,32 @@ const MCP_NAME: &str = "corey-native";
 async fn register_with_hermes(port: u16) {
     use tokio::process::Command;
 
+    // Resolve the hermes binary the SAME way the rest of Corey does
+    // (bundled-with-Corey paths first, then $PATH). A previous draft
+    // used `Command::new("hermes")` which only walks $PATH — that
+    // works for developers who installed hermes globally, but breaks
+    // for end users running the production .app bundle (where hermes
+    // sits inside `Corey.app/Contents/Resources/_up_/binaries/`, not
+    // on $PATH). Sharing `resolve_hermes_binary` keeps the lookup
+    // policy in one place; if we ever add a 4th fallback location
+    // (Homebrew Cellar, AppImage internal, …) every consumer benefits.
+    let hermes = match crate::hermes_config::resolve_hermes_binary() {
+        Ok(p) => p,
+        Err(e) => {
+            warn!(
+                error = %e,
+                "hermes binary not found via bundled-paths or $PATH; \
+                 skipping MCP auto-register. Native bridge tools \
+                 stay running but Hermes can't see them."
+            );
+            return;
+        }
+    };
+
     let url = format!("http://127.0.0.1:{port}/");
 
     // 1. Check if already registered with the same URL.
-    let listing = Command::new("hermes")
+    let listing = Command::new(&hermes)
         .args(["mcp", "list"])
         .output()
         .await;
@@ -228,13 +250,13 @@ async fn register_with_hermes(port: u16) {
 
     // 2. Remove any stale entry. Failure is fine — most likely cause
     // is "no such server", which is exactly the state we want.
-    let _ = Command::new("hermes")
+    let _ = Command::new(&hermes)
         .args(["mcp", "remove", MCP_NAME])
         .output()
         .await;
 
     // 3. Add fresh.
-    let add = Command::new("hermes")
+    let add = Command::new(&hermes)
         .args(["mcp", "add", MCP_NAME, "--url", &url])
         .output()
         .await;

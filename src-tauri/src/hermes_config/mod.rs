@@ -236,7 +236,7 @@ pub use env::{read_env_value, write_env_key};
 use env::read_env_key_names;
 #[cfg(test)]
 use env::{is_allowed_env_key, line_matches_key};
-pub use gateway::{detect, gateway_restart, gateway_start, HermesDetection};
+pub use gateway::{detect, gateway_restart, gateway_start, resolve_hermes_binary, HermesDetection};
 pub use yaml::write_channel_yaml_fields;
 #[cfg(test)]
 use yaml::{json_to_yaml_value, walk_remove, walk_set};
