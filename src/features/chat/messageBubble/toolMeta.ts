@@ -52,7 +52,37 @@ export function prettifyTool(tool: string): ToolMeta {
       return { name: '任务规划', fallbackEmoji: '📋' };
     case 'send_message':
       return { name: '发送消息', fallbackEmoji: '📨' };
+    // ── corey-native MCP tools (exposed via the Tauri-side MCP bridge,
+    // see `src-tauri/src/mcp_server/`). Hermes wraps remote MCP tools
+    // with `mcp_<server>_<tool>`, so what arrives here is the namespaced
+    // form (e.g. `mcp_corey_native_notify`). We special-case each so
+    // the timeline reads naturally instead of dumping the raw slug.
+    case 'mcp_corey_native_notify':
+      return { name: '桌面通知', fallbackEmoji: '🔔' };
+    case 'mcp_corey_native_pick_file':
+      return { name: '选择文件', fallbackEmoji: '📂' };
+    case 'mcp_corey_native_pick_folder':
+      return { name: '选择文件夹', fallbackEmoji: '📁' };
+    case 'mcp_corey_native_open_settings':
+      return { name: '跳转设置', fallbackEmoji: '⚙️' };
     default:
+      // Generic MCP tools we haven't pretty-named yet still get a
+      // sensible label by stripping the `mcp_<server>_` prefix.
+      if (isMcpTool(tool)) {
+        return { name: humanizeMcpTool(tool), fallbackEmoji: '🔌' };
+      }
       return { name: tool, fallbackEmoji: '🛠' };
   }
+}
+
+/** True when the slug starts with `mcp_<something>_`. */
+function isMcpTool(tool: string): boolean {
+  return /^mcp_[^_]+_/.test(tool);
+}
+
+/** Strip the `mcp_<server>_` prefix and replace underscores with spaces
+ * so an unknown MCP tool reads as `notify` rather than
+ * `mcp_corey_native_notify`. Cheap; the regex is anchored. */
+function humanizeMcpTool(tool: string): string {
+  return tool.replace(/^mcp_[^_]+_/, '').replace(/_/g, ' ');
 }

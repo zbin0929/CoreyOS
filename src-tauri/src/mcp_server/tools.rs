@@ -28,10 +28,20 @@ use tauri_plugin_notification::NotificationExt;
 /// hand-written rather than derived because the schema is the user's
 /// contract — a `serde::Serialize` derive would silently change it
 /// when Rust struct fields are reordered.
+///
+/// Naming convention: tool names are SHORT and unprefixed (`notify`,
+/// not `corey_native.notify`). Hermes' MCP client wraps every remote
+/// tool with `mcp_<server_name>_` automatically — so what shows up
+/// in the agent's tool catalog is `mcp_corey_native_notify`, not
+/// `mcp_corey_native_corey_native_notify`. The earlier draft had the
+/// name field redundantly prefixed with `corey_native.`, which got
+/// double-prefixed and burned 3-4 LLM round-trips per invocation
+/// while the model played name-guessing games before settling on the
+/// mangled form. Single source of namespacing → first-call hit rate.
 pub fn manifest() -> Vec<Value> {
     vec![
         json!({
-            "name": "corey_native.notify",
+            "name": "notify",
             "description": "Show a native OS notification (toast). Use \
                 this when the user is likely in another application and \
                 a long-running task just finished, or when an event \
@@ -52,7 +62,7 @@ pub fn manifest() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "corey_native.pick_file",
+            "name": "pick_file",
             "description": "Show a native file-open dialog and return \
                 the absolute path the user picked. Returns \
                 `{path: null}` if the user cancelled. Use this when you \
@@ -75,7 +85,7 @@ pub fn manifest() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "corey_native.pick_folder",
+            "name": "pick_folder",
             "description": "Show a native folder-open dialog and return \
                 the absolute path the user picked. Returns \
                 `{path: null}` if the user cancelled.",
@@ -90,7 +100,7 @@ pub fn manifest() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "corey_native.open_settings",
+            "name": "open_settings",
             "description": "Switch the Corey GUI to a specific Settings \
                 panel. Use when the agent has determined the user must \
                 configure something to proceed (e.g. add an API key, \
@@ -124,10 +134,12 @@ pub async fn call(app: AppHandle, params: &Value) -> Result<Value, (i32, String)
     let args = params.get("arguments").cloned().unwrap_or(Value::Null);
 
     let text = match name {
-        "corey_native.notify" => notify(app, args).await?,
-        "corey_native.pick_file" => pick_file(app, args).await?,
-        "corey_native.pick_folder" => pick_folder(app, args).await?,
-        "corey_native.open_settings" => open_settings(app, args).await?,
+        // Match SHORT names — these are what `manifest()` advertises
+        // and what Hermes will pass back here in `tools/call`.
+        "notify" => notify(app, args).await?,
+        "pick_file" => pick_file(app, args).await?,
+        "pick_folder" => pick_folder(app, args).await?,
+        "open_settings" => open_settings(app, args).await?,
         _ => return Err((-32601, format!("unknown tool: {name}"))),
     };
 
