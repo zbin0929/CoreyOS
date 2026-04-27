@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from '@tanstack/react-router';
 import {
   AlertTriangle,
   Check,
@@ -76,12 +77,24 @@ export function HermesInstallCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gateway]);
 
-  // The full-happy-path state collapses this card — the onboarding
-  // checklist already shows a green check for gateway-online. No need
-  // to render two confirmations.
-  if (gateway === 'online' && detection?.installed) return null;
-
-  if (checking && !detection) {
+  // Full-happy-path collapse. Two triggers render nothing:
+  //   1. Gateway reports online — by definition Hermes is installed
+  //      and healthy; no second confirmation card needed. We short-
+  //      circuit even if the local `hermes_detect` probe is still in
+  //      flight (macOS Spotlight / slow disks occasionally take a few
+  //      seconds). Without this branch the user sees a persistent
+  //      spinner on Home right above a green "Hermes 网关在线" chip,
+  //      which is the exact UX bug reported on 2026-04-27.
+  //   2. Probe is done and says installed (but gateway is offline) —
+  //      covered by the GatewayOfflineCard render below.
+  if (gateway === 'online') return null;
+  if (detection?.installed) {
+    // fall through — render the offline-gateway card below
+  } else if (checking && !detection) {
+    // Only show the inline loading state when gateway is NOT yet
+    // online. Prevents the "stuck at 加载中" look on fresh launches
+    // where gateway is 'unknown' for a beat before the first health
+    // probe completes.
     return (
       <section className="flex items-center gap-3 rounded-lg border border-border bg-bg-elev-1/60 p-4">
         <Icon icon={Loader2} size="sm" className="animate-spin text-fg-subtle" />
@@ -188,15 +201,21 @@ function NotInstalledCard({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <a
-          href="https://hermes-agent.nousresearch.com/docs/quickstart"
-          target="_blank"
-          rel="noreferrer"
+        {/* Used to point at hermes-agent.nousresearch.com/docs/quickstart
+            — that domain returns 404, so we now route to the in-app
+            user manual instead. The "Hermes 安装" section there mirrors
+            what the upstream quickstart used to cover (Linux/macOS curl
+            + Windows installer + verification commands), and works
+            offline. Keeps the affordance discoverable without depending
+            on an upstream URL we don't control. */}
+        <Link
+          to="/help"
+          hash="安装-hermes-必需"
           className="inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
         >
           <Icon icon={ExternalLink} size="xs" />
           {t('home.install_docs')}
-        </a>
+        </Link>
         <Button
           size="sm"
           variant="secondary"

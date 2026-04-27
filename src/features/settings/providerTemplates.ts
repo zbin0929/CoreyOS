@@ -204,6 +204,23 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     ],
     setupUrl: 'https://openrouter.ai/keys',
   },
+  // Catch-all for any OpenAI-compatible endpoint not on this list:
+  // self-hosted vLLM / TGI, third-party proxies, internal corporate
+  // gateways, new providers we haven't added a template for yet, etc.
+  // Empty `baseUrl` + `suggestedModels` means the wizard won't pre-fill
+  // anything — the user types both fields themselves. `envKey` defaults
+  // to `CUSTOM_API_KEY` so the .env entry has a sensible name; users
+  // can still override it on the LLMs page after the profile is saved.
+  {
+    id: 'custom',
+    label: '自定义 / Custom',
+    description:
+      '任意 OpenAI 兼容接口。手动填写 base URL + 模型名 —— 适合自建 vLLM、第三方代理、企业内网网关。',
+    baseUrl: '',
+    envKey: 'CUSTOM_API_KEY',
+    suggestedModels: [],
+    setupUrl: 'https://platform.openai.com/docs/api-reference',
+  },
 ];
 
 export function findTemplate(id: string): ProviderTemplate | undefined {

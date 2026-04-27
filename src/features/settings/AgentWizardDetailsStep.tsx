@@ -72,6 +72,15 @@ export function DetailsStep({
   const [label, setLabel] = useState(template.label);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState<string>(template.suggestedModels[0] ?? '');
+  // Editable base URL — almost every template ships a sensible default
+  // we don't want to expose, but the `custom` provider deliberately
+  // leaves it empty so the user can point Corey at any
+  // OpenAI-compatible endpoint (self-hosted vLLM, internal corporate
+  // gateway, third-party proxy, …). State is initialized from the
+  // template so probe + save flow through `baseUrl` instead of the
+  // immutable `template.baseUrl`.
+  const [baseUrl, setBaseUrl] = useState(template.baseUrl);
+  const isCustom = template.id === 'custom';
 
   // Live model list from `/v1/models`. Starts with the template's
   // suggestions so the picker is never empty.
@@ -118,7 +127,7 @@ export function DetailsStep({
     setProbeError(null);
     try {
       const report = await modelProviderProbe({
-        baseUrl: template.baseUrl,
+        baseUrl: baseUrl.trim(),
         // Prefer raw apiKey if the user typed one; otherwise fall back
         // to the env var name Hermes would resolve at runtime.
         apiKey: apiKey.trim() || null,
@@ -175,7 +184,7 @@ export function DetailsStep({
         id: agentId,
         label: agentLabel,
         provider: template.id,
-        base_url: template.baseUrl,
+        base_url: baseUrl.trim(),
         model: model.trim(),
         api_key_env: template.envKey ?? null,
       };
@@ -212,13 +221,18 @@ export function DetailsStep({
           ? null
           : t('agent_wizard.err_id_chars');
   const duplicateId = existingIds.includes(idTrim);
-  const canSave = idError === null && !duplicateId && !saving;
   // Hide API key + model fields when an existing profile is
   // selected — the profile already owns those values and the agent
   // inherits them at save time.
   const showProviderFields = selectedProfile === null;
   const keyRequired =
     showProviderFields && template.envKey !== null && !template.isLocal;
+  // For the custom template the user MUST type a base URL — otherwise
+  // we'd save a profile with `base_url=""` that fails on first probe.
+  // Other templates ship a default; an attached existing profile owns
+  // the field and skips this gate entirely.
+  const baseUrlOk = !showProviderFields || !isCustom || baseUrl.trim().length > 0;
+  const canSave = idError === null && !duplicateId && !saving && baseUrlOk;
 
   return (
     <div
@@ -324,33 +338,57 @@ export function DetailsStep({
           </div>
         </FieldCard>
 
-        {/* Credentials card — API key (hidden for local providers). */}
-        {keyRequired && (
+        {/* Credentials card — API key (hidden for local providers).
+            For the `custom` template we widen this card to also hold
+            the editable base URL field, so the user can paste the
+            endpoint without leaving the wizard. */}
+        {(keyRequired || (showProviderFields && isCustom)) && (
           <FieldCard title={t('agent_wizard.card_credentials')}>
-            <label className="flex flex-col gap-1 text-xs text-fg-muted">
-              <span>
-                {t('agent_wizard.field_api_key')}
-                <span className="ml-1 text-[10px] text-fg-subtle">
-                  ({template.envKey})
+            {showProviderFields && isCustom && (
+              <label className="flex flex-col gap-1 text-xs text-fg-muted">
+                <span>{t('agent_wizard.field_base_url', 'Base URL')}</span>
+                <Input
+                  type="url"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder="https://your-host.example.com/v1"
+                  data-testid="agent-wizard-base-url"
+                  className="font-mono"
+                />
+                <span className="text-[10px] text-fg-subtle">
+                  {t(
+                    'agent_wizard.field_base_url_hint',
+                    'Any OpenAI-compatible endpoint. Path usually ends with /v1.',
+                  )}
                 </span>
-              </span>
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-…"
-                data-testid="agent-wizard-api-key"
-              />
-              <a
-                href={template.setupUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex w-fit items-center gap-1 text-[10px] text-fg-subtle hover:text-fg"
-              >
-                <Icon icon={ExternalLink} size="xs" />
-                {t('agent_wizard.api_key_docs', { provider: template.label })}
-              </a>
-            </label>
+              </label>
+            )}
+            {keyRequired && (
+              <label className="flex flex-col gap-1 text-xs text-fg-muted">
+                <span>
+                  {t('agent_wizard.field_api_key')}
+                  <span className="ml-1 text-[10px] text-fg-subtle">
+                    ({template.envKey})
+                  </span>
+                </span>
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-…"
+                  data-testid="agent-wizard-api-key"
+                />
+                <a
+                  href={template.setupUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex w-fit items-center gap-1 text-[10px] text-fg-subtle hover:text-fg"
+                >
+                  <Icon icon={ExternalLink} size="xs" />
+                  {t('agent_wizard.api_key_docs', { provider: template.label })}
+                </a>
+              </label>
+            )}
           </FieldCard>
         )}
       </div>

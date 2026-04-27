@@ -28,4 +28,9 @@ export interface XtermBundle {
   /** Set once `ptySpawn` returns; used by teardown to kill the
    *  backend pty. Null while `starting`. */
   ptyId: string | null;
+  /** Aborts the host's `paste` listener on reattach so we don't stack
+   *  duplicate listeners after each route navigation cycle. Set by
+   *  `reattachTab`; absent on the very first `initTab` call (where the
+   *  paste listener has no abort signal). */
+  pasteAbort?: AbortController;
 }

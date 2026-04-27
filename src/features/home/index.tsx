@@ -19,6 +19,7 @@ import { cn } from '@/lib/cn';
 import { memoryRead } from '@/lib/ipc';
 import { useAppStatusStore } from '@/stores/appStatus';
 import { useChatStore } from '@/stores/chat';
+import { FirstRunModal } from './FirstRunModal';
 import { HermesInstallCard } from './HermesInstallCard';
 import { PresetCard } from './PresetCard';
 
@@ -87,6 +88,10 @@ export function HomeRoute() {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
+      {/* First-run welcome overlay. Self-gates on a localStorage flag
+          + the absence of any LLM profile, so returning users never
+          see it. */}
+      <FirstRunModal />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-60"
@@ -108,7 +113,26 @@ export function HomeRoute() {
           </div>
           <button
             type="button"
-            onClick={() => void navigate({ to: '/settings' })}
+            onClick={() => {
+              // Two intents behind this chip:
+              //  - Online → user is curious about the gateway; jump to
+              //    Settings → LLMs where they can edit the upstream
+              //    config.
+              //  - Offline → "click to configure" actually means "show
+              //    me how to start it". The HermesInstallCard right
+              //    below the hero has the install command + recheck
+              //    button — scroll there instead of dropping the user
+              //    on the Settings page (which has no install help).
+              if (gateway === 'offline') {
+                document
+                  .querySelector(
+                    '[data-testid="home-hermes-install-card"], [data-testid="home-hermes-start-card"]',
+                  )
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return;
+              }
+              void navigate({ to: '/settings' });
+            }}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition',
               gateway === 'online'

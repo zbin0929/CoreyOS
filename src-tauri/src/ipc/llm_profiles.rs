@@ -89,7 +89,60 @@ pub async fn llm_profile_upsert(
     })??;
 
     tracing::info!(id = %saved.id, provider = %saved.provider, model = %saved.model, "llm profile upserted");
+
+    // Auto-seed `~/.hermes/config.yaml` when the user has no model
+    // configured yet (typical first-run case: install Hermes, never
+    // ran `hermes config init`). Without this the Settings → Hermes
+    // model row stays empty until they manually duplicate the same
+    // values they just typed into the profile, which is exactly the
+    // friction this hook removes.
+    //
+    // Existing model sections are left alone — overwriting somebody
+    // else's `default: deepseek-reasoner` because they happened to add
+    // an OpenAI profile would be hostile.
+    seed_hermes_model_if_empty(&saved, &state.changelog_path);
+
     Ok(saved)
+}
+
+/// Best-effort: read the current Hermes config and, only when its
+/// `model.default` is unset, write the profile's `{provider, model,
+/// base_url}` triple into `~/.hermes/config.yaml`. All errors are
+/// swallowed (logged at debug) — we don't want a missing Hermes data
+/// dir or a malformed YAML to fail the profile save the user clicked.
+fn seed_hermes_model_if_empty(profile: &LlmProfile, journal_path: &std::path::Path) {
+    let view = match crate::hermes_config::read_view() {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::debug!(error = %e, "auto-seed: skipping (read_view failed)");
+            return;
+        }
+    };
+    if view.model.default.is_some() {
+        return;
+    }
+    let new_model = crate::hermes_config::HermesModelSection {
+        default: Some(profile.model.clone()),
+        provider: if profile.provider.trim().is_empty() {
+            None
+        } else {
+            Some(profile.provider.clone())
+        },
+        base_url: if profile.base_url.trim().is_empty() {
+            None
+        } else {
+            Some(profile.base_url.clone())
+        },
+    };
+    if let Err(e) = crate::hermes_config::write_model(&new_model, Some(journal_path)) {
+        tracing::warn!(error = %e, "auto-seed: write_model failed");
+    } else {
+        tracing::info!(
+            provider = %profile.provider,
+            model = %profile.model,
+            "auto-seed: hermes config.yaml populated from profile",
+        );
+    }
 }
 
 #[tauri::command]

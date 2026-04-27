@@ -58,9 +58,25 @@ bash "$(dirname "$0")/build-browser-runner.sh" || {
   echo "⚠ browser-runner build failed — browser automation will need Node.js at runtime"
 }
 
+# Stage the bundled Hermes CLI into src-tauri/binaries/ so
+# `bundle.resources` ships it inside the .dmg / .app. Soft-fails so
+# maintainers without network can still cut a release (with the
+# expectation users will install Hermes themselves).
+echo "→ Fetching bundled Hermes binary"
+node "$(dirname "$0")/fetch-hermes-binary.mjs" || {
+  echo "⚠ Hermes fetch failed — bundle will not include hermes; users must install it"
+}
+
 case "$MODE" in
   universal)
     # Fat binary covers Intel + Apple Silicon Macs in one .dmg. ~2x build time.
+    # The first run on a fresh machine fails with "target may not be
+    # installed" because rustup ships only the host triple by default;
+    # we install the cross target idempotently before building so the
+    # second + every subsequent invocation Just Works.
+    echo "→ Ensuring x86_64-apple-darwin Rust target is installed"
+    rustup target add x86_64-apple-darwin
+    rustup target add aarch64-apple-darwin
     echo "→ Building Tauri bundle (universal-apple-darwin)"
     pnpm tauri build --target universal-apple-darwin
     ;;

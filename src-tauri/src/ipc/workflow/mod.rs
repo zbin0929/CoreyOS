@@ -170,8 +170,8 @@ impl StepExecutor for HermesExecutor {
         if !cfg.model.is_empty() {
             cmd.env("BROWSER_LLM_MODEL", &cfg.model);
         }
-        if !cfg.api_key.is_empty() {
-            cmd.env("BROWSER_LLM_API_KEY", &cfg.api_key);
+        if let Some(key) = browser_config::resolve_api_key(&cfg) {
+            cmd.env("BROWSER_LLM_API_KEY", key);
         }
         if !cfg.base_url.is_empty() {
             cmd.env("BROWSER_LLM_BASE_URL", &cfg.base_url);

@@ -30,6 +30,7 @@ import {
 import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
+import { LicenseSection } from './sections/LicenseSection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
 import { StorageSection } from './sections/StorageSection';
@@ -342,7 +343,12 @@ export function SettingsRoute() {
           {/* Read-only storage info. Lives below the gateway form — it's the
               least-frequently-needed section but important for backup /
               debugging. Hides itself if the IPC fails. */}
-          {paths && <StorageSection paths={paths} />}
+          {paths && <StorageSection paths={paths} onPathsChange={setPaths} />}
+
+          {/* License management — visible only when there's a real
+              activated key. Lets users see who the license belongs
+              to + remove it (re-shows the gate on next launch). */}
+          <LicenseSection />
         </div>
       </div>
     </div>

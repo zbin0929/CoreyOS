@@ -9,6 +9,8 @@ import { useRoutingStore } from '@/stores/routing';
 import { useSandboxStore } from '@/stores/sandbox';
 import { SandboxConsentModal } from '@/components/sandbox/ConsentModal';
 import { ContextMenuProvider } from '@/components/ui/context-menu';
+import { LicenseGate } from '@/features/license/LicenseGate';
+import { useLicenseStore } from '@/features/license/store';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +64,14 @@ export function Providers({ children }: { children: ReactNode }) {
   // degrades cleanly to "no routing" rather than erroring.
   useEffect(() => {
     void useRoutingStore.getState().hydrate();
+  }, []);
+
+  // T9 — license gate. Hydrate once at boot; the gate component
+  // reads the verdict and renders an activation modal until the
+  // user pastes a valid key (production) or the maintainer
+  // dismisses the dev-mode banner.
+  useEffect(() => {
+    void useLicenseStore.getState().hydrate();
   }, []);
 
   // Apply theme on mount
@@ -134,6 +144,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <ContextMenuProvider>
         {children}
         <SandboxConsentModal />
+        <LicenseGate />
       </ContextMenuProvider>
     </QueryClientProvider>
   );

@@ -47,3 +47,10 @@ storybook-static/
 
 # UX screenshot audit output (opt-in, regenerated via SCREENSHOT_AUDIT=1).
 e2e/screenshots/
+
+# Bundled hermes binary downloaded by CI; never committed. We keep
+# the directory tracked via `.gitkeep` so tauri's `bundle.resources`
+# glob (binaries/*) doesn't error on a fresh clone before
+# `scripts/fetch-hermes-binary.mjs` has run.
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
@@ -24,7 +24,15 @@ import {
 
 import { TabStrip } from './TabStrip';
 import { base64DecodeToUint8, pickNeighbour } from './helpers';
-import type { Tab, XtermBundle } from './types';
+import type { XtermBundle } from './types';
+import {
+  terminalBundles,
+  terminalHosts,
+  terminalLabelCounter,
+  terminalPendingInit,
+  terminalPendingReattach,
+  useTerminalStore,
+} from './store';
 
 /**
  * Phase 4 · T4.5 + T4.5b (multi-tab) — Web terminal.
@@ -62,37 +70,27 @@ import type { Tab, XtermBundle } from './types';
  */
 export function TerminalRoute() {
   const { t } = useTranslation();
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [activeKey, setActiveKey] = useState<string | null>(null);
-  // Counter for the default `shell N` labels. Refs so we don't need
-  // a render when bumping.
-  const labelCounterRef = useRef(0);
-  // Per-tab xterm bundles, keyed by `Tab.key`. Never stored in state
-  // because xterm owns mutable DOM + WASM-ish internals; React
-  // identity would fight it.
-  const bundlesRef = useRef(new Map<string, XtermBundle>());
-  // DOM hosts, one per tab, registered via callback ref. Needed so
-  // we can mount xterm once the host node is attached without racing
-  // the next render.
-  const hostsRef = useRef(new Map<string, HTMLDivElement>());
-  // Tabs that have been declared but not yet initialised with an
-  // xterm instance. A separate set (not a per-tab flag) so
-  // `useLayoutEffect` can drain it without pulling tab state into
-  // the dependency array.
-  const pendingInitRef = useRef(new Set<string>());
+  // Tabs and active key live in the module-level zustand store so
+  // they survive when this route unmounts (user navigates elsewhere
+  // and back). Non-reactive maps (bundles/hosts/pending*) are
+  // imported as singletons; see `./store.ts` for the rationale.
+  const tabs = useTerminalStore((s) => s.tabs);
+  const activeKey = useTerminalStore((s) => s.activeKey);
+  const setTabs = useTerminalStore((s) => s.setTabs);
+  const setActiveKey = useTerminalStore((s) => s.setActiveKey);
 
   /** Register a fresh tab. Returns the new key; the actual xterm +
    *  pty spawn is deferred to a layout effect so the host div exists
    *  by the time `term.open()` runs. */
   const newTab = useCallback(() => {
-    labelCounterRef.current += 1;
+    terminalLabelCounter.value += 1;
     const key = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const label = `shell ${labelCounterRef.current}`;
-    pendingInitRef.current.add(key);
+    const label = `shell ${terminalLabelCounter.value}`;
+    terminalPendingInit.add(key);
     setTabs((prev) => [...prev, { key, label, state: { kind: 'starting' } }]);
     setActiveKey(key);
     return key;
-  }, []);
+  }, [setTabs, setActiveKey]);
 
   /** Tear down one tab: kill its pty + dispose xterm + drop from
    *  state. Leaves the rest of the tabs alone. If the closed tab
@@ -100,10 +98,11 @@ export function TerminalRoute() {
    *  isn't one — the left-neighbour, falling back to no selection
    *  when this was the last tab. */
   const closeTab = useCallback(async (key: string) => {
-    const bundle = bundlesRef.current.get(key);
-    bundlesRef.current.delete(key);
-    hostsRef.current.delete(key);
-    pendingInitRef.current.delete(key);
+    const bundle = terminalBundles.get(key);
+    terminalBundles.delete(key);
+    terminalHosts.delete(key);
+    terminalPendingInit.delete(key);
+    terminalPendingReattach.delete(key);
     if (bundle) {
       bundle.unlisten?.();
       bundle.ro?.disconnect();
@@ -116,41 +115,31 @@ export function TerminalRoute() {
         }
       }
     }
-    setTabs((prev) => {
-      const next = prev.filter((tab) => tab.key !== key);
-      return next;
-    });
-    setActiveKey((prev) => {
-      if (prev !== key) return prev;
-      // Read the current tabs via a closure on the latest state: the
-      // filter above hasn't committed yet, so use the last snapshot.
-      return pickNeighbour(tabsRef.current, key);
-    });
-  }, []);
-
-  /** Mirror of `tabs` for closure access inside async handlers that
-   *  outlive a single render (close-tab, unmount cleanup). */
-  const tabsRef = useRef<Tab[]>([]);
-  useEffect(() => {
-    tabsRef.current = tabs;
-  }, [tabs]);
+    const prevTabs = useTerminalStore.getState().tabs;
+    setTabs(prevTabs.filter((tab) => tab.key !== key));
+    setActiveKey((prev) => (prev !== key ? prev : pickNeighbour(prevTabs, key)));
+  }, [setTabs, setActiveKey]);
 
   /** Mount xterm + spawn pty for any tabs in `pendingInitRef` whose
    *  host div has attached. Runs synchronously after every render
    *  so the user never sees a blank tab panel. */
   useLayoutEffect(() => {
-    const pending = pendingInitRef.current;
-    if (pending.size === 0) return;
-    for (const key of Array.from(pending)) {
-      const host = hostsRef.current.get(key);
-      if (!host) continue; // host not yet attached; next render will retry
-      pending.delete(key);
+    // Drain newly-created tabs first (no bundle yet).
+    for (const key of Array.from(terminalPendingInit)) {
+      const host = terminalHosts.get(key);
+      if (!host) continue;
+      terminalPendingInit.delete(key);
       void initTab(key, host);
     }
-    // Deps intentionally omitted: the effect is idempotent and reads
-    // its inputs from refs. Including `tabs` would force a second
-    // run per new tab (starting → running state transition) with
-    // nothing to do.
+    // Then drain re-attachments (bundle exists from a previous mount;
+    // host is fresh). Re-parent the xterm, rewire ResizeObserver.
+    for (const key of Array.from(terminalPendingReattach)) {
+      const host = terminalHosts.get(key);
+      const bundle = terminalBundles.get(key);
+      if (!host || !bundle) continue;
+      terminalPendingReattach.delete(key);
+      reattachTab(key, host, bundle);
+    }
   });
 
   /** Async half of tab creation. Separated from `useLayoutEffect`
@@ -188,7 +177,7 @@ export function TerminalRoute() {
       ro: null,
       ptyId: null,
     };
-    bundlesRef.current.set(key, bundle);
+    terminalBundles.set(key, bundle);
 
     // Attach the data listener BEFORE spawn so the shell's banner
     // doesn't race ahead of us.
@@ -203,7 +192,7 @@ export function TerminalRoute() {
     } catch (e) {
       unlisten?.();
       term.dispose();
-      bundlesRef.current.delete(key);
+      terminalBundles.delete(key);
       setTabs((prev) =>
         prev.map((tab) =>
           tab.key === key
@@ -220,7 +209,38 @@ export function TerminalRoute() {
       });
     });
 
+    // Clipboard paste: xterm's default key handling swallows ⌘V /
+    // Ctrl+Shift+V on some platforms (especially when the iframe/
+    // webview doesn't forward the native paste). We listen for the
+    // DOM `paste` event on the host and forward clipboard text to the
+    // pty directly, which works uniformly across Tauri on macOS /
+    // Windows / Linux. The abort controller lives on the bundle so a
+    // later `reattachTab` can detach this listener cleanly before
+    // wiring its own; otherwise listeners stack on every route
+    // navigate-and-back cycle.
+    const pasteAbort = new AbortController();
+    bundle.pasteAbort = pasteAbort;
+    host.addEventListener(
+      'paste',
+      (ev) => {
+        const clipboard = (ev as ClipboardEvent).clipboardData;
+        const text = clipboard?.getData('text/plain');
+        if (text) {
+          ev.preventDefault();
+          void ptyWrite(ptyId, text).catch(() => {});
+        }
+      },
+      { signal: pasteAbort.signal },
+    );
+
     const ro = new ResizeObserver(() => {
+      // Hidden tabs (display:none on a sibling host) report 0×0 here.
+      // Calling fit.fit() in that state would resize xterm to 0
+      // cols/rows and wipe the visible buffer — when the user
+      // switches back the panel renders as a black void. Skip until
+      // the host has real dimensions; the next ResizeObserver tick
+      // (fired when display flips back to block) will catch up.
+      if (host.clientHeight === 0 || host.clientWidth === 0) return;
       try {
         fit.fit();
         void ptyResize(ptyId, term.rows, term.cols).catch(() => {});
@@ -238,14 +258,100 @@ export function TerminalRoute() {
           : tab,
       ),
     );
+  }, [setTabs]);
+
+  /** Re-attach an existing xterm bundle onto a freshly mounted host
+   *  div after the route remounts. The pty keeps running; we just
+   *  rebind the DOM half.
+   *
+   *  Two foot-guns this is careful about:
+   *    1. The ResizeObserver MUST guard on `clientHeight/Width === 0`
+   *       before calling fit. When the user opens a 2nd tab, the
+   *       previously-active host flips to `display:none`, which fires
+   *       RO with a 0×0 contentRect. fit.fit() at 0×0 resizes xterm to
+   *       0 cols/rows and wipes the visible buffer — the original
+   *       "switch back, terminal is black" bug.
+   *    2. The paste handler is `AbortController`-scoped, so a second
+   *       remount doesn't double-fire writes. Without this each
+   *       navigate-away-and-back cycle stacks another listener.
+   */
+  const reattachTab = useCallback((key: string, host: HTMLDivElement, bundle: XtermBundle) => {
+    bundle.ro?.disconnect();
+    bundle.pasteAbort?.abort();
+    // Move the existing xterm root element into the new host instead
+    // of calling `term.open(host)` again. xterm 5 doesn't reliably
+    // re-open to a fresh parent — the second call leaves the renderer
+    // in a half-initialized state and the panel paints solid black
+    // (the bug reported on 2026-04-27 right after a route navigate-
+    // away-and-back). Moving the DOM node sidesteps the renderer
+    // entirely; the buffer + scrollback live on `term._core` and
+    // survive the move.
+    //
+    // Fallback to `term.open(host)` only when the term has no element
+    // yet (shouldn't happen for reattach — the bundle always existed
+    // — but defensively cover it so a corrupted state doesn't throw).
+    const termEl = bundle.term.element;
+    if (termEl) {
+      if (termEl.parentElement !== host) {
+        // appendChild auto-detaches from the old (likely-orphaned)
+        // parent so we don't need an explicit removeChild.
+        host.appendChild(termEl);
+      }
+    } else {
+      bundle.term.open(host);
+    }
+    try {
+      bundle.fit.fit();
+    } catch {
+      /* layout not ready yet; ResizeObserver will catch up. */
+    }
+    const ro = new ResizeObserver(() => {
+      // Same 0-size guard as `initTab` — see comment there.
+      if (host.clientHeight === 0 || host.clientWidth === 0) return;
+      try {
+        bundle.fit.fit();
+        if (bundle.ptyId) {
+          void ptyResize(bundle.ptyId, bundle.term.rows, bundle.term.cols).catch(() => {});
+        }
+      } catch {
+        /* see fit() above. */
+      }
+    });
+    ro.observe(host);
+    bundle.ro = ro;
+    const abort = new AbortController();
+    bundle.pasteAbort = abort;
+    host.addEventListener(
+      'paste',
+      (ev) => {
+        const clipboard = (ev as ClipboardEvent).clipboardData;
+        const text = clipboard?.getData('text/plain');
+        if (text && bundle.ptyId) {
+          ev.preventDefault();
+          void ptyWrite(bundle.ptyId, text).catch(() => {});
+        }
+      },
+      { signal: abort.signal },
+    );
+    void key;
   }, []);
 
   /** When the active tab changes, re-run fit() on the incoming tab so
    *  its xterm catches up with the container's actual size (inactive
-   *  tabs were `display: none` so their layout measurements stale). */
+   *  tabs were `display: none` so their layout measurements stale).
+   *
+   *  We also call `term.refresh(...)` to force xterm's renderer to
+   *  repaint every visible row from its buffer state. On some
+   *  Chromium / WebKit2GTK builds the terminal panel comes back blank
+   *  after a display:none → block flip even when fit() and focus()
+   *  ran successfully — refresh nudges the canvas/DOM renderer to
+   *  actually draw the cells the buffer already has. Without this
+   *  the panel renders as a black rectangle, which is the bug
+   *  reported on 2026-04-27.
+   */
   useEffect(() => {
     if (!activeKey) return;
-    const bundle = bundlesRef.current.get(activeKey);
+    const bundle = terminalBundles.get(activeKey);
     if (!bundle) return;
     // Defer one frame so the display: none → block transition paints
     // before we measure.
@@ -262,31 +368,30 @@ export function TerminalRoute() {
       } catch {
         /* layout may still be settling on first switch; no-op. */
       }
+      // Repaint every visible row regardless of fit result. Cheap —
+      // xterm only redraws the requested range.
+      try {
+        const last = Math.max(0, bundle.term.rows - 1);
+        bundle.term.refresh(0, last);
+      } catch {
+        /* term may have been disposed mid-switch; harmless. */
+      }
       bundle.term.focus();
     });
     return () => cancelAnimationFrame(raf);
   }, [activeKey]);
 
-  // Teardown all tabs on unmount (route navigation away). Capture the
-  // three maps upfront so the cleanup closure doesn't read
-  // `ref.current` after the component has torn down (the warning
-  // React gives you here is genuinely load-bearing — if a tab is
-  // mid-spawn when unmount fires, `current` could get reassigned
-  // between capture and teardown).
+  // Unmount: do NOT tear down bundles. They live in the module-level
+  // store so the ptys + scrollback survive route navigation. We do
+  // release DOM host refs (the old host nodes are about to be
+  // removed from the DOM anyway) and queue a re-attach for each
+  // surviving tab so the next mount re-parents them.
   useEffect(() => {
-    const bundles = bundlesRef.current;
-    const hosts = hostsRef.current;
-    const pending = pendingInitRef.current;
     return () => {
-      for (const [, bundle] of bundles) {
-        bundle.unlisten?.();
-        bundle.ro?.disconnect();
-        bundle.term.dispose();
-        if (bundle.ptyId) void ptyKill(bundle.ptyId).catch(() => {});
+      for (const key of Array.from(terminalBundles.keys())) {
+        terminalPendingReattach.add(key);
       }
-      bundles.clear();
-      hosts.clear();
-      pending.clear();
+      terminalHosts.clear();
     };
   }, []);
 
@@ -382,8 +487,8 @@ export function TerminalRoute() {
             <div
               key={tab.key}
               ref={(node) => {
-                if (node) hostsRef.current.set(tab.key, node);
-                else hostsRef.current.delete(tab.key);
+                if (node) terminalHosts.set(tab.key, node);
+                else terminalHosts.delete(tab.key);
               }}
               data-testid={activeKey === tab.key ? 'terminal-host' : undefined}
               data-tab-key={tab.key}

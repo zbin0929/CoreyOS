@@ -22,8 +22,7 @@
         "fullscreen": false,
         "decorations": true,
         "transparent": false,
-        "titleBarStyle": "Overlay",
-        "theme": "Dark"
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {
@@ -48,7 +47,8 @@
     "createUpdaterArtifacts": true,
     "resources": [
       "assets/presets/**/*",
-      "scripts/browser-runner.cjs"
+      "scripts/browser-runner.cjs",
+      "binaries/*"
     ],
     "macOS": {
       "infoPlist": "../src-tauri/macos.Info.plist"

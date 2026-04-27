@@ -20,7 +20,6 @@ use serde_yaml::{Mapping, Value};
 use crate::changelog;
 use crate::fs_atomic;
 
-pub(super) const HERMES_DIR: &str = ".hermes";
 pub(super) const CONFIG_FILE: &str = "config.yaml";
 pub(super) const ENV_FILE: &str = ".env";
 
@@ -53,21 +52,12 @@ pub struct HermesConfigView {
     pub env_keys_present: Vec<String>,
 }
 
-/// Resolve `~/.hermes/`. Pure std, no `dirs` crate needed.
-///
-/// Reads `$HOME` first (covers macOS, Linux, and WSL), then falls back
-/// to `%USERPROFILE%` so Windows CI and native Windows hosts — where
-/// `$HOME` isn't populated by default — also resolve.
+/// Resolve the Hermes data directory. Thin re-export of
+/// [`crate::paths::hermes_data_dir`] kept here so the many existing
+/// call-sites (and tests) that spell `hermes_config::hermes_dir()`
+/// keep compiling. See `crate::paths` for the precedence rules.
 pub(crate) fn hermes_dir() -> io::Result<PathBuf> {
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "neither $HOME nor %USERPROFILE% set",
-            )
-        })?;
-    Ok(PathBuf::from(home).join(HERMES_DIR))
+    crate::paths::hermes_data_dir()
 }
 
 pub(super) fn config_path() -> io::Result<PathBuf> {

@@ -449,6 +449,11 @@ export interface BrowserLLMConfig {
   model: string;
   api_key: string;
   base_url: string;
+  /** Optional env-var name the runner resolves the real key from at
+   *  launch. When set we don't need `api_key` stored in the JSON file
+   *  (plaintext secret), and the Settings UI can drive the whole thing
+   *  from an `LlmProfile` picker. */
+  api_key_env?: string | null;
 }
 
 export function browserConfigGet(): Promise<BrowserLLMConfig> {

@@ -17,6 +17,7 @@ pub mod hermes_logs;
 pub mod hermes_profiles;
 pub mod knowledge;
 pub mod learning;
+pub mod license;
 pub mod llm_profiles;
 pub mod mcp;
 pub mod memory;

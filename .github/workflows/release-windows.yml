@@ -52,6 +52,16 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
+      # Fetch the matching Hermes CLI release into src-tauri/binaries/
+      # so tauri's `bundle.resources` glob (binaries/*) ships it inside
+      # the .msi. The script logs + skips on a missing upstream asset
+      # rather than failing the build — bundling is opportunistic.
+      - name: Fetch bundled Hermes binary
+        run: node scripts/fetch-hermes-binary.mjs
+        env:
+          HERMES_VERSION: ${{ vars.HERMES_VERSION || 'latest' }}
+          HERMES_TARGET: x86_64-pc-windows-msvc
+
       - name: Build frontend
         run: pnpm build
 

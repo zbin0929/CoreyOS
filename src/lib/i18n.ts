@@ -15,7 +15,13 @@ void i18n
       en: { translation: en },
       zh: { translation: zh },
     },
-    fallbackLng: 'en',
+    // Default to Simplified Chinese for any locale we don't directly
+    // support. The product is built primarily for Chinese users today;
+    // an Anglophone running in `en-GB` still sees coherent English via
+    // the explicit `en` bundle, but a user in `ja-JP` / `de-DE` /
+    // anything else now lands on zh instead of en. Flip this back to
+    // 'en' once the English copy reaches feature parity (see #i18n-audit).
+    fallbackLng: 'zh',
     supportedLngs: [...supportedLngs],
     // Without this, a browser reporting `navigator.language = 'zh-CN'`
     // is detected as `zh-CN`, which doesn't match our supportedLngs

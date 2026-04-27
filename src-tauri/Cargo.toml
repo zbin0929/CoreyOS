@@ -77,6 +77,16 @@ portable-pty = "0.9"
 # bytes out, not bytes in — and we leave it alone.)
 base64 = "0.22"
 
+# License-key gating (T9 · 2026-04-27). ed25519-dalek verifies the
+# offline-signed token against an embedded public key; the matching
+# private key never ships and lives on the maintainer's machine. See
+# `src/license/` and `src/bin/{license_keygen,mint_license}.rs` for
+# the workflow. `pkcs8` lets the CLI dump / load keys in the
+# OpenSSH-compatible format so the maintainer's keyring can hold
+# them long-term.
+ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8", "pem"] }
+rand = "0.8"
+
 # Phase 2 · tar.gz profile import/export (2026-04-23). `tar` writes
 # POSIX archives and `flate2` adds the gzip layer. Both are pure-Rust,
 # no C deps — matches the "no system libraries" stance of rusqlite

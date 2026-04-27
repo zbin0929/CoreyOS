@@ -41,3 +41,4 @@ export * from './ipc/hermes-channels';
 export * from './ipc/hermes-config';
 export * from './ipc/hermes-instances';
 export * from './ipc/runtime';
+export * from './ipc/license';

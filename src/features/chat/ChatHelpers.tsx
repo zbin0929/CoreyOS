@@ -57,13 +57,14 @@ function SaveAsSkillHeaderAction({ messages }: { messages: UiMessage[] }) {
   );
 }
 
-export function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
+export function EmptyHero(_props: { onPick: (prompt: string) => void }) {
+  // The `onPick` prop is kept for the call-site contract but no
+  // longer wired — early-feedback users found the hardcoded sample
+  // prompts confusing (they referenced internal Hermes/TRAE concepts
+  // and didn't reflect what most people actually ask). Restore as a
+  // recently-used / featured-skill carousel later if data motivates.
+  void _props;
   const { t } = useTranslation();
-  const suggestions = [
-    t('chat_page.hero_suggestion_1'),
-    t('chat_page.hero_suggestion_2'),
-    t('chat_page.hero_suggestion_3'),
-  ];
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
       <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-500/10 text-gold-500">
@@ -76,17 +77,6 @@ export function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
           <code className="font-mono text-xs">:8642</code>
           {t('chat_page.hero_subtitle_suffix')}
         </p>
-      </div>
-      <div className="grid w-full max-w-xl gap-2 sm:grid-cols-1">
-        {suggestions.map((s) => (
-          <button
-            key={s}
-            onClick={() => onPick(s)}
-            className="rounded-xl border border-border bg-bg-elev-1 px-4 py-3 text-left text-sm text-fg transition hover:border-gold-500/40 hover:bg-gold-500/5"
-          >
-            {s}
-          </button>
-        ))}
       </div>
     </div>
   );

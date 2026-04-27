@@ -35,12 +35,31 @@ export interface AppPaths {
   data_dir: string;
   db_path: string;
   changelog_path: string;
+  /** Currently-resolved Hermes data dir (`.hermes`). Reflects env var
+   *  + user override if set, otherwise the platform default. */
+  hermes_data_dir: string;
+  /** `true` when the user has a persistent override configured; env
+   *  vars don't count because the UI can't clear them. */
+  hermes_data_dir_overridden: boolean;
 }
 
 /** Platform-native paths the app uses on disk. Read-only view for the
  *  Settings → Storage section. No I/O — AppState caches these at boot. */
 export function appPaths(): Promise<AppPaths> {
   return invoke<AppPaths>('app_paths');
+}
+
+/** Persist a user-selected Hermes data dir. Rejects empty paths; use
+ *  `appDataDirClear` to go back to the platform default. Returns the
+ *  resolved absolute path the backend recorded, for UI echo. */
+export function appDataDirSet(path: string): Promise<string> {
+  return invoke<string>('app_data_dir_set', { args: { path } });
+}
+
+/** Clear the persisted Hermes data dir override and fall back to the
+ *  platform default. Idempotent. */
+export function appDataDirClear(): Promise<void> {
+  return invoke<void>('app_data_dir_clear');
 }
 
 // ───────────────────────── Presets ─────────────────────────

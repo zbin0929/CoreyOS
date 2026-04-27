@@ -3,6 +3,23 @@ import { persist } from 'zustand/middleware';
 
 export type Theme = 'dark' | 'light' | 'system';
 
+/**
+ * Push the resolved theme (light/dark — never 'system') to the native
+ * Tauri window so the OS-drawn title bar, traffic-light buttons, and
+ * scrollbars stop looking out of place against a freshly-toggled app
+ * theme. Web-only environments (vitest, storybook, `pnpm dev` without
+ * tauri) just no-op; we lazy-import so those environments don't need
+ * the Tauri runtime in scope.
+ */
+async function syncNativeWindowTheme(theme: 'dark' | 'light') {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().setTheme(theme);
+  } catch {
+    /* not running under Tauri, or plugin unavailable — ignore. */
+  }
+}
+
 interface UIState {
   theme: Theme;
   sidebarCollapsed: boolean;
@@ -39,10 +56,13 @@ export const useUIStore = create<UIState>()(
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
+  let resolved: 'dark' | 'light';
   if (theme === 'system') {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    root.dataset.theme = prefersDark ? 'dark' : 'light';
-    return;
+    resolved = prefersDark ? 'dark' : 'light';
+  } else {
+    resolved = theme;
   }
-  root.dataset.theme = theme;
+  root.dataset.theme = resolved;
+  void syncNativeWindowTheme(resolved);
 }

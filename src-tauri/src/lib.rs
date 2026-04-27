@@ -23,8 +23,10 @@ mod hermes_profiles_archive;
 // via `llm_profile_id`). Lives next to hermes_instances; similar
 // shape, similar validation rules.
 mod ipc;
+mod license;
 mod llm_profiles;
 mod menu;
+mod paths;
 mod pty;
 mod routing_rules;
 mod sandbox;
@@ -106,6 +108,8 @@ pub fn run() {
             ipc::db::db_tool_call_append,
             ipc::db::analytics_summary,
             ipc::paths::app_paths,
+            ipc::paths::app_data_dir_set,
+            ipc::paths::app_data_dir_clear,
             ipc::channels::hermes_channel_list,
             ipc::channels::hermes_channel_save,
             ipc::channels::probe::hermes_channel_probe_token,
@@ -204,6 +208,10 @@ pub fn run() {
             ipc::llm_profiles::llm_profile_delete,
             ipc::llm_profiles::llm_profile_ensure_adapter,
             ipc::llm_profiles::llm_profile_probe_vision,
+            ipc::license::license_status,
+            ipc::license::license_install,
+            ipc::license::license_clear,
+            ipc::license::license_machine_id,
             ipc::workflow::workflow_list,
             ipc::workflow::workflow_get,
             ipc::workflow::workflow_save,
@@ -228,6 +236,10 @@ pub fn run() {
                 .path()
                 .app_config_dir()
                 .expect("failed to resolve app_config_dir");
+            // Install the central path resolver BEFORE any subsystem
+            // tries to locate `~/.hermes` — hermes_config, skills, and
+            // the sandbox all read through it.
+            paths::set_app_config_dir(config_dir.clone());
             let cfg = GatewayConfig::load_or_default(&config_dir);
             info!(
                 base_url = %cfg.base_url,

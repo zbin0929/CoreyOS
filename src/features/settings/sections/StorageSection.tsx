@@ -1,19 +1,33 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, FolderOpen, RotateCcw } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import type { AppPaths } from '@/lib/ipc';
+import {
+  appDataDirClear,
+  appDataDirSet,
+  appPaths,
+  ipcErrorMessage,
+  type AppPaths,
+} from '@/lib/ipc';
 
 import { Section } from '../shared';
 
 /**
- * Read-only display of the on-disk locations Corey writes to. Lives
- * at the bottom of Settings — least-frequently-needed but useful for
- * backup / debugging. The container hides itself if the IPC fails
- * (see `SettingsRoute`).
+ * Read-only display of the on-disk locations Corey writes to, plus a
+ * user-editable slot for the Hermes data dir (`.hermes/`). Lives at
+ * the bottom of Settings — least-frequently-needed but useful for
+ * backup / debugging / relocating off the system drive on Windows.
+ * The container hides itself if the IPC fails (see `SettingsRoute`).
  */
-export function StorageSection({ paths }: { paths: AppPaths }) {
+export function StorageSection({
+  paths,
+  onPathsChange,
+}: {
+  paths: AppPaths;
+  onPathsChange?: (next: AppPaths) => void;
+}) {
   const { t } = useTranslation();
   const rows: Array<{ key: keyof AppPaths; label: string }> = [
     { key: 'config_dir', label: t('settings.storage.config_dir') },
@@ -28,12 +42,114 @@ export function StorageSection({ paths }: { paths: AppPaths }) {
       title={t('settings.storage.title')}
       description={t('settings.storage.desc')}
     >
-      <ul className="flex flex-col gap-2">
-        {rows.map((row) => (
-          <PathRow key={row.key} label={row.label} value={paths[row.key]} />
-        ))}
-      </ul>
+      {/* Primary row: the one location users actually want to
+          relocate. Skills, MEMORY.md, profiles, chat logs — all the
+          user-generated data Hermes owns sits here. Sized + styled
+          prominently so users don't mistake it for the read-only
+          Tauri internals below. */}
+      <HermesDataDirRow paths={paths} onPathsChange={onPathsChange} />
+
+      {/* Tauri-managed app-support paths. Small (≪ 10 MB), OS-standard
+          location, not relocatable without restarting under a different
+          platform-dirs bundle id. Shown for backup / debugging. */}
+      <details className="group rounded-md border border-border/60 bg-bg-elev-1/40">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs text-fg-muted hover:text-fg">
+          <span>{t('settings.storage.internals_title')}</span>
+          <span className="text-fg-subtle transition group-open:rotate-180">▾</span>
+        </summary>
+        <ul className="flex flex-col gap-2 border-t border-border/60 p-2">
+          {rows.map((row) => (
+            <PathRow key={row.key} label={row.label} value={paths[row.key] as string} />
+          ))}
+        </ul>
+      </details>
     </Section>
+  );
+}
+
+/**
+ * Hermes data dir (`.hermes/`) picker. Unlike the other rows this is
+ * a mutable field — users move it off the system drive, or to an
+ * encrypted volume, etc. Restart is NOT required: subsystems resolve
+ * the path lazily on the next read/write.
+ */
+function HermesDataDirRow({
+  paths,
+  onPathsChange,
+}: {
+  paths: AppPaths;
+  onPathsChange?: (next: AppPaths) => void;
+}) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      const next = await appPaths();
+      onPathsChange?.(next);
+    } catch {
+      /* Non-fatal: the user can re-open Settings to refetch. */
+    }
+  }
+
+  async function onBrowse() {
+    setError(null);
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const picked = await open({ directory: true, multiple: false });
+      if (typeof picked !== 'string' || !picked) return;
+      setBusy(true);
+      await appDataDirSet(picked);
+      await refresh();
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onReset() {
+    setError(null);
+    setBusy(true);
+    try {
+      await appDataDirClear();
+      await refresh();
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-col gap-2 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-xs">
+      <div className="flex items-center gap-3">
+        <span className="min-w-[110px] flex-none text-fg-subtle">
+          {t('settings.storage.hermes_data_dir')}
+        </span>
+        <code
+          className="min-w-0 flex-1 truncate font-mono text-fg"
+          title={paths.hermes_data_dir}
+        >
+          {paths.hermes_data_dir || '—'}
+        </code>
+        <div className="flex flex-none items-center gap-1.5">
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onBrowse()}>
+            <Icon icon={FolderOpen} size="sm" />
+            {t('settings.storage.change')}
+          </Button>
+          {paths.hermes_data_dir_overridden && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onReset()}>
+              <Icon icon={RotateCcw} size="sm" />
+              {t('settings.storage.reset')}
+            </Button>
+          )}
+        </div>
+      </div>
+      {error && <div className="text-red-500">{error}</div>}
+      <div className="text-fg-subtle">{t('settings.storage.hermes_data_dir_hint')}</div>
+    </li>
   );
 }
 

@@ -1,0 +1,26 @@
+mint_license — produce a signed Corey license token
+
+USAGE
+  mint_license --user <id> [--expires <date>] [--features a,b] [--key <path>]
+
+FLAGS
+  --user        Buyer identifier (email/name/slug). REQUIRED.
+  --expires     YYYY-MM-DD or RFC-3339 datetime. Omit for perpetual.
+  --features    Comma-separated capability tags. Reserved for future use.
+  --machine-id  Bind license to a specific install (UUID printed by
+                Corey on the activation screen / Settings). Omit for
+                a portable license usable on any machine.
+  --key         Private key PEM. Default: ~/.corey-license/private.pem
+
+EXAMPLES
+  # 1-year, machine-bound license for Alice
+  mint_license --user alice@example.com \
+               --machine-id 1f4d1e2c-... \
+               --expires 2027-04-27
+
+  # Portable site license, perpetual
+  mint_license --user "Acme Corp" --features pro,beta
+
+OUTPUT
+  A single-line token like  <base64>.<base64>  to a stdout. Hand it
+  to the buyer; they paste it into Corey's Activate dialog.
