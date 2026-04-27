@@ -115,7 +115,7 @@ const BINARY_NAME: &str = "hermes.exe";
 #[cfg(not(target_os = "windows"))]
 const BINARY_NAME: &str = "hermes";
 
-pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
+fn resolve_hermes_binary() -> io::Result<PathBuf> {
     // 1) Bundled-with-Corey lookups. Distribution channels (the
     // Windows MSI, the macOS .app, future Linux AppImage) ship
     // hermes alongside the Corey executable so users don't have to

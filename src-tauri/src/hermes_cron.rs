@@ -373,6 +373,66 @@ mod tests {
         assert_eq!(jobs[0].schedule_display(), "every 2h");
     }
 
+    /// Regression for the panic surfaced as
+    /// `Internal error: load_jobs: jobs.json parse: invalid type: map,
+    /// expected u32` when a user opened the Scheduler page after Hermes
+    /// upgraded to >= 0.10. Hermes started writing both `schedule` and
+    /// `repeat` as objects; the old struct expected `String` and
+    /// `Option<u32>` and serde rightfully refused. This test pins the
+    /// exact shape we saw on disk so a future "tidy the struct"
+    /// refactor can't silently break opening the page again.
+    #[test]
+    fn parse_handles_hermes_0_10_object_schedule_and_repeat() {
+        let raw = r#"{
+            "jobs": [{
+                "id": "17068813c0b0",
+                "name": "daily-36kr-news",
+                "prompt": "fetch news",
+                "schedule": {
+                    "kind": "cron",
+                    "expr": "0 8 * * *",
+                    "display": "0 8 * * *"
+                },
+                "schedule_display": "0 8 * * *",
+                "repeat": {"times": null, "completed": 2},
+                "enabled": true,
+                "state": "scheduled",
+                "deliver": "local"
+            }]
+        }"#;
+        let jobs = parse_jobs(raw).expect("must parse without panic");
+        assert_eq!(jobs.len(), 1);
+        let j = &jobs[0];
+        assert_eq!(j.id, "17068813c0b0");
+        // `schedule_display()` extracts the human label out of the
+        // structured form.
+        assert_eq!(j.schedule_display(), "0 8 * * *");
+        // `repeat` is preserved as raw Value; round-trip-safe.
+        assert!(j.repeat.is_some());
+    }
+
+    /// Round-trip: load → save with the rich-schedule shape must
+    /// preserve the inner `{kind, expr, display}` object verbatim.
+    /// If we ever serialize back as a bare string we'd silently lose
+    /// the `kind` discriminator and Hermes might re-classify the
+    /// schedule on its next read.
+    #[test]
+    fn rich_schedule_round_trips_unchanged() {
+        let raw = r#"[{
+            "id": "x",
+            "schedule": {"kind": "cron", "expr": "0 8 * * *", "display": "0 8 * * *"},
+            "prompt": "p"
+        }]"#;
+        let jobs = parse_jobs(raw).unwrap();
+        let out = serialize_jobs(&jobs).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let job0 = &v.as_array().unwrap()[0];
+        let sched = job0.get("schedule").unwrap();
+        assert!(sched.is_object(), "schedule must round-trip as object, got {sched}");
+        assert_eq!(sched.get("kind").and_then(|v| v.as_str()), Some("cron"));
+        assert_eq!(sched.get("expr").and_then(|v| v.as_str()), Some("0 8 * * *"));
+    }
+
     #[test]
     fn parse_empty_and_garbage_return_empty_list_not_error() {
         assert_eq!(parse_jobs("[]").unwrap().len(), 0);
