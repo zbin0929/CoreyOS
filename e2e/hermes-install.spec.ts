@@ -15,7 +15,12 @@ test.describe('home · hermes install card', () => {
   }) => {
     await page.addInitScript(() => {
       const mock = (
-        window as unknown as { __CADUCEUS_MOCK__?: { state: Record<string, unknown> } }
+        window as unknown as {
+          __CADUCEUS_MOCK__?: {
+            state: Record<string, unknown>;
+            on: (cmd: string, handler: (args: unknown) => unknown) => void;
+          };
+        }
       ).__CADUCEUS_MOCK__;
       if (!mock) return;
       mock.state.hermesDetection = {
@@ -23,12 +28,15 @@ test.describe('home · hermes install card', () => {
         path: null,
         version: null,
       };
-      // Also flip the gateway probe to failure so the card doesn't
-      // collapse via the "online" early-exit.
-      mock.state.config = {
-        ...(mock.state.config as Record<string, unknown>),
-        base_url: 'http://127.0.0.1:9999',
-      };
+      // Force the gateway probe to fail so HermesInstallCard.tsx's
+      // `if (gateway === 'online') return null;` early-exit doesn't
+      // hide the card before our assertions run. Mutating config.base_url
+      // alone is not enough — the mock's `config_test` ignores it and
+      // returns a healthy probe by default. Override the handler so the
+      // app's refreshGateway() flow falls into the `offline` branch.
+      mock.on('config_test', () => {
+        throw { kind: 'unreachable', message: 'gateway down (e2e fixture)' };
+      });
     });
 
     await page.goto('/');

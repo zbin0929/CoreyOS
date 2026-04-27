@@ -60,6 +60,11 @@ test.describe('settings', () => {
   test('storage panel renders all four paths from app_paths', async ({ page }) => {
     await page.goto('/settings');
 
+    // Tauri-managed paths (config_dir, data_dir, db_path, changelog_path)
+    // live inside a collapsed <details> labelled "App internals" — the
+    // primary surface is now the Hermes data dir picker. Click the
+    // <summary> so the four <code> rows become visible.
+    await page.locator('summary').filter({ hasText: /internals/i }).first().click();
     // The DB-path row's <code> contains the full path — matches by substring.
     await expect(page.getByText(/caduceus\.db/).first()).toBeVisible();
     await expect(page.getByText(/changelog\.jsonl/).first()).toBeVisible();

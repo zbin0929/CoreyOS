@@ -16,6 +16,18 @@
 /** The script below is stringified and injected verbatim by Playwright. */
 export const tauriMockInitScript = /* js */ `
 (function() {
+  // ── pre-ack the first-run onboarding modal ──
+  // FirstRunModal (src/features/home/FirstRunModal.tsx) renders a
+  // dismiss-once overlay when localStorage flag is absent AND no LLM
+  // profiles exist. The default mock state has 0 profiles, so without
+  // pre-acking the flag every page-level test sees the modal and
+  // times out hunting for the actual page content beneath it. Specs
+  // that genuinely want to exercise the modal can clear this flag in
+  // their own beforeEach.
+  try {
+    window.localStorage.setItem('corey:first-run-acknowledged-v1', '1');
+  } catch { /* private mode etc. — modal won't matter then */ }
+
   // ── callback registry (for transformCallback) ──
   const callbacks = new Map();
   let nextCallbackId = 1;
