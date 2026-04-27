@@ -169,10 +169,20 @@ export function WorkflowRoute() {
           }
         />
         <div className="flex-1 overflow-y-auto p-6">
-          {running && (
+          {running && runResult?.status !== 'paused' && (
             <div className="flex items-center gap-3 text-fg-subtle">
               <Icon icon={Loader2} size="md" className="animate-spin" />
               <span>{t('workflow_page.executing')}</span>
+            </div>
+          )}
+          {/* Distinct banner when the run is parked on a human
+              decision: not spinning (nothing's running on the
+              backend), but not "done" either. The Approve / Reject
+              buttons live inside the step card below. */}
+          {runResult?.status === 'paused' && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+              <Icon icon={Clock} size="md" />
+              <span>{t('workflow_page.paused_awaiting_approval')}</span>
             </div>
           )}
           {runResult && (
@@ -214,21 +224,35 @@ export function WorkflowRoute() {
                   <div
                     key={sr.step_id}
                     className={cn(
-                      'flex items-center gap-3 rounded-lg border border-border px-4 py-3',
+                      'flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-3',
                       sr.status === 'completed' && 'bg-green-500/5',
                       sr.status === 'running' && 'bg-blue-500/5',
                       sr.status === 'failed' && 'bg-red-500/5',
                       sr.status === 'pending' && 'bg-bg-elev-1',
+                      // Highlight the row that's blocking on the human.
+                      // Amber rather than red — it's not a failure, just
+                      // a pending decision.
+                      sr.status === 'awaiting_approval' &&
+                        'bg-amber-500/10 border-amber-500/40 ring-1 ring-amber-500/30',
                     )}
                   >
                     <Icon
-                      icon={sr.status === 'completed' ? CheckCircle2 : sr.status === 'failed' ? XCircle : sr.status === 'running' ? Loader2 : Clock}
+                      icon={
+                        sr.status === 'completed'
+                          ? CheckCircle2
+                          : sr.status === 'failed'
+                          ? XCircle
+                          : sr.status === 'running'
+                          ? Loader2
+                          : Clock
+                      }
                       size="sm"
                       className={cn(
                         sr.status === 'completed' && 'text-green-500',
                         sr.status === 'failed' && 'text-red-500',
                         sr.status === 'running' && 'text-blue-500 animate-spin',
                         sr.status === 'pending' && 'text-fg-subtle',
+                        sr.status === 'awaiting_approval' && 'text-amber-500',
                       )}
                     />
                     <span className="text-sm font-medium text-fg">{sr.step_id}</span>
@@ -255,15 +279,37 @@ export function WorkflowRoute() {
                         </pre>
                       </details>
                     )}
-                    {sr.status === 'running' && runResult?.status === 'paused' && (
-                      <div className="ml-auto flex gap-2">
-                        <Button variant="secondary" size="sm" onClick={() => void handleApprove(sr.step_id, true)}>
-                          {t('workflow_page.approve')}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => void handleApprove(sr.step_id, false)}>
-                          {t('workflow_page.reject')}
-                        </Button>
-                      </div>
+                    {sr.status === 'awaiting_approval' && (
+                      <>
+                        {/* Full-width approval prompt + actions.
+                            Renders below the status row inside the
+                            same card so the message stays anchored
+                            to the step it gates. */}
+                        <div className="basis-full" />
+                        {typeof sr.output === 'object' &&
+                          sr.output !== null &&
+                          'message' in sr.output && (
+                            <pre className="w-full whitespace-pre-wrap rounded bg-amber-500/5 p-3 text-xs text-fg">
+                              {String((sr.output as Record<string, unknown>).message ?? '')}
+                            </pre>
+                          )}
+                        <div className="ml-auto flex gap-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => void handleApprove(sr.step_id, true)}
+                          >
+                            {t('workflow_page.approve')}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleApprove(sr.step_id, false)}
+                          >
+                            {t('workflow_page.reject')}
+                          </Button>
+                        </div>
+                      </>
                     )}
                   </div>
                 ))}

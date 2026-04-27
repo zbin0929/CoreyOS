@@ -3,6 +3,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use super::model::{WorkflowDef, WorkflowStep};
 
 pub struct ExecutionPlan {
+    /// Initial ready set for a fresh run (steps with no `after`).
+    /// `execute_with_executor` recomputes its own ready set after
+    /// the resume bootstrap, so this field is effectively only
+    /// used by tests today; kept for symmetry / future
+    /// optimisation when the engine learns to skip the bootstrap
+    /// on a known-fresh run.
+    #[allow(dead_code)]
     pub ready: Vec<String>,
     pub remaining: HashMap<String, StepDeps>,
 }

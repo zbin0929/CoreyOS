@@ -20,13 +20,18 @@ pub enum RunStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum StepRunStatus {
     Pending,
     Running,
     Completed,
     Failed,
     Skipped,
+    /// Approval step has paused the run and is waiting for the
+    /// human-in-the-loop. Cleared by `workflow_approve` (→
+    /// `Completed`) which then resumes the engine. Distinct from
+    /// `Pending` so the UI can render a "Approve / Reject" affordance.
+    AwaitingApproval,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -117,6 +122,14 @@ impl StepExecutor for SimulatedExecutor {
     }
 }
 
+/// Drive a workflow forward. **Idempotent**: safe to call again on
+/// the same `run` after a pause (e.g. an approval step). On entry
+/// we re-seed the planner + context from any already-completed
+/// steps in `run.step_runs`, so resume picks up from the boundary
+/// without re-running anything. Approval steps short-circuit the
+/// loop by setting `RunStatus::Paused` and returning early — the
+/// `workflow_approve` IPC then flips the step to `Completed` and
+/// re-invokes this function.
 pub fn execute_with_executor(
     def: &WorkflowDef,
     run: &mut WorkflowRun,
@@ -124,7 +137,41 @@ pub fn execute_with_executor(
     executor: &dyn StepExecutor,
 ) {
     let mut plan = planner::build_plan(def);
-    let mut ready: Vec<String> = plan.ready.clone();
+
+    // ── Resume bootstrap ──────────────────────────────────────────
+    // For every step already marked Completed, remove it from the
+    // remaining-deps map and merge its output back into ctx. After
+    // this, the `ready` set represents what's actually executable
+    // *right now* (downstream of all completed work + all
+    // approvals that have been resolved).
+    let completed_ids: Vec<String> = run
+        .step_runs
+        .iter()
+        .filter(|(_, sr)| sr.status == StepRunStatus::Completed)
+        .map(|(id, _)| id.clone())
+        .collect();
+    for id in &completed_ids {
+        if let Some(sr) = run.step_runs.get(id) {
+            if let Some(out) = &sr.output {
+                ctx.set_step_output(id, out.clone());
+            }
+        }
+        planner::mark_completed(&mut plan.remaining, id);
+    }
+    // Recompute ready set: anything in `remaining` whose `after` is
+    // now empty is unblocked. (`build_plan`'s initial `plan.ready`
+    // is only correct for a fresh run.)
+    let mut ready: Vec<String> = plan
+        .remaining
+        .iter()
+        .filter(|(_, deps)| deps.after.is_empty())
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    // Run is now actively driving forward.
+    if run.status == RunStatus::Paused || run.status == RunStatus::Pending {
+        run.status = RunStatus::Running;
+    }
 
     while !ready.is_empty() {
         let mut next_ready = Vec::new();
@@ -134,6 +181,39 @@ pub fn execute_with_executor(
             let Some(step) = step else {
                 continue;
             };
+
+            // ── Approval gate ────────────────────────────────────
+            // Pause the entire run and exit the executor. The
+            // human-in-the-loop will eventually call
+            // `workflow_approve`, which sets this step to Completed
+            // and re-enters this function — at which point the
+            // resume bootstrap above will skip past it.
+            if step.step_type == "approval" {
+                let cur_status = run
+                    .step_runs
+                    .get(step_id)
+                    .map(|s| s.status.clone())
+                    .unwrap_or(StepRunStatus::Pending);
+                if cur_status != StepRunStatus::Completed {
+                    let msg = step
+                        .approval_message
+                        .as_deref()
+                        .map(|m| ctx.render_template(m))
+                        .unwrap_or_default();
+                    if let Some(sr) = run.step_runs.get_mut(step_id) {
+                        sr.status = StepRunStatus::AwaitingApproval;
+                        sr.output = Some(json!({
+                            "status": "awaiting_approval",
+                            "message": msg,
+                        }));
+                    }
+                    run.status = RunStatus::Paused;
+                    tracing::info!(step_id = %step_id, "workflow paused awaiting approval");
+                    return;
+                }
+                // Already approved on a prior call — skip.
+                continue;
+            }
 
             if let Some(sr) = run.step_runs.get_mut(step_id) {
                 sr.status = StepRunStatus::Running;
@@ -196,7 +276,12 @@ fn execute_step_live(
         "parallel" => execute_parallel_step_live(step, ctx, executor),
         "branch" => execute_branch_step(step, ctx),
         "loop" => execute_loop_step_live(step, ctx, executor),
-        "approval" => execute_approval_step(step, ctx),
+        // `approval` is handled inline in `execute_with_executor`'s
+        // outer loop — it pauses the run instead of returning a value.
+        // Reaching here would mean the loop forgot to short-circuit
+        // (a bug); be loud rather than silently auto-approving.
+        "approval" => Err("approval step reached execute_step_live; \
+                          should have been intercepted by the run loop".into()),
         other => Err(format!("Unknown step type: {other}")),
     }
 }
@@ -331,22 +416,6 @@ fn execute_branch_step(
         }
     }
     Ok(json!({ "matched": null, "goto": null }))
-}
-
-fn execute_approval_step(
-    step: &WorkflowStep,
-    ctx: &mut RunContext,
-) -> Result<serde_json::Value, String> {
-    let msg = step
-        .approval_message
-        .as_deref()
-        .map(|m| ctx.render_template(m))
-        .unwrap_or_default();
-    Ok(json!({
-        "approved": true,
-        "message": msg,
-        "status": "auto_approved"
-    }))
 }
 
 #[cfg(test)]

@@ -7,6 +7,7 @@ use super::browser_config as browser_config_ipc;
 use crate::adapters::{ChatMessageDto, ChatTurn};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
+use crate::workflow;
 use crate::workflow::browser_config;
 use crate::workflow::engine::{self, StepExecutor, WorkflowRun};
 use crate::workflow::model::{WorkflowDef, WorkflowSummary};
@@ -262,33 +263,104 @@ pub struct ApproveParams {
     pub feedback: Option<String>,
 }
 
+/// Resolve a paused approval step.
+///
+/// `approved=true` flips the step to Completed and re-enters the
+/// engine to drive the rest of the workflow forward (the executor
+/// is idempotent — it picks up where it left off).
+///
+/// `approved=false` flips the run to Failed with a clear error so
+/// downstream steps don't run. We deliberately don't have a
+/// "resume from elsewhere" path; rejection means abort.
 #[tauri::command]
 pub async fn workflow_approve(
     state: State<'_, AppState>,
     params: ApproveParams,
 ) -> IpcResult<bool> {
     let runs = state.workflow_runs.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut map = runs.lock();
-        if let Some(run) = map.get_mut(&params.run_id) {
-            if let Some(sr) = run.step_runs.get_mut(&params.step_id) {
+    let adapters = state.adapters.clone();
+    let run_id = params.run_id.clone();
+    let step_id = params.step_id.clone();
+    let approved = params.approved;
+    let feedback = params.feedback.clone();
+
+    // Phase 1: stamp the approval verdict onto the step + decide
+    // whether we still need to drive the engine forward.
+    let (should_resume, workflow_id) = tokio::task::spawn_blocking({
+        let runs = runs.clone();
+        let run_id = run_id.clone();
+        let step_id = step_id.clone();
+        let feedback = feedback.clone();
+        move || -> Option<(bool, String)> {
+            let mut map = runs.lock();
+            let run = map.get_mut(&run_id)?;
+            let sr = run.step_runs.get_mut(&step_id)?;
+            // Only act on a step that's actually paused on us.
+            // Re-clicks (network retry, double-tap) become no-ops.
+            if sr.status != engine::StepRunStatus::AwaitingApproval {
+                return Some((false, run.workflow_id.clone()));
+            }
+            if approved {
                 sr.status = engine::StepRunStatus::Completed;
                 sr.output = Some(serde_json::json!({
-                    "approved": params.approved,
-                    "feedback": params.feedback,
+                    "approved": true,
+                    "feedback": feedback,
+                    "decided_at": chrono::Utc::now().to_rfc3339(),
                 }));
+            } else {
+                sr.status = engine::StepRunStatus::Failed;
+                sr.error = Some(
+                    feedback
+                        .clone()
+                        .unwrap_or_else(|| "Rejected by approver".into()),
+                );
+                run.status = engine::RunStatus::Failed;
+                run.error = Some(format!(
+                    "Approval step '{step_id}' rejected: {}",
+                    feedback.as_deref().unwrap_or("(no reason given)")
+                ));
             }
-            return Ok(true);
+            Some((approved, run.workflow_id.clone()))
         }
-        Ok(false)
     })
     .await
     .map_err(|e| IpcError::Internal {
         message: format!("workflow_approve join: {e}"),
     })?
-    .map_err(|e: anyhow::Error| IpcError::Internal {
-        message: format!("workflow_approve: {e}"),
-    })
+    .ok_or_else(|| IpcError::Internal {
+        message: format!("run/step not found: {run_id}/{step_id}"),
+    })?;
+
+    // Phase 2: if approved, fire the executor again to resume the
+    // run. This mirrors what `workflow_run` does on initial start —
+    // we re-load the def from disk (small YAML, cheap) and re-build
+    // ctx from the run's persisted step_runs.
+    if !should_resume {
+        return Ok(true);
+    }
+
+    let runs_for_resume = runs.clone();
+    tokio::task::spawn_blocking(move || {
+        let def = match store::get(&workflow_id) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!(workflow_id = %workflow_id, error = %e, "workflow_approve: cannot reload def to resume");
+                return;
+            }
+        };
+        let mut ctx = {
+            let map = runs_for_resume.lock();
+            let Some(run) = map.get(&run_id) else { return };
+            workflow::context::RunContext::new(&def.id, &run.id, run.inputs.clone())
+        };
+        let executor = HermesExecutor { adapters };
+        if let Some(r) = runs_for_resume.lock().get_mut(&run_id) {
+            engine::execute_with_executor(&def, r, &mut ctx, &executor);
+        }
+        tracing::info!(run_id = %run_id, status = ?runs_for_resume.lock().get(&run_id).map(|r| &r.status), "workflow run resumed after approval");
+    });
+
+    Ok(true)
 }
 
 #[tauri::command]

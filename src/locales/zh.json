@@ -1286,6 +1286,7 @@
     "editor_subtitle": "可视化流程编辑器",
     "approve": "通过",
     "reject": "驳回",
+    "paused_awaiting_approval": "工作流已暂停，等待你的审批。请在下方对应的步骤里点「通过」或「驳回」。",
     "step_output": "输出",
     "create": "新建工作流",
     "generate": "用对话生成",

@@ -15,7 +15,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
@@ -77,7 +77,9 @@ pub async fn hermes_user_md_write(
 ) -> IpcResult<HermesMemoryStatus> {
     let _journal = state.changelog_path.clone();
     tokio::task::spawn_blocking(move || -> IpcResult<()> {
-        let path = user_md_path()?;
+        let path = user_md_path().map_err(|e| IpcError::Internal {
+            message: format!("resolve USER.md path: {e}"),
+        })?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| IpcError::Internal {
                 message: format!("create memories dir: {e}"),

@@ -1286,6 +1286,7 @@
     "editor_subtitle": "Visual Flow Editor",
     "approve": "Approve",
     "reject": "Reject",
+    "paused_awaiting_approval": "Workflow paused, awaiting your approval. Click Approve or Reject on the matching step below.",
     "step_output": "Output",
     "create": "New Workflow",
     "generate": "Generate from prompt",

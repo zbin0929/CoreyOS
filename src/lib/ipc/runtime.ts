@@ -421,12 +421,37 @@ export function workflowApprove(
   approved: boolean,
   feedback?: string,
 ): Promise<boolean> {
-  return invoke('workflow_approve', { params: { runId, stepId, approved, feedback } });
+  // ApproveParams on the Rust side uses snake_case fields (it's a
+  // plain Deserialize struct without a rename_all attribute), so we
+  // send the body in snake_case to match. Tauri's automatic
+  // camelCase→snake_case conversion only applies to the
+  // top-level command args, NOT to nested struct fields.
+  return invoke('workflow_approve', {
+    params: {
+      run_id: runId,
+      step_id: stepId,
+      approved,
+      feedback,
+    },
+  });
 }
 
 export interface WorkflowStepRun {
   step_id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  /**
+   * `awaiting_approval` was added when the engine learned to actually
+   * pause on `approval` steps (previously they auto-approved silently).
+   * UI shows an Approve / Reject affordance only in that state; calling
+   * `workflow_approve` flips it to `completed` (or `failed` on reject)
+   * and resumes the run.
+   */
+  status:
+    | 'pending'
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'skipped'
+    | 'awaiting_approval';
   output?: Record<string, unknown>;
   error?: string;
   duration_ms?: number;
