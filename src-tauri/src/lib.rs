@@ -190,8 +190,9 @@ pub fn run() {
             ipc::scheduler::scheduler_validate_cron,
             ipc::scheduler::scheduler_list_runs,
             ipc::scheduler::scheduler_extract_intent,
-            ipc::rag::rag_search,
-            ipc::rag::rag_index_recent,
+            // `ipc::rag::*` was removed in v9 — see `embedding.rs` doc
+            // comment for context. Real semantic search will land
+            // again as a fresh module backed by Hermes /v1/embeddings.
             ipc::knowledge::knowledge_upload,
             ipc::knowledge::knowledge_list,
             ipc::knowledge::knowledge_delete,

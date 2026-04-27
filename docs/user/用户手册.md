@@ -652,26 +652,29 @@ Runbook = 带 `{{参数}}` 占位符的命名 prompt 模板。
   - TXT / Markdown
 - 上传后自动：
   1. 提取文本
-  2. 分块（默认 1000 字符 + 200 重叠）
-  3. 嵌入向量（用 Hermes 默认 embedding 模型）
-  4. 写入向量库
+  2. 分块（默认 500 字符 + 50 重叠）
+  3. 写入 SQLite（仅原文 + chunks，**不再做本地向量化**）
+
+> **v9 起：本地向量索引（BGE-Small ONNX）已移除**。原因：模型下载依赖 HuggingFace，国内常失败 → 永远软失败为零向量。后续会改走 Hermes `/v1/embeddings`，此刻先回退为纯关键词检索。
 
 #### 在 Chat 里使用
 
 ##### 自动检索
-- Chat 系统会在每次发送前调 `rag_search` 找最相关的前 N 个 chunks
-- 自动注入到 system prompt 末尾
-- 你不需要做任何事
+- Chat 系统每次发送前会做两件事：
+  1. **TF-IDF**：在你之前的对话里找相似条目（`learningSearchSimilar`）。
+  2. **Knowledge keyword**：在你上传的文档里跑 Jaccard 关键词匹配（`knowledgeSearch`）。
+- 命中的内容会自动拼到 system prompt 前面，无需手动操作。
+- 真正的语义检索（RAG）会在接入 Hermes embeddings 之后回归。
 
 ##### 手动引用
 - 在 prompt 里 `@knowledge:文件名`
-- 强制引用某文档（即使 RAG 评分低）
+- 强制引用某文档（绕过自动评分）。
 
 #### 管理
 
-- 列表显示所有文档 + 大小 + 上传时间
-- 点击查看分块预览
-- 删除会同步清向量库
+- 列表显示所有文档 + 大小 + 上传时间。
+- 点击查看分块预览。
+- 删除即彻底清除（无向量库副本）。
 
 ---
 

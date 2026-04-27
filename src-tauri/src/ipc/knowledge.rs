@@ -118,7 +118,13 @@ pub async fn knowledge_upload(
         fs_atomic::atomic_write(&dir.join("original.txt"), content.as_bytes(), None)
             .map_err(io_err)?;
 
-        let chunk_ids = db
+        // Insert document + chunks. The DB still has an `embedding`
+        // BLOB column on `knowledge_chunks`, but we deliberately leave
+        // it NULL — the local ONNX embedder was removed (see
+        // `embedding.rs` module docs); when the Hermes /v1/embeddings
+        // route lands we'll backfill in a separate IPC. Returning the
+        // chunk_ids is no longer necessary for embedding writes.
+        let _chunk_ids = db
             .insert_knowledge_doc(
                 &id_clone,
                 &name_clone,
@@ -129,11 +135,6 @@ pub async fn knowledge_upload(
                 &chunks,
             )
             .map_err(db_err)?;
-
-        let embeddings = embedding::embed(&chunks);
-        for (chunk_id, emb) in chunk_ids.iter().zip(embeddings.iter()) {
-            let _ = embedding::store_embedding(&db, *chunk_id, emb);
-        }
 
         Ok(())
     })

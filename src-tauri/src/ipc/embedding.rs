@@ -1,111 +1,63 @@
-//! Embedding service — local ONNX-based embedding via fastembed.
+//! Embedding service (DEFERRED — vector path removed).
 //!
-//! Provides:
-//!   - Phase 1: Local embedding generation (BGE-small-zh for Chinese + Multilingual)
-//!   - Phase 2: Vector storage in SQLite (blob column)
-//!   - Phase 3: Smart chunking with overlap
-//!   - Phase 4: Hybrid retrieval (vector + keyword RRF fusion)
-//!   - Phase 5: Query expansion + cross-encoder reranking
+//! ## What changed and why
 //!
-//! The embedding model is lazy-loaded on first use and cached for the
-//! app lifetime. Model weights are downloaded from HuggingFace Hub
-//! on first run (~30MB) and cached locally.
-
-use std::sync::OnceLock;
-
-use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
-use parking_lot::Mutex;
-use rusqlite::params;
+//! Previously this module embedded local ONNX (`fastembed` + BGE-Small)
+//! and exposed a five-phase RAG pipeline (embed → store → chunk →
+//! hybrid → rerank). In practice:
+//!
+//!   1. The BGE-Small download is the first thing in this module to
+//!      touch the network, and HuggingFace Hub is unreachable from
+//!      mainland China without an explicit `HF_ENDPOINT` mirror — so
+//!      every domestic developer / user experienced a permanent
+//!      "warn: BGE-Small ONNX init failed; falling back to zero
+//!      vectors" boot and the vector path silently degraded to junk.
+//!   2. The downstream `rag.rs::rag_search` IPC was already a Jaccard
+//!      keyword fallback; calling it `rag` was misleading.
+//!   3. `enrichHistory.ts` dispatched the IPC on every chat turn,
+//!      adding latency for zero quality return.
+//!   4. The 30 MB ONNX runtime + `ort` C++ chain bloated every
+//!      release build for a feature that doesn't actually work.
+//!
+//! Decision (v9 audit): drop the local embedder + `fastembed` dep,
+//! keep the public surface small but stable, and route real semantic
+//! search through Hermes' `/v1/embeddings` endpoint when (and only
+//! when) we wire that path in v10.
+//!
+//! ## What still works
+//!
+//!   - `chunk_text_smart` — pure-text paragraph chunking (no model).
+//!   - `expand_query` — bilingual synonym expansion (no model).
+//!   - `hybrid_search` — Jaccard keyword overlap against
+//!     `knowledge_chunks`. The "hybrid" name is preserved for now so
+//!     `knowledge_search` IPC keeps compiling, but the vector branch
+//!     is gone — it's a keyword search dressed in the old API.
+//!
+//! ## What's gone (compared to v8)
+//!
+//!   - `fastembed::TextEmbedding` and the BGE-Small model
+//!   - `embed` / `embed_single` (callers now skip embedding entirely)
+//!   - `store_embedding` / `search_by_vector` / `rrf_fuse` /
+//!     `cosine_similarity` — all dead without vectors
+//!   - `EMBEDDING_DIM` constant
+//!
+//! The SQLite `knowledge_chunks.embedding` BLOB column is left in the
+//! schema for forward-compat. New uploads write `NULL` there;
+//! `search_by_vector` is gone so old non-NULL rows are simply
+//! ignored.
+//!
+//! ## Re-enabling vectors later
+//!
+//! Add a Hermes `/v1/embeddings` client (e.g. `deepseek-embedding`)
+//! and reintroduce `embed`/`store_embedding`/`search_by_vector` —
+//! exactly the four functions removed in this commit. The chunking
+//! and expansion code is intentionally left untouched so the wiring
+//! is small.
 
 use crate::db::Db;
 
-const EMBEDDING_DIM: usize = 384;
 const CHUNK_MAX_CHARS: usize = 500;
 const CHUNK_OVERLAP_CHARS: usize = 50;
-
-// Lazy-initialised wrapper for the BGE-Small ONNX model. The init step
-// downloads ~30 MB of weights from HuggingFace Hub on first use; in
-// network-restricted environments (e.g. CN behind GFW with no proxy) that
-// download fails with `Connection refused`. We treat that as a degraded
-// mode rather than a crash:
-//   - `EMBEDDER` flips to `Some(Err(message))` and stays there for the
-//     process lifetime — we don't keep retrying every call, otherwise
-//     every search would pay the same network timeout cost.
-//   - `embed()` then returns zero vectors (a stable fallback that lets
-//     downstream cosine-similarity code keep running without panicking).
-//   - The semantic-quality cost is "knowledge / similarity search returns
-//     keyword-only results"; chat / Hermes / delegation are unaffected.
-//
-// The previous implementation called `.expect(...)` here, which panicked
-// on the first index call after boot (knowledge ingest, learning auto-
-// indexer, …). The panic killed a tokio worker and surfaced as a noisy
-// stack trace in the dev console without breaking the app — confusing
-// users who saw "panicked at embedding.rs:31" right next to a perfectly
-// functional chat. Soft-failing makes the degraded mode quiet.
-static EMBEDDER: OnceLock<Result<Mutex<TextEmbedding>, String>> = OnceLock::new();
-
-fn get_embedder() -> Option<&'static Mutex<TextEmbedding>> {
-    let cell = EMBEDDER.get_or_init(|| {
-        TextEmbedding::try_new(InitOptions::new(EmbeddingModel::BGESmallENV15))
-            .map(Mutex::new)
-            .map_err(|e| {
-                let msg = format!(
-                    "BGE-Small ONNX init failed ({e}); falling back to zero \
-                     vectors. Knowledge / similarity search will return \
-                     keyword-only results until the model is reachable. \
-                     Most common cause: HuggingFace Hub blocked by network — \
-                     set HF_ENDPOINT to a mirror or pre-seed \
-                     ~/.cache/huggingface/."
-                );
-                tracing::warn!("{msg}");
-                msg
-            })
-    });
-    cell.as_ref().ok()
-}
-
-pub fn embed(texts: &[String]) -> Vec<Vec<f32>> {
-    if texts.is_empty() {
-        return Vec::new();
-    }
-    let Some(embedder) = get_embedder() else {
-        return texts.iter().map(|_| vec![0.0f32; EMBEDDING_DIM]).collect();
-    };
-    let mut embedder = embedder.lock();
-    let inputs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
-    match embedder.embed(inputs, None) {
-        Ok(embeddings) => embeddings,
-        Err(e) => {
-            tracing::warn!("embedding failed: {e}, returning zero vectors");
-            texts.iter().map(|_| vec![0.0f32; EMBEDDING_DIM]).collect()
-        }
-    }
-}
-
-pub fn embed_single(text: &str) -> Vec<f32> {
-    let results = embed(&[text.to_string()]);
-    results
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| vec![0.0f32; EMBEDDING_DIM])
-}
-
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    let mut dot = 0.0f32;
-    let mut norm_a = 0.0f32;
-    let mut norm_b = 0.0f32;
-    for i in 0..a.len().min(b.len()) {
-        dot += a[i] * b[i];
-        norm_a += a[i] * a[i];
-        norm_b += b[i] * b[i];
-    }
-    let denom = norm_a.sqrt() * norm_b.sqrt();
-    if denom == 0.0 {
-        0.0
-    } else {
-        dot / denom
-    }
-}
 
 // ───────────────────────── Phase 3: Smart Chunking ─────────────────────────
 
@@ -177,96 +129,6 @@ fn chunk_with_overlap(text: &str, max_chars: usize, overlap: usize) -> Vec<Strin
         };
     }
     chunks
-}
-
-// ───────────────────────── Phase 2: Vector Storage ─────────────────────────
-
-pub fn store_embedding(db: &Db, chunk_id: i64, embedding: &[f32]) -> rusqlite::Result<()> {
-    let blob: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
-    let conn = db.conn_raw();
-    conn.execute(
-        "UPDATE knowledge_chunks SET embedding = ?1 WHERE id = ?2",
-        params![blob, chunk_id],
-    )?;
-    Ok(())
-}
-
-pub fn search_by_vector(
-    db: &Db,
-    query_embedding: &[f32],
-    limit: usize,
-) -> Vec<(i64, String, String, usize, f32)> {
-    let conn = db.conn_raw();
-    let mut stmt = match conn.prepare(
-        "SELECT c.id, d.name, c.content, c.chunk_index, c.embedding FROM knowledge_chunks c JOIN knowledge_docs d ON d.id = c.doc_id WHERE c.embedding IS NOT NULL",
-    ) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
-    };
-
-    let rows = match stmt.query_map([], |row| {
-        let id: i64 = row.get(0)?;
-        let doc_name: String = row.get(1)?;
-        let content: String = row.get(2)?;
-        let chunk_index: usize = row.get(3)?;
-        let blob: Vec<u8> = row.get(4)?;
-        Ok((id, doc_name, content, chunk_index, blob))
-    }) {
-        Ok(r) => r,
-        Err(_) => return Vec::new(),
-    };
-
-    let mut scored: Vec<(i64, String, String, usize, f32)> = Vec::new();
-    for r in rows {
-        let (id, doc_name, content, chunk_index, blob) = match r {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let embedding: Vec<f32> = blob
-            .chunks_exact(4)
-            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-            .collect();
-        let score = cosine_similarity(query_embedding, &embedding);
-        if score > 0.3 {
-            scored.push((id, doc_name, content, chunk_index, score));
-        }
-    }
-
-    scored.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
-    scored.truncate(limit);
-    scored
-}
-
-// ───────────────────────── Phase 4: Hybrid RRF ─────────────────────────
-
-pub fn rrf_fuse(
-    vector_results: &[(i64, String, String, usize, f32)],
-    keyword_results: &[(i64, String, String, usize, f64)],
-    k: f64,
-) -> Vec<(String, String, usize, f64)> {
-    let mut scores: std::collections::HashMap<i64, (f64, String, String, usize)> =
-        std::collections::HashMap::new();
-
-    for (rank, (id, doc_name, content, chunk_idx, _)) in vector_results.iter().enumerate() {
-        let entry = scores
-            .entry(*id)
-            .or_insert_with(|| (0.0, doc_name.clone(), content.clone(), *chunk_idx));
-        entry.0 += 1.0 / (k + rank as f64 + 1.0);
-    }
-
-    for (rank, (id, doc_name, content, chunk_idx, _)) in keyword_results.iter().enumerate() {
-        let entry = scores
-            .entry(*id)
-            .or_insert_with(|| (0.0, doc_name.clone(), content.clone(), *chunk_idx));
-        entry.0 += 1.0 / (k + rank as f64 + 1.0);
-    }
-
-    let mut fused: Vec<_> = scores
-        .into_iter()
-        .map(|(_id, (score, doc_name, content, chunk_idx))| (doc_name, content, chunk_idx, score))
-        .collect();
-    fused.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
-    fused
 }
 
 // ───────────────────────── Phase 5: Query Expansion ─────────────────────────
@@ -343,11 +205,13 @@ pub struct HybridSearchResult {
     pub source: String,
 }
 
+/// Search knowledge chunks. Despite the legacy "hybrid_search" name,
+/// this is now a pure Jaccard token-overlap search — the vector arm
+/// was removed when we dropped the local ONNX embedder. Keeping the
+/// name avoids a churn in `knowledge_search` and the public API; when
+/// the Hermes `/v1/embeddings` route lands, this function will fan
+/// out to both arms again and the RRF fusion will come back.
 pub fn hybrid_search(db: &Db, query: &str, limit: usize) -> Vec<HybridSearchResult> {
-    let query_embedding = embed_single(query);
-
-    let vector_results = search_by_vector(db, &query_embedding, limit * 2);
-
     let query_tokens: std::collections::HashSet<String> = query
         .to_lowercase()
         .split_whitespace()
@@ -355,22 +219,19 @@ pub fn hybrid_search(db: &Db, query: &str, limit: usize) -> Vec<HybridSearchResu
         .map(String::from)
         .collect();
 
-    let keyword_results = search_knowledge_chunks_jaccard(db, &query_tokens, limit * 2);
+    if query_tokens.is_empty() {
+        return Vec::new();
+    }
 
-    let fused = rrf_fuse(&vector_results, &keyword_results, 60.0);
-
-    fused
+    search_knowledge_chunks_jaccard(db, &query_tokens, limit)
         .into_iter()
-        .take(limit)
-        .map(
-            |(doc_name, content, chunk_index, score)| HybridSearchResult {
-                doc_name,
-                content,
-                chunk_index,
-                score,
-                source: "hybrid".into(),
-            },
-        )
+        .map(|(_, doc_name, content, chunk_index, score)| HybridSearchResult {
+            doc_name,
+            content,
+            chunk_index,
+            score,
+            source: "keyword".into(),
+        })
         .collect()
 }
 

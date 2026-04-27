@@ -1,11 +1,23 @@
 import type { ChatMessageDto } from '@/lib/ipc';
 import {
   learningSearchSimilar,
-  ragSearch,
   knowledgeSearch,
   learningReadLearnings,
   memoryRead,
 } from '@/lib/ipc';
+
+// v9: `ragSearch` removed. The Rust-side `rag_search` IPC was a
+// Jaccard-on-`messages` keyword fallback misnamed as RAG; it never
+// produced semantically useful hits and added a serial IPC roundtrip
+// to every chat send. The TF-IDF arm above (`learningSearchSimilar`)
+// already covers "find related past conversations", and
+// `knowledgeSearch` covers user-uploaded docs — those are the two
+// real value adds. When real semantic search lands (Hermes
+// `/v1/embeddings`), we'll re-introduce a `semanticSearch` call here
+// and feed it into the same `enriched.unshift(...)` flow. Until
+// then, dropping this arm shaves ~50–200 ms off every chat send and
+// avoids the empty `[Semantically related context]` system block
+// that was eating prompt tokens for nothing.
 
 export async function enrichHistoryWithContext(
   history: ChatMessageDto[],
@@ -13,10 +25,8 @@ export async function enrichHistoryWithContext(
 ): Promise<ChatMessageDto[]> {
   const enriched = [...history];
 
-  let tfidfHitCount = 0;
   try {
     const similar = await learningSearchSimilar(userText, 3);
-    tfidfHitCount = similar.length;
     if (similar.length > 0) {
       const contextParts = similar
         .map((r) => r.content.slice(0, 200).replace(/\n/g, ' '))
@@ -28,26 +38,6 @@ export async function enrichHistoryWithContext(
     }
   } catch {
     // non-critical — proceed without TF-IDF context
-  }
-
-  if (tfidfHitCount === 0) {
-    try {
-      const ragResults = await ragSearch(userText, 5);
-      if (ragResults.length > 0) {
-        const ragContext = ragResults
-          .filter((r) => r.score > 0.1)
-          .map((r) => r.content.slice(0, 200).replace(/\n/g, ' '))
-          .join('\n');
-        if (ragContext.length > 0) {
-          enriched.unshift({
-            role: 'system',
-            content: `[Semantically related context]\n${ragContext}`,
-          });
-        }
-      }
-    } catch {
-      // non-critical — proceed without RAG context
-    }
   }
 
   try {

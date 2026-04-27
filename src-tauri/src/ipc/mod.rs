@@ -26,7 +26,6 @@ pub mod model;
 pub mod paths;
 pub mod preset;
 pub mod pty;
-pub mod rag;
 pub mod routing_rules;
 pub mod runbooks;
 pub mod sandbox;

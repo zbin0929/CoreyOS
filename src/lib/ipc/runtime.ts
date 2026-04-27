@@ -95,30 +95,17 @@ export function schedulerExtractIntent(message: string): Promise<SchedulerIntent
   return invoke<SchedulerIntent>('scheduler_extract_intent', { message });
 }
 
-// ───────────────────────── RAG ─────────────────────────
-
-export interface RagSearchResult {
-  message_id: string;
-  session_id: string;
-  content: string;
-  score: number;
-  source: string;
-}
-
-export function ragSearch(query: string, limit?: number): Promise<RagSearchResult[]> {
-  return invoke<RagSearchResult[]>('rag_search', { query, limit });
-}
-
-export interface RagIndexResult {
-  indexed: number;
-  skipped: number;
-}
-
-export function ragIndexRecent(): Promise<RagIndexResult> {
-  return invoke<RagIndexResult>('rag_index_recent');
-}
-
 // ───────────────────────── Knowledge base ─────────────────────────
+//
+// `ragSearch` / `ragIndexRecent` / `RagSearchResult` / `RagIndexResult`
+// were removed in v9. See `src-tauri/src/ipc/embedding.rs` for the
+// rationale; the short version is that the Rust-side `rag_search`
+// was a Jaccard fallback misnamed as RAG, the local ONNX embedder
+// (BGE-Small via fastembed) failed silently behind the GFW, and the
+// downstream call site (`enrichHistory.ts`) added a serial IPC
+// roundtrip per chat send for zero quality return. Real semantic
+// search will land again as a fresh export here once we wire Hermes'
+// `/v1/embeddings` endpoint.
 
 export interface KnowledgeDoc {
   id: string;

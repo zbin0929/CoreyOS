@@ -123,7 +123,13 @@ lopdf = "0.34"
 # tokio-cron-scheduler crate (which adds persistence / signal infra
 # we don't need since we persist to SQLite ourselves).
 cron = "0.12"
-fastembed = "5.13.3"
+
+# `fastembed` (BGE-Small ONNX) was removed in v9 — see
+# `src/ipc/embedding.rs` module docs. Net effect: −30 MB model
+# weights, no HuggingFace Hub dependency on first boot, and the
+# `ort` C++ chain disappears from release builds. Re-add only when
+# we want a *local* embedder again; otherwise wire Hermes
+# `/v1/embeddings` from a fresh module.
 
 cpal = "0.15"
 hound = "3.5"
