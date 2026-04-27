@@ -45,14 +45,14 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::OnceCell;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 pub mod tools;
 
@@ -143,10 +143,112 @@ pub fn start(app: AppHandle) {
         };
         let _ = BOUND_PORT.set(bound.port());
         info!(port = bound.port(), "MCP server: listening on 127.0.0.1");
+
+        // Self-register with Hermes so the user doesn't have to run
+        // `hermes mcp add` by hand. Idempotent: a stale entry pointing
+        // at a previous run's port gets replaced. Failure is logged
+        // and we keep serving — the user can still register manually.
+        // Spawn-and-forget so a slow `hermes` CLI invocation can't
+        // delay axum::serve below.
+        tauri::async_runtime::spawn(register_with_hermes(bound.port()));
+
         if let Err(e) = axum::serve(listener, router).await {
             warn!(error = %e, "MCP server: axum::serve exited");
         }
     });
+}
+
+/// Name used as the MCP-config key on the Hermes side. Stable across
+/// runs so `register_with_hermes` can re-bind it to a fresh port without
+/// the user noticing.
+const MCP_NAME: &str = "corey-native";
+
+/// Add (or refresh) the `corey-native` MCP server entry in Hermes'
+/// config so the agent can discover our tools without a manual
+/// `hermes mcp add`.
+///
+/// Strategy:
+///   1. List current MCP servers via `hermes mcp list`.
+///   2. If `corey-native` exists pointing at the same URL we'd write,
+///      do nothing — saves a Hermes config rewrite + re-init.
+///   3. Otherwise, `remove` then `add` — simpler than parsing flags
+///      to detect "needs update", and idempotent against partial state
+///      from a previous crashed run.
+///
+/// Why shell out instead of writing `~/.hermes/config.yaml` directly:
+/// Hermes treats that file as authoritative state. Editing it from
+/// under a running gateway risks the gateway re-saving its in-memory
+/// view and clobbering us. The CLI goes through Hermes' own write
+/// pipeline (atomic, locked, validation-aware), which is the contract
+/// upstream documents.
+async fn register_with_hermes(port: u16) {
+    use tokio::process::Command;
+
+    let url = format!("http://127.0.0.1:{port}/");
+
+    // 1. Check if already registered with the same URL.
+    let listing = Command::new("hermes")
+        .args(["mcp", "list"])
+        .output()
+        .await;
+    let already_correct = match listing {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            // `hermes mcp list` output isn't a stable structured
+            // format; scrape for both the server name and the
+            // current URL on nearby lines. Cheap and only matters
+            // for the no-op fast path.
+            stdout.contains(MCP_NAME) && stdout.contains(&url)
+        }
+        Ok(out) => {
+            debug!(
+                stderr = %String::from_utf8_lossy(&out.stderr),
+                "hermes mcp list non-zero exit; will retry add path"
+            );
+            false
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                "hermes CLI not found in PATH; skipping auto-register. \
+                 Hermes will not see Corey's native tools until the user \
+                 runs `hermes mcp add corey-native --url {url}` manually."
+            );
+            return;
+        }
+    };
+    if already_correct {
+        info!(name = MCP_NAME, url = %url, "MCP: already registered with current URL");
+        return;
+    }
+
+    // 2. Remove any stale entry. Failure is fine — most likely cause
+    // is "no such server", which is exactly the state we want.
+    let _ = Command::new("hermes")
+        .args(["mcp", "remove", MCP_NAME])
+        .output()
+        .await;
+
+    // 3. Add fresh.
+    let add = Command::new("hermes")
+        .args(["mcp", "add", MCP_NAME, "--url", &url])
+        .output()
+        .await;
+    match add {
+        Ok(out) if out.status.success() => {
+            info!(name = MCP_NAME, url = %url, "MCP: registered with Hermes");
+        }
+        Ok(out) => {
+            warn!(
+                stdout = %String::from_utf8_lossy(&out.stdout),
+                stderr = %String::from_utf8_lossy(&out.stderr),
+                "hermes mcp add returned non-zero; native tools may be invisible to Hermes"
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "hermes mcp add invocation failed");
+        }
+    }
 }
 
 async fn banner() -> Json<Value> {
