@@ -3,6 +3,7 @@ name = "caduceus"
 version = "0.1.0"
 description = "Corey — control plane for AI agents"
 authors = ["Corey Contributors"]
+autobins = false
 # Multiple [[bin]] targets exist (Corey + license_keygen + mint_license).
 # Without default-run, `cargo run` (the form Tauri's dev runner uses)
 # bails with "could not determine which binary to run". Pin to the GUI.
