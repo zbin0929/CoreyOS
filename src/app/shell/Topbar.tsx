@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { Sun, Moon, Search, CircleDot } from 'lucide-react';
-import { AgentSwitcher } from '@/app/shell/AgentSwitcher';
+// AgentSwitcher hidden — see comment near its render site below for context.
+// import { AgentSwitcher } from '@/app/shell/AgentSwitcher';
 import { Icon } from '@/components/ui/icon';
 import { Kbd } from '@/components/ui/kbd';
 import { usePaletteStore } from '@/stores/palette';
@@ -67,10 +68,17 @@ export function Topbar() {
         <span>{gatewayLabel(gateway, gatewayLatencyMs, t)}</span>
       </button>
 
-      {/* T5.5a — registered agents. Sits between the gateway pill and the
-          right-hand palette/theme cluster so it reads left-to-right as
-          "gateway → agent → navigation". */}
-      <AgentSwitcher />
+      {/* AgentSwitcher hidden as of the Hermes-as-default pivot: Corey is
+          a GUI for Hermes Agent, so the previous multi-adapter switcher
+          (which exposed `aider` / `claude_code` / etc. as parallel agent
+          backends) only added confusion — the non-Hermes options were
+          never configured for real users and dominated the dropdown.
+          The Topbar now just shows the gateway pill on the left; the
+          conversation-level "which LLM does Hermes use" picker lives in
+          the chat composer where it belongs. Component file is kept in
+          place under @/app/shell/AgentSwitcher.tsx in case multi-backend
+          agent routing comes back as a power-user feature. */}
+      {/* <AgentSwitcher /> */}
 
       <div className="flex-1" />
 

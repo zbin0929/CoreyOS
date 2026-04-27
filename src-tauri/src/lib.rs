@@ -295,26 +295,32 @@ pub fn run() {
             }
 
             // Register every saved LLM Profile as a Hermes-backed adapter
-            // under `hermes:profile:<id>`. This is the "Option B" bridge
-            // that lets the Chat model picker surface profile-backed
-            // endpoints directly — without the user having to hand-craft
-            // a matching Hermes Instance row. Failures per profile are
-            // logged and swallowed (bad base_url on one profile must not
-            // block the others or the app boot).
+            // under `hermes:profile:<id>`.
+            //
+            // **Critical**: profile-backed adapters route to the LOCAL
+            // Hermes gateway (`cfg.base_url`), NOT to the profile's own
+            // `base_url`. The profile is the user's choice of MODEL — the
+            // execution environment is always Hermes (so we get its agent
+            // loop, tool registry, delegation, cron, skills, …). Passing
+            // `profile.base_url` directly here was the original wiring,
+            // and it bypassed Hermes entirely — every "profile" chat went
+            // straight to vendor APIs without an agent loop, defeating
+            // the whole point of integrating with Hermes-agent.
+            //
+            // The profile's `model` field is forwarded as the chat
+            // completion request's `model`. Hermes' provider resolution
+            // looks up which provider handles `deepseek-chat` /
+            // `glm-5.1` / etc. and uses the credentials in its own
+            // `~/.hermes/auth.json`. Corey's `api_key_env` field is
+            // therefore informational only on this path; the source of
+            // truth for vendor keys is Hermes.
+            //
+            // Failures per profile are logged and swallowed — a malformed
+            // profile must not block the others or the app boot.
             for profile in llm_profiles::load(&config_dir) {
-                let api_key = match profile
-                    .api_key_env
-                    .as_deref()
-                    .filter(|k| !k.is_empty())
-                {
-                    Some(env_name) => {
-                        hermes_config::read_env_value(env_name).unwrap_or(None)
-                    }
-                    None => None,
-                };
                 match HermesAdapter::new_live(
-                    profile.base_url.clone(),
-                    api_key,
+                    cfg.base_url.clone(),
+                    None,
                     Some(profile.model.clone()),
                 ) {
                     Ok(adapter) => {

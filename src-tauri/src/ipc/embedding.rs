@@ -23,21 +23,55 @@ const EMBEDDING_DIM: usize = 384;
 const CHUNK_MAX_CHARS: usize = 500;
 const CHUNK_OVERLAP_CHARS: usize = 50;
 
-static EMBEDDER: OnceLock<Mutex<TextEmbedding>> = OnceLock::new();
+// Lazy-initialised wrapper for the BGE-Small ONNX model. The init step
+// downloads ~30 MB of weights from HuggingFace Hub on first use; in
+// network-restricted environments (e.g. CN behind GFW with no proxy) that
+// download fails with `Connection refused`. We treat that as a degraded
+// mode rather than a crash:
+//   - `EMBEDDER` flips to `Some(Err(message))` and stays there for the
+//     process lifetime — we don't keep retrying every call, otherwise
+//     every search would pay the same network timeout cost.
+//   - `embed()` then returns zero vectors (a stable fallback that lets
+//     downstream cosine-similarity code keep running without panicking).
+//   - The semantic-quality cost is "knowledge / similarity search returns
+//     keyword-only results"; chat / Hermes / delegation are unaffected.
+//
+// The previous implementation called `.expect(...)` here, which panicked
+// on the first index call after boot (knowledge ingest, learning auto-
+// indexer, …). The panic killed a tokio worker and surfaced as a noisy
+// stack trace in the dev console without breaking the app — confusing
+// users who saw "panicked at embedding.rs:31" right next to a perfectly
+// functional chat. Soft-failing makes the degraded mode quiet.
+static EMBEDDER: OnceLock<Result<Mutex<TextEmbedding>, String>> = OnceLock::new();
 
-fn get_embedder() -> &'static Mutex<TextEmbedding> {
-    EMBEDDER.get_or_init(|| {
-        let model = TextEmbedding::try_new(InitOptions::new(EmbeddingModel::BGESmallENV15))
-            .expect("failed to load embedding model");
-        Mutex::new(model)
-    })
+fn get_embedder() -> Option<&'static Mutex<TextEmbedding>> {
+    let cell = EMBEDDER.get_or_init(|| {
+        TextEmbedding::try_new(InitOptions::new(EmbeddingModel::BGESmallENV15))
+            .map(Mutex::new)
+            .map_err(|e| {
+                let msg = format!(
+                    "BGE-Small ONNX init failed ({e}); falling back to zero \
+                     vectors. Knowledge / similarity search will return \
+                     keyword-only results until the model is reachable. \
+                     Most common cause: HuggingFace Hub blocked by network — \
+                     set HF_ENDPOINT to a mirror or pre-seed \
+                     ~/.cache/huggingface/."
+                );
+                tracing::warn!("{msg}");
+                msg
+            })
+    });
+    cell.as_ref().ok()
 }
 
 pub fn embed(texts: &[String]) -> Vec<Vec<f32>> {
     if texts.is_empty() {
         return Vec::new();
     }
-    let mut embedder = get_embedder().lock();
+    let Some(embedder) = get_embedder() else {
+        return texts.iter().map(|_| vec![0.0f32; EMBEDDING_DIM]).collect();
+    };
+    let mut embedder = embedder.lock();
     let inputs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
     match embedder.embed(inputs, None) {
         Ok(embeddings) => embeddings,

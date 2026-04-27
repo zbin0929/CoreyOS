@@ -25,6 +25,54 @@ import { Markdown } from './messageBubble/Markdown';
 import { ReasoningPanel } from './messageBubble/ReasoningPanel';
 import { RetryButton } from './messageBubble/RetryButton';
 import { ToolCallsStrip } from './messageBubble/ToolCallsStrip';
+import { prettifyTool } from './messageBubble/toolMeta';
+import type { UiToolCall } from '@/stores/chat';
+
+/**
+ * Compact summary of the LATEST in-flight tool call, rendered next to the
+ * thinking spinner so the user sees concrete activity ("正在浏览
+ * google.com") instead of a featureless `thinking…`. The strip above shows
+ * the full ordered timeline; this is just the one-glance "what is it doing
+ * RIGHT NOW" line.
+ */
+function renderLiveActivity(call: UiToolCall): ReactNode {
+  const meta = prettifyTool(call.tool);
+  const emoji = call.emoji ?? meta.fallbackEmoji;
+  // Special case: delegate_task is the parent agent fanning out to N
+  // subagents. Hermes' SSE doesn't surface child progress, so the most
+  // honest signal we have is "并行执行中".
+  if (call.tool === 'delegate_task') {
+    return (
+      <span className="inline-flex items-baseline gap-1">
+        <span className="leading-none">{emoji}</span>
+        <span>{meta.name}：子员工并行执行中…</span>
+      </span>
+    );
+  }
+  // For everything else we lead with the emoji + friendly tool name + a
+  // truncated hint from `label`. Truncation keeps long URLs / curl
+  // commands from wrapping to a second line and shoving the chat layout
+  // around — full text is one expand-click away in the strip above.
+  const hint = call.label ? truncateMiddle(call.label, 60) : null;
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="leading-none">{emoji}</span>
+      <span className="font-semibold">{meta.name}</span>
+      {hint && (
+        <>
+          <span className="text-fg-subtle">·</span>
+          <code className="font-mono text-[12px] text-fg-subtle">{hint}</code>
+        </>
+      )}
+    </span>
+  );
+}
+
+function truncateMiddle(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const half = Math.floor((max - 1) / 2);
+  return `${s.slice(0, half)}…${s.slice(-half)}`;
+}
 
 // Re-export for `src/features/compare/index.tsx`, which renders each
 // lane's response in the same chrome via this named export.
@@ -166,15 +214,23 @@ export function MessageBubble({
             />
           )}
           {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
-            <ToolCallsStrip calls={msg.toolCalls} />
+            <ToolCallsStrip calls={msg.toolCalls} pending={!!msg.pending} />
           )}
           {isUser && msg.attachments && msg.attachments.length > 0 && (
             <AttachmentsStrip attachments={msg.attachments} />
           )}
           {msg.pending && !msg.content ? (
+            // While we wait for the first prose delta, show a contextual
+            // status: if Hermes has already fired tool calls, name the latest
+            // one so the user sees concrete activity ("正在浏览 google.com")
+            // instead of a featureless `thinking…`. The ToolCallsStrip above
+            // already shows the in-flight pill with a live timer; this line
+            // is the single-glance summary right next to the spinner.
             <span className="inline-flex items-center gap-2 text-fg-muted">
               <Icon icon={Loader2} size="sm" className="animate-spin" />
-              thinking…
+              {msg.toolCalls && msg.toolCalls.length > 0
+                ? renderLiveActivity(msg.toolCalls[msg.toolCalls.length - 1]!)
+                : 'thinking…'}
             </span>
           ) : msg.error ? (
             <span className="inline-flex items-start gap-2">

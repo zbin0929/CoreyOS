@@ -99,7 +99,20 @@ export function ActiveLLMBadge() {
     Promise.allSettled([modelList(), llmProfileList()]).then((results) => {
       if (!alive) return;
       const [m, p] = results;
-      if (m.status === 'fulfilled') setModels(m.value);
+      if (m.status === 'fulfilled') {
+        // Hermes' `/v1/models` advertises `hermes-agent` as a meta
+        // model — sending `model=hermes-agent` resolves on Hermes'
+        // side to whatever `model.default` says in
+        // `~/.hermes/config.yaml`. That's the SAME thing the
+        // "使用默认 …" row at the top of this picker does, so
+        // listing it as a separate selectable option created two
+        // identical-looking entries (the user's screenshot showed
+        // both "使用默认 deepseek-reasoner" and "hermes-agent · 默认"
+        // side by side). Drop the duplicate so the menu stays clean
+        // — the "default" affordance lives at the top, profile
+        // overrides live below, no third confusing path.
+        setModels(m.value.filter((mi) => mi.id !== 'hermes-agent'));
+      }
       if (p.status === 'fulfilled') setProfiles(p.value.profiles);
       if (m.status === 'rejected' && p.status === 'rejected') {
         setError(ipcErrorMessage(m.reason));
