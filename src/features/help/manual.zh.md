@@ -105,9 +105,9 @@ CoreyOS 按这个顺序找 hermes 二进制：
 
 #### 版本兼容性
 
-CoreyOS 测试范围：**Hermes v0.10.x**。
+CoreyOS 测试范围：**Hermes v0.10.x – v0.11.x**。
 
-如果你装了更新版本（如 v0.11+），Home 页会**黄色 banner 提示「未经测试」**——大部分功能还能用，但 Hermes 端配置 schema 可能漂移，配置写入可能失败。建议升级 Corey 或临时回退 Hermes。
+如果你装了更新版本（如 v0.12+），Home 页会**黄色 banner 提示「未经测试」**——大部分功能还能用，但 Hermes 端配置 schema 可能漂移，配置写入可能失败。建议升级 Corey 或临时回退 Hermes。
 
 如果版本太旧（< 0.10），**红色 banner 提示「版本过旧」**——auto-compress / memory store 等功能依赖较新的 Hermes。
 

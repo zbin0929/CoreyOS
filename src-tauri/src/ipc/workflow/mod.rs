@@ -413,7 +413,12 @@ pub fn spawn_run_executor(
     let wf_id_for_log = def.id.clone();
     tokio::task::spawn_blocking(move || {
         let executor = HermesExecutor { adapters };
-        let hook = make_step_end_hook(runs.clone(), db.clone(), run_id.clone(), cancel_flag.clone());
+        let hook = make_step_end_hook(
+            runs.clone(),
+            db.clone(),
+            run_id.clone(),
+            cancel_flag.clone(),
+        );
         let progress_hook = make_step_progress_hook(runs.clone(), run_id.clone());
         let should_cancel = {
             let flag = cancel_flag.clone();
@@ -517,12 +522,14 @@ fn make_step_end_hook(
         // optimistic flip stays sticky and the next poll confirms.
         let cancel_requested = cancel_flag.load(Ordering::Relaxed);
         let mut snap = r.clone();
-        if cancel_requested && !matches!(
-            snap.status,
-            engine::RunStatus::Cancelled
-                | engine::RunStatus::Failed
-                | engine::RunStatus::Completed
-        ) {
+        if cancel_requested
+            && !matches!(
+                snap.status,
+                engine::RunStatus::Cancelled
+                    | engine::RunStatus::Failed
+                    | engine::RunStatus::Completed
+            )
+        {
             snap.status = engine::RunStatus::Cancelled;
             if snap.error.is_none() {
                 snap.error = Some("Cancelled by user".into());

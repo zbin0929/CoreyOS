@@ -13,11 +13,21 @@ use std::path::PathBuf;
 /// shape Hermes can no longer parse).
 ///
 /// Format: `(major, minor)` — patch is forward-compat by convention,
-/// minor changes are the boundary. v0.10.x = supported (this is
-/// what every IPC + yaml writer in `hermes_config/` was tested
-/// against).
+/// minor changes are the boundary.
+///
+/// 2026-04-28: bumped MAX_TESTED to 0.11 after verifying the v0.11
+/// release (a 1556-commit "Interface release" — TUI rewrite,
+/// transport ABC, native Bedrock, 5 new providers). Schema-side
+/// the relevant Corey-touched yaml sections (`compression:`,
+/// `approvals:`, `command_allowlist:`, `model:`) and the
+/// `~/.hermes/logs/agent.log` "Context compression triggered" /
+/// "Compressed: ... tokens saved" log lines are byte-identical
+/// to v0.10. v0.11 also added startup auto-prune for
+/// `~/.hermes/sessions/*.jsonl` + VACUUM on `state.db` — that's
+/// strictly additive (Corey's session-cleanup panel still works,
+/// just with smaller residue to clean).
 const HERMES_MIN_SUPPORTED: (u32, u32) = (0, 10);
-const HERMES_MAX_TESTED: (u32, u32) = (0, 10);
+const HERMES_MAX_TESTED: (u32, u32) = (0, 11);
 
 /// Compatibility verdict between the running Hermes binary and what
 /// Corey was built/tested against. Drives the Home-page banner.
@@ -351,7 +361,11 @@ mod compat_tests {
 
     #[test]
     fn untested_when_above_ceiling() {
-        let (c, _) = evaluate_compat(0, 11);
+        // Anything >= MAX_TESTED+1 should land in the untested
+        // bucket. We use a comfortably future minor here so the
+        // test doesn't have to be re-edited every time we bump
+        // MAX_TESTED to track an upstream release.
+        let (c, _) = evaluate_compat(0, 99);
         assert_eq!(c, HermesCompatibility::Untested);
     }
 }
