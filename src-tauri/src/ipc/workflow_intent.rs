@@ -46,34 +46,17 @@ pub async fn workflow_extract_intent(message: String) -> IpcResult<WorkflowInten
                 0.0
             };
 
-            let direct_keywords = match wf.id.as_str() {
-                "ups-tracking" => ["ups", "物流", "快递", "包裹", "tracking", "shipment"]
-                    .iter()
-                    .filter(|k| lower.contains(*k))
-                    .count(),
-                "daily-news-digest" => ["新闻", "摘要", "news", "digest", "头条"]
-                    .iter()
-                    .filter(|k| lower.contains(*k))
-                    .count(),
-                "douyin-hot-videos" => ["抖音", "热门", "视频", "douyin", "tiktok"]
-                    .iter()
-                    .filter(|k| lower.contains(*k))
-                    .count(),
-                "competitor-price-monitor" => ["竞品", "价格", "比价", "price", "monitor"]
-                    .iter()
-                    .filter(|k| lower.contains(*k))
-                    .count(),
-                "code-review-pipeline" => ["代码审查", "code review", "审查代码"]
-                    .iter()
-                    .filter(|k| lower.contains(*k))
-                    .count(),
-                "ai-comic-pipeline" => ["漫剧", "漫画", "comic"]
-                    .iter()
-                    .filter(|k| lower.contains(*k))
-                    .count(),
-                _ => 0,
-            };
-            let boosted = confidence + direct_keywords as f64 * 0.3;
+            // No per-id keyword boosting. The earlier draft hard-coded
+            // synonym lists for the 6 dev-seed demo workflows
+            // (ups-tracking, daily-news-digest, …) which meant any
+            // user-authored workflow effectively had a worse
+            // confidence ceiling than the bundled demos. That's
+            // backwards: real user workflows should rank at least as
+            // well as templates we ship. We rely solely on the generic
+            // jaccard score above; the LLM-side intent flow can do the
+            // smarter "what does the user actually want" matching.
+            // See `docs/agent/workflow-positioning.md`.
+            let boosted = confidence;
 
             if boosted > 0.2 {
                 if let Some((_, _, best_conf)) = &best {
