@@ -130,12 +130,44 @@ pub fn start(app: AppHandle) {
         .with_state(Arc::new(state));
 
     tauri::async_runtime::spawn(async move {
-        let addr: SocketAddr = ([127, 0, 0, 1], 0).into();
-        let listener = match tokio::net::TcpListener::bind(addr).await {
+        // Try the pinned port first. Pinning matters because
+        // (1) Hermes only re-reads `mcp_servers:` on gateway restart,
+        //     so a fresh OS-chosen port every boot would force a
+        //     restart-and-flush every time Corey relaunches — annoying
+        //     and tears down whatever in-flight chat the user had;
+        // (2) advertising a fixed URL lets curl-based debugging /
+        //     bookmarks / Settings-page screenshots stay valid across
+        //     dev sessions.
+        // 8649 is unregistered with IANA and free on every macOS we
+        // tested; if it's taken (parallel Corey instance, dev / prod
+        // simultaneously, or the user assigned it to something else),
+        // fall back to OS-chosen so the bridge still comes up — at
+        // the cost of a gateway-config drift the user has to live
+        // with for that session.
+        const PREFERRED_PORT: u16 = 8649;
+        let listener = match tokio::net::TcpListener::bind(SocketAddr::from((
+            [127, 0, 0, 1],
+            PREFERRED_PORT,
+        )))
+        .await
+        {
             Ok(l) => l,
-            Err(e) => {
-                warn!(error = %e, "MCP server: bind failed; native bridge disabled");
-                return;
+            Err(_) => {
+                let fallback: SocketAddr = ([127, 0, 0, 1], 0).into();
+                match tokio::net::TcpListener::bind(fallback).await {
+                    Ok(l) => {
+                        warn!(
+                            preferred = PREFERRED_PORT,
+                            "MCP server: preferred port busy; falling back to random. \
+                             Hermes gateway will need a restart for it to see the new URL."
+                        );
+                        l
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "MCP server: bind failed; native bridge disabled");
+                        return;
+                    }
+                }
             }
         };
         let bound = match listener.local_addr() {
@@ -192,34 +224,94 @@ fn register_with_hermes(port: u16) {
 
     let url = format!("http://127.0.0.1:{port}/");
 
-    // The yaml helper takes a map keyed by *child path*; here the
-    // child is the server name (`corey-native`) and the value is the
-    // full server config blob (just `{url}` for our HTTP transport).
+    // 1. Fast-path: if config.yaml already has us at this exact URL,
+    //    the running Hermes gateway has already picked us up — no
+    //    write, no restart, no chat-session interruption. This is the
+    //    common steady-state case (port pinned to 8649, user just
+    //    relaunched Corey). Reading the file is O(KB) and dwarfed by
+    //    every other thing happening at boot, so skipping the parse
+    //    isn't worth a fancier check.
+    if current_url_matches(&url) {
+        info!(
+            name = MCP_NAME,
+            url = %url,
+            "MCP: ~/.hermes/config.yaml already has matching entry; no restart needed"
+        );
+        return;
+    }
+
+    // 2. Write the entry. Atomic + journal-less (this isn't a user
+    //    edit, so no audit row is warranted).
     let entry = serde_json::json!({ "url": url });
     let mut updates: HashMap<String, serde_json::Value> = HashMap::new();
     updates.insert(MCP_NAME.into(), entry);
-
-    match crate::hermes_config::write_channel_yaml_fields(
-        "mcp_servers",
-        &updates,
-        None, // no audit-journal needed for our own auto-registration
-    ) {
-        Ok(()) => {
-            info!(
-                name = MCP_NAME,
-                url = %url,
-                "MCP: wrote mcp_servers.{MCP_NAME} -> {url} into ~/.hermes/config.yaml"
-            );
-        }
-        Err(e) => {
-            warn!(
-                error = %e,
-                "MCP: failed to update ~/.hermes/config.yaml; native bridge \
-                 stays running but Hermes won't see it until the user \
-                 manually adds an `mcp_servers.{MCP_NAME}.url` entry."
-            );
-        }
+    if let Err(e) =
+        crate::hermes_config::write_channel_yaml_fields("mcp_servers", &updates, None)
+    {
+        warn!(
+            error = %e,
+            "MCP: failed to update ~/.hermes/config.yaml; native bridge \
+             stays running but Hermes won't see it until the user \
+             manually adds an `mcp_servers.{MCP_NAME}.url` entry."
+        );
+        return;
     }
+    info!(
+        name = MCP_NAME,
+        url = %url,
+        "MCP: wrote mcp_servers.{MCP_NAME} -> {url} into ~/.hermes/config.yaml"
+    );
+
+    // 3. Restart the gateway so the new server enters Hermes' live
+    //    runtime registry. No HTTP `/reload-mcp` exists upstream
+    //    (verified against Hermes 0.10) — restart is the only path.
+    //    Cost: any in-flight chat completion drops; sessions resume
+    //    transparently on the next request because session state
+    //    lives in `~/.hermes/`. This only happens when our URL
+    //    *changed*, so steady-state restarts of Corey are silent.
+    //
+    //    `gateway_restart` is sync (shells out to `hermes gateway
+    //    restart`, which can take a couple of seconds). Hand it to
+    //    `spawn_blocking` so we don't park the tokio worker that's
+    //    about to enter `axum::serve`.
+    tauri::async_runtime::spawn(async {
+        let result = tokio::task::spawn_blocking(crate::hermes_config::gateway_restart).await;
+        match result {
+            Ok(Ok(_)) => info!("MCP: hermes gateway restarted to pick up corey-native"),
+            Ok(Err(e)) => warn!(
+                error = %e,
+                "MCP: gateway restart failed; user must run `hermes gateway restart` \
+                 to make the native tools visible."
+            ),
+            Err(e) => warn!(error = %e, "MCP: gateway restart join error"),
+        }
+    });
+}
+
+/// Quick scan of `~/.hermes/config.yaml` for the existing
+/// `mcp_servers.<MCP_NAME>.url`. Returns `true` only when the file
+/// exists, parses, has our entry, AND the URL is exactly `expected`.
+/// Any failure mode (missing file, malformed yaml, missing key)
+/// returns `false`, which falls through to the normal "write and
+/// restart" path — i.e. we err on the side of fixing things.
+fn current_url_matches(expected: &str) -> bool {
+    let Ok(hermes_dir) = crate::paths::hermes_data_dir() else {
+        return false;
+    };
+    let path = hermes_dir.join("config.yaml");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(doc) = serde_yaml::from_str::<serde_yaml::Value>(&raw) else {
+        return false;
+    };
+    let Some(servers) = doc.get("mcp_servers") else {
+        return false;
+    };
+    let Some(entry) = servers.get(MCP_NAME) else {
+        return false;
+    };
+    entry.get("url").and_then(|v| v.as_str()) == Some(expected)
 }
 
 async fn banner() -> Json<Value> {
