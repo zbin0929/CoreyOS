@@ -47,8 +47,7 @@
     "createUpdaterArtifacts": true,
     "resources": [
       "assets/presets/**/*",
-      "scripts/browser-runner.cjs",
-      "binaries/*"
+      "scripts/browser-runner.cjs"
     ],
     "macOS": {
       "infoPlist": "../src-tauri/macos.Info.plist"
