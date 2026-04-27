@@ -333,6 +333,13 @@ async fn rpc_handler(
     // session state), but JSON-RPC says no envelope back.
     let is_notification = req.id.is_none();
 
+    // Log every method call at INFO so problems like "Hermes never
+    // calls us" or "Hermes only calls initialize but not tools/list"
+    // are diagnosable from `pnpm tauri:dev` output without attaching
+    // a debugger or sniffing loopback. Args are deliberately NOT
+    // logged — they could carry sensitive paths from `pick_file`.
+    info!(method = %req.method, has_id = !is_notification, "MCP rpc");
+
     let result = dispatch(&state, &req.method, &req.params).await;
 
     if is_notification {
