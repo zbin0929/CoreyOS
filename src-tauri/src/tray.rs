@@ -1,7 +1,7 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    App, Manager,
+    App, AppHandle, Manager,
 };
 
 pub fn build(app: &App) {
@@ -38,7 +38,7 @@ pub fn build(app: &App) {
         .expect("tray icon");
 }
 
-fn show_window(app: &impl Manager<tauri::Wry>) {
+pub fn show_window(app: &AppHandle) {
     let Some(w) = app.get_webview_window("main") else {
         tracing::warn!("show_window: main window not found");
         return;

@@ -577,8 +577,14 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Caduceus");
+        .build(tauri::generate_context!())
+        .expect("error while building Caduceus")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                tray::show_window(app);
+            }
+        });
 }
 
 fn init_tracing() {
