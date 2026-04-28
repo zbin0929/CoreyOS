@@ -36,12 +36,13 @@ pub fn gateway_sessions_list() -> Result<Vec<GatewaySession>, String> {
                     s.started_at, MAX(m.timestamp) AS last_activity
              FROM sessions s
              LEFT JOIN messages m ON m.session_id = s.id
-             WHERE s.source IS NOT NULL
-               AND s.source != 'webui'
-               AND s.source != 'cron'
+             WHERE s.source IN ('weixin','dingtalk','qq','qqbot','telegram',
+                                'discord','slack','whatsapp','feishu','wecom',
+                                'signal','email','sms')
+               AND s.message_count > 0
              GROUP BY s.id
              ORDER BY COALESCE(last_activity, s.started_at, 0) DESC
-             LIMIT 200",
+             LIMIT 50",
         )
         .map_err(|e| format!("prepare: {e}"))?;
 
@@ -172,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn gateway_sessions_excludes_webui_and_cron() {
+    fn gateway_sessions_only_shows_im_channels_with_messages() {
         let dir = setup_test_db();
         let db_path = dir.join("state.db");
         let conn = rusqlite::Connection::open_with_flags(
@@ -186,9 +187,10 @@ mod tests {
                         s.started_at, MAX(m.timestamp) AS last_activity
                  FROM sessions s
                  LEFT JOIN messages m ON m.session_id = s.id
-                 WHERE s.source IS NOT NULL
-                   AND s.source != 'webui'
-                   AND s.source != 'cron'
+                 WHERE s.source IN ('weixin','dingtalk','qq','qqbot','telegram',
+                                    'discord','slack','whatsapp','feishu','wecom',
+                                    'signal','email','sms')
+                   AND s.message_count > 0
                  GROUP BY s.id
                  ORDER BY COALESCE(last_activity, s.started_at, 0) DESC",
             )
@@ -198,7 +200,7 @@ mod tests {
             .unwrap()
             .map(|r| r.unwrap())
             .collect();
-        assert_eq!(rows, vec!["s2", "s1"]);
+        assert_eq!(rows, vec!["s2"]);
         teardown_test_db(&dir);
     }
 

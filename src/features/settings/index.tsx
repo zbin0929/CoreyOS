@@ -37,6 +37,7 @@ import { RoutingRulesSection } from './sections/RoutingRulesSection';
 import { HermesToolPermissionsSection } from './sections/HermesToolPermissionsSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
 import { StorageSection } from './sections/StorageSection';
+import { useAppStatusStore } from '@/stores/appStatus';
 import { WorkspaceSection } from './sections/WorkspaceSection';
 import { Field, Section } from './shared';
 import { inputCls } from './styles';
@@ -153,6 +154,9 @@ export function SettingsRoute() {
       await configSet(draft);
       setLoaded(draft);
       setSave({ kind: 'saved' });
+      if (draft.default_model) {
+        useAppStatusStore.getState().setCurrentModel(draft.default_model);
+      }
       window.setTimeout(() => {
         setSave((s) => (s.kind === 'saved' ? { kind: 'idle' } : s));
       }, 2000);

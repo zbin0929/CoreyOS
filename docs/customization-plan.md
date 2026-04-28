@@ -1,8 +1,345 @@
 # CoreyOS 定制化方案
 
-> 版本：v2.0 · 2026-04-29
-> 状态：详细设计阶段
-> 基于现有代码架构分析编写
+> 版本：v3.0 · 2026-04-29
+> 状态：详细设计阶段（含竞争分析 + 数据可行性验证）
+> 基于现有代码架构分析 + 麦多AI竞品调研编写
+
+---
+
+## 0. 竞品分析与市场定位
+
+### 0.1 麦多AI 调研
+
+**基本信息：**
+
+| 维度 | 内容 |
+|------|------|
+| 公司 | 易仓科技旗下（eccang.com），国内跨境 ERP 龙头 |
+| 产品 | 麦多AI — 亚马逊 AI 全能运营助手 |
+| 口号 | "用麦多，越卖越多" / "8小时的活，1小时搞定" |
+| 用户 | 800+ 企业客户，5000+ 用户 |
+| 部署 | SaaS 云端，注册即用 |
+| 核心卖点 | 8 个 AI 机器人 7×24 小时代替人工运营 |
+
+**八大 AI 机器人：**
+
+| # | 机器人 | 角色 | 核心能力 |
+|---|--------|------|----------|
+| 1 | 否词机器人 | 预算守卫者 | 7×24 巡检广告，精准拦截高点击零转化废词，一键执行 |
+| 2 | 库存机器人 | 供应链先知 | 断货预警 + 调价建议；冗余库存清仓策略 |
+| 3 | 差评机器人 | 品牌声誉哨兵 | 全 ASIN 差评实时追踪，AI 翻译 + 提炼诉求 |
+| 4 | 数据分析机器人 | 全店诊断专家 | 打通全盘数据，归因销量波动，生成行动建议 |
+| 5 | 市场分析机器人 | 蓝海勘探队 | ASIN 健康度评估，机会词挖掘，运营策略生成 |
+| 6 | 战场雷达机器人 | 实时情报中心 | 竞品价格/排名/促销/上新监控 |
+| 7 | 竞品分析机器人 | 战术复刻引擎 | 交叉分析竞品轨迹，揭示排名驱动力 |
+| 8 | 新老诊断机器人 | 增长归因分析师 | 六维诊断（销售/库存/流量/广告/评分/退货） |
+
+**麦多的核心优势（我们无法复制的）：**
+
+1. **易仓 ERP 数据护城河** — 数千家卖家每天的数据流，10 年行业沉淀
+2. **聚合分析能力** — 跨店铺、跨市场的数据聚合
+3. **精准成本计算** — 采购成本、头程运费、FBA 费用的精确算法
+4. **开箱即用** — 注册 → 授权 SP-API → 立即使用，零部署
+
+**麦多的局限（我们的机会）：**
+
+1. **仅限亚马逊** — 不支持其他平台（Shopify/Temu/TikTok Shop）
+2. **SaaS 数据上云** — 中大型企业不愿数据出企业
+3. **无法定制** — 标准化产品，不能对接客户内部系统
+4. **仅推钉钉** — IM 推送只支持钉钉
+5. **单行业** — 只做跨境电商，不做海外仓/物流/客服
+
+### 0.2 CoreyOS vs 麦多AI 定位对比
+
+```
+麦多AI 模式（SaaS 数据聚合）：
+  卖家 → 授权店铺 → 麦多云端 → 麦多分析 → 推送结果
+  卖家用的是麦多的数据和算法
+
+CoreyOS 模式（本地 AI 中枢）：
+  企业 → CoreyOS 连接客户已有系统 → LLM 分析 → IM 推送
+  企业用的是自己的数据 + CoreyOS 的 AI 能力
+```
+
+| 维度 | 麦多AI | CoreyOS |
+|------|--------|---------|
+| 部署模式 | SaaS 云端 | **本地桌面应用** |
+| 数据安全 | 数据上云 | **数据本地，不出企业** |
+| 目标客户 | 中小卖家（运营个人决策） | **中大型企业（年销 1 亿+，IT/管理层决策）** |
+| 行业覆盖 | 仅亚马逊跨境电商 | **8 大行业可定制** |
+| IM 推送 | 仅钉钉 | **微信/QQ/钉钉/飞书全通道** |
+| 定制能力 | 无（标准化 SaaS） | **Skill Pack 按行业/客户定制** |
+| MCP 工具 | 内置固定工具链 | **可插拔 MCP Server 生态** |
+| 数据来源 | 自有 ERP + SP-API | **连接客户已有 ERP/WMS/OMS** |
+| 价格模型 | 按用量计费 | **按行业包 + 定制开发收费** |
+
+### 0.3 CoreyOS 的差异化战略
+
+**不正面硬刚麦多。** 麦多在中小卖家市场已有 5000+ 用户，且有易仓 ERP 数据护城河。
+
+**CoreyOS 的核心定位：企业 AI 运营中枢**
+
+- 面向**中大型企业**（年销 1 亿+），他们已有 ERP、已有团队、数据不能上云
+- **不聚合数据**，而是连接客户已有的系统（ERP/WMS/OMS/CRM），用 AI 在本地分析
+- 客户的 Amazon 数据、ERP 数据、WMS 数据都在客户自己那里，CoreyOS 只是"读"然后分析
+- **可定制** — 不同行业、不同客户看到不同的功能
+- **白标交付** — 可以换上客户自己的品牌
+
+---
+
+## 0.4 数据来源可行性验证
+
+### 跨境电商数据来源分析
+
+| 机器人 | 数据需求 | 可用数据源 | 可行性 | 风险 |
+|--------|---------|-----------|--------|------|
+| 广告守卫 | 广告关键词表现、搜索词报告 | **Amazon SP-API Advertising API**（官方） | ✅ 100% | 需注册 Amazon 开发者（审核 1-2 周） |
+| 库存哨兵 | FBA 库存、在途、日均销量 | **SP-API FBA Inventory** + 客户 ERP（DBHub） | ✅ 100% | 客户需授权 SP-API + 提供 ERP 连接串 |
+| 利润分析 | 结算报告、采购成本、头程运费 | **SP-API Settlement Report** + ERP 成本数据（DBHub） | ✅ 90% | 成本数据需客户提供 |
+| ASIN 诊断 | 销量/库存/流量/广告/评分/退货 | 综合以上所有数据 | ✅ 80% | 依赖其他机器人数据准确度 |
+| 差评监控 | 实时评论数据 | ⚠️ **Amazon 无官方 Reviews API** | ⚠️ 需第三方 | 用 Jungle Scout API / Helium10 API（$50-200/月）或自建爬虫 |
+| 竞品雷达 | 竞品价格/Coupon/主图/排名 | **SP-API Catalog**（公共数据）+ ⚠️ 爬虫 | ⚠️ 部分有 API | 实时价格/Buy Box 有 API，Coupon/主图变更需爬虫 |
+
+### 第一期能交付的（有可靠数据源）
+
+| 机器人 | 数据源 | 把握 | 说明 |
+|--------|--------|------|------|
+| 广告守卫 | SP-API Advertising | **100%** | 官方 API，数据完整 |
+| 库存哨兵 | SP-API Inventory + 客户 ERP | **100%** | 官方 API + DBHub 连 ERP |
+| 利润分析 | SP-API Settlement + 客户 ERP | **90%** | 结算报告 + 客户提供成本数据 |
+
+### 第二期再做的（需要额外方案）
+
+| 机器人 | 数据源 | 方案 |
+|--------|--------|------|
+| 差评监控 | 第三方 API 或爬虫 | 接入 Jungle Scout API / Helium10 API，按调用量付费 |
+| 竞品雷达 | SP-API + 爬虫 | 价格/Buy Box 用 SP-API，Coupon/主图用 Puppeteer MCP |
+
+### SP-API 注册前置条件
+
+SP-API 是获取 Amazon 第一方数据的唯一官方途径，**必须先完成注册**：
+
+1. 注册 Amazon Developer Central 账号
+2. 创建 SP-API 应用（需填写用例说明）
+3. 通过 Amazon 审核（1-2 周）
+4. 获取 `LWA_CLIENT_ID` + `CLIENT_SECRET`
+5. 卖家通过 OAuth 授权我们的应用
+6. 获得 `REFRESH_TOKEN` → 可调用 SP-API
+
+**这个前置条件不影响 Skill Pack 基础设施的开发，可以并行推进。**
+
+---
+
+## 0.5 跨境电商 Skill Pack 机器人设计（第一期）
+
+### 设计原则
+
+1. **每个机器人有名字、角色、图标** — 不只是功能，而是一个有身份的 AI 员工
+2. **行动建议 > 数据展示** — 不只是给数据，而是给"一键否词""一键调价"的操作建议
+3. **IM 推送是核心** — 所有巡检结果推送到微信/钉钉/飞书，用户不用打开 CoreyOS
+4. **数据来自客户自己的系统** — CoreyOS 只读不存，分析在本地完成
+
+### 机器人 1：广告守卫 🛡️
+
+**角色：** 7×24 小时盯广告，帮你省预算
+
+**数据来源：** Amazon SP-API → Advertising API
+
+**核心功能：**
+
+| 功能 | 描述 | API 调用 |
+|------|------|----------|
+| 废词巡检 | 每小时扫描广告活动，找高点击零转化搜索词 | `get_search_term_report` |
+| 语义否词 | 结合产品属性判断搜索词相关性（卖"指甲油"≠"美甲灯"） | LLM 分析 |
+| ACOS 预警 | ACOS 超阈值自动推送 IM 告警 | `get_campaign_metrics` |
+| 一键否词 | IM 推送建议，用户回复"确认"自动执行 | `add_negative_keywords` |
+
+**IM 推送模板：**
+
+```
+🛡️ 广告守卫 - 发现 3 个废词
+
+❌ "handheld shower head holder"
+   点击 28 次 / 订单 0 / 花费 ¥41.9 / ACOS ∞
+   → 回复"否词"一键执行
+
+❌ "rain shower head combo"
+   点击 15 次 / 订单 0 / 花费 ¥23.5 / ACOS ∞
+   → 与你的产品(手持花洒)不匹配
+
+✅ 建议否词模式：精准否词
+```
+
+### 机器人 2：库存哨兵 📦
+
+**角色：** 断货预警 + 滞销清理
+
+**数据来源：** SP-API FBA Inventory + 客户 ERP 数据库（DBHub）
+
+**核心功能：**
+
+| 功能 | 描述 | 数据源 |
+|------|------|--------|
+| 断货预警 | 可售天数 <14 黄灯，<7 红灯 | SP-API `get_inventory_summaries` + ERP 日均销量 |
+| 补货建议 | 结合在途/日均/时效给优先级 | SP-API `get_inventory_items` + ERP 采购数据 |
+| 滞销预警 | 90 天+ 库龄自动标记 | SP-API `get_inventory_aging` |
+| 每日简报 | 推送库存健康度到 IM | 综合数据 |
+
+**IM 推送模板：**
+
+```
+📦 库存哨兵 - 每日简报
+
+🔴 断货风险（3 个 SKU）
+  SKU-A: 可售 6 天 | 日均 40 件 | 在途可支撑 3 天
+  → 建议：立即涨价 10% 抑制单量 + 紧急空运补位
+
+🟡 滞销预警（2 个 SKU）
+  SKU-B: 库龄 120 天 | 日均 2 件 | 库存 360 件
+  → 建议：开启 Outlet Deal 或 BOGO 促销
+
+✅ 健康：85 个 SKU 正常运转
+```
+
+### 机器人 3：利润分析 💰
+
+**角色：** 帮你看清每笔钱去了哪里
+
+**数据来源：** SP-API Settlement Report + 客户 ERP 成本数据（DBHub）
+
+**核心功能：**
+
+| 功能 | 描述 | 数据源 |
+|------|------|--------|
+| 利润看板 | 按 SKU/天/月的利润明细 | SP-API Settlement + ERP 成本 |
+| 成本拆解 | FBA 费用/广告费/采购/头程/退货 | 综合数据 |
+| 利润预警 | 利润率低于阈值自动告警 | 实时计算 |
+| 周报/月报 | 自动生成利润分析报告 | 定时汇总 |
+
+### 定时巡检（Workflow）
+
+```
+06:00  库存哨兵 - 扫描断货/滞销
+07:00  广告守卫 - 扫描废词 + ACOS 异常
+08:00  广告守卫 - 早间巡检
+12:00  广告守卫 - 午间巡检
+18:00  利润分析 - 日终利润快报
+22:00  库存哨兵 - 晚间库存快报
+全天   广告守卫 - ACOS 突破阈值实时告警
+```
+
+### mcp-amazon-sp MCP Server 工具清单
+
+这是唯一需要自研的 MCP Server，其余复用基座已有的 DBHub + Filesystem：
+
+```
+Tools:
+  ├── 广告相关
+  │   ├── list_ad_campaigns          # 列出广告活动
+  │   ├── get_ad_keywords            # 获取关键词表现
+  │   ├── get_search_term_report     # 搜索词报告（找废词）
+  │   ├── add_negative_keywords      # 添加否定关键词（一键否词）
+  │   └── update_bid                 # 调整竞价
+  │
+  ├── 库存相关
+  │   ├── get_inventory              # 获取库存快照
+  │   ├── get_inventory_health       # 库存健康度
+  │   └── estimate_days_of_supply    # 可售天数估算
+  │
+  ├── 订单相关
+  │   ├── get_orders                 # 获取订单
+  │   └── get_order_metrics          # 订单统计
+  │
+  ├── 报告相关
+  │   ├── request_report             # 请求报告
+  │   └── get_report                 # 获取报告数据
+  │
+  └── 产品相关
+      ├── get_catalog_item           # 获取 Listing 信息
+      ├── get_item_offers            # 获取报价（含竞品 Buy Box）
+      └── update_price               # 改价
+```
+
+### Skill Pack 目录结构
+
+```
+cross-border-ecom/
+├── manifest.yaml
+├── prompts/
+│   ├── system.md
+│   ├── robots/
+│   │   ├── ad-guardian.md
+│   │   ├── inventory-sentinel.md
+│   │   └── profit-analyst.md
+│   ├── knowledge/
+│   │   ├── amazon_policy.md
+│   │   ├── fba_rules.md
+│   │   ├── advertising_guide.md
+│   │   └── glossary.md
+│   └── templates/
+│       ├── daily-report.md
+│       ├── alert-format.md
+│       └── weekly-report.md
+├── skills/
+│   ├── listing-optimizer.md
+│   ├── keyword-research.md
+│   └── compliance-checker.md
+├── workflows/
+│   ├── hourly-ad-scan.yaml
+│   ├── daily-inventory.yaml
+│   └── weekly-report.yaml
+└── mcp-servers/
+    └── mcp-amazon-sp/
+        ├── pyproject.toml
+        └── src/
+            └── mcp_amazon_sp/
+                ├── __init__.py
+                ├── server.py
+                ├── advertising.py
+                ├── inventory.py
+                ├── orders.py
+                ├── catalog.py
+                └── reports.py
+```
+
+---
+
+## 0.6 客户定位与交付策略
+
+### 目标客户画像
+
+| 维度 | 麦多客户 | CoreyOS 客户 |
+|------|---------|-------------|
+| 规模 | 中小卖家 | **中大型企业（年销 1 亿+）** |
+| ERP | 可能没用，或用易仓 | **已有 ERP（SAP/Oracle/自研/领星/积加）** |
+| 数据安全 | 不敏感 | **敏感（不愿数据上云）** |
+| 定制需求 | 标准化够用 | **需要深度定制（对接内部系统）** |
+| 采购决策 | 运营个人决定 | **IT/管理层决策** |
+| 付费意愿 | 按月订阅 | **项目制 + 年费** |
+
+### 交付方式
+
+```
+交付流程：
+1. 客户下载标准 Corey 安装包（同一个 dmg/exe）
+2. 我们远程或本地导入 customer.yaml
+3. Corey 启动 → 检测到 customer.yaml → 自动执行：
+   - 安装指定 Skill Pack
+   - 注册 MCP Server（连接客户 ERP/WMS）
+   - 应用品牌定制
+   - 隐藏内部功能
+   - 删除 customer.yaml（不留痕迹）
+4. 客户看到的是完整行业产品，找不到任何定制化痕迹
+```
+
+### 更新维护策略
+
+不同行业客户看到不同功能，但**基座代码完全相同**：
+
+- **Skill Pack 隔离** — 每个 Pack 独立安装在 `~/.hermes/skill-packs/<id>/`
+- **基座更新** — 所有客户用同一个自动更新通道（GitHub Releases）
+- **Pack 更新** — 按客户安装的 Pack 推送对应更新
+- **配置隔离** — 每个 Pack 的 MCP Server、工作流、prompt 完全独立
 
 ---
 
@@ -1993,6 +2330,39 @@ AI 行为：
 
 ## 7. 落地路线图
 
+### 前置条件（与 Phase 1 并行推进）
+
+**SP-API 开发者账号注册（1-2 周）：**
+
+| 步骤 | 操作 | 负责人 | 说明 |
+|------|------|--------|------|
+| 1 | 注册 Amazon Developer Central | 产品/运营 | https://developer.amazonservices.com/ |
+| 2 | 创建 SP-API 应用 | 开发 | 填写应用名称、描述、用例说明 |
+| 3 | 填写用例说明 | 产品 | 参考模板："AI-powered advertising optimization tool for sellers" |
+| 4 | 提交审核 | — | Amazon 审核 1-2 周 |
+| 5 | 获取 LWA 凭证 | 开发 | `CLIENT_ID` + `CLIENT_SECRET` |
+| 6 | 实现 OAuth 授权流程 | 开发 | 卖家点击授权链接 → 回调获取 `REFRESH_TOKEN` |
+| 7 | 测试 API 调用 | 开发 | 用测试店铺验证广告/库存/订单 API |
+
+**用例说明参考模板（提高审核通过率）：**
+
+```
+Application Name: CoreyOS AI Operations Assistant
+Description: AI-powered operations assistant for Amazon sellers.
+Use Case: Our application helps sellers optimize advertising campaigns,
+monitor inventory levels, and analyze profitability. We use SP-API to:
+1. Advertising: Read campaign/keyword/search term reports to identify
+   wasteful keywords and suggest negative keyword additions.
+2. Inventory: Read FBA inventory levels and sales velocity to predict
+   stockout risks and recommend replenishment timing.
+3. Settlement: Read settlement reports to calculate per-SKU profitability
+   including FBA fees, advertising costs, and referral fees.
+
+We do NOT modify listings, prices, or inventory without explicit seller
+confirmation. All data is processed locally on the seller's machine.
+Data is never shared with third parties.
+```
+
 ### Phase 1：Skill Pack 基础设施（1-2 周）
 
 **目标：** 让 Corey 能安装、管理、加载 Skill Pack
@@ -2016,23 +2386,106 @@ AI 行为：
 - Vault 密钥存储可用
 - 前端有管理界面
 
-### Phase 2：首个行业包 — 跨境电商（2-3 周）
+### Phase 2：首个行业包 — 跨境电商第一期（2-3 周）
 
-| 任务 | 工作量 |
-|------|--------|
-| 编写跨境电商 manifest.yaml + 5 个 skill .md | 2 天 |
-| 编写 3 个知识库 .md（政策/合规/术语） | 1 天 |
-| 开发 `mcp_amazon_sp_api` Python MCP Server | 5 天 |
-| 开发 `mcp_erp_sync` Python MCP Server | 3 天 |
-| 实现 3 个工作流 YAML | 1 天 |
-| Prompt 注入验证（对话中行业知识是否生效） | 1 天 |
-| 端到端测试 | 2 天 |
+**依赖：** Phase 1 完成 + SP-API 注册通过
+
+**mcp-amazon-sp 开发技术方案：**
+
+```python
+# 技术栈：Python 3.11+ + mcp-sdk + amazon-sp-api
+# 安装：pip install mcp-amazon-sp
+
+# mcp_amazon_sp/server.py 核心结构：
+
+from mcp.server import Server
+from amazon_sp_api import SPAPIClient
+
+server = Server("amazon-sp")
+
+@server.tool("list_ad_campaigns")
+async def list_ad_campaigns(profile_id: str) -> list[dict]:
+    """列出卖家的所有广告活动"""
+    client = SPAPIClient(
+        client_id=os.environ["LWA_CLIENT_ID"],
+        client_secret=os.environ["LWA_CLIENT_SECRET"],
+        refresh_token=os.environ["AMAZON_REFRESH_TOKEN"],
+        region=os.environ.get("AMAZON_REGION", "NA"),
+    )
+    return await client.advertising.list_campaigns(profile_id)
+
+@server.tool("get_search_term_report")
+async def get_search_term_report(
+    campaign_id: str,
+    start_date: str,
+    end_date: str,
+) -> list[dict]:
+    """获取搜索词报告（用于找废词）"""
+    # 返回: [{keyword, search_term, clicks, impressions, cost, orders, acos}, ...]
+
+@server.tool("add_negative_keywords")
+async def add_negative_keywords(
+    campaign_id: str,
+    keywords: list[str],
+    match_type: str = "exact",  # exact | phrase
+) -> dict:
+    """添加否定关键词（一键否词）"""
+    # 执行后返回: {success: true, added: 3}
+```
+
+**ERP 数据对接方案（零自研）：**
+
+```
+客户 ERP 数据库（MySQL/PostgreSQL/Oracle）
+  ↓
+DBHub MCP（基座预装，配置连接串即可）
+  ↓
+LLM 用自然语言查询 ERP 数据
+  ↓
+例如："查询 SKU-A 的近 30 天日均销量"
+  → DBHub 自动生成 SQL: SELECT AVG(daily_qty) FROM order_lines WHERE sku='SKU-A' AND date > NOW()-30
+  → 返回结果给 LLM
+```
+
+| 任务 | 工作量 | 说明 |
+|------|--------|------|
+| 编写跨境电商 manifest.yaml + 3 个机器人 prompt | 2 天 | 广告守卫/库存哨兵/利润分析 |
+| 编写 4 个知识库 .md（政策/合规/术语/FBA规则） | 1 天 | 行业专家可参与编写 |
+| 开发 `mcp-amazon-sp` Python MCP Server | 5 天 | 广告/库存/订单/报告 API |
+| ERP 对接（DBHub 配置，非自研） | 0.5 天 | 只需配置连接串 |
+| 实现 3 个工作流 YAML（广告巡检/库存巡检/利润日报） | 1 天 | 定时触发 + IM 推送 |
+| Prompt 注入验证（对话中行业知识是否生效） | 1 天 | 端到端测试 |
+| 端到端测试 | 2 天 | 真实数据验证 |
 
 **Phase 2 交付物：**
-- 完整的跨境电商 Skill Pack
-- 2 个可用的 MCP Server
+- 完整的跨境电商 Skill Pack（第一期：3 个机器人）
+- 1 个自研 MCP Server（mcp-amazon-sp）+ 1 个零配置 MCP（DBHub 连 ERP）
 - AI 对话中具备跨境电商专业知识
-- 工作流可运行
+- 工作流定时巡检 + IM 推送
+
+**IM 推送一键执行的技术实现：**
+
+```
+用户在微信/钉钉收到广告守卫推送
+  ↓
+用户回复 "否词" 或 "确认"
+  ↓
+Hermes Gateway 收到消息 → 匹配到机器人
+  ↓
+机器人识别为执行指令 → 调用 mcp-amazon-sp.add_negative_keywords
+  ↓
+执行结果推送到 IM："✅ 已添加 3 个否定关键词"
+```
+
+实现方式：在 `ad-guardian.md` prompt 中定义指令识别规则：
+
+```markdown
+## 指令识别
+当用户回复包含"否词"、"确认"、"执行"时：
+1. 提取上下文中的废词列表（上一条推送中的 ❌ 标记项）
+2. 调用 amazon-sp.add_negative_keywords 工具
+3. 将执行结果格式化后回复用户
+```
 
 ### Phase 3：模板化复制（持续）
 
@@ -2062,17 +2515,41 @@ AI 行为：
 | 痕迹清除（删除 yaml、清除历史、二进制持久化） | 1 天 |
 | 测试：标准安装包 + 导入 customer.yaml → 完整行业产品 | 2 天 |
 
+### Phase 5：跨境电商第二期 — 差评 + 竞品（2 周）
+
+| 任务 | 工作量 | 说明 |
+|------|--------|------|
+| 接入第三方 Reviews API（Jungle Scout / Helium10） | 3 天 | 或自建爬虫方案 |
+| 差评监控机器人 prompt + 工作流 | 2 天 | 实时差评推送 + AI 分析 |
+| 竞品雷达机器人（SP-API Catalog + Puppeteer） | 5 天 | 价格/Buy Box 用 API，Coupon/主图用爬虫 |
+| ASIN 诊断机器人（综合所有数据） | 3 天 | 六维诊断 + 红绿灯 |
+| 一键执行（IM 回复"确认"自动操作） | 3 天 | 否词/调价/清仓 |
+| 端到端测试 | 2 天 | 真实店铺数据验证 |
+
+### Phase 6：多平台 + 超越麦多（持续）
+
+| 任务 | 说明 |
+|------|------|
+| Shopify MCP Server | 对接 Shopify Admin API |
+| Temu MCP Server | 对接 Temu Seller API |
+| TikTok Shop MCP Server | 对接 TikTok Shop API |
+| AI 生图 | 产品场景图生成（拍照 → 场景图） |
+| 远程更新服务 | 搭建 update.coreyos.com |
+
 ---
 
 ## 8. 技术约束与风险
 
 | 风险 | 缓解措施 | 优先级 |
 |------|---------|--------|
-| MCP Server 开发成本高 | 提供 Python MCP Server 脚手架，`cookiecutter-mcp-server`，10 分钟出模板 | P0 |
+| SP-API 注册审核被拒 | 准备详细用例说明，参考 Amazon 官方 SP-API 审核指南；备选：通过第三方 SP-API 代理服务 | P0 |
+| MCP Server 开发成本高 | 提供 Python MCP Server 脚手架，10 分钟出模板；DBHub 复用减少 50% 自研量 | P0 |
 | 行业 prompt 质量参差 | 内置 prompt 测试框架，量化评估输出质量；行业专家审核 | P1 |
 | 外部 API 不稳定 | MCP Server 内置重试 + 降级 + 缓存 + 断路器 | P1 |
 | 多 Skill Pack 冲突 | depends_on + conflicts_with 声明 + 安装时检查 | P0 |
 | 敏感信息泄露 | Vault 用 OS 密钥链存储，manifest 中只允许 ${vault.xxx} 引用 | P0 |
+| 客户不愿提供 ERP 数据库连接串 | 提供只读账号创建指南；支持 ODBC/REST API 作为替代方案 | P1 |
+| Amazon 无 Reviews API | 第二期再实现差评监控，第一期专注有官方 API 的广告/库存/利润 | P1 |
 | Hermes 版本升级破坏兼容 | corey_version 声明 + 安装时检查 + 版本锁定 | P1 |
 | 客户逆向 feature flag | 运行时驱动但持久化为不可读二进制；customer.yaml 导入后删除 | P2 |
 | 工作流引擎复杂度 | MVP 只支持 3 种 step（tool_call / ai_transform / notify） | P1 |
@@ -2083,6 +2560,8 @@ AI 行为：
 
 **一句话：** 一个基座 + 一个 customer.yaml = 定制产品，导入后痕迹全无，Corey 更新不覆盖数据。
 
+**市场定位：** 不正面硬刚麦多AI（中小卖家 SaaS），而是面向中大型企业（年销 1 亿+），做本地部署的 AI 运营中枢，连接客户已有 ERP/WMS 系统。
+
 **核心价值：**
 - 所有客户下载同一个 Corey 安装包，我们只需导入 customer.yaml 即完成定制
 - 导入后 customer.yaml 自动删除，功能隐藏写入不可读二进制，客户和 Hermes Agent 都找不到痕迹
@@ -2090,9 +2569,25 @@ AI 行为：
 - 定制化从"改代码构建"变成"导入配置文件"，交付周期从月级降到分钟级
 - 白标交付，品牌可定制，客户感知不到底层是同一个产品
 
+**跨境电商第一期（3 个机器人）：**
+- 广告守卫：SP-API Advertising → 废词巡检 → 一键否词（IM 推送）
+- 库存哨兵：SP-API Inventory + 客户 ERP → 断货/滞销预警（IM 推送）
+- 利润分析：SP-API Settlement + 客户 ERP → 利润看板 + 周报
+
 **关键依赖：**
+- SP-API 开发者账号注册（前置条件，1-2 周审核）
+- mcp-amazon-sp 自研 MCP Server（唯一需要自研的 MCP，5 天）
+- 客户 ERP 数据库连接串（DBHub 零代码对接）
 - Hermes 已有的 skills 系统和 Skill Hub 是基础，不重复造轮子
 - MCP Server 管理已有 CRUD，只需扩展批量注册和模板替换
 - 基座预装 DBHub + Filesystem + freeweb-mcp，覆盖 80% 数据访问需求
 - Vault 用 OS 密钥链，安全且零运维
 - Feature flag 运行时驱动，customer.yaml 导入后删除，不可逆向
+
+**交付节奏：**
+- Phase 1（1-2 周）：Skill Pack 基础设施（安装/卸载/Vault/MCP 注册）
+- Phase 2（2-3 周）：跨境电商第一期（3 个机器人 + mcp-amazon-sp）
+- Phase 3（持续）：模板化复制到其他 7 个行业
+- Phase 4（2-3 周）：白标部署体系（customer.yaml + 功能隐藏）
+- Phase 5（2 周）：跨境电商第二期（差评 + 竞品 + ASIN 诊断）
+- Phase 6（持续）：多平台（Shopify/Temu/TikTok Shop）+ AI 生图

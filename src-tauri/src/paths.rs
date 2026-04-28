@@ -127,11 +127,6 @@ pub fn write_override(dir: Option<&Path>) -> io::Result<PathBuf> {
 fn platform_default() -> io::Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        if let Some(home) = std::env::var_os("HOME") {
-            if !home.is_empty() {
-                return Ok(PathBuf::from(home).join(HERMES_DIR));
-            }
-        }
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 let data_dir = dir.join("data");
