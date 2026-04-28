@@ -7,9 +7,12 @@ import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
 import {
   ipcErrorMessage,
+  hermesConfigRead,
+  hermesConfigWriteModel,
   llmProfileList,
   modelProviderProbe,
   type LlmProfile,
+  type HermesModelSection,
 } from '@/lib/ipc';
 
 import { LlmProfileCard, type LlmProbeState } from './LlmProfileCard';
@@ -40,6 +43,7 @@ export function LlmProfilesSection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [probes, setProbes] = useState<Record<string, LlmProbeState>>({});
+  const [defaultModel, setDefaultModel] = useState<HermesModelSection | null>(null);
 
   const testProfile = useCallback(async (profile: LlmProfile) => {
     setProbes((prev) => ({ ...prev, [profile.id]: 'probing' }));
@@ -61,8 +65,12 @@ export function LlmProfilesSection() {
   const refresh = useCallback(async () => {
     setError(null);
     try {
-      const { profiles } = await llmProfileList();
+      const [{ profiles }, config] = await Promise.all([
+        llmProfileList(),
+        hermesConfigRead(),
+      ]);
       setRows(profiles);
+      setDefaultModel(config.model);
     } catch (e) {
       setError(ipcErrorMessage(e));
       setRows([]);
@@ -99,6 +107,19 @@ export function LlmProfilesSection() {
   // collapses away so the form has full width and isn't competing
   // with other cards for visual attention. Closing (cancel/save/
   // delete) returns to the grid.
+  const setAsDefault = useCallback(async (profile: LlmProfile) => {
+    try {
+      const config = await hermesConfigWriteModel({
+        default: profile.model,
+        provider: profile.provider,
+        base_url: profile.base_url,
+      });
+      setDefaultModel(config.model);
+    } catch {
+      // silent — the star button just won't stick
+    }
+  }, []);
+
   const editingProfile = editingId
     ? (rows ?? []).find((r) => r.id === editingId) ?? null
     : null;
@@ -162,6 +183,12 @@ export function LlmProfilesSection() {
                 onOpen={() => setEditingId(p.id)}
                 probe={probes[p.id]}
                 onTest={() => void testProfile(p)}
+                isDefault={
+                  defaultModel != null &&
+                  defaultModel.provider === p.provider &&
+                  defaultModel.default === p.model
+                }
+                onSetDefault={() => void setAsDefault(p)}
               />
             </div>
           ))}
