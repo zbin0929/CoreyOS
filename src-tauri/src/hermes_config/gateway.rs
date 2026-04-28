@@ -475,10 +475,15 @@ fn resolve_bootstrap_script(resource_dir: &Path) -> io::Result<PathBuf> {
 /// and `~/.corey/logs/bootstrap-<platform>.log` on macOS/Linux.
 pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
     let script_path = resolve_bootstrap_script(resource_dir)?;
+    let data_dir = crate::paths::hermes_data_dir().unwrap_or_else(|_| PathBuf::from("."));
 
     #[cfg(target_os = "windows")]
     {
+        use std::io::Read;
         use std::os::windows::process::CommandExt;
+        let log_dir = data_dir.join("logs");
+        let _ = std::fs::create_dir_all(&log_dir);
+        let log_file = log_dir.join("bootstrap-windows.log");
         let mut cmd = std::process::Command::new("powershell.exe");
         cmd.args([
             "-ExecutionPolicy",
@@ -487,27 +492,71 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
             script_path.to_str().unwrap_or_default(),
         ]);
         cmd.env("PYTHONIOENCODING", "utf-8");
+        cmd.env("HERMES_HOME", &data_dir);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        const CREATE_ASJOB: u32 = 0x00000004;
-        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_ASJOB);
-        cmd.spawn()?;
-        Ok(format!(
-            "Bootstrap script started. Check {} for progress.",
-            std::env::var("LOCALAPPDATA")
-                .map(|d| format!("{}\\Corey\\logs\\bootstrap-windows.log", d))
-                .unwrap_or_else(|_| "~/.corey/logs/bootstrap-windows.log".to_string())
-        ))
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        let mut child = cmd.spawn()?;
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        if let Some(mut out) = child.stdout.take() {
+            let _ = out.read_to_string(&mut stdout);
+        }
+        if let Some(mut err) = child.stderr.take() {
+            let _ = err.read_to_string(&mut stderr);
+        }
+        let status = child.wait()?;
+        let _ = std::fs::write(&log_file, format!("{}\n{}", stdout, stderr));
+        if status.success() {
+            Ok(format!(
+                "Installation completed successfully. Log: {}",
+                log_file.display()
+            ))
+        } else {
+            let code = status.code().unwrap_or(-1);
+            Err(io::Error::other(format!(
+                "Bootstrap failed (exit code {code}). Log: {}",
+                log_file.display()
+            )))
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
+        use std::io::Read;
+        let log_dir = data_dir.join("logs");
+        let _ = std::fs::create_dir_all(&log_dir);
+        let log_file = log_dir.join("bootstrap-macos.log");
         let mut cmd = std::process::Command::new("bash");
-        cmd.arg(script_path);
+        cmd.arg(&script_path);
         cmd.env("PYTHONIOENCODING", "utf-8");
-        cmd.spawn()?;
-        Ok(String::from(
-            "Bootstrap script started. Check ~/.corey/logs/bootstrap-macos.log for progress.",
-        ))
+        cmd.env("HERMES_HOME", &data_dir);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let mut child = cmd.spawn()?;
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        if let Some(mut out) = child.stdout.take() {
+            let _ = out.read_to_string(&mut stdout);
+        }
+        if let Some(mut err) = child.stderr.take() {
+            let _ = err.read_to_string(&mut stderr);
+        }
+        let status = child.wait()?;
+        let _ = std::fs::write(&log_file, format!("{}\n{}", stdout, stderr));
+        if status.success() {
+            Ok(format!(
+                "Installation completed successfully. Log: {}",
+                log_file.display()
+            ))
+        } else {
+            let code = status.code().unwrap_or(-1);
+            Err(io::Error::other(format!(
+                "Bootstrap failed (exit code {code}). Log: {}",
+                log_file.display()
+            )))
+        }
     }
 }
 
