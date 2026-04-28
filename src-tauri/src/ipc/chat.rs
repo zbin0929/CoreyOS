@@ -111,6 +111,7 @@ pub async fn chat_stream_start(
     let delta_event = format!("chat:delta:{handle}");
     let reasoning_event = format!("chat:reasoning:{handle}");
     let tool_event = format!("chat:tool:{handle}");
+    let approval_event = format!("chat:approval:{handle}");
     let pump_app = app.clone();
     tokio::spawn(async move {
         while let Some(ev) = rx.recv().await {
@@ -123,6 +124,9 @@ pub async fn chat_stream_start(
                 }
                 ChatStreamEvent::Tool(progress) => {
                     let _ = pump_app.emit(&tool_event, progress);
+                }
+                ChatStreamEvent::Approval(approval) => {
+                    let _ = pump_app.emit(&approval_event, approval);
                 }
             }
         }
@@ -177,4 +181,44 @@ pub async fn chat_stream_start(
     });
 
     Ok(handle_out)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalRespondArgs {
+    session_id: String,
+    choice: String,
+}
+
+#[tauri::command]
+pub async fn hermes_approval_respond(
+    _app: AppHandle,
+    state: State<'_, AppState>,
+    args: ApprovalRespondArgs,
+) -> IpcResult<serde_json::Value> {
+    use crate::paths::hermes_data_dir;
+
+    let base_url = {
+        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
+        cfg.base_url.clone()
+    };
+    let client = reqwest::Client::new();
+    let url = format!(
+        "{}/api/approval/respond",
+        base_url.trim_end_matches("/v1").trim_end_matches('/')
+    );
+    let mut req = client.post(&url).json(&serde_json::json!({
+        "session_id": args.session_id,
+        "choice": args.choice,
+    }));
+    if let Ok(dir) = hermes_data_dir() {
+        req = req.header("HERMES_HOME", dir.to_string_lossy().as_ref());
+    }
+    let resp = req.send().await.map_err(|e| IpcError::Internal {
+        message: format!("approval respond: {e}"),
+    })?;
+    let body: serde_json::Value = resp.json().await.map_err(|e| IpcError::Internal {
+        message: format!("approval parse: {e}"),
+    })?;
+    Ok(body)
 }

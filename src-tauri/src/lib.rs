@@ -114,6 +114,7 @@ pub fn run() {
             ipc::model::model_provider_probe,
             ipc::chat::chat_send,
             ipc::chat::chat_stream_start,
+            ipc::chat::hermes_approval_respond,
             ipc::config::config_get,
             ipc::config::config_set,
             ipc::config::config_test,

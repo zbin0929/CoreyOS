@@ -138,6 +138,24 @@ pub enum ChatStreamEvent {
     /// into subsequent `Delta` chunks by the agent, so we don't need a
     /// separate "tool complete" event to render results.
     Tool(HermesToolProgress),
+    /// Dangerous command approval request. Hermes blocks the agent thread
+    /// until the user responds via the approval API. The frontend must
+    /// show a confirmation card and call `hermes_approval_respond`.
+    Approval(HermesApprovalRequest),
+}
+
+/// Payload of a `hermes.approval` SSE event. Hermes emits this when a
+/// dangerous command is detected and needs explicit user approval.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HermesApprovalRequest {
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub pattern_key: Option<String>,
+    #[serde(default)]
+    pub pattern_keys: Vec<String>,
+    #[serde(default)]
+    pub description: String,
 }
 
 /// Payload of a `hermes.tool.progress` SSE event. Hermes emits the agent's

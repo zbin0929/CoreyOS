@@ -449,6 +449,30 @@ impl HermesGateway {
                     // count the session as partial-success if it drops now.
                     received_any_delta = true;
                 }
+                "hermes.approval" => {
+                    let approval: HermesApprovalRequest = match serde_json::from_str(&data) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            tracing::debug!(error = %e, raw = %data, "bad hermes.approval");
+                            continue;
+                        }
+                    };
+                    tracing::warn!(
+                        command = %approval.command,
+                        desc = %approval.description,
+                        "hermes chat_stream: approval required"
+                    );
+                    if tx.send(ChatStreamEvent::Approval(approval)).await.is_err() {
+                        return Ok(ChatStreamDone {
+                            finish_reason: Some("cancelled".into()),
+                            model: resolved_model,
+                            latency_ms: started.elapsed().as_millis() as u32,
+                            prompt_tokens,
+                            completion_tokens,
+                        });
+                    }
+                    received_any_delta = true;
+                }
                 // Default event: OpenAI-compatible chat.completion.chunk.
                 "" | "message" => {
                     let chunk: StreamChunk = match serde_json::from_str(&data) {

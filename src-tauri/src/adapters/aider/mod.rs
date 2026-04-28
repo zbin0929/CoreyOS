@@ -375,8 +375,9 @@ mod tests {
         while let Some(ev) = rx.recv().await {
             match ev {
                 ChatStreamEvent::Tool(p) => tools.push(p.tool),
-                ChatStreamEvent::Reasoning(_) => { /* aider doesn't surface reasoning */ }
+                ChatStreamEvent::Reasoning(_) => {}
                 ChatStreamEvent::Delta(_) => delta_count += 1,
+                ChatStreamEvent::Approval(_) => {}
             }
         }
         let done = handle.await.unwrap().unwrap();
