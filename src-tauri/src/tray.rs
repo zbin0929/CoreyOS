@@ -1,6 +1,6 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder},
+    tray::TrayIconBuilder,
     App, Manager,
 };
 
@@ -21,7 +21,7 @@ pub fn build(app: &App) {
     TrayIconBuilder::new()
         .icon(app.default_window_icon().cloned().expect("default icon"))
         .menu(&menu)
-        .show_menu_on_left_click(false)
+        .show_menu_on_left_click(true)
         .tooltip("Corey")
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "tray_show" => {
@@ -33,18 +33,6 @@ pub fn build(app: &App) {
                 app.exit(0);
             }
             _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-            tracing::info!(?event, "tray icon event");
-            if let tauri::tray::TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                let app = tray.app_handle();
-                show_window(app);
-            }
         })
         .build(app)
         .expect("tray icon");
@@ -59,5 +47,4 @@ fn show_window(app: &impl Manager<tauri::Wry>) {
     let _ = w.show();
     let _ = w.unminimize();
     let _ = w.set_focus();
-    let _ = w.center();
 }
