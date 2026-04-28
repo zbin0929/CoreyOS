@@ -1317,6 +1317,11 @@
     "done": "Done",
     "retry": "Retry"
   },
+  "updater": {
+    "available": "Update {{version}} available",
+    "downloading": "Downloading {{progress}}%…",
+    "install": "Update now"
+  },
   "scheduler_page": {
     "title": "Scheduled jobs",
     "subtitle": "Run a prompt on a cron schedule. Each fire hits the Hermes adapter with your prompt as a single turn; the reply is stored only in the run history (no new chat session).",

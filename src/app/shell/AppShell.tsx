@@ -1,11 +1,16 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Download, RefreshCw } from 'lucide-react';
+
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from '@/components/command-palette/Palette';
 import { ShortcutsDialog } from '@/components/shortcuts/ShortcutsDialog';
 import { useShortcutsHotkey } from '@/components/shortcuts/useShortcuts';
+import { Button } from '@/components/ui/button';
 import { useMenuEvents } from '../useMenuEvents';
 import { useNavShortcuts } from '../useNavShortcuts';
+import { useAppUpdater } from '@/lib/useAppUpdater';
 
 export function AppShell({ children }: { children: ReactNode }) {
   useNavShortcuts();
@@ -20,6 +25,41 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <CommandPalette />
       <ShortcutsDialog />
+      <UpdateBanner />
+    </div>
+  );
+}
+
+function UpdateBanner() {
+  const { t } = useTranslation();
+  const { state, downloadAndInstall } = useAppUpdater();
+  const [downloading, setDownloading] = useState(false);
+
+  if (state.kind !== 'available') return null;
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-gold-500/30 bg-bg-elev-1 px-4 py-3 shadow-lg">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-medium text-fg">
+          {t('updater.available', { version: state.version })}
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="primary"
+        onClick={() => {
+          setDownloading(true);
+          void downloadAndInstall();
+        }}
+        disabled={downloading}
+      >
+        {downloading ? (
+          <RefreshCw className="h-3 w-3 animate-spin" />
+        ) : (
+          <Download className="h-3 w-3" />
+        )}
+        {t('updater.install')}
+      </Button>
     </div>
   );
 }

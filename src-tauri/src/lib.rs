@@ -96,6 +96,7 @@ pub fn run() {
         // manifest when the frontend calls `check()`. Wiring from the
         // UI lives in Settings → Updates.
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             ipc::agents::adapter_list,
             ipc::health::health_check,

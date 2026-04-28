@@ -1,6 +1,6 @@
 [package]
 name = "caduceus"
-version = "0.1.1"
+version = "0.1.2"
 description = "Corey — control plane for AI agents"
 authors = ["Corey Contributors"]
 default-run = "Corey"
@@ -42,6 +42,7 @@ tauri-plugin-notification = "2"
 # is a no-op when the app was built without TAURI_SIGNING_PRIVATE_KEY
 # — dev builds skip the updater path cleanly.
 tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "io-util", "process"] }
 async-trait = "0.1"
