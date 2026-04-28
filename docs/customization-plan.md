@@ -1527,160 +1527,45 @@ pub async fn hot_update_rollback() -> IpcResult<()>  // 删除 ~/.hermes/web/，
 | 新增 Vault 密钥管理 IPC | Layer 1 整包更新 | 需重启 App |
 | Tauri 版本升级 | Layer 1 整包更新 | 需重启 App |
 
-#### Layer 1：Corey 基座更新（平台详解）
+#### Layer 1：Corey 基座更新
 
-**已有基础设施：** Corey 已集成 `tauri-plugin-updater`，通过 GitHub Releases 分发。
+**已有基础设施：** Corey 已集成 `tauri-plugin-updater`，更新流程全自动。
 
 ```rust
-// src-tauri/src/lib.rs:94
+// src-tauri/src/lib.rs:94 — 已有
 .plugin(tauri_plugin_updater::Builder::new().build())
 
-// src-tauri/tauri.conf.json:59
+// src-tauri/tauri.conf.json:59 — 已有
 "plugins": {
   "updater": {
-    "endpoints": [
-      "https://github.com/zbin0929/CoreyOS/releases/latest/download/latest.json"
-    ],
-    "pubkey": "..."  // ed25519 公钥
+    "endpoints": ["https://github.com/zbin0929/CoreyOS/releases/latest/download/latest.json"],
+    "pubkey": "..."
   }
 }
 ```
 
-**我们发布新版本时做什么：**
+**Tauri Updater 自动处理的事（不需要我们开发）：**
+- ✅ 定时检查新版本（24h 轮询）
+- ✅ 下载安装包（macOS: .app.tar.gz, Windows: .exe）
+- ✅ ed25519 签名验证
+- ✅ 弹窗提示用户"是否更新"
+- ✅ 替换 App 二进制 + 自动重启
+- ✅ 跨平台差异（macOS/Windows 各自的安装逻辑）
 
-```
-1. 代码合并到 main 分支
-2. CI 自动构建（GitHub Actions）：
-   - macOS:  → Corey.app → Corey_x.x.x_x64.dmg
-   - Windows: → Corey.exe → Corey_x.x.x_x64-setup.exe (NSIS)
-3. CI 自动上传到 GitHub Release
-4. CI 自动生成 latest.json（Tauri Updater 协议格式）
-5. 用户端自动检测到新版本
-```
+**我们只需要做的事：**
 
-**latest.json 格式（Tauri Updater 协议）：**
+| 待办 | 说明 | 优先级 |
+|------|------|--------|
+| 配置 CI 发布流程 | 打 tag → GitHub Actions 构建 → 上传 Release → 生成 latest.json | P0 |
+| 购买代码签名证书 | macOS: Apple Developer ID ($99/年), Windows: EV 证书 (~$300/年) | P0 |
 
-```json
-{
-  "version": "0.4.0",
-  "notes": "性能优化 + 新增工作流看板",
-  "pub_date": "2026-05-15T12:00:00Z",
-  "platforms": {
-    "darwin-x86_64": {
-      "url": "https://github.com/zbin0929/CoreyOS/releases/download/v0.4.0/Corey_0.4.0_x64.dmg",
-      "signature": "dW50cnVzdGVkLWNvbW1lbnQ6..."
-    },
-    "darwin-aarch64": {
-      "url": "https://github.com/zbin0929/CoreyOS/releases/download/v0.4.0/Corey_0.4.0_aarch64.dmg",
-      "signature": "dW50cnVzdGVkLWNvbW1lbnQ6..."
-    },
-    "windows-x86_64": {
-      "url": "https://github.com/zbin0929/CoreyOS/releases/download/v0.4.0/Corey_0.4.0_x64-setup.exe",
-      "signature": "dW50cnVzdGVkLWNvbW1lbnQ6..."
-    }
-  }
-}
-```
-
-**macOS 更新流程：**
-
-```
-用户端（Corey 正在运行）：
-1. Tauri Updater 每 24h 检查 endpoint
-2. 发现新版本 → 下载 .app.tar.gz（~30-50MB）
-3. ed25519 验证签名
-4. 弹窗提示："发现新版本 0.4.0，是否更新？"
-5. 用户点击"更新" →
-   a. 下载完成 → 解压 .tar.gz
-   b. 替换 /Applications/Corey.app（需要管理员权限）
-   c. 自动重启 App
-6. 重启后 → 启动时执行 migrate_config_if_needed()
-7. ~/.hermes/ 数据完全不动
-
-特殊处理：
-- macOS Gatekeeper：首次安装需要用户在"系统设置 > 隐私与安全性"中允许
-  后续更新不需要（因为 App 已有签名身份）
-- 代码签名：必须用 Apple Developer ID 签名，否则 Gatekeeper 阻止
-- 更新不需要重新授权 Gatekeeper（同一 Developer ID 的更新自动信任）
-```
-
-**Windows 更新流程：**
-
-```
-用户端（Corey 正在运行）：
-1. Tauri Updater 每 24h 检查 endpoint
-2. 发现新版本 → 下载 Corey_x.x.x_x64-setup.exe（~50-80MB）
-3. ed25519 验证签名
-4. 弹窗提示："发现新版本 0.4.0，是否更新？"
-5. 用户点击"更新" →
-   a. 下载完成 → 关闭当前 Corey 进程
-   b. 启动 NSIS 安装程序（静默模式 /S）
-   c. NSIS 覆盖安装到 C:\Users\<user>\AppData\Local\Corey\
-   d. 自动重启 App
-6. 重启后 → 启动时执行 migrate_config_if_needed()
-7. %USERPROFILE%\.hermes\ 数据完全不动
-
-特殊处理：
-- Windows SmartScreen：首次安装可能弹出"未知发布者"警告
-  代码签名 EV 证书可以消除此警告
-- NSIS 静默安装不会弹窗，用户只看到 Corey 短暂关闭再打开
-- 安装目录在用户目录下，不需要 UAC 管理员权限
-```
-
-**平台差异总结：**
-
-| | macOS | Windows |
-|---|------|---------|
-| 安装包格式 | `.dmg`（首次）/ `.app.tar.gz`（更新） | `.exe`（NSIS 安装器） |
-| 更新下载大小 | ~30-50MB | ~50-80MB |
-| 更新方式 | 替换 .app bundle | NSIS 静默覆盖安装 |
-| 需要管理员权限 | 是（替换 /Applications 下） | 否（安装在用户目录下） |
-| 代码签名 | Apple Developer ID | EV 代码签名证书 |
-| Gatekeeper/SmartScreen | 首次需授权，更新自动信任 | EV 证书可消除警告 |
-| 数据目录 | `~/.hermes/` | `%USERPROFILE%\.hermes\` |
-| 更新后数据 | ✅ 不动 | ✅ 不动 |
-
-**白标部署适配：** 每个客户有自己的更新端点：
-
-```jsonc
-// tauri.conf.json（构建时根据客户配置替换）
-"updater": {
-  "endpoints": [
-    "https://update.coreyos.com/api/v1/check?customer=acme-logistics"
-  ],
-  "pubkey": "dW50cnVzdGVkLWNvbW1lbnQ6..."  // 我们的统一签名公钥
-}
-```
-
-**更新服务器端：**
-
-```
-GET /api/v1/check?customer=acme-logistics&arch=x86_64&platform=windows&current_version=0.3.2
-
-Response:
-{
-  "version": "0.4.0",
-  "date": "2026-05-15",
-  "body": "性能优化 + 新增工作流看板",
-  "url": "https://update.coreyos.com/artifacts/acme-logistics/0.4.0/Corey_0.4.0_x64-setup.exe",
-  "signature": "dW50cnVzdGVkLWNvbW1lbnQ6..."  // ed25519 签名
-}
-```
-
-**签名密钥：** 复用已有的 `mint_license` ed25519 体系（`src-tauri/cli/src/mint_license.rs`）。
-
-**代码签名（生产环境必须）：**
-
-| 平台 | 证书类型 | 费用 | 作用 |
-|------|---------|------|------|
-| macOS | Apple Developer ID Application | $99/年 | Gatekeeper 信任，更新不弹警告 |
-| Windows | EV 代码签名证书 | ~$300-400/年 | SmartScreen 即时信任，不弹"未知发布者" |
+> **关于白标 endpoint：** 初期不需要。所有客户用同一个 Corey 基座，更新统一从 GitHub Releases 推送。差异化由 customer.yaml（Skill Pack / 功能隐藏）控制，不由基座版本控制。只有 Phase 4+ 需要灰度发布或按客户控制升级节奏时，才搭建 `update.coreyos.com` 替换 endpoint。
 
 **没有代码签名的后果：**
-- macOS：用户无法打开，必须右键 → 打开 → 确认，每次更新都要重新确认
-- Windows：SmartScreen 弹出蓝色警告"已阻止此应用"，用户需点"更多信息 → 仍要运行"
+- macOS：Gatekeeper 阻止打开，用户必须右键 → 打开 → 确认
+- Windows：SmartScreen 弹出"未知发布者"蓝色警告
 
-**CI 发布流程（GitHub Actions）：**
+**CI 发布流程（待配置）：**
 
 ```yaml
 # .github/workflows/release.yml
@@ -1717,7 +1602,6 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Corey ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download and install this version.'
           releaseDraft: true
 ```
 

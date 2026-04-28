@@ -461,7 +461,7 @@ fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
 
     if let Some(stderr) = child.stderr.take() {
         std::thread::spawn(move || {
-            for line in BufReader::new(stderr).lines().flatten() {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 tracing::info!("qr-login stderr: {}", &line[..line.len().min(200)]);
             }
         });
