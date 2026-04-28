@@ -44,12 +44,14 @@ export interface UiMessage {
 }
 
 export interface UiToolCall {
-  /** Stable id so React can key the list. */
   id: string;
   tool: string;
   emoji?: string | null;
   label?: string | null;
   at: number;
+  args?: string | null;
+  result?: string | null;
+  duration_ms?: number | null;
 }
 
 /** UI-side attachment metadata. Mirrors `DbAttachmentRow` but uses
@@ -81,6 +83,8 @@ export interface ChatSession {
    *  per-row badge + adapter filter. Sessions created before T5.5c
    *  shipped land here as `'hermes'` (db v5 backfill). */
   adapterId: string;
+  gatewayId?: string;
+  gatewaySource?: string | null;
   /** v10 — per-session LLM-Profile pin. When set, chat send/retry
    *  routes this session's turns through `hermes:profile:<id>`
    *  (registered at boot / on-demand via `llmProfileEnsureAdapter`)
@@ -144,4 +148,9 @@ export interface ChatState {
 
   /** True when at least one session exists. Used to gate rendering. */
   hasSessions: () => boolean;
+
+  importGatewaySession: (gs: import('@/lib/ipc').GatewaySession) => string;
+
+  lastTokenUsage: { prompt: number; completion: number } | null;
+  setLastTokenUsage: (usage: { prompt: number; completion: number } | null) => void;
 }

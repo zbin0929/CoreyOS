@@ -15,6 +15,7 @@ import type { StagedAttachment } from '@/lib/ipc';
 import type { VisionSupport } from '@/lib/modelCapabilities';
 
 import { ActiveLLMBadge } from './ActiveLLMBadge';
+import { TokenUsageBadge } from './TokenUsageBadge';
 import { RoutingHint } from './ChatHelpers';
 import { formatBytes } from './formatBytes';
 
@@ -124,6 +125,7 @@ export function Composer({
       <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 pt-3">
         <ActiveLLMBadge />
         <RoutingHint draft={draft} />
+        <TokenUsageBadge />
       </div>
       <form
         onSubmit={onSubmit}

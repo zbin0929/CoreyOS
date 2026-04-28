@@ -512,6 +512,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "caduceus-cli"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "rand 0.8.6",
+ "serde",
+]
+
+[[package]]
 name = "cairo-rs"
 version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

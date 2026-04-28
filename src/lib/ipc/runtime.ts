@@ -579,3 +579,31 @@ export interface WorkflowRunResult {
   step_runs: Record<string, WorkflowStepRun>;
   error?: string;
 }
+
+// ───────────────────────── Gateway Sessions ─────────────────────────
+
+export interface GatewaySession {
+  id: string;
+  title: string;
+  model: string | null;
+  source: string | null;
+  messageCount: number;
+  startedAt: number | null;
+  lastActivity: number | null;
+}
+
+export interface GatewayMessage {
+  role: string;
+  content: string;
+  timestamp: number;
+}
+
+export function gatewaySessionsList(): Promise<GatewaySession[]> {
+  return invoke<GatewaySession[]>('gateway_sessions_list');
+}
+
+export function gatewaySessionMessages(
+  sessionId: string,
+): Promise<GatewayMessage[]> {
+  return invoke<GatewayMessage[]>('gateway_session_messages', { sessionId });
+}

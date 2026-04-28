@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
-  Check,
   FolderOpen,
   Loader2,
   Plus,
@@ -34,7 +33,7 @@ import { ActivateModal } from './ActivateModal';
 import { base64FromArrayBuffer } from './helpers';
 import { ImportModal } from './ImportModal';
 import { ProfileCard } from './ProfileCard';
-import { inputCls } from './styles';
+import { CreateProfileForm } from './CreateProfileForm';
 import type {
   ActivateMode,
   ImportMode,
@@ -415,59 +414,14 @@ export function ProfilesRoute() {
           )}
 
           {creating && (
-            <form
+            <CreateProfileForm
+              value={creating.value}
+              busy={creating.busy}
+              error={rowStatus.__create__?.kind === 'err' ? rowStatus.__create__.message : undefined}
+              onChange={(v) => setCreating({ value: v, busy: creating.busy })}
               onSubmit={onCreate}
-              className="flex flex-col gap-2 rounded-md border border-gold-500/40 bg-gold-500/5 p-3"
-            >
-              <div className="flex items-center gap-2">
-                <Icon icon={Plus} size="md" className="text-gold-500" />
-                <span className="text-sm font-medium text-fg">
-                  {t('profiles.new')}
-                </span>
-              </div>
-              <input
-                autoFocus
-                value={creating.value}
-                onChange={(e) =>
-                  setCreating({ value: e.target.value, busy: creating.busy })
-                }
-                placeholder={t('profiles.name_placeholder')}
-                data-testid="profiles-new-input"
-                className={inputCls}
-              />
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setCreating(null)}
-                  disabled={creating.busy}
-                >
-                  {t('profiles.cancel')}
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={creating.busy || !creating.value.trim()}
-                >
-                  {creating.busy ? (
-                    <Icon icon={Loader2} size="sm" className="animate-spin" />
-                  ) : (
-                    <Icon icon={Check} size="sm" />
-                  )}
-                  {t('profiles.create')}
-                </Button>
-              </div>
-              {rowStatus.__create__?.kind === 'err' && (
-                <div className="flex items-start gap-1 text-xs text-danger">
-                  <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
-                  <span className="break-all">
-                    {rowStatus.__create__.message}
-                  </span>
-                </div>
-              )}
-            </form>
+              onCancel={() => setCreating(null)}
+            />
           )}
 
           {state.kind === 'loaded' && state.view.missing_root && (

@@ -248,6 +248,8 @@ pub fn run() {
             ipc::browser_config::browser_config_get,
             ipc::browser_config::browser_config_set,
             ipc::browser_config::browser_diagnose,
+            ipc::gateway_sessions::gateway_sessions_list,
+            ipc::gateway_sessions::gateway_session_messages,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");

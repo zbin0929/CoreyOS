@@ -71,6 +71,12 @@ export function buildStreamCallbacks(
       setSending(false);
       streamRef.current = null;
       pendingRef.current = null;
+      if (summary.prompt_tokens !== null || summary.completion_tokens !== null) {
+        useChatStore.getState().setLastTokenUsage({
+          prompt: summary.prompt_tokens ?? 0,
+          completion: summary.completion_tokens ?? 0,
+        });
+      }
       if (onStreamDone) {
         onStreamDone(targetId, '', summary);
       } else if (

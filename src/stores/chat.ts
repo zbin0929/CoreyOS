@@ -9,6 +9,8 @@ import {
   dbSessionDelete,
   dbSessionUpsert,
   dbToolCallAppend,
+  gatewaySessionMessages,
+  type GatewaySession,
 } from '@/lib/ipc';
 
 import { useAgentsStore } from './agents';
@@ -37,6 +39,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   orderedIds: [],
   hydrated: false,
   lastLearningAt: null,
+  lastTokenUsage: null,
 
   hydrateFromDb: async () => {
     // Idempotent guard: if a previous call already completed (or is in-flight
@@ -455,6 +458,46 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   hasSessions: () => get().orderedIds.length > 0,
+
+  importGatewaySession: (gs: GatewaySession): string => {
+    const existing = get().orderedIds.find(
+      (id) => get().sessions[id]?.gatewayId === gs.id,
+    );
+    if (existing) {
+      get().switchTo(existing);
+      return existing;
+    }
+    const id = get().newSession();
+    set((s) => ({
+      sessions: {
+        ...s.sessions,
+        [id]: {
+          ...s.sessions[id]!,
+          title: gs.title || `Gateway: ${gs.source ?? 'unknown'}`,
+          gatewayId: gs.id,
+          gatewaySource: gs.source,
+          adapterId: 'hermes',
+        },
+      },
+    }));
+    fireWrite(dbSessionUpsert({ id, title: gs.title || `Gateway: ${gs.source ?? 'unknown'}`, model: gs.model ?? null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes' }), 'importGatewaySession');
+    gatewaySessionMessages(gs.id).then((msgs) => {
+      for (const m of msgs) {
+        const msgId = newId('m');
+        const msg: UiMessage = {
+          id: msgId,
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.content,
+          createdAt: m.timestamp,
+          pending: false,
+        };
+        get().appendMessage(id, msg);
+      }
+    });
+    return id;
+  },
+
+  setLastTokenUsage: (usage) => set({ lastTokenUsage: usage }),
 }));
 
 export const newMessageId = () => newId('m');

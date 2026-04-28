@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, Loader2 } from 'lucide-react';
 
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
@@ -75,6 +75,87 @@ export function ToolCallsStrip({
   );
 }
 
+function ToolCallDetailRow({
+  call,
+  index,
+  total,
+}: {
+  call: UiToolCall;
+  index: number;
+  total: number;
+}) {
+  const [copied, setCopied] = useState(false);
+  const hasArgs = !!call.args || !!call.label;
+  const hasResult = !!call.result;
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
+
+  return (
+    <li className="rounded border border-border bg-bg-elev-1">
+      <div className="flex items-center gap-1.5 px-2 py-1">
+        {call.emoji && <span className="flex-none text-sm leading-none">{call.emoji}</span>}
+        <span className="flex-none font-medium text-fg">
+          {prettifyTool(call.tool).name}
+        </span>
+        {total > 1 && (
+          <span className="flex-none font-mono text-[10px] text-fg-subtle">
+            #{index}
+          </span>
+        )}
+        {call.duration_ms != null && (
+          <span className="ml-auto flex-none font-mono text-[10px] text-fg-subtle">
+            {formatElapsed(call.duration_ms)}
+          </span>
+        )}
+      </div>
+      {hasArgs && (
+        <div className="border-t border-border px-2 py-1">
+          <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+            Input
+          </div>
+          <code className="block whitespace-pre-wrap break-all font-mono text-[11px] text-fg-muted">
+            {call.args ?? call.label}
+          </code>
+          <button
+            type="button"
+            onClick={() => handleCopy(call.args ?? call.label ?? '')}
+            className="mt-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-fg-subtle hover:bg-bg-elev-3 hover:text-fg"
+          >
+            <Icon icon={Copy} size="xs" />
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+      )}
+      {hasResult && (
+        <div className="border-t border-border px-2 py-1">
+          <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+            Output
+          </div>
+          <code className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] text-fg-muted">
+            {call.result}
+          </code>
+          <button
+            type="button"
+            onClick={() => handleCopy(call.result ?? '')}
+            className="mt-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-fg-subtle hover:bg-bg-elev-3 hover:text-fg"
+          >
+            <Icon icon={Copy} size="xs" />
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+      )}
+      {!hasArgs && !hasResult && (
+        <div className="border-t border-border px-2 py-1 text-fg-subtle">
+          No details available
+        </div>
+      )}
+    </li>
+  );
+}
 interface ToolCallGroup {
   tool: string;
   calls: UiToolCall[];
@@ -198,14 +279,9 @@ function ToolCallGroupRow({
             </div>
           )}
           {!isDelegate && (
-            <ul className="flex flex-col gap-0.5 font-mono text-fg-muted">
-              {group.calls.map((c) => (
-                <li
-                  key={c.id}
-                  className="overflow-hidden whitespace-pre-wrap break-all"
-                >
-                  {c.label ?? <span className="text-fg-subtle">(no args)</span>}
-                </li>
+            <ul className="flex flex-col gap-1">
+              {group.calls.map((c, idx) => (
+                <ToolCallDetailRow key={c.id} call={c} index={idx + 1} total={group.calls.length} />
               ))}
             </ul>
           )}

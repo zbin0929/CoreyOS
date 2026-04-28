@@ -3,7 +3,7 @@
 //! management live in separate files.
 
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Hermes version range Corey is built against. Bump these when
 /// you've actually tested against a newer Hermes — the `untested`
@@ -429,57 +429,13 @@ fn inject_hermes_home(cmd: &mut std::process::Command) {
     }
 }
 
-fn run_hermes(binary: &Path, args: &[&str]) -> io::Result<std::process::Output> {
-    #[cfg(target_os = "windows")]
-    {
-        // Hermes is officially WSL2-only on Windows. Bridge every gateway
-        // command through `wsl -e bash -lc ...` so Corey can manage Hermes
-        // from the native Windows app process.
-        let mut cmd = std::process::Command::new(binary);
-        let mut script = String::new();
-        if let Ok(dir) = crate::paths::hermes_data_dir() {
-            if let Some(wsl_dir) = windows_to_wsl_path(&dir) {
-                script.push_str("HERMES_HOME='");
-                script.push_str(&wsl_dir.replace('"', "\\\""));
-                script.push_str("' ");
-            }
-        }
-        script.push_str("hermes");
-        for a in args {
-            script.push(' ');
-            script.push_str(a);
-        }
-        cmd.args(["-e", "bash", "-lc", &script]);
-        cmd.output()
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let mut cmd = std::process::Command::new(binary);
-        cmd.args(args);
-        inject_hermes_home(&mut cmd);
-        cmd.output()
-    }
+fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Output> {
+    let mut cmd = std::process::Command::new(binary);
+    cmd.args(args);
+    inject_hermes_home(&mut cmd);
+    cmd.output()
 }
 
-#[cfg(target_os = "windows")]
-fn windows_to_wsl_path(path: &Path) -> Option<String> {
-    let raw = path.to_string_lossy();
-    let mut chars = raw.chars();
-    let drive = chars.next()?;
-    let colon = chars.next()?;
-    if !drive.is_ascii_alphabetic() || colon != ':' {
-        return None;
-    }
-    let rest: String = chars.collect();
-    let rest = rest
-        .trim_start_matches('\\')
-        .trim_start_matches('/')
-        .replace('\\', "/");
-    if rest.is_empty() {
-        return Some(format!("/mnt/{}", drive.to_ascii_lowercase()));
-    }
-    Some(format!("/mnt/{}/{}", drive.to_ascii_lowercase(), rest))
-}
 
 /// Platform-specific filename for the Hermes binary. `.exe` on
 /// Windows so `dir.join(BINARY_NAME).is_file()` matches what the
@@ -513,9 +469,9 @@ fn resolve_hermes_binary() -> io::Result<PathBuf> {
     }
 
     // 2) Canonical install paths. macOS / Linux Hermes installer
-    // drops the binary at `~/.local/bin/hermes`; the Windows MSI
-    // (when used standalone) drops `hermes.exe` under
-    // `%LOCALAPPDATA%\Programs\Hermes\`.
+    // drops the binary at `~/.local/bin/hermes`; the Windows
+    // installer (install.ps1) drops `hermes.exe` under
+    // `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\`.
     if let Some(home) = std::env::var_os("HOME") {
         let candidate = PathBuf::from(home).join(".local/bin").join(BINARY_NAME);
         if candidate.is_file() {
@@ -523,23 +479,16 @@ fn resolve_hermes_binary() -> io::Result<PathBuf> {
         }
     }
     #[cfg(target_os = "windows")]
-    {
-        // Official Hermes support on Windows is WSL2-only. If WSL is present
-        // and can resolve `hermes`, route through `wsl`.
-        if let Ok(out) = std::process::Command::new("wsl")
-            .args(["-e", "bash", "-lc", "command -v hermes >/dev/null 2>&1"])
-            .output()
-        {
-            if out.status.success() {
-                return Ok(PathBuf::from("wsl"));
-            }
-        }
-    }
-    #[cfg(target_os = "windows")]
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        // Official Windows installer (install.ps1) puts hermes.exe in
+        // %LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\ and adds
+        // that dir to user PATH. Also check the Scripts dir directly
+        // in case PATH hasn't been refreshed in this session.
         let candidate = PathBuf::from(local)
-            .join("Programs")
-            .join("Hermes")
+            .join("hermes")
+            .join("hermes-agent")
+            .join("venv")
+            .join("Scripts")
             .join(BINARY_NAME);
         if candidate.is_file() {
             return Ok(candidate);
