@@ -3,10 +3,6 @@ name = "caduceus"
 version = "0.1.0"
 description = "Corey — control plane for AI agents"
 authors = ["Corey Contributors"]
-autobins = false
-# Multiple [[bin]] targets exist (Corey + license_keygen + mint_license).
-# Without default-run, `cargo run` (the form Tauri's dev runner uses)
-# bails with "could not determine which binary to run". Pin to the GUI.
 default-run = "Corey"
 edition = "2021"
 rust-version = "1.77"
@@ -24,15 +20,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "Corey"
 path = "src/main.rs"
 
-[[bin]]
-name = "mint_license"
-path = "src/bin/mint_license.rs"
-required-features = ["cli"]
-
-[[bin]]
-name = "license_keygen"
-path = "src/bin/license_keygen.rs"
-required-features = ["cli"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -153,10 +140,9 @@ tempfile = "3"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-# Maintenance CLI binaries (mint_license, license_keygen). Not included
-# in default/Tauri builds so the bundler doesn't try to copy them as
-# sidecar binaries. Run with: cargo run --features cli --bin mint_license
-cli = []
+
+[workspace]
+members = ["cli"]
 
 [profile.release]
 panic = "abort"

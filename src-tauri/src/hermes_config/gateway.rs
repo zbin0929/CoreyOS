@@ -376,9 +376,10 @@ mod compat_tests {
 /// listening on 127.0.0.1:8642 yet.
 pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
-    let output = std::process::Command::new(&binary)
-        .args(["gateway", "start"])
-        .output()?;
+    let mut cmd = std::process::Command::new(&binary);
+    cmd.args(["gateway", "start"]);
+    inject_hermes_home(&mut cmd);
+    let output = cmd.output()?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     if !output.status.success() {
@@ -402,9 +403,10 @@ pub fn gateway_start() -> io::Result<String> {
 /// main thread (i.e. via `spawn_blocking` or in an async IPC handler).
 pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
-    let output = std::process::Command::new(&binary)
-        .args(["gateway", "restart"])
-        .output()?;
+    let mut cmd = std::process::Command::new(&binary);
+    cmd.args(["gateway", "restart"]);
+    inject_hermes_home(&mut cmd);
+    let output = cmd.output()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -422,6 +424,19 @@ pub fn gateway_restart() -> io::Result<String> {
     } else {
         stdout
     })
+}
+
+/// Inject `HERMES_HOME` into the child process environment so Hermes
+/// reads/writes the same data directory Corey resolved (which may differ
+/// from the platform default when the user moved it via Settings).
+/// Hermes natively honours `HERMES_HOME`; without this the gateway
+/// would still use `~/.hermes` even after the user relocated data.
+fn inject_hermes_home(cmd: &mut std::process::Command) {
+    if let Ok(dir) = crate::paths::hermes_data_dir() {
+        // Only set when it differs from the platform default to avoid
+        // surprising Hermes on standard installs.
+        cmd.env("HERMES_HOME", dir);
+    }
 }
 
 /// Platform-specific filename for the Hermes binary. `.exe` on
