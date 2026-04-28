@@ -334,96 +334,221 @@ pub struct ChannelQrSetupResult {
 #[tauri::command]
 pub async fn hermes_channel_setup_qr(channel_id: String) -> IpcResult<ChannelQrSetupResult> {
     tokio::task::spawn_blocking(move || {
-        let binary =
-            crate::hermes_config::resolve_hermes_binary().map_err(|e| IpcError::Internal {
-                message: format!("resolve hermes binary: {e}"),
-            })?;
-
-        let mut cmd = std::process::Command::new(&binary);
-        cmd.args(["channel", "setup", &channel_id, "--json"])
-            .env("PYTHONIOENCODING", "utf-8");
-        crate::hermes_config::inject_hermes_home(&mut cmd);
-        crate::hermes_config::suppress_window(&mut cmd);
-
-        let output = cmd.output().map_err(|e| IpcError::Internal {
-            message: format!("run hermes channel setup: {e}"),
-        })?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-
-        if output.status.success() {
-            let trimmed = stdout.trim();
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
-                let qr_url = json
-                    .get("qr_url")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let qr_data = json
-                    .get("qr_data")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let status = json
-                    .get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("pending")
-                    .to_string();
-                let message = json
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                Ok(ChannelQrSetupResult {
-                    qr_url,
-                    qr_data,
-                    status,
-                    message,
-                })
-            } else {
-                Ok(ChannelQrSetupResult {
-                    qr_url: None,
-                    qr_data: Some(trimmed.to_string()),
-                    status: "output".to_string(),
-                    message: stderr.trim().to_string(),
-                })
-            }
-        } else {
-            let combined = format!("{stderr}{stdout}");
-            if combined.contains("No such command") || combined.contains("unrecognized arguments") {
-                let mut cmd2 = std::process::Command::new(&binary);
-                cmd2.args(["gateway", "setup", "--channel", &channel_id])
-                    .env("PYTHONIOENCODING", "utf-8");
-                crate::hermes_config::inject_hermes_home(&mut cmd2);
-                crate::hermes_config::suppress_window(&mut cmd2);
-                let out2 = cmd2.output().map_err(|e| IpcError::Internal {
-                    message: format!("run hermes gateway setup: {e}"),
-                })?;
-                let stdout2 = String::from_utf8_lossy(&out2.stdout).into_owned();
-                let stderr2 = String::from_utf8_lossy(&out2.stderr).into_owned();
-                Ok(ChannelQrSetupResult {
-                    qr_url: None,
-                    qr_data: Some(stdout2.trim().to_string()),
-                    status: if out2.status.success() {
-                        "output".to_string()
-                    } else {
-                        "error".to_string()
-                    },
-                    message: stderr2.trim().to_string(),
-                })
-            } else {
-                Ok(ChannelQrSetupResult {
-                    qr_url: None,
-                    qr_data: None,
-                    status: "error".to_string(),
-                    message: combined.trim().to_string(),
-                })
-            }
+        let supported = ["whatsapp", "weixin", "dingtalk", "qq"];
+        if !supported.contains(&channel_id.as_str()) {
+            return Err(IpcError::Internal {
+                message: format!("QR login not supported for channel '{}'", channel_id),
+            });
         }
+        run_qr_login(&channel_id)
     })
     .await
     .map_err(|e| IpcError::Internal {
         message: format!("hermes_channel_setup_qr join: {e}"),
     })?
+}
+
+fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let hermes_home =
+        crate::paths::hermes_data_dir().map_err(|e| IpcError::Internal {
+            message: format!("hermes data dir: {e}"),
+        })?;
+
+    let session_dir = std::env::temp_dir().join("corey-qr-session");
+    std::fs::create_dir_all(&session_dir).ok();
+    let session_file = session_dir.join(format!("{channel_id}.json"));
+
+    if session_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&session_file) {
+            if let Ok(session) = serde_json::from_str::<serde_json::Value>(&content) {
+                let s = session.get("status").and_then(|v| v.as_str()).unwrap_or("");
+                match s {
+                    "done" => {
+                        let _ = std::fs::remove_file(&session_file);
+                        if let Some(env) = session.get("env").and_then(|v| v.as_object()) {
+                            let env_file = hermes_home.join(".env");
+                            let mut env_content =
+                                std::fs::read_to_string(&env_file).unwrap_or_default();
+                            for (k, v) in env {
+                                if let Some(val) = v.as_str() {
+                                    let pattern = format!("{}=", k);
+                                    if env_content.lines().any(|l| l.starts_with(&pattern)) {
+                                        env_content = env_content
+                                            .lines()
+                                            .map(|l| {
+                                                if l.starts_with(&pattern) {
+                                                    format!("{}={}", k, val)
+                                                } else {
+                                                    l.to_string()
+                                                }
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n");
+                                    } else {
+                                        if !env_content.ends_with('\n') {
+                                            env_content.push('\n');
+                                        }
+                                        env_content.push_str(&format!("{}={}\n", k, val));
+                                    }
+                                }
+                            }
+                            if let Err(e) = std::fs::write(&env_file, &env_content) {
+                                tracing::error!("qr-login: failed to write .env: {e}");
+                            }
+                        }
+                        return Ok(ChannelQrSetupResult {
+                            qr_url: None,
+                            qr_data: None,
+                            status: "done".to_string(),
+                            message: "QR scan successful".to_string(),
+                        });
+                    }
+                    _ => {
+                        let _ = std::fs::remove_file(&session_file);
+                    }
+                }
+            } else {
+                let _ = std::fs::remove_file(&session_file);
+            }
+        } else {
+            let _ = std::fs::remove_file(&session_file);
+        }
+    }
+
+    let venv_python = hermes_home
+        .join("hermes-agent")
+        .join("venv")
+        .join("bin")
+        .join("python3");
+    let python = if venv_python.exists() {
+        venv_python
+    } else {
+        std::path::PathBuf::from("python3")
+    };
+
+    let script_src = include_str!("../../../assets/scripts/qr-login.py");
+    let script_dir = std::env::temp_dir().join("corey-qr-login");
+    std::fs::create_dir_all(&script_dir).map_err(|e| IpcError::Internal {
+        message: format!("create temp dir: {e}"),
+    })?;
+    let script_path = script_dir.join("qr-login.py");
+    std::fs::write(&script_path, script_src).map_err(|e| IpcError::Internal {
+        message: format!("write qr-login script: {e}"),
+    })?;
+
+    let mut cmd = std::process::Command::new(&python);
+    cmd.arg(&script_path)
+        .arg(channel_id)
+        .arg(&session_dir)
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUNBUFFERED", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    crate::hermes_config::inject_hermes_home(&mut cmd);
+    crate::hermes_config::suppress_window(&mut cmd);
+
+    tracing::info!("qr-login: python={:?}, channel={}", python, channel_id);
+
+    let mut child = cmd.spawn().map_err(|e| IpcError::Internal {
+        message: format!("spawn qr-login.py: {e}"),
+    })?;
+
+    let stdout = child.stdout.take().ok_or_else(|| IpcError::Internal {
+        message: "failed to capture stdout".to_string(),
+    })?;
+
+    if let Some(stderr) = child.stderr.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().flatten() {
+                tracing::info!("qr-login stderr: {}", &line[..line.len().min(200)]);
+            }
+        });
+    }
+
+    let reader = BufReader::new(stdout);
+    let mut result_qr: Option<String> = None;
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    for line in reader.lines() {
+        if std::time::Instant::now() > deadline {
+            break;
+        }
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => break,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        tracing::info!("qr-login stdout: {}", &line[..line.len().min(200)]);
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+            match json.get("type").and_then(|v| v.as_str()).unwrap_or("") {
+                "qr" => {
+                    if let Some(data) = json.get("data").and_then(|v| v.as_str()) {
+                        result_qr = Some(data.to_string());
+                    }
+                    break;
+                }
+                "error" => {
+                    let msg = json
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown error");
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Ok(ChannelQrSetupResult {
+                        qr_url: None,
+                        qr_data: None,
+                        status: "error".to_string(),
+                        message: msg.to_string(),
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if let Some(qr) = result_qr {
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        return Ok(ChannelQrSetupResult {
+            qr_url: None,
+            qr_data: Some(qr),
+            status: "pending".to_string(),
+            message: String::new(),
+        });
+    }
+
+    let _ = child.kill();
+    let _ = child.wait();
+
+    if session_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&session_file) {
+            if let Ok(session) = serde_json::from_str::<serde_json::Value>(&content) {
+                let msg = session
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Failed to get QR");
+                return Ok(ChannelQrSetupResult {
+                    qr_url: None,
+                    qr_data: None,
+                    status: "error".to_string(),
+                    message: msg.to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(ChannelQrSetupResult {
+        qr_url: None,
+        qr_data: None,
+        status: "error".to_string(),
+        message: "No QR data received".to_string(),
+    })
 }
 
 #[cfg(test)]

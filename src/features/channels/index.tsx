@@ -172,6 +172,7 @@ export function ChannelsRoute() {
                   key={c.id}
                   channel={c}
                   liveStatus={liveStatuses[c.id]}
+                  onQrDone={() => void load()}
                   onSaved={(fresh) => {
                     setState((prev) =>
                       prev.kind === 'loaded'

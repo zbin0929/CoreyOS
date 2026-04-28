@@ -29,7 +29,7 @@ fn qr_login_only_on_channels_that_support_it() {
         .filter(|s| s.has_qr_login)
         .map(|s| s.id)
         .collect();
-    let expected = vec!["weixin", "dingtalk", "qq"];
+    let expected = vec!["whatsapp", "weixin", "dingtalk", "qq"];
     assert_eq!(
         qr_channels, expected,
         "has_qr_login channels changed — update this test"

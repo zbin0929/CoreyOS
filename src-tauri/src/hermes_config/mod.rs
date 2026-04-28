@@ -467,8 +467,7 @@ use env::read_env_key_names;
 use env::{is_allowed_env_key, line_matches_key};
 pub use gateway::{
     detect, gateway_restart, gateway_start, inject_hermes_home, install_preflight,
-    resolve_hermes_binary, run_bootstrap_script, suppress_window, HermesDetection,
-    HermesInstallPreflight,
+    run_bootstrap_script, suppress_window, HermesDetection, HermesInstallPreflight,
 };
 pub use yaml::write_channel_yaml_fields;
 #[cfg(test)]

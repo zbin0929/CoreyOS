@@ -173,11 +173,11 @@ export function LlmProfilesSection() {
         // column on mobile. Grid is always visible — the editor
         // lives in a right-side Drawer that slides over it.
         <div
-          className="columns-1 gap-3 sm:columns-2 xl:columns-3"
+          className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3"
           data-testid="llm-profiles-list"
         >
           {rows.map((p) => (
-            <div key={p.id} className="mb-3 break-inside-avoid">
+            <div key={p.id}>
               <LlmProfileCard
                 profile={p}
                 onOpen={() => setEditingId(p.id)}

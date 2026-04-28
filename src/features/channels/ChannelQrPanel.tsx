@@ -21,9 +21,11 @@ type QrState =
 export function ChannelQrPanel({
   channelId,
   onClose,
+  onDone,
 }: {
   channelId: string;
   onClose: () => void;
+  onDone?: () => void;
 }) {
   const { t } = useTranslation();
   const [state, setState] = useState<QrState>({ kind: 'idle' });
@@ -50,6 +52,9 @@ export function ChannelQrPanel({
         if (result.status === 'confirmed' || result.status === 'done') {
           stopPolling();
           setState({ kind: 'loaded', result });
+          if (onDone) {
+            setTimeout(onDone, 1500);
+          }
         } else if (result.status === 'error') {
           stopPolling();
           setState({ kind: 'error', message: result.message });
@@ -168,7 +173,7 @@ export function ChannelQrPanel({
           </div>
 
           {isDone && (
-            <Button size="sm" variant="primary" onClick={onClose}>
+            <Button size="sm" variant="primary" onClick={onDone ?? onClose}>
               {t('common.done')}
             </Button>
           )}

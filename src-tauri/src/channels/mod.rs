@@ -297,7 +297,7 @@ fn build_specs() -> Vec<ChannelSpec> {
                 },
             ],
             hot_reloadable: false,
-            has_qr_login: false,
+            has_qr_login: true,
         },
         // ── Matrix ───────────────────────────────────────────────────
         ChannelSpec {

@@ -52,10 +52,12 @@ export function ChannelCard({
   channel,
   liveStatus,
   onSaved,
+  onQrDone,
 }: {
   channel: ChannelState;
   liveStatus?: ChannelLiveStatus;
   onSaved: (fresh: ChannelState) => void;
+  onQrDone?: () => void;
 }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<CardMode>({ kind: 'view' });
@@ -126,6 +128,10 @@ export function ChannelCard({
         <ChannelQrPanel
           channelId={channel.id}
           onClose={() => setMode({ kind: 'view' })}
+          onDone={() => {
+            setMode({ kind: 'view' });
+            onQrDone?.();
+          }}
         />
       )}
 
@@ -203,7 +209,7 @@ export function ChannelCard({
           <div className="flex items-center gap-2">
             <Icon icon={MessageSquareMore} size="md" className="flex-none text-fg-muted" />
             <h3 className="truncate text-sm font-medium text-fg">
-              {channel.display_name}
+              {t(`channels.name_${channel.id}`, channel.display_name)}
             </h3>
           </div>
           <code className="mt-0.5 block text-[11px] text-fg-subtle">
