@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import {
   hermesDetect,
   hermesGatewayStart,
+  hermesInstall,
   hermesInstallPreflight,
   ipcErrorMessage,
   type HermesDetection,
@@ -183,11 +184,9 @@ function NotInstalledCard({
   const cmd = installCommandForPlatform();
   const [preflight, setPreflight] = useState<HermesInstallPreflight | null>(null);
   const [preflightChecking, setPreflightChecking] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
 
-  // Auto-run pre-flight on mount so the "your environment isn't
-  // ready" callout is visible BEFORE the user hits Copy. Failure
-  // silently leaves preflight=null — the install copy block still
-  // works.
   useEffect(() => {
     let cancelled = false;
     setPreflightChecking(true);
@@ -212,6 +211,19 @@ function NotInstalledCard({
     } catch {
       // Clipboard can fail under some Tauri configurations; fall
       // through quietly — the command is also shown in the code block.
+    }
+  }
+
+  async function handleInstall() {
+    setInstalling(true);
+    setInstallError(null);
+    try {
+      await hermesInstall();
+      await onRecheck();
+    } catch (e) {
+      setInstallError(ipcErrorMessage(e));
+    } finally {
+      setInstalling(false);
     }
   }
 
@@ -297,15 +309,33 @@ function NotInstalledCard({
           <Icon icon={ExternalLink} size="xs" />
           {t('home.install_docs')}
         </Link>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => void onRecheck()}
-          data-testid="home-hermes-recheck"
-        >
-          <Icon icon={RefreshCcw} size="xs" />
-          {t('home.install_recheck')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {installError && (
+            <span className="text-[10px] text-danger">{installError}</span>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void onRecheck()}
+            data-testid="home-hermes-recheck"
+          >
+            <Icon icon={RefreshCcw} size="xs" />
+            {t('home.install_recheck')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void handleInstall()}
+            disabled={installing}
+            data-testid="home-hermes-install-now"
+          >
+            {installing ? (
+              <Icon icon={Loader2} size="xs" className="animate-spin" />
+            ) : (
+              <Icon icon={Play} size="xs" />
+            )}
+            {t('home.install_now', { defaultValue: '一键安装' })}
+          </Button>
+        </div>
       </div>
     </section>
   );

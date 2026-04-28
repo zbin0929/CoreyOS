@@ -2,8 +2,8 @@ use super::*;
 use std::collections::HashSet;
 
 #[test]
-fn catalog_has_exactly_eight_channels_with_unique_ids() {
-    assert_eq!(CHANNEL_SPECS.len(), 8);
+fn catalog_has_exactly_seventeen_channels_with_unique_ids() {
+    assert_eq!(CHANNEL_SPECS.len(), 17);
     let mut ids = HashSet::new();
     for s in CHANNEL_SPECS.iter() {
         assert!(ids.insert(s.id), "duplicate channel id: {}", s.id);
@@ -23,19 +23,17 @@ fn every_channel_has_a_display_name_and_ids_are_lowercase() {
 }
 
 #[test]
-fn no_channel_uses_qr_login_post_t6_7a() {
-    // Before T6.7a we carried a fake `wechat` QR flow. Hermes upstream
-    // has no QR integration; the fictional flow was deleted. This
-    // test locks in that none of the catalog claims `has_qr_login`
-    // and fails loudly if someone re-introduces one without updating
-    // the frontend QR-panel gate.
-    for spec in CHANNEL_SPECS.iter() {
-        assert!(
-            !spec.has_qr_login,
-            "channel '{}' sets has_qr_login=true; no Hermes channel supports QR today",
-            spec.id,
-        );
-    }
+fn qr_login_only_on_channels_that_support_it() {
+    let qr_channels: Vec<&str> = CHANNEL_SPECS
+        .iter()
+        .filter(|s| s.has_qr_login)
+        .map(|s| s.id)
+        .collect();
+    let expected = vec!["weixin", "dingtalk", "qq"];
+    assert_eq!(
+        qr_channels, expected,
+        "has_qr_login channels changed — update this test"
+    );
 }
 
 #[test]

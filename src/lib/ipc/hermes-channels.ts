@@ -130,6 +130,17 @@ export interface ChannelLiveStatus {
   probed_at_ms: number;
 }
 
+export interface ChannelQrSetupResult {
+  qr_url: string | null;
+  qr_data: string | null;
+  status: string;
+  message: string;
+}
+
+export function hermesChannelSetupQr(channelId: string): Promise<ChannelQrSetupResult> {
+  return invoke<ChannelQrSetupResult>('hermes_channel_setup_qr', { channelId });
+}
+
 /** 30s-cached probe; `force=true` bypasses the cache. Reads
  *  `~/.hermes/logs/{gateway,agent}.log` and regex-classifies the
  *  most-recent marker per channel. */

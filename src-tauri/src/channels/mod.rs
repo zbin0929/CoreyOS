@@ -406,7 +406,7 @@ fn build_specs() -> Vec<ChannelSpec> {
             ],
             yaml_fields: vec![],
             hot_reloadable: false,
-            has_qr_login: false,
+            has_qr_login: true,
         },
         // ── WeCom (Enterprise WeChat) ────────────────────────────────
         //
@@ -473,7 +473,7 @@ fn build_specs() -> Vec<ChannelSpec> {
                 default_string: None,
             }],
             hot_reloadable: false,
-            has_qr_login: false,
+            has_qr_login: true,
         },
         // ── QQ Bot ───────────────────────────────────────────────────
         ChannelSpec {
@@ -505,7 +505,7 @@ fn build_specs() -> Vec<ChannelSpec> {
                 default_string: None,
             }],
             hot_reloadable: false,
-            has_qr_login: false,
+            has_qr_login: true,
         },
         // ── Signal ────────────────────────────────────────────────────
         ChannelSpec {

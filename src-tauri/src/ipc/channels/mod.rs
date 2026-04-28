@@ -322,6 +322,110 @@ fn yaml_to_json(v: &YamlValue) -> serde_json::Value {
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ChannelQrSetupResult {
+    pub qr_url: Option<String>,
+    pub qr_data: Option<String>,
+    pub status: String,
+    pub message: String,
+}
+
+#[tauri::command]
+pub async fn hermes_channel_setup_qr(channel_id: String) -> IpcResult<ChannelQrSetupResult> {
+    tokio::task::spawn_blocking(move || {
+        let binary =
+            crate::hermes_config::resolve_hermes_binary().map_err(|e| IpcError::Internal {
+                message: format!("resolve hermes binary: {e}"),
+            })?;
+
+        let mut cmd = std::process::Command::new(&binary);
+        cmd.args(["channel", "setup", &channel_id, "--json"])
+            .env("PYTHONIOENCODING", "utf-8");
+        crate::hermes_config::inject_hermes_home(&mut cmd);
+        crate::hermes_config::suppress_window(&mut cmd);
+
+        let output = cmd.output().map_err(|e| IpcError::Internal {
+            message: format!("run hermes channel setup: {e}"),
+        })?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+        if output.status.success() {
+            let trimmed = stdout.trim();
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                let qr_url = json
+                    .get("qr_url")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let qr_data = json
+                    .get("qr_data")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let status = json
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("pending")
+                    .to_string();
+                let message = json
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                Ok(ChannelQrSetupResult {
+                    qr_url,
+                    qr_data,
+                    status,
+                    message,
+                })
+            } else {
+                Ok(ChannelQrSetupResult {
+                    qr_url: None,
+                    qr_data: Some(trimmed.to_string()),
+                    status: "output".to_string(),
+                    message: stderr.trim().to_string(),
+                })
+            }
+        } else {
+            let combined = format!("{stderr}{stdout}");
+            if combined.contains("No such command") || combined.contains("unrecognized arguments") {
+                let mut cmd2 = std::process::Command::new(&binary);
+                cmd2.args(["gateway", "setup", "--channel", &channel_id])
+                    .env("PYTHONIOENCODING", "utf-8");
+                crate::hermes_config::inject_hermes_home(&mut cmd2);
+                crate::hermes_config::suppress_window(&mut cmd2);
+                let out2 = cmd2.output().map_err(|e| IpcError::Internal {
+                    message: format!("run hermes gateway setup: {e}"),
+                })?;
+                let stdout2 = String::from_utf8_lossy(&out2.stdout).into_owned();
+                let stderr2 = String::from_utf8_lossy(&out2.stderr).into_owned();
+                Ok(ChannelQrSetupResult {
+                    qr_url: None,
+                    qr_data: Some(stdout2.trim().to_string()),
+                    status: if out2.status.success() {
+                        "output".to_string()
+                    } else {
+                        "error".to_string()
+                    },
+                    message: stderr2.trim().to_string(),
+                })
+            } else {
+                Ok(ChannelQrSetupResult {
+                    qr_url: None,
+                    qr_data: None,
+                    status: "error".to_string(),
+                    message: combined.trim().to_string(),
+                })
+            }
+        }
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("hermes_channel_setup_qr join: {e}"),
+    })?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

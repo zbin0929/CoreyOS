@@ -25,7 +25,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
 # Native folder picker for Settings › Workspace. Wired into the sandbox
 # "Add root" form so users don't hand-type `/Users/…/Projects` paths.

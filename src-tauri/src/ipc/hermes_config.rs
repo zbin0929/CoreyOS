@@ -4,7 +4,7 @@
 //! touch the *Hermes* process's config. Changes require a gateway restart to
 //! take effect — the frontend surfaces that.
 
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config::{
@@ -145,5 +145,20 @@ pub async fn hermes_detect() -> IpcResult<hermes_config::HermesDetection> {
         .await
         .map_err(|e| IpcError::Internal {
             message: format!("detect task join: {e}"),
+        })
+}
+
+#[tauri::command]
+pub async fn hermes_install(app: tauri::AppHandle) -> IpcResult<String> {
+    let resource_dir = app.path().resource_dir().map_err(|e| IpcError::Internal {
+        message: format!("resource_dir: {e}"),
+    })?;
+    tokio::task::spawn_blocking(move || hermes_config::run_bootstrap_script(&resource_dir))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("hermes_install join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("run bootstrap: {e}"),
         })
 }

@@ -207,6 +207,13 @@ export function hermesInstallPreflight(): Promise<HermesInstallPreflight> {
   return invoke<HermesInstallPreflight>('hermes_install_preflight');
 }
 
+/** Run the bundled bootstrap script to install Hermes.
+ *  Fire-and-forget — the script may require elevation and runs
+ *  interactively. Check the bootstrap log for progress. */
+export function hermesInstall(): Promise<string> {
+  return invoke<string>('hermes_install');
+}
+
 /** `hermes gateway start` — used by Home's "Start gateway" button
  *  when the binary is present but the /health probe fails. */
 export function hermesGatewayStart(): Promise<string> {

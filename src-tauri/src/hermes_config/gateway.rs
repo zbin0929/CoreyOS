@@ -3,7 +3,7 @@
 //! management live in separate files.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Hermes version range Corey is built against. Bump these when
 /// you've actually tested against a newer Hermes — the `untested`
@@ -205,10 +205,10 @@ pub fn install_preflight() -> HermesInstallPreflight {
     let (python_path, version_str) = ["python3", "python"]
         .iter()
         .find_map(|cmd| {
-            let out = std::process::Command::new(cmd)
-                .arg("--version")
-                .output()
-                .ok()?;
+            let mut c = std::process::Command::new(cmd);
+            c.arg("--version");
+            suppress_window(&mut c);
+            let out = c.output().ok()?;
             if !out.status.success() {
                 return None;
             }
@@ -232,11 +232,10 @@ pub fn install_preflight() -> HermesInstallPreflight {
     let pip_ok = python_path
         .as_deref()
         .map(|cmd| {
-            std::process::Command::new(cmd)
-                .args(["-m", "pip", "--version"])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
+            let mut c = std::process::Command::new(cmd);
+            c.args(["-m", "pip", "--version"]);
+            suppress_window(&mut c);
+            c.output().map(|o| o.status.success()).unwrap_or(false)
         })
         .unwrap_or(false);
 
@@ -443,21 +442,93 @@ pub fn gateway_restart() -> io::Result<String> {
     })
 }
 
+/// Resolve the bundled bootstrap script path for the current platform.
+fn resolve_bootstrap_script(resource_dir: &Path) -> io::Result<PathBuf> {
+    let script_name = if cfg!(target_os = "windows") {
+        "scripts/bootstrap-windows.ps1"
+    } else {
+        "scripts/bootstrap-macos.sh"
+    };
+    let path = resource_dir.join(script_name);
+    if path.is_file() {
+        Ok(path)
+    } else {
+        Err(io::Error::other(format!(
+            "bootstrap script not found at {}",
+            path.display()
+        )))
+    }
+}
+
+/// Run the platform-specific bootstrap script to install Hermes.
+/// This is a fire-and-forget operation — the script may require
+/// elevation and runs interactively. The script logs to
+/// `%LOCALAPPDATA%\Corey\logs\bootstrap-<platform>.log` on Windows
+/// and `~/.corey/logs/bootstrap-<platform>.log` on macOS/Linux.
+pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
+    let script_path = resolve_bootstrap_script(resource_dir)?;
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = std::process::Command::new("powershell.exe");
+        cmd.args([
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            script_path.to_str().unwrap_or_default(),
+        ]);
+        cmd.env("PYTHONIOENCODING", "utf-8");
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const CREATE_ASJOB: u32 = 0x00000004;
+        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_ASJOB);
+        cmd.spawn()?;
+        Ok(format!(
+            "Bootstrap script started. Check {} for progress.",
+            std::env::var("LOCALAPPDATA")
+                .map(|d| format!("{}\\Corey\\logs\\bootstrap-windows.log", d))
+                .unwrap_or_else(|_| "~/.corey/logs/bootstrap-windows.log".to_string())
+        ))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new("bash");
+        cmd.arg(script_path);
+        cmd.env("PYTHONIOENCODING", "utf-8");
+        cmd.spawn()?;
+        Ok(format!(
+            "Bootstrap script started. Check ~/.corey/logs/bootstrap-macos.log for progress."
+        ))
+    }
+}
+
 /// Inject `HERMES_HOME` into the child process environment so Hermes
 /// reads/writes the same data directory Corey resolved (which may differ
 /// from the platform default when the user moved it via Settings).
 /// Hermes natively honours `HERMES_HOME`; without this the gateway
 /// would still use `~/.hermes` even after the user relocated data.
-fn inject_hermes_home(cmd: &mut std::process::Command) {
+pub fn inject_hermes_home(cmd: &mut std::process::Command) {
     if let Ok(dir) = crate::paths::hermes_data_dir() {
         cmd.env("HERMES_HOME", dir);
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn suppress_window(cmd: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn suppress_window(_cmd: &mut std::process::Command) {}
+
 fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Output> {
     let mut cmd = std::process::Command::new(binary);
     cmd.args(args);
     inject_hermes_home(&mut cmd);
+    suppress_window(&mut cmd);
     cmd.output()
 }
 
@@ -473,6 +544,7 @@ fn try_python_module_fallback(args: &[&str]) -> io::Result<String> {
     let mut cmd = std::process::Command::new(python);
     cmd.args(&full_args);
     inject_hermes_home(&mut cmd);
+    suppress_window(&mut cmd);
     let output = cmd.output()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -501,7 +573,7 @@ const BINARY_NAME: &str = "hermes.exe";
 #[cfg(not(target_os = "windows"))]
 const BINARY_NAME: &str = "hermes";
 
-fn resolve_hermes_binary() -> io::Result<PathBuf> {
+pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
     // Hermes is a Python package (`pip install hermes-agent`) and
     // upstream releases ship source-only — no precompiled binary
     // we could realistically ship inside the Corey installer.

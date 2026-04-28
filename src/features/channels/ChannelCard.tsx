@@ -8,6 +8,7 @@ import {
   Hash,
   MessageSquareMore,
   Pencil,
+  QrCode,
   RotateCw,
   X,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ import {
 } from '@/lib/ipc';
 
 import { ChannelForm, type ChannelFormSubmission } from './ChannelForm';
+import { ChannelQrPanel } from './ChannelQrPanel';
 import { ConfirmDiff } from './ConfirmDiff';
 import { LiveStatusPill, StatusPill } from './StatusPill';
 import { computeStatus } from './computeStatus';
@@ -40,6 +42,7 @@ import { formatYamlValue } from './yaml';
 type CardMode =
   | { kind: 'view' }
   | { kind: 'edit' }
+  | { kind: 'qr' }
   | { kind: 'confirm'; submission: ChannelFormSubmission }
   | { kind: 'saving'; submission: ChannelFormSubmission }
   | { kind: 'restart-prompt' }
@@ -63,6 +66,7 @@ export function ChannelCard({
   const isMobile = useIsMobile(720);
   const isInteractive =
     mode.kind === 'edit' ||
+    mode.kind === 'qr' ||
     mode.kind === 'confirm' ||
     mode.kind === 'saving' ||
     mode.kind === 'restart-prompt' ||
@@ -115,6 +119,13 @@ export function ChannelCard({
             }
             setMode({ kind: 'confirm', submission });
           }}
+        />
+      )}
+
+      {mode.kind === 'qr' && (
+        <ChannelQrPanel
+          channelId={channel.id}
+          onClose={() => setMode({ kind: 'view' })}
         />
       )}
 
@@ -230,6 +241,17 @@ export function ChannelCard({
             status !== 'qr' && (
               <LiveStatusPill status={liveStatus} />
             )}
+          {mode.kind === 'view' && channel.has_qr_login && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setMode({ kind: 'qr' })}
+              data-testid={`channel-qr-${channel.id}`}
+              title={t('channels.qr_setup_title', { defaultValue: '扫码配置' })}
+            >
+              <Icon icon={QrCode} size="sm" />
+            </Button>
+          )}
           {mode.kind === 'view' && (
             <Button
               size="sm"

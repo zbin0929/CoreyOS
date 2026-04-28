@@ -102,6 +102,7 @@ export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
       <Virtuoso
         ref={ref}
         className="min-h-0 flex-1"
+        style={{ overflowY: 'auto' }}
         data={messages}
         itemContent={itemContent}
         // Stable row key keyed by the message id — same identity the

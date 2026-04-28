@@ -6,6 +6,43 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-28 — System tray, QR channel setup, one-click install
+
+Major UX improvements targeting first-time Windows users and Hermes channel onboarding.
+
+### Shipped
+
+- **System tray (T10.1)**: Corey now minimizes to system tray instead of quitting.
+  Close window → hide to tray → "Show Corey" / "Quit Corey" from tray menu.
+  New module: `tray.rs`. Tauri `tray-icon` feature enabled.
+- **QR code channel setup (T10.2)**: WeiXin, DingTalk, QQ Bot channels now support
+  QR code scan configuration. Users click the QR icon on a channel card, scan
+  with their phone, and credentials are saved automatically.
+  New IPC: `hermes_channel_setup_qr`. New component: `ChannelQrPanel.tsx`.
+  Uses `qrcode.react` for SVG rendering with 3-second polling for scan status.
+- **One-click Hermes install (T10.3)**: Added "一键安装" button to `HermesInstallCard`.
+  Bundles `bootstrap-windows.ps1` and `bootstrap-macos.sh` in Tauri resources.
+  New IPC: `hermes_install`. Runs platform-specific bootstrap scripts silently.
+- **SOUL.md preset (T10.4)**: Hermes agent now ships with custom instructions
+  (approval requirements, skill creation rules) via `SOUL.md` in the default preset.
+- **Home page UX**: Onboarding step 2 renamed from "Pick a model" to "Configure
+  LLM & API key" with clearer description. Updated en/zh translations.
+- **Git Bash detection**: `bootstrap-windows.ps1` now uses multi-path probing
+  and recursive search to find `bash.exe` when Git is installed in non-standard locations.
+
+### Fixed
+
+- Rust test suite updated: channel catalog test updated from 8 → 17 channels;
+  QR login test rewritten to assert exact set of QR-enabled channels.
+- `cargo fmt` applied across all changed files.
+- Clippy unwrap baseline unchanged at 516 (141 production / 375 test).
+
+### All CI green (expected)
+
+306 Rust tests, 81 Playwright specs, tsc --noEmit clean, eslint clean, pnpm build clean.
+
+---
+
 ## 2026-04-26 (late night) — Full-stack refactoring round 2
 
 Structural cleanup across 3 modules. Quality review identified "center file" risk;

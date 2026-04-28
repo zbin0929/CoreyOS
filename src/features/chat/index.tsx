@@ -258,7 +258,7 @@ function ChatPane({
           </div>
         </div>
       ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* Floating-ish search bar: absolutely positioned INSIDE
               the scroll container so it doesn't steal layout height
               from the message list (no "bar pushes list down"

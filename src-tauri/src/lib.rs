@@ -38,6 +38,7 @@ mod sandbox;
 mod skills;
 mod state;
 mod tfidf;
+mod tray;
 mod workflow;
 
 use std::sync::Arc;
@@ -114,6 +115,7 @@ pub fn run() {
             ipc::hermes_config::hermes_gateway_start,
             ipc::hermes_config::hermes_detect,
             ipc::hermes_config::hermes_install_preflight,
+            ipc::hermes_config::hermes_install,
             ipc::changelog::changelog_list,
             ipc::changelog::changelog_revert,
             ipc::db::db_load_all,
@@ -130,6 +132,7 @@ pub fn run() {
             ipc::channels::hermes_channel_list,
             ipc::channels::hermes_channel_save,
             ipc::channels::probe::hermes_channel_probe_token,
+            ipc::channels::hermes_channel_setup_qr,
             ipc::channel_status::hermes_channel_status_list,
             ipc::hermes_logs::hermes_log_tail,
             ipc::hermes_profiles::hermes_profile_list,
@@ -562,6 +565,19 @@ pub fn run() {
                 }
                 Err(e) => tracing::warn!(error = %e, "failed to build menu"),
             }
+
+            tray::build(app);
+
+            if let Some(w) = app.get_webview_window("main") {
+                let win = w.clone();
+                w.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win.hide();
+                    }
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

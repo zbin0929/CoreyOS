@@ -75,10 +75,9 @@ fn preset_dir(app: &AppHandle, id: &str) -> IpcResult<PathBuf> {
 }
 
 fn hermes_home() -> IpcResult<PathBuf> {
-    let home = std::env::var_os("HOME").ok_or_else(|| IpcError::Internal {
-        message: "HOME env unset".into(),
-    })?;
-    Ok(PathBuf::from(home).join(".hermes"))
+    crate::paths::hermes_data_dir().map_err(|e| IpcError::Internal {
+        message: format!("hermes data dir: {e}"),
+    })
 }
 
 /// Read and parse `manifest.yaml` from the preset directory. The
@@ -141,9 +140,13 @@ fn install_sync(src: &Path, dst: &Path) -> IpcResult<PresetInstallResult> {
         copy_tree(&skills_src, &skills_dst, &mut result, "skills")?;
     }
 
-    // Memory files — write only if target doesn't exist, so users who
+    // Identity files — write only if target doesn't exist, so users who
     // already have a USER.md don't get trampled.
-    for (name, label) in &[("USER.md", "USER.md"), ("MEMORY.md", "MEMORY.md")] {
+    for (name, label) in &[
+        ("USER.md", "USER.md"),
+        ("MEMORY.md", "MEMORY.md"),
+        ("SOUL.md", "SOUL.md"),
+    ] {
         let src_file = src.join(name);
         if !src_file.exists() {
             continue;
