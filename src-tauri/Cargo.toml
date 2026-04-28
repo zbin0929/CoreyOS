@@ -1,6 +1,6 @@
 [package]
 name = "caduceus"
-version = "0.1.0"
+version = "0.1.1"
 description = "Corey — control plane for AI agents"
 authors = ["Corey Contributors"]
 default-run = "Corey"
