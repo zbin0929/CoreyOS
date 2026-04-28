@@ -308,22 +308,34 @@ mod tests {
 
     struct HomeGuard {
         _lock: std::sync::MutexGuard<'static, ()>,
-        prev: Option<std::ffi::OsString>,
+        prev_home: Option<std::ffi::OsString>,
+        prev_hermes_dir: Option<std::ffi::OsString>,
     }
     impl HomeGuard {
         fn new(home: &Path) -> Self {
             let lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            let prev = std::env::var_os("HOME");
+            let prev_home = std::env::var_os("HOME");
+            let prev_hermes_dir = std::env::var_os("COREY_HERMES_DIR");
             std::env::set_var("HOME", home);
-            Self { _lock: lock, prev }
+            std::env::set_var("COREY_HERMES_DIR", home);
+            Self {
+                _lock: lock,
+                prev_home,
+                prev_hermes_dir,
+            }
         }
     }
     impl Drop for HomeGuard {
         fn drop(&mut self) {
-            if let Some(p) = &self.prev {
+            if let Some(p) = &self.prev_home {
                 std::env::set_var("HOME", p);
             } else {
                 std::env::remove_var("HOME");
+            }
+            if let Some(p) = &self.prev_hermes_dir {
+                std::env::set_var("COREY_HERMES_DIR", p);
+            } else {
+                std::env::remove_var("COREY_HERMES_DIR");
             }
         }
     }
