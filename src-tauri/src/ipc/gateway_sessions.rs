@@ -21,17 +21,15 @@ fn state_db_path() -> Result<PathBuf, String> {
     Ok(dir.join("state.db"))
 }
 
-#[command]
+#[tauri::command]
 pub fn gateway_sessions_list() -> Result<Vec<GatewaySession>, String> {
     let db_path = state_db_path()?;
     if !db_path.exists() {
         return Ok(vec![]);
     }
-    let conn = rusqlite::Connection::open_with_flags(
-        &db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )
-    .map_err(|e| format!("open state.db: {e}"))?;
+    let conn =
+        rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| format!("open state.db: {e}"))?;
 
     let mut stmt = conn
         .prepare(
@@ -69,19 +67,15 @@ pub fn gateway_sessions_list() -> Result<Vec<GatewaySession>, String> {
     Ok(out)
 }
 
-#[command]
-pub fn gateway_session_messages(
-    session_id: String,
-) -> Result<Vec<GatewayMessage>, String> {
+#[tauri::command]
+pub fn gateway_session_messages(session_id: String) -> Result<Vec<GatewayMessage>, String> {
     let db_path = state_db_path()?;
     if !db_path.exists() {
         return Ok(vec![]);
     }
-    let conn = rusqlite::Connection::open_with_flags(
-        &db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )
-    .map_err(|e| format!("open state.db: {e}"))?;
+    let conn =
+        rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| format!("open state.db: {e}"))?;
 
     let mut stmt = conn
         .prepare(

@@ -110,6 +110,42 @@ if (-not $pyOk) {
     Warn "Python 3.11+ not found. The official installer will use uv to provision it automatically."
 }
 
+# ── 2b. Windows native compatibility fixes ────────────────────────
+Step "Windows compatibility patches"
+
+# Fix 1: UTF-8 encoding (Hermes uses Unicode chars that break cp1252)
+$env:PYTHONIOENCODING = "utf-8"
+[Environment]::SetEnvironmentVariable("PYTHONIOENCODING", "utf-8", "User")
+Info "Set PYTHONIOENCODING=utf-8 (fixes UnicodeEncodeError)"
+
+# Fix 2: Git Bash on PATH (Hermes code execution requires bash)
+$gitBashDir = "C:\Program Files\Git\bin"
+if (Test-Path $gitBashDir) {
+    $curPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($curPath -notlike "*$gitBashDir*") {
+        [Environment]::SetEnvironmentVariable("Path", "$gitBashDir;$curPath", "User")
+        $env:Path = "$gitBashDir;$env:Path"
+        Info "Added Git Bash to PATH: $gitBashDir"
+    } else {
+        Info "Git Bash already on PATH"
+    }
+} elseif (Get-Command git -ErrorAction SilentlyContinue) {
+    # Git installed but maybe not in standard location — find bash.exe
+    $gitRoot = (Get-Command git | Select-Object -ExpandProperty Source | Split-Path | Split-Path)
+    $altBashDir = Join-Path $gitRoot "bin"
+    if (Test-Path (Join-Path $altBashDir "bash.exe")) {
+        $curPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        if ($curPath -notlike "*$altBashDir*") {
+            [Environment]::SetEnvironmentVariable("Path", "$altBashDir;$curPath", "User")
+            $env:Path = "$altBashDir;$env:Path"
+            Info "Added Git Bash to PATH: $altBashDir"
+        }
+    }
+} else {
+    Warn "Git Bash not found. Code execution features may not work without bash."
+    Warn "Install Git for Windows first, then re-run this script."
+}
+
 # ── 3. Run official Hermes installer ─────────────────────────────
 Step "Hermes installation (official install.ps1)"
 

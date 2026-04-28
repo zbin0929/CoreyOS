@@ -88,15 +88,13 @@ pub fn detect() -> HermesDetection {
             compatibility_detail: "Hermes not installed".into(),
         };
     };
-    let version = run_hermes(&path, &["--version"])
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        });
+    let version = run_hermes(&path, &["--version"]).ok().and_then(|o| {
+        if o.status.success() {
+            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+        } else {
+            None
+        }
+    });
     let version_parsed = version.as_deref().and_then(parse_hermes_version);
     let (compatibility, compatibility_detail) = match version_parsed {
         Some((maj, min, _patch)) => evaluate_compat(maj, min),
@@ -435,7 +433,6 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
     inject_hermes_home(&mut cmd);
     cmd.output()
 }
-
 
 /// Platform-specific filename for the Hermes binary. `.exe` on
 /// Windows so `dir.join(BINARY_NAME).is_file()` matches what the
