@@ -12,6 +12,7 @@
     "dialog:allow-open",
     "updater:default",
     "notification:default",
-    "process:default"
+    "process:default",
+    "single-instance:default"
   ]
 }

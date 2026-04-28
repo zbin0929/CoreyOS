@@ -160,10 +160,18 @@ pub fn status(config_dir: &Path) -> Verdict {
 /// config dir, and we'd rather degrade noisily than silently bind a
 /// license to a transient id.
 pub fn machine_id(config_dir: &Path) -> String {
-    let path = config_dir.join(MACHINE_ID_FILE);
+    let path = machine_id_path();
     if let Ok(existing) = fs::read_to_string(&path) {
         let trimmed = existing.trim();
         if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    let legacy_path = config_dir.join(MACHINE_ID_FILE);
+    if let Ok(existing) = fs::read_to_string(&legacy_path) {
+        let trimmed = existing.trim();
+        if !trimmed.is_empty() {
+            let _ = fs::write(&path, trimmed);
             return trimmed.to_string();
         }
     }
@@ -173,6 +181,20 @@ pub fn machine_id(config_dir: &Path) -> String {
     }
     let _ = fs::write(&path, &fresh);
     fresh
+}
+
+fn machine_id_path() -> PathBuf {
+    if cfg!(target_os = "windows") {
+        std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(".").join("Corey"))
+            .join("corey-machine-id")
+    } else {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        home.join(".corey-machine-id")
+    }
 }
 
 /// Wrapper that swallows IO errors. Used by status() so that even an

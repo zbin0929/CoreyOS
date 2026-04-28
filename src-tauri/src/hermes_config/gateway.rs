@@ -453,9 +453,9 @@ pub fn gateway_restart() -> io::Result<String> {
 /// Resolve the bundled bootstrap script path for the current platform.
 fn resolve_bootstrap_script(resource_dir: &Path) -> io::Result<PathBuf> {
     let script_name = if cfg!(target_os = "windows") {
-        "scripts/bootstrap-windows.ps1"
+        "assets/scripts/bootstrap-windows.ps1"
     } else {
-        "scripts/bootstrap-macos.sh"
+        "assets/scripts/bootstrap-macos.sh"
     };
     let path = resource_dir.join(script_name);
     if path.is_file() {

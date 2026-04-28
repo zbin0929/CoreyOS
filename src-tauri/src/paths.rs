@@ -125,15 +125,27 @@ pub fn write_override(dir: Option<&Path>) -> io::Result<PathBuf> {
 /// on Windows is still "use `LOCALAPPDATA`" — only test code that
 /// explicitly sets `HOME` deviates.
 fn platform_default() -> io::Result<PathBuf> {
-    if let Some(home) = std::env::var_os("HOME") {
-        if !home.is_empty() {
-            return Ok(PathBuf::from(home).join(HERMES_DIR));
-        }
-    }
     #[cfg(target_os = "windows")]
     {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let data_dir = dir.join("data");
+                if data_dir.exists() || dir.join("Corey.exe").exists() {
+                    let _ = std::fs::create_dir_all(&data_dir);
+                    return Ok(data_dir);
+                }
+            }
+        }
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
             return Ok(PathBuf::from(local).join("Corey").join("hermes"));
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(home) = std::env::var_os("HOME") {
+            if !home.is_empty() {
+                return Ok(PathBuf::from(home).join(HERMES_DIR));
+            }
         }
     }
     let home = std::env::var_os("USERPROFILE").ok_or_else(|| {

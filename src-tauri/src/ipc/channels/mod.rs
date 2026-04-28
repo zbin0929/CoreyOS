@@ -398,6 +398,9 @@ fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
                                 tracing::error!("qr-login: failed to write .env: {e}");
                             }
                         }
+                        if let Err(e) = crate::hermes_config::gateway::gateway_restart() {
+                            tracing::warn!("qr-login: gateway restart after QR login failed: {e}");
+                        }
                         return Ok(ChannelQrSetupResult {
                             qr_url: None,
                             qr_data: None,
