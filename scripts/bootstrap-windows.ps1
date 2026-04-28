@@ -275,6 +275,31 @@ if (-not $currentHome) {
     Info "HERMES_HOME aligned: $currentHome"
 }
 
+# ── 5.5. API key check ───────────────────────────────────────────
+Step "API key check"
+
+$finalHome2 = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { [Environment]::GetEnvironmentVariable("HERMES_HOME", "User") }
+if (-not $finalHome2) { $finalHome2 = $CoreyHermesHome }
+$envFile = Join-Path $finalHome2 ".env"
+$script:HasApiKey = $false
+if (Test-Path $envFile) {
+    $envContent = Get-Content $envFile -Encoding UTF8
+    foreach ($line in $envContent) {
+        if ($line -match '^\s*(OPENAI_API_KEY|ANTHROPIC_API_KEY|GOOGLE_API_KEY|DEEPSEEK_API_KEY)\s*=\s*(.+)$') {
+            $val = $Matches[2].Trim().Trim('"').Trim("'")
+            if ($val -and $val -ne 'your-key-here' -and $val -notmatch '<') {
+                $script:HasApiKey = $true
+                Info "Found: $($Matches[1])"
+                break
+            }
+        }
+    }
+}
+if (-not $script:HasApiKey) {
+    Warn "No API key found in $envFile"
+    Warn "You need at least one provider key to use Hermes."
+}
+
 # ── 6. Start gateway ──────────────────────────────────────────────
 Step "Starting Hermes gateway"
 
@@ -289,18 +314,30 @@ try {
 
 # ── 7. Summary ────────────────────────────────────────────────────
 $finalHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { [Environment]::GetEnvironmentVariable("HERMES_HOME", "User") }
+$hermesVer = ""
+try { $hermesVer = hermes --version 2>&1 } catch { $hermesVer = "unknown" }
+$gwRunning = $false
+try { $null = hermes gateway status 2>&1; $gwRunning = $true } catch { }
+
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  Hermes bootstrap complete (native Windows)" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "  Version:    $hermesVer"
 Write-Host "  HERMES_HOME:  $finalHome"
+Write-Host "  Gateway:    $(if ($gwRunning) { 'running' } else { 'not running' })"
 Write-Host "  Log file:     $LogFile"
 Write-Host ""
+if (-not $script:HasApiKey) {
+Write-Host "  WARNING: No API key configured!" -ForegroundColor Yellow
+Write-Host "           hermes model   (choose provider + enter key)" -ForegroundColor Yellow
+Write-Host ""
+}
 Write-Host "  Next steps:" -ForegroundColor Yellow
-Write-Host "  1) hermes model              (choose LLM provider)"
-Write-Host "  2) hermes gateway start      (start messaging gateway)"
-Write-Host "  3) Open Corey — auto-detects Hermes"
+if (-not $gwRunning) { Write-Host "  1) hermes gateway start" } else { Write-Host "  1) Gateway already running" }
+if (-not $script:HasApiKey) { Write-Host "  2) hermes model              (choose LLM provider)" }
+Write-Host "  3) Open Corey - auto-detects Hermes"
 Write-Host ""
 Write-Host "  Troubleshooting:" -ForegroundColor Yellow
 Write-Host "  - hermes gateway status      (check if running)"

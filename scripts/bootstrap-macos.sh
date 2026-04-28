@@ -59,6 +59,11 @@ elif [ -x "$HOME/.hermes/venv/bin/hermes" ]; then
 else die "Hermes binary not found after install."; fi
 info "Hermes binary: $HERMES_BIN"
 
+step "Hermes version"
+HERMES_VER=""
+HERMES_VER=$("$HERMES_BIN" --version 2>&1 || true)
+if [ -n "$HERMES_VER" ]; then info "Version: $HERMES_VER"; else warn "Could not determine Hermes version."; fi
+
 step "HERMES_HOME"
 HERMES_HOME_VAL="${COREY_DATA_DIR:-$HOME/.hermes}"
 if [ "$HERMES_HOME_VAL" != "$HOME/.hermes" ]; then
@@ -68,10 +73,54 @@ if [ "$HERMES_HOME_VAL" != "$HOME/.hermes" ]; then
 else info "HERMES_HOME using default ~/.hermes"; fi
 mkdir -p "$HERMES_HOME_VAL"
 
+step "API key check"
+ENV_FILE="$HERMES_HOME_VAL/.env"
+HAS_KEY=false
+if [ -f "$ENV_FILE" ]; then
+  while IFS='=' read -r k v; do
+    case "$k" in
+      OPENAI_API_KEY|ANTHROPIC_API_KEY|GOOGLE_API_KEY|DEEPSEEK_API_KEY)
+        if [ -n "$v" ] && [ "$v" != "your-key-here" ] && [ "$v" != "sk-"*"<"* ]; then
+          HAS_KEY=true; info "Found: $k"; break
+        fi ;;
+    esac
+  done < "$ENV_FILE"
+fi
+if [ "$HAS_KEY" = false ]; then
+  warn "No API key found in $ENV_FILE"
+  warn "You need at least one provider key to use Hermes."
+fi
+
+step "Gateway start"
+GW_STARTED=false
+if "$HERMES_BIN" gateway status &>/dev/null 2>&1; then
+  info "Gateway already running."
+  GW_STARTED=true
+else
+  info "Starting Hermes gateway..."
+  if "$HERMES_BIN" gateway start &>/dev/null 2>&1; then
+    info "Gateway started successfully."
+    GW_STARTED=true
+  else
+    warn "Gateway start failed. You can start it manually: hermes gateway start"
+  fi
+fi
+
 echo ""; echo "============================================================"
 echo "  Hermes bootstrap complete"; echo "============================================================"
-echo "  Binary:   $HERMES_BIN"; echo "  Data dir: $HERMES_HOME_VAL"; echo "  Log:      $LOG_FILE"
-echo ""; echo "  Next steps:"; echo "  1) hermes model"; echo "  2) hermes gateway start"
+echo "  Binary:   $HERMES_BIN"
+echo "  Version:  ${HERMES_VER:-unknown}"
+echo "  Data dir: $HERMES_HOME_VAL"
+echo "  Gateway:  $([ "$GW_STARTED" = true ] && echo 'running' || echo 'not running')"
+echo "  Log:      $LOG_FILE"
+echo ""
+if [ "$HAS_KEY" = false ]; then
+echo "  ⚠️  No API key configured!"; echo "     hermes model   (choose provider + enter key)"; echo ""
+fi
+echo "  Next steps:"
+if [ "$GW_STARTED" = false ]; then echo "  1) hermes gateway start"; else echo "  1) ✅ Gateway already running"; fi
+if [ "$HAS_KEY" = false ]; then echo "  2) hermes model              (choose LLM provider)"; fi
 echo "  3) Open Corey — auto-detects Hermes"
+echo ""
 echo "  Troubleshoot: hermes gateway status | hermes doctor"
 echo "============================================================"
