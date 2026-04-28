@@ -3,7 +3,7 @@
 //! management live in separate files.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Hermes version range Corey is built against. Bump these when
 /// you've actually tested against a newer Hermes — the `untested`
@@ -88,9 +88,7 @@ pub fn detect() -> HermesDetection {
             compatibility_detail: "Hermes not installed".into(),
         };
     };
-    let version = std::process::Command::new(&path)
-        .arg("--version")
-        .output()
+    let version = run_hermes(&path, &["--version"])
         .ok()
         .and_then(|o| {
             if o.status.success() {
@@ -376,10 +374,7 @@ mod compat_tests {
 /// listening on 127.0.0.1:8642 yet.
 pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
-    let mut cmd = std::process::Command::new(&binary);
-    cmd.args(["gateway", "start"]);
-    inject_hermes_home(&mut cmd);
-    let output = cmd.output()?;
+    let output = run_hermes(&binary, &["gateway", "start"])?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     if !output.status.success() {
@@ -403,10 +398,7 @@ pub fn gateway_start() -> io::Result<String> {
 /// main thread (i.e. via `spawn_blocking` or in an async IPC handler).
 pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
-    let mut cmd = std::process::Command::new(&binary);
-    cmd.args(["gateway", "restart"]);
-    inject_hermes_home(&mut cmd);
-    let output = cmd.output()?;
+    let output = run_hermes(&binary, &["gateway", "restart"])?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -433,10 +425,60 @@ pub fn gateway_restart() -> io::Result<String> {
 /// would still use `~/.hermes` even after the user relocated data.
 fn inject_hermes_home(cmd: &mut std::process::Command) {
     if let Ok(dir) = crate::paths::hermes_data_dir() {
-        // Only set when it differs from the platform default to avoid
-        // surprising Hermes on standard installs.
         cmd.env("HERMES_HOME", dir);
     }
+}
+
+fn run_hermes(binary: &Path, args: &[&str]) -> io::Result<std::process::Output> {
+    #[cfg(target_os = "windows")]
+    {
+        // Hermes is officially WSL2-only on Windows. Bridge every gateway
+        // command through `wsl -e bash -lc ...` so Corey can manage Hermes
+        // from the native Windows app process.
+        let mut cmd = std::process::Command::new(binary);
+        let mut script = String::new();
+        if let Ok(dir) = crate::paths::hermes_data_dir() {
+            if let Some(wsl_dir) = windows_to_wsl_path(&dir) {
+                script.push_str("HERMES_HOME='");
+                script.push_str(&wsl_dir.replace('"', "\\\""));
+                script.push_str("' ");
+            }
+        }
+        script.push_str("hermes");
+        for a in args {
+            script.push(' ');
+            script.push_str(a);
+        }
+        cmd.args(["-e", "bash", "-lc", &script]);
+        cmd.output()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new(binary);
+        cmd.args(args);
+        inject_hermes_home(&mut cmd);
+        cmd.output()
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_to_wsl_path(path: &Path) -> Option<String> {
+    let raw = path.to_string_lossy();
+    let mut chars = raw.chars();
+    let drive = chars.next()?;
+    let colon = chars.next()?;
+    if !drive.is_ascii_alphabetic() || colon != ':' {
+        return None;
+    }
+    let rest: String = chars.collect();
+    let rest = rest
+        .trim_start_matches('\\')
+        .trim_start_matches('/')
+        .replace('\\', "/");
+    if rest.is_empty() {
+        return Some(format!("/mnt/{}", drive.to_ascii_lowercase()));
+    }
+    Some(format!("/mnt/{}/{}", drive.to_ascii_lowercase(), rest))
 }
 
 /// Platform-specific filename for the Hermes binary. `.exe` on
@@ -478,6 +520,19 @@ fn resolve_hermes_binary() -> io::Result<PathBuf> {
         let candidate = PathBuf::from(home).join(".local/bin").join(BINARY_NAME);
         if candidate.is_file() {
             return Ok(candidate);
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Official Hermes support on Windows is WSL2-only. If WSL is present
+        // and can resolve `hermes`, route through `wsl`.
+        if let Ok(out) = std::process::Command::new("wsl")
+            .args(["-e", "bash", "-lc", "command -v hermes >/dev/null 2>&1"])
+            .output()
+        {
+            if out.status.success() {
+                return Ok(PathBuf::from("wsl"));
+            }
         }
     }
     #[cfg(target_os = "windows")]
