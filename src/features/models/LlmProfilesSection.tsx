@@ -12,7 +12,6 @@ import {
   llmProfileList,
   modelProviderProbe,
   type LlmProfile,
-  type HermesModelSection,
 } from '@/lib/ipc';
 
 import { LlmProfileCard, type LlmProbeState } from './LlmProfileCard';
@@ -43,7 +42,7 @@ export function LlmProfilesSection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [probes, setProbes] = useState<Record<string, LlmProbeState>>({});
-  const [defaultModel, setDefaultModel] = useState<HermesModelSection | null>(null);
+  const [defaultProfileId, setDefaultProfileId] = useState<string | null>(null);
 
   const testProfile = useCallback(async (profile: LlmProfile) => {
     setProbes((prev) => ({ ...prev, [profile.id]: 'probing' }));
@@ -70,7 +69,11 @@ export function LlmProfilesSection() {
         hermesConfigRead(),
       ]);
       setRows(profiles);
-      setDefaultModel(config.model);
+      const dm = config.model;
+      const match = dm && dm.provider && dm.default
+        ? profiles.find((p) => p.provider === dm.provider && p.model === dm.default)
+        : null;
+      setDefaultProfileId(match?.id ?? null);
     } catch (e) {
       setError(ipcErrorMessage(e));
       setRows([]);
@@ -109,12 +112,12 @@ export function LlmProfilesSection() {
   // delete) returns to the grid.
   const setAsDefault = useCallback(async (profile: LlmProfile) => {
     try {
-      const config = await hermesConfigWriteModel({
+      await hermesConfigWriteModel({
         default: profile.model,
         provider: profile.provider,
         base_url: profile.base_url,
       });
-      setDefaultModel(config.model);
+      setDefaultProfileId(profile.id);
     } catch {
       // silent — the star button just won't stick
     }
@@ -183,11 +186,7 @@ export function LlmProfilesSection() {
                 onOpen={() => setEditingId(p.id)}
                 probe={probes[p.id]}
                 onTest={() => void testProfile(p)}
-                isDefault={
-                  defaultModel != null &&
-                  defaultModel.provider === p.provider &&
-                  defaultModel.default === p.model
-                }
+                isDefault={defaultProfileId === p.id}
                 onSetDefault={() => void setAsDefault(p)}
               />
             </div>
