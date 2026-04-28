@@ -186,6 +186,7 @@ function NotInstalledCard({
   const [preflightChecking, setPreflightChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
+  const [installMessage, setInstallMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,8 +219,9 @@ function NotInstalledCard({
     setInstalling(true);
     setInstallError(null);
     try {
-      await hermesInstall();
-      await onRecheck();
+      const msg = await hermesInstall();
+      setInstallError(null);
+      setInstallMessage(msg || 'Bootstrap started');
     } catch (e) {
       setInstallError(ipcErrorMessage(e));
     } finally {
@@ -312,6 +314,9 @@ function NotInstalledCard({
         <div className="flex items-center gap-2">
           {installError && (
             <span className="text-[10px] text-danger">{installError}</span>
+          )}
+          {installMessage && !installError && (
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400">{installMessage}</span>
           )}
           <Button
             size="sm"
