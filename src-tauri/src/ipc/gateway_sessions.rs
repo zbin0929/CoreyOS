@@ -1,6 +1,5 @@
 use serde::Serialize;
 use std::path::PathBuf;
-use tauri::command;
 
 use crate::paths;
 

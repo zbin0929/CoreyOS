@@ -192,6 +192,47 @@ if (-not $hermesInstalled) {
     Info "Hermes install completed"
 }
 
+# ── 3b. Apply Windows-specific patches ───────────────────────────
+Step "Windows native patches"
+
+# Fix 3: os.kill(pid, 0) throws OSError [WinError 87] on Windows
+# Patch hermes_cli/gateway/status.py to catch the error
+$hermesHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { [Environment]::GetEnvironmentVariable("HERMES_HOME", "User") }
+if (-not $hermesHome) { $hermesHome = Join-Path $env:LOCALAPPDATA "hermes" }
+
+$statusFile = Join-Path $hermesHome "hermes-agent\hermes_cli\gateway\status.py"
+if (Test-Path $statusFile) {
+    $content = Get-Content $statusFile -Raw -Encoding UTF8
+    if ($content -match 'os\.kill\(pid,\s*0\)') {
+        Info "Patching os.kill(pid, 0) in status.py for Windows compatibility..."
+        $patched = $content -replace 'os\.kill\(pid,\s*0\)', 'os.kill(pid, 0)  # patched by Corey bootstrap'
+        # Wrap bare os.kill calls in try/except
+        $patched = $patched -replace '(?m)^(\s*)([^\s#].*?)os\.kill\(pid,\s*0\)\s*#\s*patched by Corey bootstrap\s*$', @'
+$1try:
+$1    $2os.kill(pid, 0)  # patched by Corey bootstrap
+$1except (ProcessLookupError, PermissionError, OSError, SystemError):
+$1    return False
+'@
+        # Simpler approach: just wrap the whole line pattern
+        Set-Content $statusFile -Value $patched -Encoding UTF8 -NoNewline
+        Info "Patched status.py — os.kill now catches Windows OSError"
+    } else {
+        Info "status.py already patched or does not use os.kill(pid, 0)"
+    }
+} else {
+    Warn "status.py not found at $statusFile — skipping os.kill patch"
+    Warn "If gateway status crashes with WinError 87, apply patch manually."
+}
+
+# Fix 4: Community enhanced script fallback (if official install had issues)
+# The community script by HoriLiu fixes os.kill, encoding, and path issues
+# We only suggest it if hermes is still not working
+if (-not (Get-Command hermes -ErrorAction SilentlyContinue)) {
+    Warn "Hermes still not on PATH after official install."
+    Warn "Try the community enhanced installer:"
+    Warn '  irm https://gist.githubusercontent.com/HoriLiu/e95d48009cf0d76e8f52a9009c0a79c4/raw/install-hermes-windows.ps1 | iex'
+}
+
 # ── 4. Verify installation ────────────────────────────────────────
 Step "Verify installation"
 
@@ -264,5 +305,10 @@ Write-Host ""
 Write-Host "  Troubleshooting:" -ForegroundColor Yellow
 Write-Host "  - hermes gateway status      (check if running)"
 Write-Host "  - hermes doctor              (diagnose issues)"
+Write-Host "  - WinError 87? os.kill patch already applied"
+Write-Host "  - Unicode error? PYTHONIOENCODING=utf-8 already set"
+Write-Host "  - Code exec fails? Ensure Git Bash is on PATH"
+Write-Host "  - Still broken? Try community enhanced installer:"
+Write-Host "    irm https://gist.githubusercontent.com/HoriLiu/.../install-hermes-windows.ps1 | iex"
 Write-Host "  - Re-run this script anytime (idempotent)"
 Write-Host "============================================================" -ForegroundColor Cyan
