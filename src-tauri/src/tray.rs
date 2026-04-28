@@ -1,6 +1,6 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder},
     App, Manager,
 };
 
@@ -25,17 +25,32 @@ pub fn build(app: &App) {
         .tooltip("Corey")
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "tray_show" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.unminimize();
-                    let _ = w.set_focus();
-                }
+                show_window(app);
             }
             "tray_quit" => {
                 app.exit(0);
             }
             _ => {}
         })
+        .on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                show_window(app);
+            }
+        })
         .build(app)
         .expect("tray icon");
+}
+
+fn show_window(app: &impl Manager<tauri::Wry>) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
 }
