@@ -137,7 +137,7 @@
     "reload_config": "重新读取 ~/.hermes/config.yaml",
     "probe_title": "对该端点执行 GET /v1/models",
     "dismiss": "关闭",
-    "legacy_title": "Hermes 网关默认模型",
+    "legacy_title": "高级模型设置",
     "legacy_expand": "展开",
     "legacy_collapse": "收起",
     "custom_provider_warning": "自定义 provider。请确认 Hermes 支持该标识。",

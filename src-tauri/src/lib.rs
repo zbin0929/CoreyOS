@@ -78,6 +78,12 @@ pub fn run() {
     init_tracing();
 
     tauri::Builder::default()
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         // Native desktop notifications — used both by the in-app
@@ -567,16 +573,6 @@ pub fn run() {
             }
 
             tray::build(app);
-
-            if let Some(w) = app.get_webview_window("main") {
-                let win = w.clone();
-                w.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = win.hide();
-                    }
-                });
-            }
 
             Ok(())
         })

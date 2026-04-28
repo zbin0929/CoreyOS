@@ -263,9 +263,6 @@ export function ModelsRoute() {
                     <span className="font-medium">
                       {t('models_page.legacy_title')}
                     </span>
-                    <code className="font-mono text-[10px] text-fg-subtle">
-                      {loaded.config_path}
-                    </code>
                   </span>
                   <span className="text-xs text-fg-subtle group-open:hidden">
                     {t('models_page.legacy_expand')}

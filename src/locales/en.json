@@ -137,7 +137,7 @@
     "reload_config": "Re-read ~/.hermes/config.yaml",
     "probe_title": "GET /v1/models against this endpoint",
     "dismiss": "Dismiss",
-    "legacy_title": "Hermes gateway default model",
+    "legacy_title": "Advanced model settings",
     "legacy_expand": "Show",
     "legacy_collapse": "Hide",
     "custom_provider_warning": "Custom provider slug. Make sure Hermes recognizes it.",
