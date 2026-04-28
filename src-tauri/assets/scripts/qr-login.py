@@ -145,7 +145,7 @@ def run_dingtalk():
         return
 
     try:
-        init_data = _dingtalk_api_post("/app/registration/init", {"source": "openClaw"})
+        init_data = _dingtalk_api_post("/app/registration/init", {"source": "DING_DWS_CLAW"})
         nonce = str(init_data.get("nonce", "")).strip()
         if not nonce:
             _write_error("dingtalk", "init response missing nonce")
@@ -230,8 +230,8 @@ def run_qqbot():
                     _write_error("qq", "COMPLETED but missing credentials")
                     return
                 _write_done("qq", {
-                    "QQ_APP_ID": str(app_id),
-                    "QQ_CLIENT_SECRET": str(client_secret),
+                    "QQ_BOT_APP_ID": str(app_id),
+                    "QQ_BOT_APP_SECRET": str(client_secret),
                 })
                 return
             elif status == BindStatus.EXPIRED:

@@ -450,12 +450,12 @@ fn build_specs() -> Vec<ChannelSpec> {
             yaml_root: "channels.dingtalk",
             env_keys: vec![
                 EnvKeySpec {
-                    name: "DINGTALK_APP_KEY".into(),
+                    name: "DINGTALK_CLIENT_ID".into(),
                     required: true,
                     hint_key: "channels.dingtalk.hint_app_key".into(),
                 },
                 EnvKeySpec {
-                    name: "DINGTALK_APP_SECRET".into(),
+                    name: "DINGTALK_CLIENT_SECRET".into(),
                     required: true,
                     hint_key: "channels.dingtalk.hint_app_secret".into(),
                 },
@@ -482,12 +482,12 @@ fn build_specs() -> Vec<ChannelSpec> {
             yaml_root: "channels.qq",
             env_keys: vec![
                 EnvKeySpec {
-                    name: "QQ_APP_ID".into(),
+                    name: "QQ_BOT_APP_ID".into(),
                     required: true,
                     hint_key: "channels.qq.hint_app_id".into(),
                 },
                 EnvKeySpec {
-                    name: "QQ_APP_SECRET".into(),
+                    name: "QQ_BOT_APP_SECRET".into(),
                     required: true,
                     hint_key: "channels.qq.hint_app_secret".into(),
                 },
