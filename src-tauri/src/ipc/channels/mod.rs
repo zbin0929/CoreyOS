@@ -352,10 +352,9 @@ fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
     use std::io::{BufRead, BufReader};
     use std::process::Stdio;
 
-    let hermes_home =
-        crate::paths::hermes_data_dir().map_err(|e| IpcError::Internal {
-            message: format!("hermes data dir: {e}"),
-        })?;
+    let hermes_home = crate::paths::hermes_data_dir().map_err(|e| IpcError::Internal {
+        message: format!("hermes data dir: {e}"),
+    })?;
 
     let session_dir = std::env::temp_dir().join("corey-qr-session");
     std::fs::create_dir_all(&session_dir).ok();
