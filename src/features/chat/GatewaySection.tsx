@@ -13,6 +13,15 @@ const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
   discord: { label: 'DC', cls: 'border-indigo-500/50 text-indigo-600' },
   slack: { label: 'SL', cls: 'border-emerald-500/50 text-emerald-600' },
   whatsapp: { label: 'WA', cls: 'border-green-500/50 text-green-600' },
+  weixin: { label: '微信', cls: 'border-red-500/50 text-red-500' },
+  dingtalk: { label: '钉钉', cls: 'border-blue-500/50 text-blue-500' },
+  qq: { label: 'QQ', cls: 'border-cyan-500/50 text-cyan-500' },
+  qqbot: { label: 'QQ', cls: 'border-cyan-500/50 text-cyan-500' },
+  feishu: { label: '飞书', cls: 'border-violet-500/50 text-violet-500' },
+  wecom: { label: '企微', cls: 'border-orange-500/50 text-orange-500' },
+  signal: { label: 'SG', cls: 'border-blue-400/50 text-blue-400' },
+  email: { label: '邮件', cls: 'border-yellow-500/50 text-yellow-500' },
+  sms: { label: 'SMS', cls: 'border-pink-500/50 text-pink-500' },
 };
 
 function sourceBadge(source: string | null) {
