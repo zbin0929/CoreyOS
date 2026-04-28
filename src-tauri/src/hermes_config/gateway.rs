@@ -384,6 +384,11 @@ mod compat_tests {
 /// listening on 127.0.0.1:8642 yet.
 pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
+
+    if cfg!(target_os = "windows") {
+        return windows_gateway_spawn(&binary);
+    }
+
     let output = run_hermes(&binary, &["gateway", "start"])?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -414,6 +419,11 @@ pub fn gateway_start() -> io::Result<String> {
 /// main thread (i.e. via `spawn_blocking` or in an async IPC handler).
 pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
+
+    if cfg!(target_os = "windows") {
+        return windows_gateway_spawn(&binary);
+    }
+
     let output = run_hermes(&binary, &["gateway", "restart"])?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -528,6 +538,31 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
     inject_hermes_home(&mut cmd);
     suppress_window(&mut cmd);
     cmd.output()
+}
+
+#[cfg(target_os = "windows")]
+fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
+    use std::process::Stdio;
+
+    let mut cmd = std::process::Command::new(binary);
+    cmd.args(["gateway", "run"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    inject_hermes_home(&mut cmd);
+    suppress_window(&mut cmd);
+
+    let child = cmd.spawn()?;
+    let pid = child.id();
+
+    std::thread::sleep(std::time::Duration::from_secs(3));
+
+    Ok(format!("gateway started (pid {pid})"))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn windows_gateway_spawn(_binary: &PathBuf) -> io::Result<String> {
+    unreachable!()
 }
 
 fn try_python_module_fallback(args: &[&str]) -> io::Result<String> {
