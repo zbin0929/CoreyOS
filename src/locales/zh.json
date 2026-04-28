@@ -1094,7 +1094,16 @@
       "matrix": "Matrix 协议（开源、自托管优先）。",
       "feishu": "飞书机器人。在飞书开放平台建应用即可。",
       "weixin": "个人微信（通过 iLink 中转，非官方）。",
-      "wecom": "企业微信自建应用机器人。"
+      "wecom": "企业微信自建应用机器人。",
+      "dingtalk": "钉钉企业机器人。Stream 协议，支持扫码配置。",
+      "qq": "QQ 机器人，官方 API v2。WebSocket 入站 + REST 出站。",
+      "signal": "Signal 私密消息，通过 signal-cli 接入。",
+      "email": "邮件交互（IMAP/SMTP）。发邮件提问，收邮件回复。",
+      "sms": "短信（Twilio）。有字符数限制。",
+      "mattermost": "Mattermost 自托管团队聊天机器人。",
+      "bluebubbles": "iMessage 通过 BlueBubbles 服务器（需 macOS）。",
+      "homeassistant": "Home Assistant 智能家居事件和设备控制。",
+      "webhook": "通用 HTTP Webhook 接收外部事件。"
     },
     "telegram": {
       "hint_token": "在 Telegram 中找 @BotFather → /newbot 创建。",
@@ -1131,6 +1140,49 @@
       "hint_secret": "企业微信机器人密钥（存为 WECOM_SECRET）。",
       "hint_websocket_url": "可选：覆盖默认 wss://openws.work.weixin.qq.com。",
       "hint_allowed_users": "逗号分隔的允许用户 ID 列表。"
+    },
+    "dingtalk": {
+      "hint_app_key": "钉钉开放平台 → App Key。",
+      "hint_app_secret": "与 App Key 配对的密钥，请保密。",
+      "hint_allowed_users": "逗号分隔的允许用户 ID 列表。"
+    },
+    "qq": {
+      "hint_app_id": "QQ 开放平台 → App ID。",
+      "hint_app_secret": "QQ 机器人 App Secret。",
+      "hint_allowed_users": "逗号分隔的允许用户 ID 列表。"
+    },
+    "signal": {
+      "hint_phone_number": "绑定的 signal-cli 手机号（如 +8613800138000）。",
+      "hint_config_dir": "signal-cli 配置目录路径。留空使用默认。"
+    },
+    "email": {
+      "hint_imap_host": "IMAP 服务器地址（如 imap.gmail.com）。",
+      "hint_imap_user": "IMAP 登录用户名（通常是邮箱地址）。",
+      "hint_imap_password": "IMAP 密码或应用专用密码。",
+      "hint_smtp_host": "SMTP 服务器地址（如 smtp.gmail.com）。",
+      "hint_smtp_user": "SMTP 用户名。留空则与 IMAP 用户名相同。",
+      "hint_smtp_password": "SMTP 密码。留空则与 IMAP 密码相同。"
+    },
+    "sms": {
+      "hint_account_sid": "Twilio 控制台的 Account SID。",
+      "hint_auth_token": "Twilio 控制台的 Auth Token。",
+      "hint_phone_number": "Twilio 电话号码（如 +1234567890）。"
+    },
+    "mattermost": {
+      "hint_token": "Mattermost Bot Token（个人访问令牌或机器人令牌）。",
+      "hint_url": "Mattermost 服务器 URL（如 https://mattermost.example.com）。"
+    },
+    "bluebubbles": {
+      "hint_url": "BlueBubbles 服务器 URL（如 http://192.168.1.100:1234）。",
+      "hint_password": "BlueBubbles 服务器密码。"
+    },
+    "homeassistant": {
+      "hint_url": "Home Assistant URL（如 http://homeassistant.local:8123）。",
+      "hint_token": "HA 用户设置中的长期访问令牌。"
+    },
+    "webhook": {
+      "hint_secret": "Webhook 验证用的共享密钥。可选。",
+      "hint_port": "监听 Webhook 的端口。可选。"
     }
   },
   "profiles": {

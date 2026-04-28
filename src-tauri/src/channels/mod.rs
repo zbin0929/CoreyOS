@@ -1,5 +1,7 @@
-//! Static catalog of the 8 messaging channels Hermes supports
-//! (Telegram, Discord, Slack, WhatsApp, Matrix, Feishu, WeiXin, WeCom).
+//! Static catalog of the 17 messaging channels Hermes supports
+//! (Telegram, Discord, Slack, WhatsApp, Matrix, Feishu, WeiXin, WeCom,
+//!  DingTalk, QQ Bot, Signal, Email, SMS, Mattermost, BlueBubbles,
+//!  Home Assistant, Webhook).
 //!
 //! Phase 3 · T3.1 — the schema that drives everything downstream:
 //!   - Rust side: env-key allowlist extension so `hermes_env_set_key` can
@@ -441,13 +443,255 @@ fn build_specs() -> Vec<ChannelSpec> {
             hot_reloadable: false,
             has_qr_login: false,
         },
+        // ── DingTalk (钉钉) ──────────────────────────────────────────
+        ChannelSpec {
+            id: "dingtalk",
+            display_name: "DingTalk",
+            yaml_root: "channels.dingtalk",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "DINGTALK_APP_KEY".into(),
+                    required: true,
+                    hint_key: "channels.dingtalk.hint_app_key".into(),
+                },
+                EnvKeySpec {
+                    name: "DINGTALK_APP_SECRET".into(),
+                    required: true,
+                    hint_key: "channels.dingtalk.hint_app_secret".into(),
+                },
+                EnvKeySpec {
+                    name: "DINGTALK_ALLOWED_USERS".into(),
+                    required: false,
+                    hint_key: "channels.dingtalk.hint_allowed_users".into(),
+                },
+            ],
+            yaml_fields: vec![YamlFieldSpec {
+                path: "mention_required".into(),
+                kind: FieldKind::Bool,
+                label_key: "channels.field.mention_required".into(),
+                default_bool: Some(true),
+                default_string: None,
+            }],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── QQ Bot ───────────────────────────────────────────────────
+        ChannelSpec {
+            id: "qq",
+            display_name: "QQ Bot",
+            yaml_root: "channels.qq",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "QQ_APP_ID".into(),
+                    required: true,
+                    hint_key: "channels.qq.hint_app_id".into(),
+                },
+                EnvKeySpec {
+                    name: "QQ_APP_SECRET".into(),
+                    required: true,
+                    hint_key: "channels.qq.hint_app_secret".into(),
+                },
+                EnvKeySpec {
+                    name: "QQ_ALLOWED_USERS".into(),
+                    required: false,
+                    hint_key: "channels.qq.hint_allowed_users".into(),
+                },
+            ],
+            yaml_fields: vec![YamlFieldSpec {
+                path: "mention_required".into(),
+                kind: FieldKind::Bool,
+                label_key: "channels.field.mention_required".into(),
+                default_bool: Some(true),
+                default_string: None,
+            }],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── Signal ────────────────────────────────────────────────────
+        ChannelSpec {
+            id: "signal",
+            display_name: "Signal",
+            yaml_root: "channels.signal",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "SIGNAL_PHONE_NUMBER".into(),
+                    required: true,
+                    hint_key: "channels.signal.hint_phone_number".into(),
+                },
+                EnvKeySpec {
+                    name: "SIGNAL_CONFIG_DIR".into(),
+                    required: false,
+                    hint_key: "channels.signal.hint_config_dir".into(),
+                },
+            ],
+            yaml_fields: vec![],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── Email (IMAP/SMTP) ─────────────────────────────────────────
+        ChannelSpec {
+            id: "email",
+            display_name: "Email",
+            yaml_root: "channels.email",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "EMAIL_IMAP_HOST".into(),
+                    required: true,
+                    hint_key: "channels.email.hint_imap_host".into(),
+                },
+                EnvKeySpec {
+                    name: "EMAIL_IMAP_USER".into(),
+                    required: true,
+                    hint_key: "channels.email.hint_imap_user".into(),
+                },
+                EnvKeySpec {
+                    name: "EMAIL_IMAP_PASSWORD".into(),
+                    required: true,
+                    hint_key: "channels.email.hint_imap_password".into(),
+                },
+                EnvKeySpec {
+                    name: "EMAIL_SMTP_HOST".into(),
+                    required: true,
+                    hint_key: "channels.email.hint_smtp_host".into(),
+                },
+                EnvKeySpec {
+                    name: "EMAIL_SMTP_USER".into(),
+                    required: false,
+                    hint_key: "channels.email.hint_smtp_user".into(),
+                },
+                EnvKeySpec {
+                    name: "EMAIL_SMTP_PASSWORD".into(),
+                    required: false,
+                    hint_key: "channels.email.hint_smtp_password".into(),
+                },
+            ],
+            yaml_fields: vec![],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── SMS (Twilio) ──────────────────────────────────────────────
+        ChannelSpec {
+            id: "sms",
+            display_name: "SMS (Twilio)",
+            yaml_root: "channels.sms",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "TWILIO_ACCOUNT_SID".into(),
+                    required: true,
+                    hint_key: "channels.sms.hint_account_sid".into(),
+                },
+                EnvKeySpec {
+                    name: "TWILIO_AUTH_TOKEN".into(),
+                    required: true,
+                    hint_key: "channels.sms.hint_auth_token".into(),
+                },
+                EnvKeySpec {
+                    name: "TWILIO_PHONE_NUMBER".into(),
+                    required: true,
+                    hint_key: "channels.sms.hint_phone_number".into(),
+                },
+            ],
+            yaml_fields: vec![],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── Mattermost ────────────────────────────────────────────────
+        ChannelSpec {
+            id: "mattermost",
+            display_name: "Mattermost",
+            yaml_root: "channels.mattermost",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "MATTERMOST_BOT_TOKEN".into(),
+                    required: true,
+                    hint_key: "channels.mattermost.hint_token".into(),
+                },
+                EnvKeySpec {
+                    name: "MATTERMOST_URL".into(),
+                    required: true,
+                    hint_key: "channels.mattermost.hint_url".into(),
+                },
+            ],
+            yaml_fields: vec![YamlFieldSpec {
+                path: "mention_required".into(),
+                kind: FieldKind::Bool,
+                label_key: "channels.field.mention_required".into(),
+                default_bool: Some(true),
+                default_string: None,
+            }],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── BlueBubbles (iMessage) ────────────────────────────────────
+        ChannelSpec {
+            id: "bluebubbles",
+            display_name: "BlueBubbles (iMessage)",
+            yaml_root: "channels.bluebubbles",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "BLUEBUBBLES_URL".into(),
+                    required: true,
+                    hint_key: "channels.bluebubbles.hint_url".into(),
+                },
+                EnvKeySpec {
+                    name: "BLUEBUBBLES_PASSWORD".into(),
+                    required: true,
+                    hint_key: "channels.bluebubbles.hint_password".into(),
+                },
+            ],
+            yaml_fields: vec![],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── Home Assistant ────────────────────────────────────────────
+        ChannelSpec {
+            id: "homeassistant",
+            display_name: "Home Assistant",
+            yaml_root: "channels.homeassistant",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "HA_URL".into(),
+                    required: true,
+                    hint_key: "channels.homeassistant.hint_url".into(),
+                },
+                EnvKeySpec {
+                    name: "HA_TOKEN".into(),
+                    required: true,
+                    hint_key: "channels.homeassistant.hint_token".into(),
+                },
+            ],
+            yaml_fields: vec![],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── Webhook ───────────────────────────────────────────────────
+        ChannelSpec {
+            id: "webhook",
+            display_name: "Webhook",
+            yaml_root: "channels.webhook",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "WEBHOOK_SECRET".into(),
+                    required: false,
+                    hint_key: "channels.webhook.hint_secret".into(),
+                },
+                EnvKeySpec {
+                    name: "WEBHOOK_PORT".into(),
+                    required: false,
+                    hint_key: "channels.webhook.hint_port".into(),
+                },
+            ],
+            yaml_fields: vec![],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
     ]
 }
 
 /// The catalog. Built once at first access.
 pub static CHANNEL_SPECS: Lazy<Vec<ChannelSpec>> = Lazy::new(build_specs);
 
-/// Lookup a channel by its stable slug. `O(n)` over 8 entries — fine.
+/// Lookup a channel by its stable slug. `O(n)` over 17 entries — fine.
 pub fn find_spec(id: &str) -> Option<&'static ChannelSpec> {
     CHANNEL_SPECS.iter().find(|s| s.id == id)
 }

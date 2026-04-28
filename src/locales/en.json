@@ -1093,16 +1093,6 @@
       "reactions": "React with emoji on receipt",
       "enable": "Enable this channel"
     },
-    "card_desc": {
-      "telegram": "Telegram group/DM bot. Easiest to configure, most common.",
-      "discord": "Discord server bot. Good for community groups.",
-      "slack": "Slack workspace bot (Socket Mode, needs Bot + App tokens).",
-      "whatsapp": "WhatsApp bridge (unofficial API, requires a separate bridge process).",
-      "matrix": "Matrix protocol (open-source, self-host-first).",
-      "feishu": "Feishu/Lark bot. Create an app in the Feishu Open Platform.",
-      "weixin": "Personal WeChat (via iLink relay — unofficial).",
-      "wecom": "WeCom (Enterprise WeChat) custom bot."
-    },
     "telegram": {
       "hint_token": "In Telegram, @BotFather → /newbot.",
       "free_chats": "Chat IDs allowed without @-mention"
@@ -1131,6 +1121,68 @@
       "hint_secret": "WeCom bot secret (stored as WECOM_SECRET).",
       "hint_websocket_url": "Optional override for the WeCom websocket endpoint. Defaults to wss://openws.work.weixin.qq.com.",
       "hint_allowed_users": "Comma-separated WeCom user IDs allowed to talk to the bot."
+    },
+    "dingtalk": {
+      "hint_app_key": "DingTalk Open Platform → App Key.",
+      "hint_app_secret": "Paired with App Key; keep secret.",
+      "hint_allowed_users": "Comma-separated DingTalk user IDs allowed to talk to the bot."
+    },
+    "qq": {
+      "hint_app_id": "QQ Open Platform → App ID.",
+      "hint_app_secret": "QQ bot App Secret.",
+      "hint_allowed_users": "Comma-separated QQ user IDs allowed to talk to the bot."
+    },
+    "signal": {
+      "hint_phone_number": "Phone number linked to your signal-cli instance (e.g. +1234567890).",
+      "hint_config_dir": "Path to signal-cli config directory. Leave blank for default."
+    },
+    "email": {
+      "hint_imap_host": "IMAP server hostname (e.g. imap.gmail.com).",
+      "hint_imap_user": "IMAP login username (usually your email address).",
+      "hint_imap_password": "IMAP password or app-specific password.",
+      "hint_smtp_host": "SMTP server hostname (e.g. smtp.gmail.com).",
+      "hint_smtp_user": "SMTP login username. Defaults to IMAP user if blank.",
+      "hint_smtp_password": "SMTP password. Defaults to IMAP password if blank."
+    },
+    "sms": {
+      "hint_account_sid": "Twilio Account SID from console.",
+      "hint_auth_token": "Twilio Auth Token from console.",
+      "hint_phone_number": "Twilio phone number (e.g. +1234567890)."
+    },
+    "mattermost": {
+      "hint_token": "Mattermost Bot Token (Personal Access Token or Bot Token).",
+      "hint_url": "Mattermost server URL (e.g. https://mattermost.example.com)."
+    },
+    "bluebubbles": {
+      "hint_url": "BlueBubbles server URL (e.g. http://192.168.1.100:1234).",
+      "hint_password": "BlueBubbles server password."
+    },
+    "homeassistant": {
+      "hint_url": "Home Assistant URL (e.g. http://homeassistant.local:8123).",
+      "hint_token": "Long-lived access token from HA user settings."
+    },
+    "webhook": {
+      "hint_secret": "Shared secret for webhook verification. Optional.",
+      "hint_port": "Port to listen on for incoming webhooks. Optional."
+    },
+    "card_desc": {
+      "telegram": "Telegram group/DM bot. Easiest to configure, most common.",
+      "discord": "Discord server bot. Good for community groups.",
+      "slack": "Slack workspace bot (Socket Mode, needs Bot + App tokens).",
+      "whatsapp": "WhatsApp bridge (unofficial API, requires a separate bridge process).",
+      "matrix": "Matrix protocol (open-source, self-host-first).",
+      "feishu": "Feishu/Lark bot. Create an app in the Feishu Open Platform.",
+      "weixin": "Personal WeChat (via iLink relay — unofficial).",
+      "wecom": "WeCom (Enterprise WeChat) custom bot.",
+      "dingtalk": "DingTalk (钉钉) enterprise bot. Stream protocol, QR setup supported.",
+      "qq": "QQ Bot via official API v2. WebSocket inbound + REST outbound.",
+      "signal": "Signal private messenger via signal-cli.",
+      "email": "Email interaction via IMAP/SMTP. Send prompts, get replies.",
+      "sms": "SMS via Twilio. Short messages, character limits apply.",
+      "mattermost": "Mattermost self-hosted team chat bot.",
+      "bluebubbles": "iMessage via BlueBubbles server (requires macOS).",
+      "homeassistant": "Home Assistant smart home events and device control.",
+      "webhook": "Generic HTTP webhook receiver for external events."
     }
   },
   "profiles": {

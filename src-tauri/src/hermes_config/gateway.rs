@@ -88,13 +88,16 @@ pub fn detect() -> HermesDetection {
             compatibility_detail: "Hermes not installed".into(),
         };
     };
-    let version = run_hermes(&path, &["--version"]).ok().and_then(|o| {
-        if o.status.success() {
-            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-        } else {
-            None
-        }
-    });
+    let version = run_hermes(&path, &["--version"])
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .or_else(|| try_python_module_fallback(&["--version"]).ok());
     let version_parsed = version.as_deref().and_then(parse_hermes_version);
     let (compatibility, compatibility_detail) = match version_parsed {
         Some((maj, min, _patch)) => evaluate_compat(maj, min),
@@ -376,6 +379,12 @@ pub fn gateway_start() -> io::Result<String> {
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     if !output.status.success() {
+        let combined = format!("{stderr}{stdout}");
+        if combined.contains("ModuleNotFoundError") || combined.contains("No module named") {
+            if let Ok(fallback) = try_python_module_fallback(&["gateway", "start"]) {
+                return Ok(fallback);
+            }
+        }
         return Err(io::Error::other(format!(
             "hermes gateway start failed (status {:?}): {}{}",
             output.status.code(),
@@ -402,6 +411,12 @@ pub fn gateway_restart() -> io::Result<String> {
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
     if !output.status.success() {
+        let combined = format!("{stderr}{stdout}");
+        if combined.contains("ModuleNotFoundError") || combined.contains("No module named") {
+            if let Ok(fallback) = try_python_module_fallback(&["gateway", "restart"]) {
+                return Ok(fallback);
+            }
+        }
         return Err(io::Error::other(format!(
             "hermes gateway restart failed (status {:?}): {}{}",
             output.status.code(),
@@ -432,6 +447,38 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
     cmd.args(args);
     inject_hermes_home(&mut cmd);
     cmd.output()
+}
+
+fn try_python_module_fallback(args: &[&str]) -> io::Result<String> {
+    let python = if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    };
+    let mut full_args = vec!["-m", "hermes_cli"];
+    full_args.extend(args);
+
+    let mut cmd = std::process::Command::new(python);
+    cmd.args(&full_args);
+    inject_hermes_home(&mut cmd);
+    let output = cmd.output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "python -m hermes_cli fallback failed (status {:?}): {}{}",
+            output.status.code(),
+            stderr,
+            stdout
+        )));
+    }
+    Ok(if stdout.trim().is_empty() {
+        stderr
+    } else {
+        stdout
+    })
 }
 
 /// Platform-specific filename for the Hermes binary. `.exe` on
