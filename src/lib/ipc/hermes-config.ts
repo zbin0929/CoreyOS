@@ -172,6 +172,8 @@ export type HermesCompatibility = 'supported' | 'untested' | 'too_old' | 'unknow
  *  — the Home page renders an install CTA in that case. */
 export interface HermesDetection {
   installed: boolean;
+  /** True if the binary exists but `hermes --version` fails (broken install). */
+  broken: boolean;
   path: string | null;
   version: string | null;
   /** [major, minor, patch] tuple parsed from `version`, or null. */

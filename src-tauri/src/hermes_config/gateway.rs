@@ -61,6 +61,8 @@ pub enum HermesCompatibility {
 pub struct HermesDetection {
     /// True if we found a `hermes` binary at one of the canonical paths.
     pub installed: bool,
+    /// True if the binary exists but `hermes --version` fails (broken install).
+    pub broken: bool,
     /// Absolute path to the resolved binary, when found.
     pub path: Option<String>,
     /// Best-effort `hermes --version` output. Absent when the version
@@ -81,6 +83,7 @@ pub fn detect() -> HermesDetection {
     let Ok(path) = resolve_hermes_binary() else {
         return HermesDetection {
             installed: false,
+            broken: false,
             path: None,
             version: None,
             version_parsed: None,
@@ -88,26 +91,35 @@ pub fn detect() -> HermesDetection {
             compatibility_detail: "Hermes not installed".into(),
         };
     };
-    let version = run_hermes(&path, &["--version"])
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .or_else(|| try_python_module_fallback(&["--version"]).ok());
+
+    let version_output = run_hermes(&path, &["--version"]).ok();
+    let raw_success = version_output
+        .as_ref()
+        .map_or(false, |o| o.status.success());
+
+    let version = if raw_success {
+        version_output.and_then(|o| Some(String::from_utf8_lossy(&o.stdout).trim().to_string()))
+    } else {
+        try_python_module_fallback(&["--version"]).ok()
+    };
+
+    let broken = !raw_success && version.is_none();
+
     let version_parsed = version.as_deref().and_then(parse_hermes_version);
     let (compatibility, compatibility_detail) = match version_parsed {
         Some((maj, min, _patch)) => evaluate_compat(maj, min),
         None => (
             HermesCompatibility::Unknown,
-            "Could not parse Hermes version string; assuming compatible.".into(),
+            if broken {
+                "Hermes binary found but broken — reinstall with: pip install --upgrade hermes-agent".into()
+            } else {
+                "Could not parse Hermes version string; assuming compatible.".into()
+            },
         ),
     };
     HermesDetection {
         installed: true,
+        broken,
         path: Some(path.display().to_string()),
         version,
         version_parsed,

@@ -62,6 +62,7 @@ export function HermesInstallCard() {
       console.warn('hermes_detect failed:', ipcErrorMessage(e));
       setDetection({
         installed: false,
+        broken: false,
         path: null,
         version: null,
         version_parsed: null,
@@ -133,6 +134,10 @@ export function HermesInstallCard() {
 
   if (!detection?.installed) {
     return <NotInstalledCard onRecheck={probe} copied={copied} setCopied={setCopied} />;
+  }
+
+  if (detection.broken) {
+    return <BrokenInstallCard detection={detection} onRecheck={probe} />;
   }
 
   // Installed but gateway offline → offer the one-click start.
@@ -297,6 +302,84 @@ function NotInstalledCard({
           variant="secondary"
           onClick={() => void onRecheck()}
           data-testid="home-hermes-recheck"
+        >
+          <Icon icon={RefreshCcw} size="xs" />
+          {t('home.install_recheck')}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+// ───────────────────────── State 1.5: broken install ────────────────────────
+
+function BrokenInstallCard({
+  detection,
+  onRecheck,
+}: {
+  detection: HermesDetection;
+  onRecheck: () => void;
+}) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const fixCommand =
+    typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('win')
+      ? 'pip install --upgrade hermes-agent'
+      : 'pip install --upgrade hermes-agent';
+
+  return (
+    <section
+      className={cn(
+        'flex flex-col gap-3 rounded-lg border border-danger/40 bg-danger/5 p-4',
+      )}
+      data-testid="home-hermes-broken"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-danger/40 bg-danger/10 text-danger">
+          <Icon icon={AlertTriangle} size="sm" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-fg">
+            {t('home.broken_title', { defaultValue: 'Hermes 安装损坏' })}
+          </h3>
+          <p className="mt-0.5 text-xs text-fg-muted">
+            {t('home.broken_desc', {
+              defaultValue:
+                '找到了 Hermes 二进制，但无法运行（模块缺失或 Python 环境不匹配）。请重新安装：',
+            })}
+          </p>
+          {detection.path && (
+            <code className="mt-1 block truncate text-[10px] text-fg-subtle">
+              {detection.path}
+            </code>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded border border-border bg-bg-elev-1 p-2">
+        <code className="block text-xs text-fg">{fixCommand}</code>
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            navigator.clipboard.writeText(fixCommand).catch(() => {});
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+        >
+          <Icon icon={copied ? Check : Copy} size="xs" />
+          {copied
+            ? t('home.install_copied')
+            : t('home.install_copy')}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => void onRecheck()}
         >
           <Icon icon={RefreshCcw} size="xs" />
           {t('home.install_recheck')}
