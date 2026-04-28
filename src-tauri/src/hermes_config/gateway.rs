@@ -93,12 +93,10 @@ pub fn detect() -> HermesDetection {
     };
 
     let version_output = run_hermes(&path, &["--version"]).ok();
-    let raw_success = version_output
-        .as_ref()
-        .map_or(false, |o| o.status.success());
+    let raw_success = version_output.as_ref().is_some_and(|o| o.status.success());
 
     let version = if raw_success {
-        version_output.and_then(|o| Some(String::from_utf8_lossy(&o.stdout).trim().to_string()))
+        version_output.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
     } else {
         try_python_module_fallback(&["--version"]).ok()
     };
@@ -497,8 +495,8 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
         cmd.arg(script_path);
         cmd.env("PYTHONIOENCODING", "utf-8");
         cmd.spawn()?;
-        Ok(format!(
-            "Bootstrap script started. Check ~/.corey/logs/bootstrap-macos.log for progress."
+        Ok(String::from(
+            "Bootstrap script started. Check ~/.corey/logs/bootstrap-macos.log for progress.",
         ))
     }
 }
