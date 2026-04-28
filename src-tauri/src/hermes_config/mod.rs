@@ -454,7 +454,7 @@ fn set_or_remove(map: &mut Mapping, key: &str, value: Option<&str>) {
 }
 
 mod env;
-mod gateway;
+pub(crate) mod gateway;
 mod yaml;
 
 pub use env::{read_env_value, write_env_key};

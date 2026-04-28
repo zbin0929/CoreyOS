@@ -34,14 +34,14 @@ pub fn build(app: &App) {
             }
             _ => {}
         })
-        .on_tray_icon_event(move |app, event| {
+        .on_tray_icon_event(move |tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 ..
             } = event
             {
-                show_window(app);
+                show_window(tray.app_handle());
             }
         })
         .build(app)
