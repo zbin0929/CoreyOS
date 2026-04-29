@@ -306,7 +306,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
         streamRef,
         pendingRef,
         (pid, _text, summary) => onStreamDone(pid, trimmed, summary),
-        (approval) => setPendingApproval(approval),
+        (approval) => setPendingApproval((prev) => prev ?? approval),
       );
       const handle = await chatStream(
         {
@@ -385,7 +385,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
         streamRef,
         pendingRef,
         undefined,
-        (approval) => setPendingApproval(approval),
+        (approval) => setPendingApproval((prev) => prev ?? approval),
       );
       const handle = await chatStream(
         {
