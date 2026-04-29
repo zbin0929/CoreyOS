@@ -697,22 +697,33 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
     {
         use std::io::Read;
         use std::os::windows::process::CommandExt;
-        let log_dir = data_dir.join("logs");
+        let log_dir = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .map(|p| p.join("Corey").join("logs"))
+            .unwrap_or_else(|| data_dir.join("logs"));
         let _ = std::fs::create_dir_all(&log_dir);
         let log_file = log_dir.join("bootstrap-windows.log");
         let mut cmd = std::process::Command::new("powershell.exe");
         cmd.args([
             "-ExecutionPolicy",
             "Bypass",
+            "-NoProfile",
             "-File",
             script_path.to_str().unwrap_or_default(),
         ]);
         cmd.env("PYTHONIOENCODING", "utf-8");
         cmd.env("HERMES_HOME", &data_dir);
+        cmd.env("COREY_DATA_DIR", &data_dir);
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         cmd.creation_flags(CREATE_NO_WINDOW);
+        let diag = format!(
+            "script_path: {}\ndata_dir: {}\nlog_file: {}\n",
+            script_path.display(),
+            data_dir.display(),
+            log_file.display(),
+        );
         let mut child = cmd.spawn()?;
         let mut stdout = String::new();
         let mut stderr = String::new();
@@ -723,7 +734,7 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
             let _ = err.read_to_string(&mut stderr);
         }
         let status = child.wait()?;
-        let _ = std::fs::write(&log_file, format!("{}\n{}", stdout, stderr));
+        let _ = std::fs::write(&log_file, format!("{diag}{stdout}\n{stderr}"));
         if status.success() {
             Ok(format!(
                 "Installation completed successfully. Log: {}",
