@@ -20,10 +20,6 @@ jobs:
           mv coscli-linux-amd64 coscli
           chmod +x coscli
 
-      - name: Configure coscli
-        run: |
-          ./coscli config set -a "${{ secrets.COS_SECRET_ID }}" -s "${{ secrets.COS_SECRET_KEY }}" -b "${{ secrets.COS_BUCKET }}" -r ap-guangzhou
-
       - name: Download release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,7 +33,11 @@ jobs:
       - name: Upload assets to COS
         run: |
           TAG="${{ inputs.release_tag || github.event.release.tag_name }}"
-          ./coscli cp ./assets/ "cos://${{ secrets.COS_BUCKET }}/releases/${TAG}/" -r --include "*"
+          BUCKET="${{ secrets.COS_BUCKET }}"
+          ./coscli cp ./assets/ "cos://${BUCKET}/releases/${TAG}/" -r \
+            -i "${{ secrets.COS_SECRET_ID }}" \
+            -k "${{ secrets.COS_SECRET_KEY }}" \
+            -e "cos.ap-guangzhou.myqcloud.com"
 
       - name: Generate and upload latest.json
         run: |
@@ -61,7 +61,10 @@ jobs:
           echo "$UPDATED" > ./latest.json
           cat ./latest.json
 
-          ./coscli cp ./latest.json "cos://${BUCKET}/releases/latest.json"
+          ./coscli cp ./latest.json "cos://${BUCKET}/releases/latest.json" \
+            -i "${{ secrets.COS_SECRET_ID }}" \
+            -k "${{ secrets.COS_SECRET_KEY }}" \
+            -e "cos.ap-guangzhou.myqcloud.com"
 
       - name: Verify
         run: |
