@@ -133,9 +133,6 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
 } elseif (Test-Path (Join-Path $HermesDir "venv\Scripts\hermes.exe")) {
     Info "Hermes found at $HermesDir\venv"
 } else {
-    Info "HermesDir: $HermesDir"
-    Info "Dir exists: $(Test-Path $HermesDir)"
-    Info "venv exists: $(Test-Path (Join-Path $HermesDir 'venv\Scripts\hermes.exe'))"
     $hermesParent = Split-Path $HermesDir
     if (-not (Test-Path $hermesParent)) { New-Item -ItemType Directory -Path $hermesParent -Force | Out-Null }
 
@@ -294,21 +291,44 @@ if (-not $script:HasApiKey) {
 # ── 6. Start gateway ──────────────────────────────────────────────
 Step "Starting Hermes gateway"
 
+$gwRunning = $false
 try {
-    $gwOut = hermes gateway start 2>&1
-    Write-Log 'GATEWAY' $gwOut
-    Info "Gateway start output: $gwOut"
-} catch {
-    Warn "Gateway start failed: $($_.Exception.Message)"
-    Warn "You can start it manually: hermes gateway start"
+    $statusOut = hermes gateway status 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Info "Gateway already running"
+        $gwRunning = $true
+    }
+} catch { }
+
+if (-not $gwRunning) {
+    try {
+        $gwOut = hermes gateway start 2>&1
+        Write-Log 'GATEWAY' $gwOut
+        if ($LASTEXITCODE -eq 0) {
+            Info "Gateway started"
+            $gwRunning = $true
+        } else {
+            Warn "gateway start not supported, trying gateway run in background..."
+            Start-Process -FilePath "powershell.exe" `
+                -ArgumentList "-ExecutionPolicy Bypass -Command `"cd '$HermesDir'; & .\venv\Scripts\Activate.ps1; hermes gateway run`"" `
+                -WindowStyle Normal
+            Info "Gateway run launched in separate window"
+            $gwRunning = $true
+        }
+    } catch {
+        Warn "Gateway start failed: $($_.Exception.Message)"
+        Warn "Starting gateway run in separate window..."
+        Start-Process -FilePath "powershell.exe" `
+            -ArgumentList "-ExecutionPolicy Bypass -Command `"cd '$HermesDir'; & .\venv\Scripts\Activate.ps1; hermes gateway run`"" `
+            -WindowStyle Normal
+        $gwRunning = $true
+    }
 }
 
 # ── 7. Summary ────────────────────────────────────────────────────
 $finalHome = $env:HERMES_HOME
 $hermesVer = ""
 try { $hermesVer = hermes --version 2>&1 } catch { $hermesVer = "unknown" }
-$gwRunning = $false
-try { $null = hermes gateway status 2>&1; $gwRunning = $true } catch { }
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
