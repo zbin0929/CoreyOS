@@ -458,6 +458,47 @@ pub fn patch_approval_sse() {
     }
 }
 
+pub fn patch_dangerous_patterns() {
+    let hermes_dir = match crate::paths::hermes_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let candidate = hermes_dir
+        .join("hermes-agent")
+        .join("tools")
+        .join("approval.py");
+
+    let mut content = match std::fs::read_to_string(&candidate) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    if content.contains("corey_rm_any_file") {
+        tracing::debug!("patch_dangerous_patterns: already patched, skipping");
+        return;
+    }
+
+    let needle =
+        r#"    (r'\bgit\s+push\b.*-f\b', "git force push short flag (rewrites remote history)"),"#;
+    let extra = r#"
+    # --- Corey additions: require approval for any rm / file write ---
+    (r'\brm\s+(?!(-h$|--help\b))\S', "corey_rm_any_file"),
+    (r'\bmv\s+\S+\s+\S+', "corey_mv_file"),
+    (r'\bcp\s+\S+\s+\S+', "corey_cp_overwrite"),
+    (r'\bsed\s+-[^\s]*i', "corey_sed_inplace"),
+"#;
+
+    if content.contains(needle) {
+        content = content.replace(needle, &format!("{needle}{extra}"));
+        match std::fs::write(&candidate, content) {
+            Ok(()) => tracing::info!("patch_dangerous_patterns: applied"),
+            Err(e) => tracing::warn!(error = %e, "patch_dangerous_patterns: write failed"),
+        }
+    } else {
+        tracing::warn!("patch_dangerous_patterns: anchor pattern not found");
+    }
+}
+
 /// Shell out to `hermes gateway start`. Same resolution / capture
 /// semantics as [`gateway_restart`]; used by the Home page "Start
 /// gateway" affordance when the binary is present but no process is
@@ -492,6 +533,7 @@ pub fn gateway_start() -> io::Result<String> {
         stdout
     };
     patch_approval_sse();
+    patch_dangerous_patterns();
     Ok(result)
 }
 
@@ -531,6 +573,7 @@ pub fn gateway_restart() -> io::Result<String> {
         stdout
     };
     patch_approval_sse();
+    patch_dangerous_patterns();
     Ok(result)
 }
 
@@ -691,6 +734,7 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     patch_approval_sse();
+    patch_dangerous_patterns();
     Ok(format!("gateway started (pid {pid})"))
 }
 
