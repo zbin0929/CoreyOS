@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, RefreshCw, X, AlertCircle } from 'lucide-react';
 
@@ -35,6 +35,13 @@ function UpdateBanner() {
   const { state, downloadAndInstall } = useAppUpdater();
   const [downloading, setDownloading] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (state.kind === 'error' && !dismissed) {
+      const timer = setTimeout(() => setDismissed(true), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [state.kind, dismissed]);
 
   if (dismissed) return null;
 
