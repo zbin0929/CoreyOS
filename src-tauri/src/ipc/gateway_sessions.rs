@@ -82,7 +82,7 @@ pub fn gateway_session_messages(session_id: String) -> Result<Vec<GatewayMessage
 
     let mut stmt = conn
         .prepare(
-            "SELECT role, content, timestamp
+            "SELECT role, COALESCE(content, '') AS content, timestamp
              FROM messages
              WHERE session_id = ?
              ORDER BY timestamp ASC
