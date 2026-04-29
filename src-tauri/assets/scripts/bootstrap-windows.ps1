@@ -9,10 +9,10 @@
   Logs to %LOCALAPPDATA%\Corey\logs\bootstrap-windows.log
 #>
 [CmdletBinding()]
-param([switch]$SkipElevation, [switch]$Verbose)
+param([switch]$SkipElevation, [switch]$VerboseLog)
 
 $ErrorActionPreference = 'Stop'
-$VerbosePreference = if ($Verbose) { 'Continue' } else { 'SilentlyContinue' }
+$VerbosePreference = if ($VerboseLog) { 'Continue' } else { 'SilentlyContinue' }
 
 $LogDir = Join-Path $env:LOCALAPPDATA "Corey\logs"
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -65,11 +65,41 @@ if ($policy -in @('Restricted','AllSigned')) {
 }
 
 Step "Network connectivity"
+
+$script:UseProxy = $false
+$script:ProxyUrl = $null
+
+if ($env:HTTPS_PROXY -or $env:https_proxy -or $env:ALL_PROXY) {
+    $script:ProxyUrl = if ($env:HTTPS_PROXY) { $env:HTTPS_PROXY } elseif ($env:https_proxy) { $env:https_proxy } else { $env:ALL_PROXY }
+    Info "Proxy detected: $script:ProxyUrl"
+    $script:UseProxy = $true
+}
+
+$script:GitHubReachable = $false
 try {
     $null = Invoke-WebRequest -Uri "https://raw.githubusercontent.com" -Method Head -TimeoutSec 10 -UseBasicParsing
     Info "GitHub reachable"
+    $script:GitHubReachable = $true
 } catch {
-    Fail "Cannot reach GitHub. Check internet/proxy. Error: $($_.Exception.Message)"
+    Warn "Cannot reach GitHub directly: $($_.Exception.Message)"
+    if (-not $script:UseProxy) {
+        Info "Trying common proxy ports..."
+        foreach ($port in @(7890, 1080, 10809, 10808, 7897, 8080)) {
+            try {
+                $null = Invoke-WebRequest -Uri "https://raw.githubusercontent.com" -Method Head -TimeoutSec 3 -UseBasicParsing -Proxy "http://127.0.0.1:$port"
+                Info "Found proxy at 127.0.0.1:$port"
+                $script:ProxyUrl = "http://127.0.0.1:$port"
+                $script:UseProxy = $true
+                $script:GitHubReachable = $true
+                $env:HTTPS_PROXY = $script:ProxyUrl
+                $env:HTTP_PROXY = $script:ProxyUrl
+                break
+            } catch { }
+        }
+    }
+    if (-not $script:GitHubReachable) {
+        Fail "Cannot reach GitHub even with proxy. Set HTTPS_PROXY env var or check network. Error: $($_.Exception.Message)"
+    }
 }
 
 # ── 2. Prerequisites ─────────────────────────────────────────────
@@ -93,6 +123,14 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Warn "Git may need a terminal restart to be on PATH." }
     Info "Git installed"
+}
+
+if ($script:UseProxy -and $script:ProxyUrl) {
+    Info "Configuring git proxy: $script:ProxyUrl"
+    try {
+        git config --global http.proxy $script:ProxyUrl 2>$null
+        git config --global https.proxy $script:ProxyUrl 2>$null
+    } catch { Warn "Failed to set git proxy" }
 }
 
 # Python 3.11+ (uv will handle exact version, but we need a bootstrap python)
