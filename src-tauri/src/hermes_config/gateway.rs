@@ -718,6 +718,11 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
         cmd.env("PYTHONIOENCODING", "utf-8");
         cmd.env("HERMES_HOME", &data_dir);
         cmd.env("COREY_INSTALL_DIR", &corey_install_dir);
+        tracing::info!(
+            "bootstrap env: COREY_INSTALL_DIR={}, HERMES_HOME={}",
+            corey_install_dir.display(),
+            data_dir.display()
+        );
         cmd.stdout(std::process::Stdio::inherit());
         cmd.stderr(std::process::Stdio::inherit());
         let mut child = cmd.spawn()?;
