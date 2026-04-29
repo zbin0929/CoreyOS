@@ -434,9 +434,11 @@ pub fn patch_approval_sse() {
             agent_task = asyncio.ensure_future(self._run_agent("#;
     let p2_replacement = r#"            def _on_approval(ad):
                 _stream_q.put(("__approval__", ad))
+            os.environ["HERMES_GATEWAY_SESSION"] = "1"
+            os.environ["HERMES_SESSION_KEY"] = session_id or ""
             try:
                 from tools.approval import register_gateway_notify as _ra
-                _ra(session_id, _on_approval)
+                _ra(session_id or "", _on_approval)
             except Exception:
                 pass
 

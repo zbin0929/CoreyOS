@@ -128,6 +128,24 @@ Hermes already has ~/.hermes/.env for API keys. Corey does NOT create a parallel
 ### HD-4: Skill format follows Hermes
 Hermes defines skill format: .md files in ~/.hermes/skills/. Corey does NOT invent a new skill format. Skill Packs are collections of Hermes-compatible .md files + manifest.yaml.
 
+### HD-5: Hermes dependency map is the source of truth
+Full dependency mapping lives in `docs/hermes-dependency-map.md`. When Hermes updates, consult that document first to locate impacted code. The map covers: CLI commands, Gateway HTTP API, file system dependencies, config.yaml fields, .env variables, MCP/memory/channel integration, and cross-platform differences.
+
+### HD-6: CLI allowlist must stay in sync
+Corey's `ipc/skill_hub.rs` maintains an `ALLOWED_SUBCOMMANDS` list. When Hermes adds/renames/removes a `hermes skills` subcommand, update the allowlist in the same commit. Never allow destructive subcommands through the UI.
+
+### HD-7: config.yaml writes are additive only
+Corey only adds fields to `~/.hermes/config.yaml`, never removes or renames them. If Hermes deprecates a field, Corey keeps writing it for backward compatibility until the minimum supported Hermes version no longer reads it. Check Hermes config version (currently 17) on each upgrade.
+
+### HD-8: Shared files require atomic writes
+Corey writes to `~/.hermes/config.yaml`, `.env`, `cron/jobs.json`, `MEMORY.md`, `USER.md` — all shared with Hermes. Always use `fs_atomic::atomic_write` so Hermes never reads a half-written file. Never change the file format without verifying Hermes still reads it correctly.
+
+### HD-9: Gateway restart is required after config changes
+Hermes Gateway does not hot-reload config.yaml. After any write to config.yaml or .env, Corey must call `hermes_gateway_restart()`. The only exception: Hermes supports `/reload-mcp` chat command for MCP-only changes (Corey does not use this yet — still restarts).
+
+### HD-10: Memory files follow Hermes conventions
+Corey writes `MEMORY.md` using the `## [auto] <date>` section format and `USER.md` under `~/.hermes/memories/`. These are injected into Hermes' system prompt every session. If Hermes changes the MEMORY.md/USER.md injection format, Corey's `ipc/learning/mod.rs` and `ipc/hermes_memory.rs` must adapt immediately.
+
 ## Customization & White-Label
 
 ### CW-1: One binary, config-driven
