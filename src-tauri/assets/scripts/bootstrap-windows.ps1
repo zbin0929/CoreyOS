@@ -138,7 +138,8 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
 
     if (Test-Path $HermesDir) {
         $isGitRepo = Test-Path (Join-Path $HermesDir ".git")
-        if ($isGitRepo) {
+        $hasProject = Test-Path (Join-Path $HermesDir "pyproject.toml")
+        if ($isGitRepo -and $hasProject) {
             Info "Existing hermes-agent git repo found, pulling latest..."
             Push-Location $HermesDir
             $savedEAP = $ErrorActionPreference
@@ -151,7 +152,11 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
             $ErrorActionPreference = $savedEAP
             Pop-Location
         } else {
-            Info "Directory exists but is not a git repo, removing..."
+            if ($isGitRepo -and -not $hasProject) {
+                Info "Git repo exists but incomplete (no pyproject.toml), removing..."
+            } else {
+                Info "Directory exists but is not a git repo, removing..."
+            }
             Remove-Item $HermesDir -Recurse -Force
         }
     } else {
@@ -200,8 +205,8 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        Info "Running: uv venv venv --python 3.11"
-        uv venv venv --python 3.11 2>&1 | ForEach-Object { Write-Log 'VENV' $_ }
+        Info "Running: uv venv venv --python 3.11 --clear"
+        uv venv venv --python 3.11 --clear 2>&1 | ForEach-Object { Write-Log 'VENV' $_ }
         Info "Running: uv pip install -e . --index-url https://pypi.tuna.tsinghua.edu.cn/simple"
         uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
         if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
