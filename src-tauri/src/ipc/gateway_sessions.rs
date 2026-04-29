@@ -64,13 +64,16 @@ pub fn gateway_sessions_list() -> Result<Vec<GatewaySession>, String> {
     for r in rows {
         out.push(r.map_err(|e| format!("row: {e}"))?);
     }
+    tracing::info!(count = out.len(), "gateway_sessions_list result");
     Ok(out)
 }
 
 #[tauri::command]
 pub fn gateway_session_messages(session_id: String) -> Result<Vec<GatewayMessage>, String> {
     let db_path = state_db_path()?;
+    tracing::info!(session_id = %session_id, db_path = %db_path.display(), "gateway_session_messages called");
     if !db_path.exists() {
+        tracing::warn!(path = %db_path.display(), "state.db not found");
         return Ok(vec![]);
     }
     let conn =
