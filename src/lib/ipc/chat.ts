@@ -71,14 +71,18 @@ export interface ChatToolProgress {
   label: string | null;
 }
 
+export interface ChatApprovalRequest {
+  command: string;
+  pattern_key?: string | null;
+  pattern_keys?: string[];
+  description: string;
+}
+
 export interface ChatStreamCallbacks {
   onDelta: (chunk: string) => void;
-  /** Reasoning-content delta (deepseek-reasoner / o1-style models).
-   *  Plain chat models never emit this. When callers omit the handler
-   *  reasoning is silently dropped, preserving the pre-T6.x behavior
-   *  for UI code that hasn't been updated yet. */
   onReasoning?: (chunk: string) => void;
   onTool?: (progress: ChatToolProgress) => void;
+  onApproval?: (approval: ChatApprovalRequest) => void;
   onDone: (summary: ChatStreamDone) => void;
   onError: (err: unknown) => void;
 }
@@ -112,6 +116,14 @@ export async function chatStream(
       await listen<ChatToolProgress>(`chat:tool:${handle}`, (e) => onTool(e.payload)),
     );
   }
+  if (cbs.onApproval) {
+    const onApproval = cbs.onApproval;
+    unlistens.push(
+      await listen<ChatApprovalRequest>(`chat:approval:${handle}`, (e) =>
+        onApproval(e.payload),
+      ),
+    );
+  }
   unlistens.push(
     await listen<ChatStreamDone>(`chat:done:${handle}`, async (e) => {
       cbs.onDone(e.payload);
@@ -142,6 +154,15 @@ export async function chatStream(
 async function disposeAll(unlistens: UnlistenFn[]): Promise<void> {
   await Promise.allSettled(unlistens.map((u) => Promise.resolve(u())));
   unlistens.length = 0;
+}
+
+export async function hermesApprovalRespond(
+  sessionId: string,
+  choice: string,
+): Promise<unknown> {
+  return invoke('hermes_approval_respond', {
+    args: { sessionId, choice },
+  });
 }
 
 /**

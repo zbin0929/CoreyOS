@@ -15,6 +15,7 @@ import {
   type ChatMessageDto,
   type ChatStreamDone,
   type ChatStreamHandle,
+  type ChatApprovalRequest,
 } from '@/lib/ipc';
 import {
   newMessageId,
@@ -46,6 +47,8 @@ export interface UseChatSendResult {
   draft: string;
   sending: boolean;
   voiceRecording: boolean;
+  pendingApproval: ChatApprovalRequest | null;
+  setPendingApproval: (a: ChatApprovalRequest | null) => void;
   budgetWarnings: string[];
   send: (text: string) => Promise<void>;
   retry: () => Promise<void>;
@@ -150,6 +153,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     () => useComposerStore.getState().pendingDraft ?? '',
   );
   const [sending, setSending] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<ChatApprovalRequest | null>(null);
   const { voiceRecording, onVoiceStart, onVoiceStop } = useVoiceDraft({ setDraft });
 
   // Live handle for the current stream, so Stop can cancel it.
@@ -302,6 +306,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
         streamRef,
         pendingRef,
         (pid, _text, summary) => onStreamDone(pid, trimmed, summary),
+        (approval) => setPendingApproval(approval),
       );
       const handle = await chatStream(
         {
@@ -379,6 +384,8 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
         setSending,
         streamRef,
         pendingRef,
+        undefined,
+        (approval) => setPendingApproval(approval),
       );
       const handle = await chatStream(
         {
@@ -454,6 +461,8 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     draft,
     sending,
     voiceRecording,
+    pendingApproval,
+    setPendingApproval,
     budgetWarnings,
     send,
     retry,

@@ -5,6 +5,7 @@ import {
   type ChatStreamDone,
   type ChatStreamHandle,
   type ChatToolProgress,
+  type ChatApprovalRequest,
 } from '@/lib/ipc';
 import {
   useChatStore,
@@ -17,6 +18,7 @@ type StreamCallbacks = {
   onDelta: (chunk: string) => void;
   onReasoning: (chunk: string) => void;
   onTool: (progress: ChatToolProgress) => void;
+  onApproval: (approval: ChatApprovalRequest) => void;
   onDone: (summary: ChatStreamDone) => void;
   onError: (err: unknown) => void;
 };
@@ -34,6 +36,7 @@ export function buildStreamCallbacks(
   streamRef: React.MutableRefObject<ChatStreamHandle | null>,
   pendingRef: React.MutableRefObject<string | null>,
   onStreamDone?: (pendingId: string, userText: string, summary: ChatStreamDone) => void,
+  onApproval?: (approval: ChatApprovalRequest) => void,
 ): StreamCallbacks {
   return {
     onDelta(chunk) {
@@ -65,6 +68,9 @@ export function buildStreamCallbacks(
       if (current?.pending) {
         patchMessage(sessionId, targetId, { pending: false });
       }
+    },
+    onApproval(approval) {
+      if (onApproval) onApproval(approval);
     },
     onDone(summary) {
       patchMessage(sessionId, targetId, { pending: false });
