@@ -825,28 +825,67 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     let hermes_dir = binary
         .parent()
         .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
         .map(|p| p.to_path_buf());
 
-    let mut cmd = std::process::Command::new(binary);
-    cmd.args(["gateway", "run"]).stdin(Stdio::null());
+    let mut start_cmd = std::process::Command::new(binary);
+    start_cmd
+        .args(["gateway", "start"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(ref dir) = &hermes_dir {
+        start_cmd.current_dir(dir);
+    }
+    inject_hermes_home(&mut start_cmd);
+    suppress_window(&mut start_cmd);
+
+    if let Ok(output) = start_cmd.output() {
+        if output.status.success() {
+            let _ = std::fs::write(
+                &gw_log,
+                format!(
+                    "gateway start succeeded\nstdout: {}\nstderr: {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr),
+                ),
+            );
+            patch_approval_sse();
+            patch_dangerous_patterns();
+            return Ok("gateway started via 'gateway start'".into());
+        }
+        let _ = std::fs::write(
+            &gw_log,
+            format!(
+                "gateway start failed (exit {:?}), falling back to gateway run\nstdout: {}\nstderr: {}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            ),
+        );
+    }
+
+    let mut run_cmd = std::process::Command::new(binary);
+    run_cmd.args(["gateway", "run"]).stdin(Stdio::null());
 
     if let Ok(log_file) = std::fs::File::create(&gw_log) {
-        cmd.stdout(
-            log_file
-                .try_clone()
-                .unwrap_or_else(|_| std::fs::File::open(os_dev_null()).unwrap()),
-        );
-        cmd.stderr(log_file);
+        let _ = std::fs::write(&gw_log, "falling back to 'gateway run' (foreground)\n");
+        if let Ok(log_file2) = std::fs::File::create(&gw_log) {
+            run_cmd.stdout(log_file2);
+        }
+        if let Ok(log_file3) = std::fs::File::create(&gw_log) {
+            run_cmd.stderr(log_file3);
+        }
     }
 
-    if let Some(ref dir) = hermes_dir {
-        cmd.current_dir(dir);
+    if let Some(ref dir) = &hermes_dir {
+        run_cmd.current_dir(dir);
     }
+    inject_hermes_home(&mut run_cmd);
+    suppress_window(&mut run_cmd);
 
-    inject_hermes_home(&mut cmd);
-    suppress_window(&mut cmd);
-
-    let child = cmd.spawn()?;
+    let child = run_cmd.spawn()?;
     let pid = child.id();
 
     std::thread::sleep(std::time::Duration::from_secs(5));
@@ -854,14 +893,9 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     patch_approval_sse();
     patch_dangerous_patterns();
     Ok(format!(
-        "gateway started (pid {pid}), log: {}",
+        "gateway started (pid {pid}, fallback 'gateway run'), log: {}",
         gw_log.display()
     ))
-}
-
-#[cfg(target_os = "windows")]
-fn os_dev_null() -> &'static str {
-    "NUL"
 }
 
 #[cfg(not(target_os = "windows"))]
