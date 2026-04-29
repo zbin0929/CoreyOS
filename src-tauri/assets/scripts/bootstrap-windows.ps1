@@ -152,13 +152,13 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
             Remove-Item $HermesDir -Recurse -Force
         }
     } else {
-        Info "Cloning hermes-agent via ghfast.top mirror..."
+        Info "Cloning hermes-agent via ghfast.top mirror (shallow)..."
         try {
-            git clone "https://ghfast.top/https://github.com/NousResearch/hermes-agent.git" $HermesDir 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
+            git clone --depth 1 "https://ghfast.top/https://github.com/NousResearch/hermes-agent.git" $HermesDir 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
         } catch {
             Warn "ghfast.top mirror failed, trying direct GitHub..."
             try {
-                git clone "https://github.com/NousResearch/hermes-agent.git" $HermesDir 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
+                git clone --depth 1 "https://github.com/NousResearch/hermes-agent.git" $HermesDir 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
             } catch {
                 Fail "git clone failed. Check network connectivity. Error: $($_.Exception.Message)"
             }
