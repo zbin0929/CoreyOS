@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, X, AlertCircle } from 'lucide-react';
 
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -34,6 +34,21 @@ function UpdateBanner() {
   const { t } = useTranslation();
   const { state, downloadAndInstall } = useAppUpdater();
   const [downloading, setDownloading] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+
+  if (state.kind === 'error') {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-red-500/30 bg-bg-elev-1 px-4 py-3 shadow-lg">
+        <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+        <span className="text-sm text-red-400">{t('updater.error')}</span>
+        <button onClick={() => setDismissed(true)} className="ml-2 text-fg-subtle hover:text-fg">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
 
   if (state.kind !== 'available') return null;
 
@@ -43,6 +58,9 @@ function UpdateBanner() {
         <span className="text-sm font-medium text-fg">
           {t('updater.available', { version: state.version })}
         </span>
+        {downloading && (
+          <span className="text-[10px] text-fg-subtle">{t('updater.downloading')}</span>
+        )}
       </div>
       <Button
         size="sm"
@@ -58,7 +76,7 @@ function UpdateBanner() {
         ) : (
           <Download className="h-3 w-3" />
         )}
-        {t('updater.install')}
+        {downloading ? t('updater.downloading') : t('updater.install')}
       </Button>
     </div>
   );

@@ -1326,8 +1326,9 @@
   },
   "updater": {
     "available": "Update {{version}} available",
-    "downloading": "Downloading {{progress}}%…",
-    "install": "Update now"
+    "downloading": "Downloading…",
+    "install": "Update now",
+    "error": "Update failed. Please download manually."
   },
   "scheduler_page": {
     "title": "Scheduled jobs",
