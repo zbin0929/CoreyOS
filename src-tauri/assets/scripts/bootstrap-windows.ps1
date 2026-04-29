@@ -91,7 +91,7 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
         Remove-Item $gitInstaller -ErrorAction SilentlyContinue
     }
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
-    Get-Command git -ErrorAction SilentlyContinue | Out-Null || Warn "Git may need a terminal restart to be on PATH."
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Warn "Git may need a terminal restart to be on PATH." }
     Info "Git installed"
 }
 
