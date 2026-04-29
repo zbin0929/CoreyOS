@@ -76,6 +76,7 @@ export interface ChatApprovalRequest {
   pattern_key?: string | null;
   pattern_keys?: string[];
   description: string;
+  _sessionId?: string;
 }
 
 export interface ChatStreamCallbacks {

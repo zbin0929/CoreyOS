@@ -156,6 +156,8 @@ pub struct HermesApprovalRequest {
     pub pattern_keys: Vec<String>,
     #[serde(default)]
     pub description: String,
+    #[serde(rename = "_sessionId", default)]
+    pub session_id: Option<String>,
 }
 
 /// Payload of a `hermes.tool.progress` SSE event. Hermes emits the agent's

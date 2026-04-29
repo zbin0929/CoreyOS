@@ -17,7 +17,7 @@ export function ApprovalCard({ approval, sessionId, onResolved }: Props) {
     setLoading(choice);
     try {
       await invoke('hermes_approval_respond', {
-        args: { sessionId, choice },
+        args: { sessionId: approval._sessionId || sessionId, choice },
       });
       onResolved();
     } catch {

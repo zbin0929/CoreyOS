@@ -433,6 +433,7 @@ pub fn patch_approval_sse() {
     let p2_needle = r#"            agent_ref = [None]
             agent_task = asyncio.ensure_future(self._run_agent("#;
     let p2_replacement = r#"            def _on_approval(ad):
+                ad["_session_id"] = session_id or ""
                 _stream_q.put(("__approval__", ad))
             os.environ["HERMES_EXEC_ASK"] = "1"
             os.environ["HERMES_SESSION_KEY"] = session_id or ""
