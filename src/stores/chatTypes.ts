@@ -149,6 +149,11 @@ export interface ChatState {
   /** True when at least one session exists. Used to gate rendering. */
   hasSessions: () => boolean;
 
+  importGatewayMessages: (
+    sessionId: string,
+    msgs: readonly { role: string; content: string; timestamp: number }[],
+  ) => void;
+
   importGatewaySession: (gs: import('@/lib/ipc').GatewaySession) => string;
 
   lastTokenUsage: { prompt: number; completion: number } | null;

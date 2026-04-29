@@ -459,6 +459,47 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   hasSessions: () => get().orderedIds.length > 0,
 
+  importGatewayMessages: (
+    sessionId: string,
+    msgs: readonly { role: string; content: string; timestamp: number }[],
+  ) => {
+    for (let i = 0; i < msgs.length; i++) {
+      const cur = msgs[i]!;
+      if (cur.role === 'user' && cur.content) {
+        get().appendMessage(sessionId, {
+          id: newId('m'),
+          role: 'user',
+          content: cur.content,
+          createdAt: cur.timestamp,
+          pending: false,
+        });
+      } else if (cur.role === 'assistant' && cur.content) {
+        get().appendMessage(sessionId, {
+          id: newId('m'),
+          role: 'assistant',
+          content: cur.content,
+          createdAt: cur.timestamp,
+          pending: false,
+        });
+      } else if (cur.role === 'tool' && cur.content) {
+        try {
+          const data = JSON.parse(cur.content);
+          if (data.approval) {
+            get().appendMessage(sessionId, {
+              id: newId('m'),
+              role: 'assistant',
+              content: `⚠️ **${data.approval}**`,
+              createdAt: cur.timestamp,
+              pending: false,
+            });
+          }
+        } catch {
+          // not JSON, skip
+        }
+      }
+    }
+  },
+
   importGatewaySession: (gs: GatewaySession): string => {
     const existing = get().orderedIds.find(
       (id) => get().sessions[id]?.gatewayId === gs.id,
@@ -468,18 +509,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const sess = get().sessions[existing];
       if (sess && sess.messages.length === 0) {
         gatewaySessionMessages(gs.id).then((msgs) => {
-          for (const m of msgs) {
-            if (m.role !== 'user' && m.role !== 'assistant') continue;
-            if (!m.content) continue;
-            get().appendMessage(existing, {
-              id: newId('m'),
-              role: m.role === 'user' ? 'user' : 'assistant',
-              content: m.content,
-              createdAt: m.timestamp,
-              pending: false,
-            });
-          }
-        });
+          get().importGatewayMessages(existing, msgs);
+        }).catch(() => {});
       }
       return existing;
     }
@@ -498,19 +529,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
     fireWrite(dbSessionUpsert({ id, title: gs.title || `Gateway: ${gs.source ?? 'unknown'}`, model: gs.model ?? null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes' }), 'importGatewaySession');
     gatewaySessionMessages(gs.id).then((msgs) => {
-      for (const m of msgs) {
-        if (m.role !== 'user' && m.role !== 'assistant') continue;
-        if (!m.content) continue;
-        const msgId = newId('m');
-        const msg: UiMessage = {
-          id: msgId,
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.content,
-          createdAt: m.timestamp,
-          pending: false,
-        };
-        get().appendMessage(id, msg);
-      }
+      get().importGatewayMessages(id, msgs);
     }).catch((e) => {
       console.error('[gateway] failed to load messages for', gs.id, e);
     });
