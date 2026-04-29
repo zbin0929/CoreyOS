@@ -2,7 +2,7 @@
 
 > CoreyOS 是你本地 AI Agent 生态的桌面控制台。所有 LLM、所有 IM 平台、所有技能/记忆/工具/工作流，集中到一个 Tauri 应用里。
 
-**最后更新**：2026-04-27 · 覆盖至 v0.1.0 · 21 个功能页
+**最后更新**：2026-04-29 · 覆盖至 v0.1.8 · 21 个功能页
 
 ---
 
@@ -53,7 +53,7 @@
 
 - 一份二进制（~30 MB），跨 macOS / Windows / Linux
 - 不依赖 Electron、不要求云后端、不发送遥测
-- 数据全部保存在本地 `~/.hermes/` 和 `~/Library/Application Support/com.corey.dev/`（macOS）
+- 数据全部保存在本地 `~/.hermes/` 和 `~/Library/Application Support/com.caduceus.app/`（macOS）
 
 ### 是给谁的
 
@@ -88,6 +88,20 @@ CoreyOS 会自动检测：
 - ✅ `~/.hermes/config.yaml` 可读写
 
 如果未装 Hermes，CoreyOS 会进入**只读 stub 模式**——能浏览界面但不能真聊天。
+
+#### Windows 一键安装
+
+Windows 用户可以在 Corey 内点击**一键安装**按钮，自动完成以下操作：
+
+1. **检测环境** — Windows 版本、Git、Python
+2. **安装 Hermes Agent** — 通过 ghfast.top 镜像 clone 代码 + 清华 PyPI 安装依赖（无需代理）
+3. **创建虚拟环境** — 使用 `uv venv` + Python 3.11
+4. **配置 PATH** — 将 hermes 加入用户 PATH
+5. **启动 Gateway** — 自动使用 `hermes gateway run`
+
+安装过程中会弹出 PowerShell 窗口显示实时进度。安装完成后 Gateway 自动运行。
+
+> **安装位置**：Hermes 安装到 Corey 所在目录下（如 `E:\Program Files\Corey\hermes-agent\`）。HERMES_HOME 默认为 `C:\Users\<用户名>\.hermes\`。
 
 ### 首次启动
 
@@ -219,6 +233,30 @@ CoreyOS 会自动检测：
 #### 进阶用法
 - **多 Agent 模式**：左侧顶部 AgentSwitcher 切换不同 Hermes agent
 - **Routing rules**：Settings 里配置规则，根据消息内容自动路由（如"含代码 → Claude"）
+
+#### 网关会话（Gateway Sessions）
+
+通过 IM 平台（微信、钉钉、Telegram 等）与 Hermes 进行的对话会**自动出现在左侧对话列表**中。
+
+- **自动同步**：Corey 每 60 秒自动检查并导入新的网关会话
+- **来源标记**：每个网关会话前面有彩色 badge 标识来源平台：
+
+| 来源 | 标记 | 颜色 |
+|------|------|------|
+| 微信 | 微信 | 红色 |
+| 钉钉 | 钉钉 | 蓝色 |
+| 飞书 | 飞书 | 紫色 |
+| 企业微信 | 企微 | 橙色 |
+| QQ | QQ | 青色 |
+| Telegram | TG | 天蓝 |
+| Discord | DC | 靛蓝 |
+| Slack | SL | 翠绿 |
+| WhatsApp | WA | 绿色 |
+| CLI | CLI | 琥珀 |
+
+- **默认标题**：自动命名为"微信聊天记录"、"Telegram 聊天记录"等
+- **只读**：网关会话不可编辑，只能查看历史记录
+- **审批提示**：对话中如果 Hermes 发起了安全审批，会以 ⚠️ 标记显示
 
 ---
 
@@ -655,7 +693,7 @@ Runbook = 带 `{{参数}}` 占位符的命名 prompt 模板。
   2. 分块（默认 500 字符 + 50 重叠）
   3. 写入 SQLite（仅原文 + chunks，**不再做本地向量化**）
 
-> **v9 起：本地向量索引（BGE-Small ONNX）已移除**。原因：模型下载依赖 HuggingFace，国内常失败 → 永远软失败为零向量。后续会改走 Hermes `/v1/embeddings`，此刻先回退为纯关键词检索。
+> **v9 起：本地向量索引（BGE-Small ONNX）已移除**。原因：模型下载依赖 HuggingFace，国内常失败 → 永远软失败为零向量。当前使用关键词检索。后续计划支持 BGE-M3 语义搜索（用户手动安装模型，从国内 CDN 下载）。
 
 #### 在 Chat 里使用
 
@@ -1198,16 +1236,29 @@ CoreyOS 内置一个**简化的 token 价格表**（`FALLBACK_PRICE`），覆盖
 | 内容 | 路径（macOS） |
 |---|---|
 | Hermes 数据 | `~/.hermes/` |
-| CoreyOS 数据库 | `~/Library/Application Support/com.corey.dev/` |
-| 应用配置 | `~/Library/Preferences/com.corey.dev.plist` |
+| CoreyOS 数据库 | `~/Library/Application Support/com.caduceus.app/` |
+| 应用配置 | `~/Library/Preferences/com.caduceus.app.plist` |
 
 Linux：
 - `~/.hermes/`
-- `~/.local/share/com.corey.dev/`
+- `~/.local/share/com.caduceus.app/`
 
 Windows：
 - `%USERPROFILE%\.hermes\`
-- `%APPDATA%\com.corey.dev\`
+- `%LOCALAPPDATA%\Corey\`（Corey 数据）
+
+### 版本与更新
+
+#### 查看版本号
+
+左侧导航栏底部显示当前 Corey 版本号（如 `Corey v0.1.8`）。
+
+#### 自动更新
+
+- 有新版本时，右下角弹出更新提示
+- 点击更新按钮，自动下载并安装
+- 更新是**全量替换**——直接跳到最新版本，不逐版本递增
+- 如果更新失败，会显示错误提示（5 秒后自动消失），可手动下载安装
 
 ---
 
@@ -1322,7 +1373,8 @@ Windows：
 
 ### Q3：会话数据放在哪？怎么备份？
 
-- SQLite 数据库：`~/Library/Application Support/com.corey.dev/sessions.db`（macOS）
+- SQLite 数据库：`~/Library/Application Support/com.caduceus.app/caduceus.db`（macOS）
+- Windows：`%LOCALAPPDATA%\Corey\caduceus.db`
 - 包含：会话标题 / 消息 / 反馈 / 工具调用轨迹 / 附件元数据
 - 附件 blob：`~/.hermes/attachments/<hash>`
 - 直接复制文件夹即可备份
@@ -1355,14 +1407,33 @@ Windows：
 - Vector search — Knowledge 文件超 10K chunks 后明显
 - xterm 多 tab — 每 tab 占 ~20MB，10 个起就会感觉卡
 
+### Q9：Windows 一键安装失败怎么办？
+
+常见原因：
+1. **Git 未安装** — 先安装 Git for Windows
+2. **网络问题** — 确保能访问外网（脚本使用 ghfast.top 镜像，无需代理）
+3. **PowerShell 版本过低** — Windows 10 自带的 PS 5.1 即可
+4. **目录权限** — 如果装到 `C:\Program Files\` 需要管理员权限
+
+查看日志：`%LOCALAPPDATA%\Corey\logs\bootstrap-windows.log`
+
+### Q10：网关会话多久同步一次？
+
+每 60 秒自动检查。新产生的 IM 对话（微信、钉钉等）最多 1 分钟后出现在 Corey 的对话列表中。
+
+### Q11：如何查看 Corey 和 Hermes 的版本号？
+
+- **Corey 版本**：左侧导航栏底部（如 `Corey v0.1.8`）
+- **Hermes 版本**：Home 页右上角状态栏显示
+
 ---
 
 ## 故障排查
 
 ### 启动崩溃 / 白屏
 
-1. 检查 `~/Library/Logs/com.corey.dev/` 看 stack trace
-2. 删除 `~/Library/Application Support/com.corey.dev/`（**会丢会话**）重启
+1. 检查 `~/Library/Logs/com.caduceus.app/` 看 stack trace
+2. 删除 `~/Library/Application Support/com.caduceus.app/`（**会丢会话**）重启
 3. 装最新版本（GitHub Releases）
 
 ### Chat 消息发不出
