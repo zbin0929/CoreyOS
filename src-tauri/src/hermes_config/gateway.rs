@@ -692,6 +692,8 @@ fn resolve_bootstrap_script(resource_dir: &Path) -> io::Result<PathBuf> {
 pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
     let script_path = resolve_bootstrap_script(resource_dir)?;
     let data_dir = crate::paths::hermes_data_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    #[cfg(target_os = "windows")]
     let corey_install_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
