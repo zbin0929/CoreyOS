@@ -116,7 +116,16 @@ if ($bashExe) {
 # ── 3. Install Hermes Agent ──────────────────────────────────────
 Step "Hermes installation (git clone + uv)"
 
-$HermesDir = Join-Path $env:LOCALAPPDATA "hermes\hermes-agent"
+if ($env:COREY_INSTALL_DIR -and (Test-Path $env:COREY_INSTALL_DIR)) {
+    $HermesDir = Join-Path $env:COREY_INSTALL_DIR "hermes-agent"
+    Info "Using Corey install dir: $HermesDir"
+} elseif ($env:HERMES_HOME -and (Test-Path $env:HERMES_HOME)) {
+    $HermesDir = Join-Path $env:HERMES_HOME "hermes-agent"
+    Info "Using HERMES_HOME: $HermesDir"
+} else {
+    $HermesDir = Join-Path $env:LOCALAPPDATA "hermes\hermes-agent"
+    Info "Using default: $HermesDir"
+}
 
 if (Get-Command hermes -ErrorAction SilentlyContinue) {
     Info "Hermes already on PATH: $(Get-Command hermes | Select-Object -ExpandProperty Source)"
@@ -124,7 +133,6 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
 } elseif (Test-Path (Join-Path $HermesDir "venv\Scripts\hermes.exe")) {
     Info "Hermes found at $HermesDir\venv"
 } else {
-    Info "Cloning hermes-agent via ghfast.top mirror..."
     $hermesParent = Split-Path $HermesDir
     if (-not (Test-Path $hermesParent)) { New-Item -ItemType Directory -Path $hermesParent -Force | Out-Null }
 
@@ -138,6 +146,7 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
         }
         Pop-Location
     } else {
+        Info "Cloning hermes-agent via ghfast.top mirror..."
         try {
             git clone "https://ghfast.top/https://github.com/NousResearch/hermes-agent.git" $HermesDir 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
         } catch {

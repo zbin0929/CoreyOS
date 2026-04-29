@@ -692,6 +692,10 @@ fn resolve_bootstrap_script(resource_dir: &Path) -> io::Result<PathBuf> {
 pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
     let script_path = resolve_bootstrap_script(resource_dir)?;
     let data_dir = crate::paths::hermes_data_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let corey_install_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| resource_dir.to_path_buf());
 
     #[cfg(target_os = "windows")]
     {
@@ -711,7 +715,7 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
         ]);
         cmd.env("PYTHONIOENCODING", "utf-8");
         cmd.env("HERMES_HOME", &data_dir);
-        cmd.env("COREY_DATA_DIR", &data_dir);
+        cmd.env("COREY_INSTALL_DIR", &corey_install_dir);
         cmd.stdout(std::process::Stdio::inherit());
         cmd.stderr(std::process::Stdio::inherit());
         let mut child = cmd.spawn()?;
