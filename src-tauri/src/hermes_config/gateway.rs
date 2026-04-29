@@ -689,6 +689,18 @@ fn resolve_bootstrap_script(resource_dir: &Path) -> io::Result<PathBuf> {
 /// elevation and runs interactively. The script logs to
 /// `%LOCALAPPDATA%\Corey\logs\bootstrap-<platform>.log` on Windows
 /// and `~/.corey/logs/bootstrap-<platform>.log` on macOS/Linux.
+#[cfg(target_os = "windows")]
+fn ps_encode_command(s: &str) -> String {
+    let utf16: Vec<u8> = s.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+    let mut out = String::with_capacity(utf16.len() * 4 / 3 + 4);
+    base64::engine::Engine::encode_string(
+        &base64::engine::general_purpose::STANDARD,
+        &utf16,
+        &mut out,
+    );
+    out
+}
+
 pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
     let script_path = resolve_bootstrap_script(resource_dir)?;
     let data_dir = crate::paths::hermes_data_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -707,22 +719,28 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
             .unwrap_or_else(|| data_dir.join("logs"));
         let _ = std::fs::create_dir_all(&log_dir);
         let log_file = log_dir.join("bootstrap-windows.log");
+        let script_str = script_path.to_str().unwrap_or_default();
+        let corey_dir_str = corey_install_dir.to_str().unwrap_or_default();
+        let hermes_home_str = data_dir.to_str().unwrap_or_default();
+        tracing::info!(
+            "bootstrap args: COREY_INSTALL_DIR={}, HERMES_HOME={}",
+            corey_dir_str,
+            hermes_home_str
+        );
+        let ps_inline = format!(
+            "$env:COREY_INSTALL_DIR=\"{}\"; $env:HERMES_HOME=\"{}\"; & \"{}\"",
+            corey_dir_str, hermes_home_str, script_str
+        );
+        let encoded = ps_encode_command(&ps_inline);
         let mut cmd = std::process::Command::new("powershell.exe");
         cmd.args([
             "-ExecutionPolicy",
             "Bypass",
             "-NoProfile",
-            "-File",
-            script_path.to_str().unwrap_or_default(),
+            "-EncodedCommand",
+            &encoded,
         ]);
         cmd.env("PYTHONIOENCODING", "utf-8");
-        cmd.env("HERMES_HOME", &data_dir);
-        cmd.env("COREY_INSTALL_DIR", &corey_install_dir);
-        tracing::info!(
-            "bootstrap env: COREY_INSTALL_DIR={}, HERMES_HOME={}",
-            corey_install_dir.display(),
-            data_dir.display()
-        );
         cmd.stdout(std::process::Stdio::inherit());
         cmd.stderr(std::process::Stdio::inherit());
         let mut child = cmd.spawn()?;
