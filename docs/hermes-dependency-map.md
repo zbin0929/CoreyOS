@@ -484,8 +484,8 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 | 环境变量 | `$HOME` | `%USERPROFILE%` | 使用 `dirs` crate |
 | 进程窗口抑制 | 不需要 | `.creation_flags(CREATE_NO_WINDOW)` | `hermes_config/gateway.rs` |
 | Bootstrap 脚本 | bash | PowerShell (`bootstrap-windows.ps1`) | `src-tauri/assets/scripts/` |
-| Windows Bootstrap 日志 | `~/.hermes/logs/bootstrap-macos.log` | `%LOCALAPPDATA%/Corey/logs/bootstrap-windows.log`（记录 exit_code） | `hermes_config/gateway.rs` |
-| Windows Bootstrap 环境注入 | `HERMES_HOME` | `HERMES_HOME` + `COREY_DATA_DIR` | `hermes_config/gateway.rs` |
+| Windows Bootstrap 日志 | `~/.hermes/logs/bootstrap-macos.log` | `%LOCALAPPDATA%/Corey/logs/bootstrap-windows.log`（记录 exit_code；实时输出通过 `Stdio::inherit()` 到 PowerShell 窗口） | `hermes_config/gateway.rs` |
+| Windows Bootstrap 环境注入 | `HERMES_HOME` | `HERMES_HOME` + `COREY_INSTALL_DIR`（Corey exe 所在目录） | `hermes_config/gateway.rs` |
 
 **⚠️ Hermes 更新时重点检查：**
 - Windows 上 `hermes.exe` 安装路径是否变更
@@ -546,7 +546,7 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 - [ ] Windows: `hermes.exe` 路径是否仍有效
 - [ ] Windows: `CREATE_NO_WINDOW` 是否仍需要
 - [ ] Windows: bootstrap 日志路径/exit_code 记录是否仍有效
-- [ ] Windows: `COREY_DATA_DIR` 注入是否仍被脚本使用
+- [ ] Windows: `COREY_INSTALL_DIR` 注入是否仍被脚本使用
 
 ### Step 6：文档更新
 - [ ] 更新 `HERMES_MIN_SUPPORTED` 如果最低版本变更
@@ -585,3 +585,4 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 | 2026-04-29 | v1.0 | 0.10-0.11 | 初始文档创建 | — |
 | 2026-04-29 | v2.0 | 0.10-0.11 | 基于 Hermes 官方文档全面更新：补充 28 个未调用 CLI 命令、完整目录结构、auth.json/SOUL.md/memory_store.db、config.yaml 4.2/4.3 分类、.env 完整变量列表、MCP/记忆/频道集成细节、跨平台注意事项、config version 17 迁移信息 | — |
 | 2026-04-29 | v2.1 | 0.10-0.11 | 同步代码现状：补充 `/api/approval/pending` 依赖；更新 Windows bootstrap 日志与环境注入说明（`COREY_DATA_DIR`、exit_code 日志） | — |
+| 2026-04-29 | v2.2 | 0.11 | Windows bootstrap 重写：`COREY_INSTALL_DIR` 替代 `COREY_DATA_DIR`，安装到 Corey exe 同级目录；`resolve_hermes_binary()` 新增 Corey 安装目录搜索路径；`Stdio::inherit()` 替代 `Stdio::piped()` 显示实时进度；PowerShell 5.1 兼容性修复；`gateway run` 替代 `gateway start`（Windows 不支持 start） | `gateway.rs` `resolve_hermes_binary()`, `bootstrap-windows.ps1` |
