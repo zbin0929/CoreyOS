@@ -10,12 +10,35 @@ import {
   dbSessionUpsert,
   dbToolCallAppend,
   gatewaySessionMessages,
+  gatewaySessionsList,
   type GatewaySession,
 } from '@/lib/ipc';
 
 import { useAgentsStore } from './agents';
 import { useAppStatusStore } from './appStatus';
 import { deriveTitle, fireWrite, newId, sessionFromDb } from './chatPersist';
+
+const GATEWAY_SOURCE_LABELS: Record<string, string> = {
+  weixin: '微信聊天记录',
+  dingtalk: '钉钉聊天记录',
+  feishu: '飞书聊天记录',
+  wecom: '企业微信聊天记录',
+  qq: 'QQ聊天记录',
+  qqbot: 'QQ聊天记录',
+  telegram: 'Telegram 聊天记录',
+  discord: 'Discord 聊天记录',
+  slack: 'Slack 聊天记录',
+  whatsapp: 'WhatsApp 聊天记录',
+  signal: 'Signal 聊天记录',
+  email: '邮件记录',
+  sms: '短信记录',
+  cli: 'CLI 聊天记录',
+};
+
+function gatewayDefaultTitle(source: string | null | undefined): string {
+  if (!source) return '聊天记录';
+  return GATEWAY_SOURCE_LABELS[source] ?? `${source} 聊天记录`;
+}
 import type {
   ChatSession,
   ChatState,
@@ -86,6 +109,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }),
         'attachmentGc',
       );
+
+      gatewaySessionsList().then((list) => {
+        const store = get();
+        for (const gs of list) {
+          if (store.orderedIds.find((id) => store.sessions[id]?.gatewayId === gs.id)) continue;
+          get().importGatewaySession(gs);
+        }
+      }).catch(() => {});
     } catch (e) {
       console.error('db hydrate failed:', e);
       // Still mark as hydrated so the UI unblocks — users start fresh.
@@ -520,7 +551,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         ...s.sessions,
         [id]: {
           ...s.sessions[id]!,
-          title: gs.title || `Gateway: ${gs.source ?? 'unknown'}`,
+          title: gs.title || gatewayDefaultTitle(gs.source),
           gatewayId: gs.id,
           gatewaySource: gs.source,
           adapterId: 'hermes',

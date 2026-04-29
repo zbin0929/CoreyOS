@@ -220,6 +220,16 @@ export function SessionsPanel() {
                       className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                       title={`${s.title} \u2014 ${adapterNameById[s.adapterId] ?? s.adapterId}`}
                     >
+                      {s.gatewaySource && (
+                        <span
+                          className={cn(
+                            'shrink-0 rounded-full border px-1 py-0 font-mono text-[9px] uppercase tracking-wider',
+                            gatewayBadgeClass(s.gatewaySource),
+                          )}
+                        >
+                          {gatewayBadgeLabel(s.gatewaySource)}
+                        </span>
+                      )}
                       {showBadge && (
                         <span
                           className={cn(
@@ -272,6 +282,31 @@ function adapterBadgeLabel(id: string, names: Record<string, string>): string {
     return first.slice(0, 3);
   }
   return id.split('_')[0]?.slice(0, 3) ?? id.slice(0, 3);
+}
+
+const GATEWAY_BADGE: Record<string, { label: string; cls: string }> = {
+  cli: { label: 'CLI', cls: 'border-amber-500/40 bg-amber-500/10 text-amber-600' },
+  telegram: { label: 'TG', cls: 'border-sky-500/40 bg-sky-500/10 text-sky-600' },
+  discord: { label: 'DC', cls: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-600' },
+  slack: { label: 'SL', cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600' },
+  whatsapp: { label: 'WA', cls: 'border-green-500/40 bg-green-500/10 text-green-600' },
+  weixin: { label: '微信', cls: 'border-red-500/40 bg-red-500/10 text-red-500' },
+  dingtalk: { label: '钉钉', cls: 'border-blue-500/40 bg-blue-500/10 text-blue-500' },
+  qq: { label: 'QQ', cls: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-500' },
+  qqbot: { label: 'QQ', cls: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-500' },
+  feishu: { label: '飞书', cls: 'border-violet-500/40 bg-violet-500/10 text-violet-500' },
+  wecom: { label: '企微', cls: 'border-orange-500/40 bg-orange-500/10 text-orange-500' },
+  signal: { label: 'SG', cls: 'border-blue-400/40 bg-blue-400/10 text-blue-400' },
+  email: { label: '邮件', cls: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-500' },
+  sms: { label: 'SMS', cls: 'border-pink-500/40 bg-pink-500/10 text-pink-500' },
+};
+
+function gatewayBadgeClass(source: string): string {
+  return GATEWAY_BADGE[source]?.cls ?? 'border-border bg-bg-elev-2 text-fg-subtle';
+}
+
+function gatewayBadgeLabel(source: string): string {
+  return GATEWAY_BADGE[source]?.label ?? source.slice(0, 2).toUpperCase();
 }
 
 /**
