@@ -910,10 +910,6 @@ pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
     }
     #[cfg(target_os = "windows")]
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-        // Official Windows installer (install.ps1) puts hermes.exe in
-        // %LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\ and adds
-        // that dir to user PATH. Also check the Scripts dir directly
-        // in case PATH hasn't been refreshed in this session.
         let candidate = PathBuf::from(local)
             .join("hermes")
             .join("hermes-agent")
@@ -922,6 +918,23 @@ pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
             .join(BINARY_NAME);
         if candidate.is_file() {
             return Ok(candidate);
+        }
+    }
+
+    // 3) Corey install dir. The bootstrap script installs hermes-agent
+    //    into <corey_install_dir>/hermes-agent/venv/Scripts/ on Windows
+    //    (e.g. E:\Program Files\Corey\hermes-agent\venv\Scripts\).
+    #[cfg(target_os = "windows")]
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(install_dir) = exe.parent() {
+            let candidate = install_dir
+                .join("hermes-agent")
+                .join("venv")
+                .join("Scripts")
+                .join(BINARY_NAME);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
         }
     }
 
