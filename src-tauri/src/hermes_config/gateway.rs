@@ -695,8 +695,6 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::io::Read;
-        use std::os::windows::process::CommandExt;
         let log_dir = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .map(|p| p.join("Corey").join("logs"))
@@ -714,27 +712,14 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
         cmd.env("PYTHONIOENCODING", "utf-8");
         cmd.env("HERMES_HOME", &data_dir);
         cmd.env("COREY_DATA_DIR", &data_dir);
-        cmd.stdout(std::process::Stdio::piped());
-        cmd.stderr(std::process::Stdio::piped());
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        let diag = format!(
-            "script_path: {}\ndata_dir: {}\nlog_file: {}\n",
-            script_path.display(),
-            data_dir.display(),
-            log_file.display(),
-        );
+        cmd.stdout(std::process::Stdio::inherit());
+        cmd.stderr(std::process::Stdio::inherit());
         let mut child = cmd.spawn()?;
-        let mut stdout = String::new();
-        let mut stderr = String::new();
-        if let Some(mut out) = child.stdout.take() {
-            let _ = out.read_to_string(&mut stdout);
-        }
-        if let Some(mut err) = child.stderr.take() {
-            let _ = err.read_to_string(&mut stderr);
-        }
         let status = child.wait()?;
-        let _ = std::fs::write(&log_file, format!("{diag}{stdout}\n{stderr}"));
+        let _ = std::fs::write(
+            &log_file,
+            format!("exit_code: {}\n", status.code().unwrap_or(-1)),
+        );
         if status.success() {
             Ok(format!(
                 "Installation completed successfully. Log: {}",
