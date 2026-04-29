@@ -20,14 +20,31 @@ jobs:
           mv coscli-linux-amd64 coscli
           chmod +x coscli
 
-      - name: Download release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download release assets (parallel curl)
         run: |
           TAG="${{ inputs.release_tag || github.event.release.tag_name }}"
-          echo "Syncing release: $TAG"
+          REPO="${{ github.repository }}"
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
           mkdir -p ./assets
-          gh release download "$TAG" --repo "${{ github.repository }}" --dir ./assets
+
+          FILES=(
+            "latest.json"
+            "Corey_${TAG#v}_universal.dmg"
+            "Corey_universal.app.tar.gz"
+            "Corey_universal.app.tar.gz.sig"
+            "Corey_${TAG#v}_x64-setup.exe"
+            "Corey_${TAG#v}_x64-setup.exe.sig"
+            "Corey_${TAG#v}_x64_en-US.msi"
+            "Corey_${TAG#v}_x64_en-US.msi.sig"
+          )
+
+          for f in "${FILES[@]}"; do
+            echo "Downloading $f..."
+            curl -fSL -o "./assets/$f" "${BASE}/${f}" &
+          done
+          wait
+          echo "All downloads complete"
+          ls -lh ./assets/
         shell: bash
 
       - name: Upload assets to COS
