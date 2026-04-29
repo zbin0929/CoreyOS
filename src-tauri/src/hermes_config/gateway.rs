@@ -451,12 +451,97 @@ pub fn patch_approval_sse() {
     }
 
     if patched {
-        match std::fs::write(&candidate, content) {
+        match std::fs::write(&candidate, &content) {
             Ok(()) => tracing::info!("patch_approval_sse: applied successfully"),
             Err(e) => tracing::warn!(error = %e, "patch_approval_sse: write failed"),
         }
     } else {
         tracing::warn!("patch_approval_sse: no matching patterns found — Hermes may have changed");
+    }
+
+    let p3_needle = r#"            self._app.router.add_post("/api/jobs", self._handle_create_job)"#;
+    let p3_replacement = r#"            self._app.router.add_post("/api/jobs", self._handle_create_job)
+            self._app.router.add_post("/api/approval/respond", self._handle_approval_respond)
+            self._app.router.add_post("/api/approval/pending", self._handle_approval_pending)"#;
+
+    if content.contains(p3_needle) && !content.contains("_handle_approval_respond") {
+        content = content.replacen(p3_needle, p3_replacement, 1);
+        let handler_code = r#"
+    async def _handle_approval_respond(self, request: "web.Request") -> "web.Response":
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "invalid json"}, status=400)
+        session_id = body.get("session_id", "")
+        choice = body.get("choice", "deny")
+        approval_id = body.get("approval_id", "")
+        if choice not in ("once", "session", "always", "deny"):
+            return web.json_response({"error": f"Invalid choice: {choice}"}, status=400)
+        try:
+            from tools.approval import (
+                resolve_gateway_approval,
+                approve_session,
+                approve_permanent,
+                save_permanent_allowlist,
+                _pending,
+                _lock,
+            )
+            pending = None
+            with _lock:
+                queue = _pending.get(session_id)
+                if isinstance(queue, list):
+                    if approval_id:
+                        for i, entry in enumerate(queue):
+                            if entry.get("approval_id") == approval_id:
+                                pending = queue.pop(i)
+                                break
+                        else:
+                            pending = queue.pop(0) if queue else None
+                    else:
+                        pending = queue.pop(0) if queue else None
+                    if not queue:
+                        _pending.pop(session_id, None)
+                elif queue:
+                    pending = _pending.pop(session_id, None)
+            if pending:
+                keys = pending.get("pattern_keys") or [pending.get("pattern_key", "")]
+                if choice in ("once", "session"):
+                    for k in keys:
+                        approve_session(session_id, k)
+                elif choice == "always":
+                    for k in keys:
+                        approve_session(session_id, k)
+                        approve_permanent(k)
+                    save_permanent_allowlist(_permanent_approved)
+            resolve_gateway_approval(session_id, choice, resolve_all=False)
+            return web.json_response({"ok": True, "choice": choice})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def _handle_approval_pending(self, request: "web.Request") -> "web.Response":
+        session_id = request.query.get("session_id", "")
+        try:
+            from tools.approval import _pending, _lock
+            with _lock:
+                p = _pending.get(session_id)
+                if isinstance(p, list):
+                    if p:
+                        return web.json_response({"pending": p[0], "pending_count": len(p)})
+                    return web.json_response({"pending": None})
+                elif p:
+                    return web.json_response({"pending": p})
+                return web.json_response({"pending": None})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+"#;
+        content = content.replace(
+            "    async def _handle_health(self",
+            &format!("{handler_code}\n    async def _handle_health(self"),
+        );
+        match std::fs::write(&candidate, &content) {
+            Ok(()) => tracing::info!("patch_approval_sse: added /api/approval/respond endpoint"),
+            Err(e) => tracing::warn!(error = %e, "patch_approval_sse: write failed for p3"),
+        }
     }
 }
 
