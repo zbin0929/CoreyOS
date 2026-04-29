@@ -185,19 +185,24 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
 
     Info "Creating venv and installing hermes-agent..."
     Push-Location $HermesDir
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         Info "Running: uv venv venv --python 3.11"
-        $venvOut = uv venv venv --python 3.11 2>&1
-        $venvOut | ForEach-Object { Write-Log 'VENV' $_ }
+        uv venv venv --python 3.11 2>&1 | ForEach-Object { Write-Log 'VENV' $_ }
         Info "Running: uv pip install -e . --index-url https://pypi.tuna.tsinghua.edu.cn/simple"
-        $pipOut = uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" 2>&1
-        $pipOut | ForEach-Object { Write-Log 'PIP' $_ }
+        uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
+        if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+            Pop-Location
+            Fail "uv pip install exited with code $LASTEXITCODE"
+        }
     } catch {
         Write-Log 'ERROR' "Full error: $($_ | Out-String)"
         Pop-Location
         Fail "Hermes install failed: $($_.Exception.Message)"
     }
     Pop-Location
+    $ErrorActionPreference = $prevEAP
     Info "Hermes install complete"
 }
 

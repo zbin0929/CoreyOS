@@ -1,6 +1,6 @@
 # Hermes Agent 依赖地图
 
-> 版本：v2.0 · 2026-04-29
+> 版本：v2.1 · 2026-04-29
 > 当前 Hermes 最低支持版本：0.10
 > Hermes 官方文档：https://hermes-agent.nousresearch.com/docs/
 > Hermes GitHub：https://github.com/NousResearch/hermes-agent
@@ -95,6 +95,7 @@ Gateway API Server 配置（Hermes 官方）：
 | `/v1/chat/completions` | POST (non-stream) | `adapters/hermes/gateway/mod.rs` | 单轮聊天 | 响应 JSON 变更 → 解析失败 |
 | `/v1/models` | GET | `adapters/hermes/probe.rs`, `ipc/hermes_instances.rs` | 模型列表探测 | 响应格式变更 → 模型列表为空 |
 | `/api/approval/respond` | POST | `ipc/chat.rs` | 审批响应 | 路径/格式变更 → 审批流中断 |
+| `/api/approval/pending` | POST | `hermes_config/gateway.rs` (patch 注入) | 查询待审批项 | 路径/格式变更 → 审批恢复/轮询失败 |
 
 **SSE 事件类型依赖（`/v1/chat/completions` stream）：**
 
@@ -111,6 +112,7 @@ Gateway API Server 配置（Hermes 官方）：
 - `approval` 事件的交互协议是否变化
 - `/health` 响应是否新增必要字段
 - `/api/approval/respond` 路径是否变更
+- `/api/approval/pending` 路径是否变更
 - `API_SERVER_*` 环境变量是否变更默认值
 
 ---
@@ -482,6 +484,8 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 | 环境变量 | `$HOME` | `%USERPROFILE%` | 使用 `dirs` crate |
 | 进程窗口抑制 | 不需要 | `.creation_flags(CREATE_NO_WINDOW)` | `hermes_config/gateway.rs` |
 | Bootstrap 脚本 | bash | PowerShell (`bootstrap-windows.ps1`) | `src-tauri/assets/scripts/` |
+| Windows Bootstrap 日志 | `~/.hermes/logs/bootstrap-macos.log` | `%LOCALAPPDATA%/Corey/logs/bootstrap-windows.log`（记录 exit_code） | `hermes_config/gateway.rs` |
+| Windows Bootstrap 环境注入 | `HERMES_HOME` | `HERMES_HOME` + `COREY_DATA_DIR` | `hermes_config/gateway.rs` |
 
 **⚠️ Hermes 更新时重点检查：**
 - Windows 上 `hermes.exe` 安装路径是否变更
@@ -541,6 +545,8 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 - [ ] Windows: 同上
 - [ ] Windows: `hermes.exe` 路径是否仍有效
 - [ ] Windows: `CREATE_NO_WINDOW` 是否仍需要
+- [ ] Windows: bootstrap 日志路径/exit_code 记录是否仍有效
+- [ ] Windows: `COREY_DATA_DIR` 注入是否仍被脚本使用
 
 ### Step 6：文档更新
 - [ ] 更新 `HERMES_MIN_SUPPORTED` 如果最低版本变更
@@ -578,3 +584,4 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 |------|------|-----------|---------|-----------|
 | 2026-04-29 | v1.0 | 0.10-0.11 | 初始文档创建 | — |
 | 2026-04-29 | v2.0 | 0.10-0.11 | 基于 Hermes 官方文档全面更新：补充 28 个未调用 CLI 命令、完整目录结构、auth.json/SOUL.md/memory_store.db、config.yaml 4.2/4.3 分类、.env 完整变量列表、MCP/记忆/频道集成细节、跨平台注意事项、config version 17 迁移信息 | — |
+| 2026-04-29 | v2.1 | 0.10-0.11 | 同步代码现状：补充 `/api/approval/pending` 依赖；更新 Windows bootstrap 日志与环境注入说明（`COREY_DATA_DIR`、exit_code 日志） | — |
