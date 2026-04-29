@@ -483,6 +483,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     fireWrite(dbSessionUpsert({ id, title: gs.title || `Gateway: ${gs.source ?? 'unknown'}`, model: gs.model ?? null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes' }), 'importGatewaySession');
     gatewaySessionMessages(gs.id).then((msgs) => {
       for (const m of msgs) {
+        if (m.role !== 'user' && m.role !== 'assistant') continue;
+        if (!m.content) continue;
         const msgId = newId('m');
         const msg: UiMessage = {
           id: msgId,
