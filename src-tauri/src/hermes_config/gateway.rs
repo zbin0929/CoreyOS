@@ -869,14 +869,13 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     let mut run_cmd = std::process::Command::new(binary);
     run_cmd.args(["gateway", "run"]).stdin(Stdio::null());
 
-    if let Ok(log_file) = std::fs::File::create(&gw_log) {
-        let _ = std::fs::write(&gw_log, "falling back to 'gateway run' (foreground)\n");
-        if let Ok(log_file2) = std::fs::File::create(&gw_log) {
-            run_cmd.stdout(log_file2);
-        }
-        if let Ok(log_file3) = std::fs::File::create(&gw_log) {
-            run_cmd.stderr(log_file3);
-        }
+    let _ = std::fs::write(&gw_log, "falling back to 'gateway run' (foreground)\n");
+
+    if let Ok(stdout_log) = std::fs::File::create(&gw_log) {
+        run_cmd.stdout(stdout_log);
+    }
+    if let Ok(stderr_log) = std::fs::OpenOptions::new().append(true).open(&gw_log) {
+        run_cmd.stderr(stderr_log);
     }
 
     if let Some(ref dir) = &hermes_dir {
