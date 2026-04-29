@@ -378,6 +378,86 @@ mod compat_tests {
     }
 }
 
+/// Idempotent patch that injects approval SSE support into Hermes'
+/// `gateway/platforms/api_server.py`. Hermes v0.11 (and likely several
+/// versions after) does NOT register `register_gateway_notify` for the
+/// api_server platform, so dangerous-command approval events never reach
+/// SSE consumers (Corey). This patch:
+///   1. Registers a `_on_approval` callback that pushes `("__approval__", data)`
+///      into the stream queue.
+///   2. Extends `_emit` to forward `__approval__` tuples as
+///      `event: hermes.approval` SSE events.
+///
+/// The patch is a pure string replacement (no regex, no AST). It is
+/// idempotent: if either replacement pattern is already absent (i.e. the
+/// patch was applied or Hermes upstream fixed the gap), it becomes a no-op.
+pub fn patch_approval_sse() {
+    let hermes_dir = match crate::paths::hermes_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let candidate = hermes_dir
+        .join("hermes-agent")
+        .join("gateway")
+        .join("platforms")
+        .join("api_server.py");
+
+    let mut content = match std::fs::read_to_string(&candidate) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    if content.contains("__approval__") {
+        tracing::debug!("patch_approval_sse: already patched, skipping");
+        return;
+    }
+
+    let p1_needle = r#"                    )
+                else:
+                    content_chunk = {"#;
+    let p1_replacement = r#"                    )
+                elif isinstance(item, tuple) and len(item) == 2 and item[0] == "__approval__":
+                    event_data = json.dumps(item[1])
+                    await response.write(
+                        f"event: hermes.approval\ndata: {event_data}\n\n".encode()
+                    )
+                else:
+                    content_chunk = {"#;
+
+    let mut patched = false;
+    if content.contains(p1_needle) {
+        content = content.replacen(p1_needle, p1_replacement, 1);
+        patched = true;
+    }
+
+    let p2_needle = r#"            agent_ref = [None]
+            agent_task = asyncio.ensure_future(self._run_agent("#;
+    let p2_replacement = r#"            def _on_approval(ad):
+                _stream_q.put(("__approval__", ad))
+            try:
+                from tools.approval import register_gateway_notify as _ra
+                _ra(session_id, _on_approval)
+            except Exception:
+                pass
+
+            agent_ref = [None]
+            agent_task = asyncio.ensure_future(self._run_agent("#;
+
+    if content.contains(p2_needle) {
+        content = content.replacen(p2_needle, p2_replacement, 1);
+        patched = true;
+    }
+
+    if patched {
+        match std::fs::write(&candidate, content) {
+            Ok(()) => tracing::info!("patch_approval_sse: applied successfully"),
+            Err(e) => tracing::warn!(error = %e, "patch_approval_sse: write failed"),
+        }
+    } else {
+        tracing::warn!("patch_approval_sse: no matching patterns found — Hermes may have changed");
+    }
+}
+
 /// Shell out to `hermes gateway start`. Same resolution / capture
 /// semantics as [`gateway_restart`]; used by the Home page "Start
 /// gateway" affordance when the binary is present but no process is
@@ -406,11 +486,13 @@ pub fn gateway_start() -> io::Result<String> {
             stdout
         )));
     }
-    Ok(if stdout.trim().is_empty() {
+    let result = if stdout.trim().is_empty() {
         stderr
     } else {
         stdout
-    })
+    };
+    patch_approval_sse();
+    Ok(result)
 }
 
 /// Shell out to `hermes gateway restart`. Tries `$PATH` first, then falls back
@@ -443,11 +525,13 @@ pub fn gateway_restart() -> io::Result<String> {
             stdout
         )));
     }
-    Ok(if stdout.trim().is_empty() {
+    let result = if stdout.trim().is_empty() {
         stderr
     } else {
         stdout
-    })
+    };
+    patch_approval_sse();
+    Ok(result)
 }
 
 /// Resolve the bundled bootstrap script path for the current platform.
@@ -606,6 +690,7 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
 
     std::thread::sleep(std::time::Duration::from_secs(3));
 
+    patch_approval_sse();
     Ok(format!("gateway started (pid {pid})"))
 }
 

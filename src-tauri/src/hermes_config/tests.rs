@@ -44,10 +44,9 @@ fn set_or_remove_clears_empty() {
 
 #[test]
 fn env_keys_only_returns_nonempty_api_keys() {
-    // Write a fake .env into a temp HOME.
     let tmp = std::env::temp_dir().join(format!("caduceus-hermes-env-{}", std::process::id()));
-    std::fs::create_dir_all(tmp.join(".hermes")).unwrap();
-    let env_file = tmp.join(".hermes/.env");
+    std::fs::create_dir_all(&tmp).unwrap();
+    let env_file = tmp.join(".env");
     std::fs::write(
         &env_file,
         r#"
@@ -60,12 +59,9 @@ NOT_A_KEY=hello
     )
     .unwrap();
 
-    // Temporarily point HOME at our tempdir. Lock is held for the
-    // entire test body so a concurrent test can't observe a half-set
-    // HOME; the guard drop happens after the restore below.
     let _lock = _home_lock();
-    let original_home = std::env::var_os("HOME");
-    std::env::set_var("HOME", &tmp);
+    let orig = std::env::var_os("COREY_HERMES_DIR");
+    std::env::set_var("COREY_HERMES_DIR", &tmp);
 
     let keys = read_env_key_names().unwrap();
     assert!(keys.contains(&"DEEPSEEK_API_KEY".to_string()));
@@ -73,11 +69,10 @@ NOT_A_KEY=hello
     assert!(!keys.contains(&"OPENAI_API_KEY".to_string()));
     assert!(!keys.contains(&"NOT_A_KEY".to_string()));
 
-    // Restore.
-    if let Some(v) = original_home {
-        std::env::set_var("HOME", v);
+    if let Some(v) = orig {
+        std::env::set_var("COREY_HERMES_DIR", v);
     } else {
-        std::env::remove_var("HOME");
+        std::env::remove_var("COREY_HERMES_DIR");
     }
 }
 
@@ -182,24 +177,19 @@ fn write_channel_yaml_fields_round_trips_through_disk() {
             .unwrap()
             .as_nanos(),
     ));
-    std::fs::create_dir_all(tmp.join(".hermes")).unwrap();
-    // Seed a yaml file with an unrelated field so we can assert it survives.
-    std::fs::write(
-        tmp.join(".hermes/config.yaml"),
-        "model:\n  default: gpt-4o\n",
-    )
-    .unwrap();
+    std::fs::create_dir_all(&tmp).unwrap();
+    std::fs::write(tmp.join("config.yaml"), "model:\n  default: gpt-4o\n").unwrap();
 
     let _lock = _home_lock();
-    let original_home = std::env::var_os("HOME");
-    std::env::set_var("HOME", &tmp);
+    let orig = std::env::var_os("COREY_HERMES_DIR");
+    std::env::set_var("COREY_HERMES_DIR", &tmp);
 
     let mut updates = std::collections::HashMap::new();
     updates.insert("mention_required".to_string(), serde_json::json!(true));
     updates.insert("free_chats".to_string(), serde_json::json!(["one", "two"]));
     write_channel_yaml_fields("channels.telegram", &updates, None).unwrap();
 
-    let raw = std::fs::read_to_string(tmp.join(".hermes/config.yaml")).unwrap();
+    let raw = std::fs::read_to_string(tmp.join("config.yaml")).unwrap();
     let parsed: Value = serde_yaml::from_str(&raw).unwrap();
     let tg = parsed
         .as_mapping()
@@ -218,18 +208,16 @@ fn write_channel_yaml_fields_round_trips_through_disk() {
     );
     let fc = tg.get(Value::String("free_chats".into())).unwrap();
     assert_eq!(fc.as_sequence().unwrap().len(), 2);
-    // unrelated field survives
     assert!(parsed
         .as_mapping()
         .unwrap()
         .get(Value::String("model".into()))
         .is_some());
 
-    // Delete semantic: JSON null removes the field.
     let mut del = std::collections::HashMap::new();
     del.insert("mention_required".to_string(), serde_json::Value::Null);
     write_channel_yaml_fields("channels.telegram", &del, None).unwrap();
-    let raw2 = std::fs::read_to_string(tmp.join(".hermes/config.yaml")).unwrap();
+    let raw2 = std::fs::read_to_string(tmp.join("config.yaml")).unwrap();
     let parsed2: Value = serde_yaml::from_str(&raw2).unwrap();
     let tg2 = parsed2
         .as_mapping()
@@ -244,10 +232,10 @@ fn write_channel_yaml_fields_round_trips_through_disk() {
         .unwrap();
     assert!(tg2.get(Value::String("mention_required".into())).is_none());
 
-    if let Some(v) = original_home {
-        std::env::set_var("HOME", v);
+    if let Some(v) = orig {
+        std::env::set_var("COREY_HERMES_DIR", v);
     } else {
-        std::env::remove_var("HOME");
+        std::env::remove_var("COREY_HERMES_DIR");
     }
 }
 
