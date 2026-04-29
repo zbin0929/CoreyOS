@@ -17,6 +17,15 @@ $LogDir = Join-Path $env:LOCALAPPDATA "Corey\logs"
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 $LogFile = Join-Path $LogDir "bootstrap-windows.log"
 
+trap {
+    Write-Host "`n[x] UNHANDLED ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "    at $($_.InvocationInfo.ScriptName):$($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor DarkGray
+    Add-Content -Path $LogFile -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [FATAL] $($_.Exception.Message) at line $($_.InvocationInfo.ScriptLineNumber)" -Encoding UTF8
+    Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    break
+}
+
 function Write-Log([string]$Level, [string]$Msg) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     Add-Content -Path $LogFile -Value "[$ts] [$Level] $Msg" -Encoding UTF8
