@@ -191,7 +191,7 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
         Info "Running: uv venv venv --python 3.11"
         uv venv venv --python 3.11 2>&1 | ForEach-Object { Write-Log 'VENV' $_ }
         Info "Running: uv pip install -e . --index-url https://pypi.tuna.tsinghua.edu.cn/simple"
-        uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
+        uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
         if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
             Pop-Location
             Fail "uv pip install exited with code $LASTEXITCODE"
