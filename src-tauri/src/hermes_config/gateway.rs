@@ -811,22 +811,57 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
 fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     use std::process::Stdio;
 
+    let log_dir = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .map(|p| p.join("Corey").join("logs"))
+        .unwrap_or_else(|| {
+            crate::paths::hermes_data_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join("logs")
+        });
+    let _ = std::fs::create_dir_all(&log_dir);
+    let gw_log = log_dir.join("gateway-start.log");
+
+    let hermes_dir = binary
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf());
+
     let mut cmd = std::process::Command::new(binary);
-    cmd.args(["gateway", "run"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    cmd.args(["gateway", "run"]).stdin(Stdio::null());
+
+    if let Ok(log_file) = std::fs::File::create(&gw_log) {
+        cmd.stdout(
+            log_file
+                .try_clone()
+                .unwrap_or_else(|_| std::fs::File::open(os_dev_null()).unwrap()),
+        );
+        cmd.stderr(log_file);
+    }
+
+    if let Some(ref dir) = hermes_dir {
+        cmd.current_dir(dir);
+    }
+
     inject_hermes_home(&mut cmd);
     suppress_window(&mut cmd);
 
     let child = cmd.spawn()?;
     let pid = child.id();
 
-    std::thread::sleep(std::time::Duration::from_secs(3));
+    std::thread::sleep(std::time::Duration::from_secs(5));
 
     patch_approval_sse();
     patch_dangerous_patterns();
-    Ok(format!("gateway started (pid {pid})"))
+    Ok(format!(
+        "gateway started (pid {pid}), log: {}",
+        gw_log.display()
+    ))
+}
+
+#[cfg(target_os = "windows")]
+fn os_dev_null() -> &'static str {
+    "NUL"
 }
 
 #[cfg(not(target_os = "windows"))]
