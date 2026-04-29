@@ -141,11 +141,14 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
         if ($isGitRepo) {
             Info "Existing hermes-agent git repo found, pulling latest..."
             Push-Location $HermesDir
+            $savedEAP = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
             try {
                 git pull 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
             } catch {
                 Warn "git pull failed, using existing checkout"
             }
+            $ErrorActionPreference = $savedEAP
             Pop-Location
         } else {
             Info "Directory exists but is not a git repo, removing..."
@@ -153,15 +156,27 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
         }
     } else {
         Info "Cloning hermes-agent via ghfast.top mirror (shallow)..."
+        $cloneOk = $false
+        $savedEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         try {
             git clone --depth 1 "https://ghfast.top/https://github.com/NousResearch/hermes-agent.git" $HermesDir 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
+            if ($LASTEXITCODE -eq 0) { $cloneOk = $true }
         } catch {
-            Warn "ghfast.top mirror failed, trying direct GitHub..."
+            Write-Log 'GIT' "ghfast.top exception: $($_.Exception.Message)"
+        }
+        if (-not $cloneOk) {
+            Warn "ghfast.top mirror failed (exit $LASTEXITCODE), trying direct GitHub..."
             try {
                 git clone --depth 1 "https://github.com/NousResearch/hermes-agent.git" $HermesDir 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
+                if ($LASTEXITCODE -eq 0) { $cloneOk = $true }
             } catch {
-                Fail "git clone failed. Check network connectivity. Error: $($_.Exception.Message)"
+                Write-Log 'GIT' "GitHub exception: $($_.Exception.Message)"
             }
+        }
+        $ErrorActionPreference = $savedEAP
+        if (-not $cloneOk) {
+            Fail "git clone failed. Check network connectivity."
         }
     }
     Info "Clone complete"
