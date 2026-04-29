@@ -246,7 +246,12 @@ function ChatPane({
       <PageHeader
         title={t('chat_page.title')}
         subtitle={t('chat_page.subtitle')}
-        actions={<ChatHeaderActions sessionId={sessionId} messages={messages} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <LearningIndicator />
+            <ChatHeaderActions sessionId={sessionId} messages={messages} />
+          </div>
+        }
       />
 
       {/* T1.9 — virtualised list when we have messages; the empty-
@@ -333,7 +338,6 @@ function ChatPane({
         onVoiceStart={chat.onVoiceStart}
         onVoiceStop={chat.onVoiceStop}
       />
-      <LearningIndicator />
     </div>
   );
 }

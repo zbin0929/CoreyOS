@@ -32,7 +32,7 @@ export function LearningIndicator() {
   if (!visible) return null;
 
   return (
-    <div className="flex items-center justify-center gap-1.5 py-1 text-[10px] text-fg-subtle">
+    <div className="flex items-center gap-1 text-[10px] text-fg-subtle whitespace-nowrap">
       <Icon icon={Sparkles} size="xs" className="text-gold-500" />
       {t('chat_page.learning_extracted')}
     </div>
