@@ -54,3 +54,4 @@ e2e/screenshots/
 # `scripts/fetch-hermes-binary.mjs` has run.
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
+*.db
