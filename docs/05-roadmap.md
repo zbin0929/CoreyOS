@@ -163,4 +163,20 @@ See `docs/phases/`:
 - `phase-8-optional.md`
 - `phase-9-workflow.md`
 
+## Release history
+
+| Version | Date | Highlights |
+|---------|------|-----------|
+| v0.1.0 | 2026-04-21 | First public build — app shell, chat, CI |
+| v0.1.5 | 2026-04-26 | Phase 8-12 complete (voice, workflow, browser, file intelligence) |
+| v0.1.6 | 2026-04-28 | Windows bootstrap script (PowerShell 5.1, ghfast.top mirror, gateway run) |
+| v0.1.7 | 2026-04-29 | Windows install dir fix, app version display, update error auto-dismiss |
+| v0.1.8 | 2026-04-29 | Gateway session auto-import + source badges, Windows gateway start fix, COS CDN updater, download progress bar, user manual update |
+
+## Upcoming
+
+| Version | Plan | Key features |
+|---------|------|-------------|
+| v0.1.9 | `docs/plans/v0.1.9-bge-m3-rag.md` | BGE-M3 local embedding, unified download center, hybrid RAG search, update→download center integration |
+
 Each phase file contains: goals, task breakdown (with owner/effort), file-level outputs, acceptance criteria, test plan, demo script.

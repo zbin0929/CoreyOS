@@ -1,6 +1,6 @@
 # Hermes Agent 依赖地图
 
-> 版本：v2.1 · 2026-04-29
+> 版本：v2.2 · 2026-04-29
 > 当前 Hermes 最低支持版本：0.10
 > Hermes 官方文档：https://hermes-agent.nousresearch.com/docs/
 > Hermes GitHub：https://github.com/NousResearch/hermes-agent
@@ -573,6 +573,9 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 | 数据目录管理 | `ipc/paths.rs` | Corey 专用 |
 | Tauri Updater | 内置插件 | 不依赖 Hermes |
 | Instance 管理 | `ipc/hermes_instances.rs` | Corey 管理 API 端点配置 |
+| COS CDN 更新 | `.github/workflows/sync-cos.yml` | 腾讯云 COS 自动同步 release 产物 |
+| 统一下载中心 | `ipc/download.rs`（v0.1.9） | 应用更新 + 模型下载进度管理 |
+| BGE-M3 Embedding | `ipc/embedding.rs`（v0.1.9） | 本地 ONNX 推理，不依赖 Hermes |
 
 **注意：** `ipc/learning/mod.rs` 虽然是 Corey 自有逻辑，但它写入 `MEMORY.md` 的格式遵循 Hermes 的 `## [auto]` 约定，如果 Hermes 变更 MEMORY.md 的注入格式，学习功能也需要适配。
 
@@ -585,4 +588,5 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 | 2026-04-29 | v1.0 | 0.10-0.11 | 初始文档创建 | — |
 | 2026-04-29 | v2.0 | 0.10-0.11 | 基于 Hermes 官方文档全面更新：补充 28 个未调用 CLI 命令、完整目录结构、auth.json/SOUL.md/memory_store.db、config.yaml 4.2/4.3 分类、.env 完整变量列表、MCP/记忆/频道集成细节、跨平台注意事项、config version 17 迁移信息 | — |
 | 2026-04-29 | v2.1 | 0.10-0.11 | 同步代码现状：补充 `/api/approval/pending` 依赖；更新 Windows bootstrap 日志与环境注入说明（`COREY_DATA_DIR`、exit_code 日志） | — |
+| 2026-04-29 | v2.2 | 0.10-0.11 | 补充 COS CDN 更新流程、统一下载中心、BGE-M3 Embedding（v0.1.9 计划） | — |
 | 2026-04-29 | v2.2 | 0.11 | Windows bootstrap 重写：`COREY_INSTALL_DIR` 替代 `COREY_DATA_DIR`，安装到 Corey exe 同级目录；`resolve_hermes_binary()` 新增 Corey 安装目录搜索路径；`Stdio::inherit()` 替代 `Stdio::piped()` 显示实时进度；PowerShell 5.1 兼容性修复；`gateway run` 替代 `gateway start`（Windows 不支持 start） | `gateway.rs` `resolve_hermes_binary()`, `bootstrap-windows.ps1` |
