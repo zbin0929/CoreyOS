@@ -8,7 +8,7 @@ export type UpdateState =
   | { kind: 'checking' }
   | { kind: 'up-to-date'; version: string }
   | { kind: 'available'; version: string; currentVersion: string; body: string }
-  | { kind: 'downloading'; version: string }
+  | { kind: 'downloading'; version: string; progress: number; total: number }
   | { kind: 'error'; message: string };
 
 export function useAppUpdater() {
@@ -41,7 +41,7 @@ export function useAppUpdater() {
     const version = state.version;
 
     try {
-      setState({ kind: 'downloading', version });
+      setState({ kind: 'downloading', version, progress: 0, total: 0 });
 
       const result = await check();
       if (!result) {
@@ -49,9 +49,22 @@ export function useAppUpdater() {
         return;
       }
 
+      let downloaded = 0;
+      let totalSize = 0;
+
       await result.downloadAndInstall((event: DownloadEvent) => {
-        if (event.event === 'Finished') {
-          void relaunch();
+        switch (event.event) {
+          case 'Started':
+            totalSize = event.data.contentLength ?? 0;
+            setState({ kind: 'downloading', version, progress: 0, total: totalSize });
+            break;
+          case 'Progress':
+            downloaded += event.data.chunkLength;
+            setState({ kind: 'downloading', version, progress: downloaded, total: totalSize });
+            break;
+          case 'Finished':
+            void relaunch();
+            break;
         }
       });
     } catch (e) {
