@@ -39,6 +39,22 @@ function gatewayDefaultTitle(source: string | null | undefined): string {
   if (!source) return '聊天记录';
   return GATEWAY_SOURCE_LABELS[source] ?? `${source} 聊天记录`;
 }
+
+async function gatewaySync(get: () => ChatState) {
+  const list = await gatewaySessionsList();
+  const store = get();
+  for (const gs of list) {
+    if (store.orderedIds.find((id) => store.sessions[id]?.gatewayId === gs.id)) continue;
+    get().importGatewaySession(gs);
+  }
+}
+
+let _gatewaySyncTimer: ReturnType<typeof setInterval> | null = null;
+function startGatewaySync(get: () => ChatState) {
+  if (_gatewaySyncTimer) return;
+  _gatewaySyncTimer = setInterval(() => { gatewaySync(get).catch(() => {}); }, 60_000);
+}
+
 import type {
   ChatSession,
   ChatState,
@@ -110,13 +126,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         'attachmentGc',
       );
 
-      gatewaySessionsList().then((list) => {
-        const store = get();
-        for (const gs of list) {
-          if (store.orderedIds.find((id) => store.sessions[id]?.gatewayId === gs.id)) continue;
-          get().importGatewaySession(gs);
-        }
-      }).catch(() => {});
+      gatewaySync(get).catch(() => {});
+      startGatewaySync(get);
     } catch (e) {
       console.error('db hydrate failed:', e);
       // Still mark as hydrated so the UI unblocks — users start fresh.
