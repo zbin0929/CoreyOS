@@ -125,10 +125,10 @@ if ($bashExe) {
 # ── 3. Install Hermes Agent ──────────────────────────────────────
 Step "Hermes installation (git clone + uv)"
 
-if ($env:COREY_INSTALL_DIR -and (Test-Path $env:COREY_INSTALL_DIR)) {
+if ($env:COREY_INSTALL_DIR) {
     $HermesDir = Join-Path $env:COREY_INSTALL_DIR "hermes-agent"
     Info "Using Corey install dir: $HermesDir"
-} elseif ($env:HERMES_HOME -and (Test-Path $env:HERMES_HOME)) {
+} elseif ($env:HERMES_HOME) {
     $HermesDir = Join-Path $env:HERMES_HOME "hermes-agent"
     Info "Using HERMES_HOME: $HermesDir"
 } else {

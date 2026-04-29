@@ -989,6 +989,20 @@ pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
         }
     }
 
+    // 2b) HERMES_HOME env var. Bootstrap script installs to
+    //     $HERMES_HOME/hermes-agent/venv/Scripts/ when the env var is set.
+    #[cfg(target_os = "windows")]
+    if let Some(home) = std::env::var_os("HERMES_HOME") {
+        let candidate = PathBuf::from(home)
+            .join("hermes-agent")
+            .join("venv")
+            .join("Scripts")
+            .join(BINARY_NAME);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
     // 3) Corey install dir. The bootstrap script installs hermes-agent
     //    into <corey_install_dir>/hermes-agent/venv/Scripts/ on Windows
     //    (e.g. E:\Program Files\Corey\hermes-agent\venv\Scripts\).
