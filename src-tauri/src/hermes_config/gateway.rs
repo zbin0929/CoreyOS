@@ -460,7 +460,8 @@ pub fn patch_approval_sse() {
         tracing::warn!("patch_approval_sse: no matching patterns found — Hermes may have changed");
     }
 
-    let p3_needle = r#"            self._app.router.add_post("/api/jobs", self._handle_create_job)"#;
+    let p3_needle =
+        r#"            self._app.router.add_post("/api/jobs", self._handle_create_job)"#;
     let p3_replacement = r#"            self._app.router.add_post("/api/jobs", self._handle_create_job)
             self._app.router.add_post("/api/approval/respond", self._handle_approval_respond)
             self._app.router.add_post("/api/approval/pending", self._handle_approval_pending)"#;

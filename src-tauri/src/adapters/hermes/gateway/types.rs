@@ -156,7 +156,7 @@ pub struct HermesApprovalRequest {
     pub pattern_keys: Vec<String>,
     #[serde(default)]
     pub description: String,
-    #[serde(rename = "_sessionId", default)]
+    #[serde(rename = "_session_id", default)]
     pub session_id: Option<String>,
 }
 
