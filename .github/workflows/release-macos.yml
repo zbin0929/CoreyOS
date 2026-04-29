@@ -90,3 +90,23 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target universal-apple-darwin
+
+      - name: Upload macOS artifacts to COS
+        run: |
+          TAG="${{ inputs.release_tag }}"
+          BUCKET="${{ secrets.COS_BUCKET }}"
+          BUNDLE_DIR="src-tauri/target/universal-apple-darwin/release/bundle"
+          
+          brew install coscli 2>/dev/null || true
+          if ! command -v coscli &>/dev/null; then
+            curl -sL https://cosbrowser.cloud.tencent.com/software/coscli/coscli-darwin-arm64 -o /usr/local/bin/coscli
+            chmod +x /usr/local/bin/coscli
+          fi
+          
+          echo "Uploading macOS artifacts to COS..."
+          coscli cp "${BUNDLE_DIR}/dmg/" "cos://${BUCKET}/releases/${TAG}/" -r \
+            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.ap-guangzhou.myqcloud.com" || true
+          coscli cp "${BUNDLE_DIR}/macos/" "cos://${BUCKET}/releases/${TAG}/" -r \
+            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.ap-guangzhou.myqcloud.com" || true
+          
+          echo "Files uploaded to cos://${BUCKET}/releases/${TAG}/"

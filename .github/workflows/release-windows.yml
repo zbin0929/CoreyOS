@@ -75,3 +75,20 @@ jobs:
           releaseName: 'Corey ${{ inputs.release_tag }}'
           releaseDraft: true
           prerelease: false
+
+      - name: Upload Windows artifacts to COS
+        shell: bash
+        run: |
+          TAG="${{ inputs.release_tag }}"
+          BUCKET="${{ secrets.COS_BUCKET }}"
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          
+          curl -sL https://cosbrowser.cloud.tencent.com/software/coscli/coscli-windows-amd64.exe -o coscli.exe
+          
+          echo "Uploading Windows artifacts to COS..."
+          ./coscli.exe cp "${BUNDLE_DIR}/msi/" "cos://${BUCKET}/releases/${TAG}/" -r \
+            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.ap-guangzhou.myqcloud.com" || true
+          ./coscli.exe cp "${BUNDLE_DIR}/nsis/" "cos://${BUCKET}/releases/${TAG}/" -r \
+            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.ap-guangzhou.myqcloud.com" || true
+          
+          echo "Files uploaded to cos://${BUCKET}/releases/${TAG}/"
