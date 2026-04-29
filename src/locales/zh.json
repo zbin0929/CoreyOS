@@ -66,6 +66,7 @@
     "scope_all": "全部 Agent",
     "empty_sessions": "还没有会话。开始聊天即可创建一个。",
     "gateway_title": "网关会话",
+    "gateway_source": "来自 {{source}} 的对话 · 只读",
     "gateway_desc": "来自 CLI、Telegram、Discord 等",
     "gateway_empty": "暂无网关会话。",
     "gateway_import": "导入",

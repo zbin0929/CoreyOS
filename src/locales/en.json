@@ -66,6 +66,7 @@
     "scope_all": "All agents",
     "empty_sessions": "No sessions yet. Start chatting to create one.",
     "gateway_title": "Gateway Sessions",
+    "gateway_source": "Conversation from {{source}} · Read-only",
     "gateway_desc": "From CLI, Telegram, Discord, etc.",
     "gateway_empty": "No gateway sessions found.",
     "gateway_import": "Import",

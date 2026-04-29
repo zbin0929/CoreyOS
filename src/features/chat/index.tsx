@@ -127,6 +127,12 @@ function ChatPane({
   // with no chat-state interlock beyond "snapshot on send".
   const att = useAttachments();
 
+  const gatewaySource = useChatStore((s) => s.sessions[sessionId]?.gatewaySource);
+
+  const sourceLabel = gatewaySource
+    ? t('chat_page.gateway_source', { source: gatewaySource })
+    : null;
+
   // T-polish — ref + auto-resize effect for the composer textarea.
   // Default `<textarea rows={1}>` is fixed-height; users typing more
   // than one line see their prose scroll inside a cramped box. We
@@ -245,7 +251,7 @@ function ChatPane({
     <div className="flex min-w-0 flex-1 flex-col">
       <PageHeader
         title={t('chat_page.title')}
-        subtitle={t('chat_page.subtitle')}
+        subtitle={sourceLabel || t('chat_page.subtitle')}
         actions={
           <div className="flex items-center gap-2">
             <LearningIndicator />
@@ -312,6 +318,7 @@ function ChatPane({
           onResolved={() => chat.setPendingApproval(null)}
         />
       )}
+      {!gatewaySource && (
       <Composer
         draft={chat.draft}
         sending={chat.sending}
@@ -338,6 +345,7 @@ function ChatPane({
         onVoiceStart={chat.onVoiceStart}
         onVoiceStop={chat.onVoiceStop}
       />
+      )}
     </div>
   );
 }
