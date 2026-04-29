@@ -133,18 +133,27 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
 } elseif (Test-Path (Join-Path $HermesDir "venv\Scripts\hermes.exe")) {
     Info "Hermes found at $HermesDir\venv"
 } else {
+    Info "HermesDir: $HermesDir"
+    Info "Dir exists: $(Test-Path $HermesDir)"
+    Info "venv exists: $(Test-Path (Join-Path $HermesDir 'venv\Scripts\hermes.exe'))"
     $hermesParent = Split-Path $HermesDir
     if (-not (Test-Path $hermesParent)) { New-Item -ItemType Directory -Path $hermesParent -Force | Out-Null }
 
     if (Test-Path $HermesDir) {
-        Info "Existing hermes-agent directory found, pulling latest..."
-        Push-Location $HermesDir
-        try {
-            git pull 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
-        } catch {
-            Warn "git pull failed, using existing checkout"
+        $isGitRepo = Test-Path (Join-Path $HermesDir ".git")
+        if ($isGitRepo) {
+            Info "Existing hermes-agent git repo found, pulling latest..."
+            Push-Location $HermesDir
+            try {
+                git pull 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
+            } catch {
+                Warn "git pull failed, using existing checkout"
+            }
+            Pop-Location
+        } else {
+            Info "Directory exists but is not a git repo, removing..."
+            Remove-Item $HermesDir -Recurse -Force
         }
-        Pop-Location
     } else {
         Info "Cloning hermes-agent via ghfast.top mirror..."
         try {
