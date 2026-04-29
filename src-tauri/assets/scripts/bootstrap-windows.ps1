@@ -29,7 +29,7 @@ function Write-Log([string]$Level, [string]$Msg) {
 }
 function Info($m) { Write-Log 'INFO' $m }
 function Warn($m) { Write-Log 'WARN' $m }
-function Fail($m) { Write-Log 'ERROR' $m; exit 1 }
+function Fail($m) { Write-Log 'ERROR' $m; Write-Host "`n[x] FAILED: $m" -ForegroundColor Red; Write-Host "Press any key to exit..." -ForegroundColor Yellow; $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown'); exit 1 }
 function Step($m) { Write-Log 'STEP' $m }
 
 # ── 0. Self-elevation ────────────────────────────────────────────
@@ -367,3 +367,6 @@ if (-not $script:HasApiKey) { Write-Host "  2) hermes model              (choose
 Write-Host "  3) Open Corey - auto-detects Hermes"
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Press any key to close this window..." -ForegroundColor Yellow
+$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
