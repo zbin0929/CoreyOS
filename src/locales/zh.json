@@ -543,7 +543,9 @@
     "action_title": "快捷操作",
     "action_settings": "设置",
     "status_connected": "已连接",
-    "status_active": "活跃"
+    "status_active": "活跃",
+    "statusbar_messages": "条消息",
+    "statusbar_search": "搜索"
   },
   "agent_wizard": {
     "title": "新增 Agent",

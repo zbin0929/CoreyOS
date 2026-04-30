@@ -491,7 +491,9 @@
     "action_title": "Quick actions",
     "action_settings": "Settings",
     "status_connected": "connected",
-    "status_active": "active"
+    "status_active": "active",
+    "statusbar_messages": "messages",
+    "statusbar_search": "Search"
   },
   "agent_wizard": {
     "title": "Add a new agent",

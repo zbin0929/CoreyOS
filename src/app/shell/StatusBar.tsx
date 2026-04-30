@@ -1,80 +1,81 @@
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from '@tanstack/react-router';
+import { useRouterState } from '@tanstack/react-router';
 import {
-  Settings,
-  Wifi,
-  WifiOff,
+  MessageSquare,
 } from 'lucide-react';
 
 import { Icon } from '@/components/ui/icon';
-import { useAppStatusStore, type GatewayHealth } from '@/stores/appStatus';
-import { cn } from '@/lib/cn';
+import { Kbd } from '@/components/ui/kbd';
+import { useChatStore } from '@/stores/chat';
 
 export function StatusBar() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const gateway = useAppStatusStore((s) => s.gateway);
-  const gatewayLatencyMs = useAppStatusStore((s) => s.gatewayLatencyMs);
-  const currentModel = useAppStatusStore((s) => s.currentModel);
-  const refreshGateway = useAppStatusStore((s) => s.refreshGateway);
+  const location = useRouterState({ select: (s) => s.location });
+  const currentId = useChatStore((s) => s.currentId);
+  const sessions = useChatStore((s) => s.sessions);
+
+  const session = currentId ? sessions[currentId] : null;
+  const msgCount = session?.messages.length ?? 0;
+  const isChat = location.pathname === '/chat';
 
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-1 border-t border-border bg-bg-elev-1 px-3 text-[11px] select-none">
-      <button
-        type="button"
-        onClick={() => void refreshGateway()}
-        title={t('topbar.gateway_click_to_refresh')}
-        className={cn(
-          'inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors',
-          gateway === 'online' && 'text-emerald-500 hover:bg-emerald-500/10',
-          gateway === 'offline' && 'text-danger hover:bg-danger/10',
-          gateway === 'unknown' && 'text-fg-subtle hover:bg-bg-elev-2',
-        )}
-      >
-        <Icon
-          icon={gateway === 'online' ? Wifi : WifiOff}
-          size="xs"
-          className={gateway === 'online' ? 'animate-pulse' : undefined}
-        />
-        <span>{gatewayLabel(gateway, gatewayLatencyMs)}</span>
-      </button>
-
-      <Separator />
-
-      {currentModel && (
+    <footer className="flex h-10 shrink-0 items-center border-t border-border bg-bg-elev-1 px-4 text-[11px] select-none">
+      {isChat && session ? (
         <>
-          <span className="truncate text-fg-subtle max-w-[160px]">{currentModel}</span>
-          <Separator />
+          <Icon icon={MessageSquare} size="xs" className="text-fg-subtle" />
+          <span className="ml-1.5 max-w-[240px] truncate text-fg">{session.title || t('home.untitled_chat')}</span>
+          <Sep />
+          <span className="text-fg-subtle">{msgCount} {t('statusbar.messages')}</span>
         </>
+      ) : (
+        <span className="text-fg-subtle">{pageTitle(location.pathname, t)}</span>
       )}
 
       <div className="flex-1" />
 
-      <button
-        type="button"
-        onClick={() => void navigate({ to: '/settings' })}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-fg-subtle hover:bg-bg-elev-2 hover:text-fg transition-colors"
-        title={t('nav.settings')}
-      >
-        <Icon icon={Settings} size="xs" />
-        <span>{t('nav.settings')}</span>
-      </button>
+      <span className="text-fg-subtle">
+        <Kbd keys={['mod', 'k']} className="mr-1" />
+        {t('statusbar.search')}
+      </span>
 
-      <Separator />
+      <Sep />
 
-      <span className="text-fg-subtle">Corey v{__APP_VERSION__}</span>
+      <span className="text-fg-muted">Corey v{__APP_VERSION__}</span>
     </footer>
   );
 }
 
-function Separator() {
-  return <span className="mx-1 text-border">│</span>;
+function Sep() {
+  return <span className="mx-2 text-border/60">·</span>;
 }
 
-function gatewayLabel(g: GatewayHealth, latencyMs: number | null): string {
-  if (g === 'online') {
-    return latencyMs !== null ? `${latencyMs}ms` : 'online';
+function pageTitle(pathname: string, t: (k: string) => string): string {
+  const map: Record<string, string> = {
+    '/': t('nav.home'),
+    '/chat': t('nav.chat'),
+    '/workflows': t('nav.workflows'),
+    '/agents': t('nav.agents'),
+    '/models': t('nav.models'),
+    '/compare': t('nav.compare'),
+    '/analytics': t('nav.analytics'),
+    '/terminal': t('nav.terminal'),
+    '/logs': t('nav.logs'),
+    '/skills': t('nav.skills'),
+    '/trajectory': t('nav.trajectory'),
+    '/channels': t('nav.channels'),
+    '/scheduler': t('nav.scheduler'),
+    '/profiles': t('nav.profiles'),
+    '/runbooks': t('nav.runbooks'),
+    '/budgets': t('nav.budgets'),
+    '/memory': t('nav.memory'),
+    '/knowledge': t('nav.knowledge'),
+    '/voice': t('nav.voice'),
+    '/mcp': t('nav.mcp'),
+    '/settings': t('nav.settings'),
+    '/help': t('nav.help'),
+  };
+  for (const [prefix, label] of Object.entries(map)) {
+    if (pathname === prefix || pathname.startsWith(prefix + '/')) return label;
   }
-  if (g === 'offline') return 'offline';
-  return '—';
+  return 'CoreyOS';
 }
