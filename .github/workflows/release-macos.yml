@@ -1,17 +1,12 @@
 name: Release (macOS universal)
 
 # Builds a universal-apple-darwin .dmg that runs on both Intel and
-# Apple Silicon Macs. macOS runners on GitHub-hosted Actions are
-# 10× pricier per minute than Linux/Windows, so this workflow is
-# manually-triggered only — bump version + create a draft Release
-# matching the tag, then dispatch this workflow with that tag as
-# `release_tag`.
+# Apple Silicon Macs. Manually-triggered only — bump version + create
+# a draft Release matching the tag, then dispatch this workflow with
+# that tag as `release_tag`.
 #
-# Cost model (private repo, GitHub Pro):
-#   macOS rate: ~$0.08/min × 25min build ≈ $2.00 per run.
-#   3000 Linux-min/mo == 300 macOS-min/mo == ~12 universal builds
-#   before pay-as-you-go kicks in. Plenty for a release every
-#   couple of weeks; we still build locally for day-to-day dev.
+# Cost: this repo is PUBLIC, so all GitHub Actions minutes (including
+# macOS) are free. No pay-as-you-go to worry about.
 #
 # What this builds:
 #   - Universal `Corey.app` (Intel x86_64 + arm64 fat binary)

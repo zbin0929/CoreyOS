@@ -20,7 +20,7 @@ jobs:
           mv coscli-linux-amd64 coscli
           chmod +x coscli
 
-      - name: Download release assets (parallel curl)
+      - name: Download release assets (parallel curl, fail-loud)
         run: |
           TAG="${{ inputs.release_tag || github.event.release.tag_name }}"
           REPO="${{ github.repository }}"
@@ -38,11 +38,33 @@ jobs:
             "Corey_${TAG#v}_x64_en-US.msi.sig"
           )
 
+          # Spawn parallel downloads, collect PIDs and the file each
+          # downloads, then wait on each PID and surface failures.
+          # Without this, a 404 in any background curl is silently
+          # swallowed by `wait`, and later steps explode mysteriously
+          # (cf. v0.1.12 sync failure where 8/8 assets were missing).
+          declare -a PIDS=()
+          declare -a NAMES=()
           for f in "${FILES[@]}"; do
             echo "Downloading $f..."
             curl -fSL -o "./assets/$f" "${BASE}/${f}" &
+            PIDS+=($!)
+            NAMES+=("$f")
           done
-          wait
+
+          FAILED=()
+          for i in "${!PIDS[@]}"; do
+            if ! wait "${PIDS[$i]}"; then
+              FAILED+=("${NAMES[$i]}")
+            fi
+          done
+
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::Missing release assets for ${TAG}: ${FAILED[*]}"
+            echo "::error::Run release-macos.yml + release-windows.yml for ${TAG} first."
+            exit 1
+          fi
+
           echo "All downloads complete"
           ls -lh ./assets/
         shell: bash
