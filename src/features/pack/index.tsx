@@ -20,11 +20,17 @@ import { useParams } from '@tanstack/react-router';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { packViewsList, type PackView } from '@/lib/ipc/pack';
 import { AlertListTemplate } from '@/features/pack/templates/AlertList';
+import { CompositeDashboardTemplate } from '@/features/pack/templates/CompositeDashboard';
 import { DataTableTemplate } from '@/features/pack/templates/DataTable';
+import { FormRunnerTemplate } from '@/features/pack/templates/FormRunner';
 import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
 import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
+import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
+import { SkillPaletteTemplate } from '@/features/pack/templates/SkillPalette';
 import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
+import { TimelineTemplate } from '@/features/pack/templates/Timeline';
 import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
+import { WorkflowLauncherTemplate } from '@/features/pack/templates/WorkflowLauncher';
 
 interface TemplateProps {
   view: PackView;
@@ -33,11 +39,17 @@ interface TemplateProps {
 /** Template registry. Adding a new template = one entry here. */
 const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   AlertList: AlertListTemplate,
+  CompositeDashboard: CompositeDashboardTemplate,
   DataTable: DataTableTemplate,
+  FormRunner: FormRunnerTemplate,
   MetricsCard: MetricsCardTemplate,
   PivotTable: PivotTableTemplate,
+  RadarChart: RadarChartTemplate,
+  SkillPalette: SkillPaletteTemplate,
   TimeSeriesChart: TimeSeriesChartTemplate,
+  Timeline: TimelineTemplate,
   TrendsMatrix: TrendsMatrixTemplate,
+  WorkflowLauncher: WorkflowLauncherTemplate,
 };
 
 export function PackRoute() {
