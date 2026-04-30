@@ -9,6 +9,7 @@ export type UpdateState =
   | { kind: 'up-to-date'; version: string }
   | { kind: 'available'; version: string; currentVersion: string; body: string }
   | { kind: 'downloading'; version: string; progress: number; total: number }
+  | { kind: 'downloaded'; version: string }
   | { kind: 'error'; message: string };
 
 export function useAppUpdater() {
@@ -37,10 +38,15 @@ export function useAppUpdater() {
   }, []);
 
   const downloadAndInstall = useCallback(async () => {
-    if (state.kind !== 'available') return;
+    if (state.kind !== 'available' && state.kind !== 'downloaded') return;
     const version = state.version;
 
     try {
+      if (state.kind === 'downloaded') {
+        await relaunch();
+        return;
+      }
+
       setState({ kind: 'downloading', version, progress: 0, total: 0 });
 
       const result = await check();
@@ -63,10 +69,13 @@ export function useAppUpdater() {
             setState({ kind: 'downloading', version, progress: downloaded, total: totalSize });
             break;
           case 'Finished':
-            void relaunch();
+            setState({ kind: 'downloaded', version });
             break;
         }
       });
+
+      setState({ kind: 'downloaded', version });
+      await relaunch();
     } catch (e) {
       setState({ kind: 'error', message: String(e) });
     }

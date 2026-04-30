@@ -1327,7 +1327,9 @@
   "updater": {
     "available": "Update {{version}} available",
     "downloading": "Downloading…",
+    "downloaded": "{{version}} ready to install",
     "install": "Update now",
+    "relaunch": "Restart",
     "error": "Update failed. Please download manually."
   },
   "scheduler_page": {

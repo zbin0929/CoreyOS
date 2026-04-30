@@ -93,6 +93,24 @@ function UpdateBanner() {
     );
   }
 
+  if (state.kind === 'downloaded') {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-gold-500/30 bg-bg-elev-1 px-4 py-3 shadow-lg">
+        <span className="text-sm font-medium text-fg">
+          {t('updater.downloaded', { version: state.version })}
+        </span>
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={() => void downloadAndInstall()}
+        >
+          <RefreshCw className="h-3 w-3" />
+          {t('updater.relaunch')}
+        </Button>
+      </div>
+    );
+  }
+
   if (state.kind !== 'available') return null;
 
   return (
