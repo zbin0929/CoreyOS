@@ -12,9 +12,10 @@ export function AppearanceSection() {
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
 
-  const currentLang: Lang = (supportedLngs as readonly string[]).includes(i18n.language)
-    ? (i18n.language as Lang)
-    : 'en';
+  const resolvedLang = i18n.language?.split('-')[0] ?? 'zh';
+  const currentLang: Lang = (supportedLngs as readonly string[]).includes(resolvedLang)
+    ? (resolvedLang as Lang)
+    : 'zh';
 
   const themes: Array<{ value: Theme; label: string; icon: typeof Sun }> = [
     { value: 'dark', label: t('settings.appearance.theme_dark'), icon: Moon },

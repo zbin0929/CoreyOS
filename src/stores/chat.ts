@@ -9,6 +9,7 @@ import {
   dbSessionDelete,
   dbSessionUpsert,
   dbToolCallAppend,
+  gatewaySourceMessages,
   gatewaySessionMessages,
   gatewaySessionsList,
   type GatewaySession,
@@ -19,17 +20,17 @@ import { useAppStatusStore } from './appStatus';
 import { deriveTitle, fireWrite, newId, sessionFromDb } from './chatPersist';
 
 const GATEWAY_SOURCE_LABELS: Record<string, string> = {
-  weixin: '微信聊天记录',
-  dingtalk: '钉钉聊天记录',
-  feishu: '飞书聊天记录',
-  wecom: '企业微信聊天记录',
-  qq: 'QQ聊天记录',
-  qqbot: 'QQ聊天记录',
-  telegram: 'Telegram 聊天记录',
-  discord: 'Discord 聊天记录',
-  slack: 'Slack 聊天记录',
-  whatsapp: 'WhatsApp 聊天记录',
-  signal: 'Signal 聊天记录',
+  weixin: '微信对话',
+  dingtalk: '钉钉对话',
+  feishu: '飞书对话',
+  wecom: '企业微信对话',
+  qq: 'QQ对话',
+  qqbot: 'QQ对话',
+  telegram: 'Telegram 对话',
+  discord: 'Discord 对话',
+  slack: 'Slack 对话',
+  whatsapp: 'WhatsApp 对话',
+  signal: 'Signal 对话',
   email: '邮件记录',
   sms: '短信记录',
   cli: 'CLI 聊天记录',
@@ -42,10 +43,16 @@ function gatewayDefaultTitle(source: string | null | undefined): string {
 
 async function gatewaySync(get: () => ChatState) {
   const list = await gatewaySessionsList();
+  if (list.length === 0) return;
+  const sources = new Set(list.map((gs) => gs.source).filter(Boolean) as string[]);
   const store = get();
-  for (const gs of list) {
-    if (store.orderedIds.find((id) => store.sessions[id]?.gatewayId === gs.id)) continue;
-    get().importGatewaySession(gs);
+  for (const source of sources) {
+    const existing = store.orderedIds.find(
+      (id) => store.sessions[id]?.gatewaySource === source && !store.sessions[id]?.gatewayId,
+    );
+    if (!existing) {
+      get().importGatewaySource(source);
+    }
   }
 }
 
@@ -540,6 +547,42 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }
       }
     }
+  },
+
+  importGatewaySource: (source: string): string => {
+    const existing = get().orderedIds.find(
+      (id) => get().sessions[id]?.gatewaySource === source && !get().sessions[id]?.gatewayId,
+    );
+    if (existing) {
+      get().switchTo(existing);
+      const sess = get().sessions[existing];
+      if (sess && sess.messages.length === 0) {
+        gatewaySourceMessages(source).then((msgs) => {
+          get().importGatewayMessages(existing, msgs);
+        }).catch(() => {});
+      }
+      return existing;
+    }
+    const id = get().newSession();
+    const title = gatewayDefaultTitle(source);
+    set((s) => ({
+      sessions: {
+        ...s.sessions,
+        [id]: {
+          ...s.sessions[id]!,
+          title,
+          gatewaySource: source,
+          adapterId: 'hermes',
+        },
+      },
+    }));
+    fireWrite(dbSessionUpsert({ id, title, model: null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes' }), 'importGatewaySource');
+    gatewaySourceMessages(source).then((msgs) => {
+      get().importGatewayMessages(id, msgs);
+    }).catch((e) => {
+      console.error('[gateway] failed to load messages for source', source, e);
+    });
+    return id;
   },
 
   importGatewaySession: (gs: GatewaySession): string => {

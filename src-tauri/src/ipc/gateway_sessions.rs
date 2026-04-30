@@ -115,6 +115,44 @@ pub struct GatewayMessage {
     pub timestamp: f64,
 }
 
+#[tauri::command]
+pub fn gateway_source_messages(source: String) -> Result<Vec<GatewayMessage>, String> {
+    let db_path = state_db_path()?;
+    if !db_path.exists() {
+        return Ok(vec![]);
+    }
+    let conn =
+        rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| format!("open state.db: {e}"))?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT m.role, COALESCE(m.content, '') AS content, m.timestamp
+             FROM messages m
+             JOIN sessions s ON m.session_id = s.id
+             WHERE s.source = ?
+             ORDER BY m.timestamp ASC
+             LIMIT 2000",
+        )
+        .map_err(|e| format!("prepare: {e}"))?;
+
+    let rows = stmt
+        .query_map([&source], |row| {
+            Ok(GatewayMessage {
+                role: row.get(0)?,
+                content: row.get(1)?,
+                timestamp: row.get(2)?,
+            })
+        })
+        .map_err(|e| format!("query: {e}"))?;
+
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| format!("row: {e}"))?);
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

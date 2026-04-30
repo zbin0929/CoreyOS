@@ -14,11 +14,11 @@
 //! 2. A persisted override file at `<app_config_dir>/data_dir` (plain
 //!    UTF-8, one path per line). Written by the Settings UI through
 //!    `app_data_dir_set`. Read lazily once per process.
-//! 3. A platform-appropriate default: `%LOCALAPPDATA%\Corey\hermes` on
-//!    Windows (so fresh Windows installs don't dump `.hermes` into the
-//!    root of the user profile), and `~/.hermes` everywhere else
-//!    (matches what every existing install already has on disk — no
-//!    migration needed).
+//! 3. A platform-appropriate default: `~/.hermes` on all platforms
+//!    (i.e. `$HOME/.hermes` on Unix, `%USERPROFILE%\.hermes` on
+//!    Windows). This matches Hermes Agent's own default so both
+//!    Corey and Hermes share the same data directory without extra
+//!    configuration.
 //!
 //! The Tauri app-config-dir is supplied at startup via
 //! [`set_app_config_dir`]. Before that call (e.g. very early unit
@@ -111,35 +111,20 @@ pub fn write_override(dir: Option<&Path>) -> io::Result<PathBuf> {
     Ok(file)
 }
 
-/// Default when no override is set. On Windows we prefer
-/// `%LOCALAPPDATA%\Corey\hermes` so the data dir lives under the
-/// canonical Windows app-data tree (not the user-profile root). On
-/// macOS/Linux we keep `~/.hermes` — installed bases already have it,
-/// and moving it would orphan every profile in the field.
+/// Default when no override is set. All platforms use `~/.hermes`
+/// (`$HOME/.hermes` on Unix, `%USERPROFILE%\.hermes` on Windows).
+/// This matches Hermes Agent's own default so Corey and Hermes share
+/// the same data directory without requiring `HERMES_HOME` or env
+/// overrides.
 ///
 /// **`HOME` overrides everything.** Many tests in this crate (skills,
 /// hermes_config, …) point `HOME` at a `tempdir()` to isolate disk
 /// state; treating `HOME` as authoritative when explicitly set keeps
 /// that pattern working on Windows too. Windows itself does not set
 /// `HOME` by default (it sets `USERPROFILE`), so production behaviour
-/// on Windows is still "use `LOCALAPPDATA`" — only test code that
+/// on Windows still uses `USERPROFILE` — only test code that
 /// explicitly sets `HOME` deviates.
 fn platform_default() -> io::Result<PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(dir) = exe.parent() {
-                let data_dir = dir.join("data");
-                if data_dir.exists() || dir.join("Corey.exe").exists() {
-                    let _ = std::fs::create_dir_all(&data_dir);
-                    return Ok(data_dir);
-                }
-            }
-        }
-        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            return Ok(PathBuf::from(local).join("Corey").join("hermes"));
-        }
-    }
     #[cfg(not(target_os = "windows"))]
     {
         if let Some(home) = std::env::var_os("HOME") {

@@ -7,7 +7,15 @@ export type ChannelStatus = 'configured' | 'partial' | 'unconfigured' | 'qr';
  *  channel uses QR) but is kept in the union for forward-compat with
  *  the `has_qr_login` spec flag. */
 export function computeStatus(c: ChannelState): ChannelStatus {
-  if (c.has_qr_login) return 'qr';
+  if (c.has_qr_login) {
+    const required = c.env_keys.filter((k) => k.required);
+    if (required.length > 0) {
+      const setCount = required.filter((k) => c.env_present[k.name]).length;
+      if (setCount >= required.length) return 'configured';
+      if (setCount > 0) return 'partial';
+    }
+    return 'qr';
+  }
   const required = c.env_keys.filter((k) => k.required);
   if (required.length === 0) return 'configured';
   const setCount = required.filter((k) => c.env_present[k.name]).length;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Radio } from 'lucide-react';
 
@@ -24,9 +24,31 @@ const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
   sms: { label: 'SMS', cls: 'border-pink-500/50 text-pink-500' },
 };
 
-function sourceBadge(source: string | null) {
-  if (!source) return { label: '??', cls: 'border-fg-subtle text-fg-subtle' };
+function sourceBadge(source: string) {
   return SOURCE_BADGE[source] ?? { label: source.slice(0, 2).toUpperCase(), cls: 'border-fg-subtle text-fg-subtle' };
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  weixin: '微信对话',
+  dingtalk: '钉钉对话',
+  feishu: '飞书对话',
+  wecom: '企业微信对话',
+  qq: 'QQ对话',
+  qqbot: 'QQ对话',
+  telegram: 'Telegram 对话',
+  discord: 'Discord 对话',
+  slack: 'Slack 对话',
+  whatsapp: 'WhatsApp 对话',
+  signal: 'Signal 对话',
+  email: '邮件记录',
+  sms: '短信记录',
+};
+
+interface SourceGroup {
+  source: string;
+  label: string;
+  count: number;
+  lastActivity: number | null;
 }
 
 export function GatewaySection() {
@@ -35,7 +57,29 @@ export function GatewaySection() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
-  const importSession = useChatStore((s) => s.importGatewaySession);
+  const importSource = useChatStore((s) => s.importGatewaySource);
+
+  const groups = useMemo<SourceGroup[]>(() => {
+    const map = new Map<string, SourceGroup>();
+    for (const s of sessions) {
+      const src = s.source ?? 'unknown';
+      const existing = map.get(src);
+      if (existing) {
+        existing.count += 1;
+        if (s.lastActivity != null && (existing.lastActivity == null || s.lastActivity > existing.lastActivity)) {
+          existing.lastActivity = s.lastActivity;
+        }
+      } else {
+        map.set(src, {
+          source: src,
+          label: SOURCE_LABELS[src] ?? `${src} 对话`,
+          count: 1,
+          lastActivity: s.lastActivity ?? s.startedAt ?? null,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0));
+  }, [sessions]);
 
   const refresh = useCallback(() => {
     gatewaySessionsList()
@@ -52,7 +96,7 @@ export function GatewaySection() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  if (loading || sessions.length === 0) return null;
+  if (loading || groups.length === 0) return null;
 
   return (
     <div className="border-t border-border pt-2">
@@ -64,19 +108,19 @@ export function GatewaySection() {
         <Icon icon={Radio} size="xs" className="text-gold-500" />
         {t('chat_page.gateway_title')}
         <span className="ml-auto font-mono text-[10px] text-fg-subtle">
-          {sessions.length}
+          {groups.length}
         </span>
       </button>
       {expanded && (
         <ul className="mt-1 flex flex-col gap-0.5">
-          {sessions.map((s) => {
-            const badge = sourceBadge(s.source);
+          {groups.map((g) => {
+            const badge = sourceBadge(g.source);
             return (
-              <li key={s.id}>
+              <li key={g.source}>
                 <button
-                  onClick={() => importSession(s)}
+                  onClick={() => importSource(g.source)}
                   className="group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-fg-muted transition hover:bg-bg-elev-2 hover:text-fg"
-                  title={`${s.title} — ${s.source ?? ''}`}
+                  title={`${g.label} — ${g.count} 条对话`}
                 >
                   <span
                     className={cn(
@@ -86,9 +130,9 @@ export function GatewaySection() {
                   >
                     {badge.label}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{s.title || s.id}</span>
-                  <span className="flex-none text-[10px] text-fg-subtle opacity-0 transition group-hover:opacity-100">
-                    {t('chat_page.gateway_import')}
+                  <span className="min-w-0 flex-1 truncate">{g.label}</span>
+                  <span className="flex-none font-mono text-[10px] text-fg-subtle">
+                    {g.count}
                   </span>
                 </button>
               </li>

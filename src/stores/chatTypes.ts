@@ -154,6 +154,8 @@ export interface ChatState {
     msgs: readonly { role: string; content: string; timestamp: number }[],
   ) => void;
 
+  importGatewaySource: (source: string) => string;
+
   importGatewaySession: (gs: import('@/lib/ipc').GatewaySession) => string;
 
   lastTokenUsage: { prompt: number; completion: number } | null;

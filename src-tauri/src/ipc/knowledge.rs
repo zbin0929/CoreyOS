@@ -374,7 +374,11 @@ pub async fn rag_download_model(app: AppHandle, state: State<'_, AppState>) -> I
     for (name, url) in embedding::MODEL_FILES {
         let target = dir.join(name);
         if target.exists() {
-            continue;
+            if let Ok(meta) = std::fs::metadata(&target) {
+                if meta.len() > 0 {
+                    continue;
+                }
+            }
         }
         let req = crate::ipc::download::DownloadStartRequest {
             url: url.to_string(),

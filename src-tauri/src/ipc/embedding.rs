@@ -513,9 +513,27 @@ pub fn model_dir() -> std::path::PathBuf {
 
 pub fn model_exists() -> bool {
     let dir = model_dir();
-    dir.join("model.onnx").exists()
-        && dir.join("model.onnx_data").exists()
-        && dir.join("tokenizer.json").exists()
+    let onnx = dir.join("model.onnx");
+    let data = dir.join("model.onnx_data");
+    let tok = dir.join("tokenizer.json");
+    if !onnx.exists() || !data.exists() || !tok.exists() {
+        return false;
+    }
+    let min_sizes: [(&std::path::PathBuf, u64); 3] = [
+        (&onnx, 1_000_000),
+        (&data, 100_000_000),
+        (&tok, 100_000),
+    ];
+    for (path, min) in min_sizes {
+        if let Ok(meta) = std::fs::metadata(path) {
+            if meta.len() < min {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    true
 }
 
 pub const MODEL_FILES: &[(&str, &str)] = &[

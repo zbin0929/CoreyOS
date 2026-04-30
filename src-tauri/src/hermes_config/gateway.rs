@@ -590,10 +590,57 @@ pub fn patch_dangerous_patterns() {
 
 /// Shell out to `hermes gateway start`. Same resolution / capture
 /// semantics as [`gateway_restart`]; used by the Home page "Start
+/// Ensure `API_SERVER_ENABLED=true` exists in `~/.hermes/.env` so the
+/// gateway's HTTP endpoint (port 8642) starts listening. Hermes gateway
+/// does NOT enable the API server by default — it only runs messaging
+/// platforms + cron. Corey needs the API server for `/health` probes and
+/// chat. Best-effort: errors are logged, never propagated.
+fn ensure_api_server_env() {
+    let env_path = match crate::paths::hermes_data_dir() {
+        Ok(d) => d.join(".env"),
+        Err(_) => return,
+    };
+
+    let raw = std::fs::read_to_string(&env_path).unwrap_or_default();
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(eq) = trimmed.find('=') {
+            let key = trimmed[..eq].trim();
+            if key == "API_SERVER_ENABLED" {
+                return;
+            }
+        }
+    }
+
+    let append = if raw.is_empty() || raw.ends_with('\n') {
+        "API_SERVER_ENABLED=true\n".to_string()
+    } else {
+        "\nAPI_SERVER_ENABLED=true\n".to_string()
+    };
+
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .write(true)
+        .open(&env_path)
+    {
+        Ok(mut f) => match std::io::Write::write_all(&mut f, append.as_bytes()) {
+            Ok(()) => tracing::info!("ensured API_SERVER_ENABLED=true in {}", env_path.display()),
+            Err(e) => tracing::warn!("failed to write API_SERVER_ENABLED: {e}"),
+        },
+        Err(e) => tracing::warn!("failed to open {}: {e}", env_path.display()),
+    }
+}
+
 /// gateway" affordance when the binary is present but no process is
 /// listening on 127.0.0.1:8642 yet.
 pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
+    ensure_api_server_env();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);
@@ -632,6 +679,7 @@ pub fn gateway_start() -> io::Result<String> {
 /// main thread (i.e. via `spawn_blocking` or in an async IPC handler).
 pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
+    ensure_api_server_env();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);
@@ -664,6 +712,75 @@ pub fn gateway_restart() -> io::Result<String> {
     patch_approval_sse();
     patch_dangerous_patterns();
     Ok(result)
+}
+
+/// Stop the Hermes gateway. On macOS/Linux uses `hermes gateway stop`
+/// (systemd/launchd). On Windows, kills the process by PID from
+/// `gateway.pid` or by port 8642.
+pub fn gateway_stop() -> io::Result<String> {
+    if cfg!(target_os = "windows") {
+        return windows_gateway_stop();
+    }
+    let binary = resolve_hermes_binary()?;
+    let output = run_hermes(&binary, &["gateway", "stop"])?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "hermes gateway stop failed: {}{}",
+            stderr, stdout
+        )));
+    }
+    Ok(if stdout.trim().is_empty() { stderr } else { stdout })
+}
+
+#[cfg(target_os = "windows")]
+fn windows_gateway_stop() -> io::Result<String> {
+    let home = crate::paths::hermes_data_dir()?;
+    let pid_file = home.join("gateway.pid");
+
+    let pid_str = std::fs::read_to_string(&pid_file)
+        .ok()
+        .and_then(|s| s.trim().lines().next().map(|l| l.to_string()))
+        .and_then(|s| {
+            let parsed: u32 = s.parse().ok()?;
+            if parsed > 0 { Some(parsed.to_string()) } else { None }
+        });
+
+    if let Some(ref pid_s) = pid_str {
+        let pid: u32 = pid_s.parse().map_err(|_| io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid PID in gateway.pid",
+        ))?;
+        let mut kill_cmd = std::process::Command::new("taskkill");
+        kill_cmd.args(["/F", "/PID", &pid.to_string()]);
+        let output = kill_cmd.output()?;
+        if output.status.success() {
+            let _ = std::fs::remove_file(&pid_file);
+            let _ = std::fs::remove_file(home.join("gateway.lock"));
+            return Ok(format!("gateway stopped (pid {pid})"));
+        }
+    }
+
+    let mut fallback = std::process::Command::new("powershell.exe");
+    fallback.args([
+        "-NoProfile",
+        "-Command",
+        "Get-NetTCPConnection -LocalPort 8642 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force }",
+    ]);
+    let output = fallback.output()?;
+    if output.status.success() {
+        let _ = std::fs::remove_file(&pid_file);
+        let _ = std::fs::remove_file(home.join("gateway.lock"));
+        Ok("gateway stopped (by port 8642)".into())
+    } else {
+        Err(io::Error::other("no gateway process found"))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn windows_gateway_stop() -> io::Result<String> {
+    unreachable!()
 }
 
 /// Resolve the bundled bootstrap script path for the current platform.
@@ -831,8 +948,23 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
 }
 
 #[cfg(target_os = "windows")]
+fn check_port_8642() -> bool {
+    use std::net::TcpStream;
+    TcpStream::connect_timeout(
+        &"127.0.0.1:8642".parse().unwrap(),
+        std::time::Duration::from_secs(2),
+    )
+    .is_ok()
+}
+
+#[cfg(target_os = "windows")]
 fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
+    use std::os::windows::process::CommandExt;
     use std::process::Stdio;
+
+    const DETACHED_PROCESS: u32 = 0x00000008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
 
     let log_dir = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
@@ -845,79 +977,70 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     let _ = std::fs::create_dir_all(&log_dir);
     let gw_log = log_dir.join("gateway-start.log");
 
+    if let Ok(home) = crate::paths::hermes_data_dir() {
+        for name in &["gateway.pid", "gateway.lock"] {
+            let f = home.join(name);
+            if f.exists() {
+                match std::fs::remove_file(&f) {
+                    Ok(()) => tracing::info!("cleaned gateway lock file: {}", f.display()),
+                    Err(e) => tracing::warn!("cannot remove {}: {e}, gateway may have been started by admin", f.display()),
+                }
+            }
+        }
+    }
+
     let hermes_dir = binary
         .parent()
         .and_then(|p| p.parent())
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf());
 
-    let mut start_cmd = std::process::Command::new(binary);
-    start_cmd
-        .args(["gateway", "start"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    if let Some(ref dir) = &hermes_dir {
-        start_cmd.current_dir(dir);
-    }
-    inject_hermes_home(&mut start_cmd);
-    suppress_window(&mut start_cmd);
-
-    if let Ok(output) = start_cmd.output() {
-        if output.status.success() {
-            let _ = std::fs::write(
-                &gw_log,
-                format!(
-                    "gateway start succeeded\nstdout: {}\nstderr: {}",
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr),
-                ),
-            );
-            patch_approval_sse();
-            patch_dangerous_patterns();
-            return Ok("gateway started via 'gateway start'".into());
-        }
-        let _ = std::fs::write(
-            &gw_log,
-            format!(
-                "gateway start failed (exit {:?}), falling back to gateway run\nstdout: {}\nstderr: {}",
-                output.status.code(),
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            ),
-        );
-    }
-
     let mut run_cmd = std::process::Command::new(binary);
-    run_cmd.args(["gateway", "run"]).stdin(Stdio::null());
-
-    let _ = std::fs::write(&gw_log, "falling back to 'gateway run' (foreground)\n");
-
-    if let Ok(stdout_log) = std::fs::File::create(&gw_log) {
-        run_cmd.stdout(stdout_log);
-    }
-    if let Ok(stderr_log) = std::fs::OpenOptions::new().append(true).open(&gw_log) {
-        run_cmd.stderr(stderr_log);
-    }
+    run_cmd
+        .args(["gateway", "run"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
 
     if let Some(ref dir) = &hermes_dir {
         run_cmd.current_dir(dir);
     }
     inject_hermes_home(&mut run_cmd);
-    suppress_window(&mut run_cmd);
+
+    let _ = std::fs::write(
+        &gw_log,
+        format!(
+            "[{}] spawning detached 'gateway run'\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        ),
+    );
 
     let child = run_cmd.spawn()?;
     let pid = child.id();
 
-    std::thread::sleep(std::time::Duration::from_secs(5));
+    tracing::info!("gateway spawned as detached process (pid {pid})");
+
+    std::thread::sleep(std::time::Duration::from_secs(6));
+
+    let listening = check_port_8642();
 
     patch_approval_sse();
     patch_dangerous_patterns();
-    Ok(format!(
-        "gateway started (pid {pid}, fallback 'gateway run'), log: {}",
-        gw_log.display()
-    ))
+
+    if listening {
+        tracing::info!("gateway API server confirmed listening on 127.0.0.1:8642");
+        Ok(format!(
+            "gateway started (pid {pid}), API server on :8642, log: {}",
+            gw_log.display()
+        ))
+    } else {
+        tracing::warn!("gateway spawned (pid {pid}) but port 8642 not yet listening — may still be starting");
+        Ok(format!(
+            "gateway started (pid {pid}), still initializing, log: {}",
+            gw_log.display()
+        ))
+    }
 }
 
 #[cfg(not(target_os = "windows"))]

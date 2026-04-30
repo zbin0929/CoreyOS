@@ -671,3 +671,9 @@ export function gatewaySessionMessages(
 ): Promise<GatewayMessage[]> {
   return invoke<GatewayMessage[]>('gateway_session_messages', { sessionId });
 }
+
+export function gatewaySourceMessages(
+  source: string,
+): Promise<GatewayMessage[]> {
+  return invoke<GatewayMessage[]>('gateway_source_messages', { source });
+}

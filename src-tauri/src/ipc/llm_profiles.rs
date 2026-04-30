@@ -114,8 +114,29 @@ fn seed_hermes_model_if_empty(profile: &LlmProfile, journal_path: &std::path::Pa
     let view = match crate::hermes_config::read_view() {
         Ok(v) => v,
         Err(e) => {
-            tracing::debug!(error = %e, "auto-seed: skipping (read_view failed)");
-            return;
+            tracing::debug!(error = %e, "auto-seed: config.yaml missing or unreadable, will create");
+            crate::hermes_config::HermesConfigView {
+                config_path: String::new(),
+                present: false,
+                model: crate::hermes_config::HermesModelSection {
+                    default: None,
+                    provider: None,
+                    base_url: None,
+                },
+                compression: crate::hermes_config::HermesCompressionSection {
+                    enabled: None,
+                    threshold: None,
+                    protect_last_n: None,
+                    target_ratio: None,
+                },
+                security: crate::hermes_config::HermesSecuritySection {
+                    approval_mode: None,
+                    approval_timeout_s: None,
+                    cron_mode: None,
+                    command_allowlist: vec![],
+                },
+                env_keys_present: vec![],
+            }
         }
     };
     if view.model.default.is_some() {

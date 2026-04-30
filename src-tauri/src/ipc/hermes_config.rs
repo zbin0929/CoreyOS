@@ -106,6 +106,18 @@ pub async fn hermes_gateway_restart() -> IpcResult<String> {
         })
 }
 
+#[tauri::command]
+pub async fn hermes_gateway_stop() -> IpcResult<String> {
+    tokio::task::spawn_blocking(hermes_config::gateway_stop)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("stop task join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("stop hermes gateway: {e}"),
+        })
+}
+
 /// `hermes gateway start` — launches the gateway if it's not running.
 /// Used by Home's "Start gateway" button when the binary is present
 /// but the /health probe is failing (most commonly on a fresh install

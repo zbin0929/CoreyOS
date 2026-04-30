@@ -64,7 +64,7 @@ export function ChannelQrPanel({
       } catch {
         stopPolling();
       }
-    }, 3000);
+    }, 2000);
   }
 
   function stopPolling() {

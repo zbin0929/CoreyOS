@@ -19,7 +19,7 @@ pub fn find_browser_runner() -> std::path::PathBuf {
         .unwrap_or(std::path::Path::new("."))
         .to_path_buf();
 
-    let candidates: Vec<std::path::PathBuf> = vec![
+    let mut candidates: Vec<std::path::PathBuf> = vec![
         exe_dir.join("scripts/browser-runner"),
         exe_dir.join("../scripts/browser-runner"),
         exe_dir.join("../../scripts/browser-runner"),
@@ -30,6 +30,23 @@ pub fn find_browser_runner() -> std::path::PathBuf {
         exe_dir.join("../../../scripts/browser-runner.cjs"),
         std::path::PathBuf::from("../scripts/browser-runner.cjs"),
     ];
+
+    #[cfg(debug_assertions)]
+    {
+        if let Ok(cargo_manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+            let project_root = std::path::PathBuf::from(cargo_manifest)
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            candidates.push(project_root.join("scripts/browser-runner.cjs"));
+            candidates.push(project_root.join("src-tauri/scripts/browser-runner.cjs"));
+        }
+        if let Ok(cwd) = std::env::current_dir() {
+            candidates.push(cwd.join("scripts/browser-runner.cjs"));
+        }
+    }
+
     for p in &candidates {
         if p.exists() {
             return p.canonicalize().unwrap_or_else(|_| p.clone());
@@ -63,14 +80,7 @@ pub async fn browser_config_set(config: BrowserConfig) -> IpcResult<()> {
 #[tauri::command]
 pub async fn browser_diagnose() -> IpcResult<BrowserDiagResult> {
     tokio::task::spawn_blocking(|| {
-        let node_output = std::process::Command::new("node").arg("--version").output();
-        let (node_available, node_version) = match node_output {
-            Ok(o) if o.status.success() => {
-                let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                (true, Some(v))
-            }
-            _ => (false, None),
-        };
+        let (node_available, node_version) = detect_node();
 
         let runner = find_browser_runner();
         let runner_found = runner.exists();
@@ -92,6 +102,45 @@ pub async fn browser_diagnose() -> IpcResult<BrowserDiagResult> {
     .map_err(|e| IpcError::Internal {
         message: format!("browser_diagnose join: {e}"),
     })
+}
+
+fn detect_node() -> (bool, Option<String>) {
+    #[cfg(target_os = "macos")]
+    let node_candidates: Vec<std::path::PathBuf> = {
+        let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+        let mut paths = vec![
+            std::path::PathBuf::from("/usr/local/bin/node"),
+            std::path::PathBuf::from("/opt/homebrew/bin/node"),
+        ];
+        if let Some(h) = home {
+            paths.push(h.join(".nvm/versions/node/current/bin/node"));
+            paths.push(h.join(".local/bin/node"));
+            paths.push(h.join(".volta/bin/node"));
+            paths.push(h.join(".fnm/node/current/bin/node"));
+        }
+        paths
+    };
+    #[cfg(not(target_os = "macos"))]
+    let node_candidates: Vec<std::path::PathBuf> = vec![];
+
+    for candidate in &node_candidates {
+        if candidate.exists() {
+            if let Ok(output) = std::process::Command::new(candidate).arg("--version").output() {
+                if output.status.success() {
+                    let v = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    return (true, Some(v));
+                }
+            }
+        }
+    }
+
+    match std::process::Command::new("node").arg("--version").output() {
+        Ok(o) if o.status.success() => {
+            let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            (true, Some(v))
+        }
+        _ => (false, None),
+    }
 }
 
 #[cfg(test)]

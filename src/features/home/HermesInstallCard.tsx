@@ -109,7 +109,7 @@ export function HermesInstallCard() {
       detection.compatibility === 'supported' ||
       detection.compatibility === 'unknown')
   ) {
-    return null;
+    return <NextStepsCard />;
   }
   if (
     gateway === 'online' &&
@@ -580,6 +580,46 @@ function CompatibilityBanner({ detection }: { detection: HermesDetection }) {
             </code>
           )}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function NextStepsCard() {
+  const { t } = useTranslation();
+  const steps = [
+    { label: t('home.next_skills', { defaultValue: '配置 Skills' }), to: '/skills' as const },
+    { label: t('home.next_mcp', { defaultValue: '配置 MCP' }), to: '/settings' as const },
+    { label: t('home.next_channel', { defaultValue: '连接通道' }), to: '/channels' as const },
+  ];
+  return (
+    <section
+      className="flex flex-col gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4"
+      data-testid="home-next-steps"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-500">
+          <Icon icon={Check} size="sm" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-fg">
+            {t('home.next_title', { defaultValue: 'Hermes 网关已启动' })}
+          </h3>
+          <p className="mt-0.5 text-xs text-fg-muted">
+            {t('home.next_desc', { defaultValue: '接下来配置你的 AI 助手能力：' })}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {steps.map((s) => (
+          <Link
+            key={s.to}
+            to={s.to}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elev-2 px-3 py-1.5 text-xs text-fg transition hover:border-gold-500/40 hover:text-gold-500"
+          >
+            {s.label}
+          </Link>
+        ))}
       </div>
     </section>
   );

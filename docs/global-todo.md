@@ -470,5 +470,184 @@ skill-packs/cross-border-ecom/
 |------|------|---------|
 | v0.1.8 | ✅ 已发布 | 网关会话自动导入 + Windows 修复 + COS CDN + 进度条 |
 | v0.1.9 | 🔄 开发中 | BGE-M3 RAG + 统一下载中心 |
+| v0.1.11 | 🔄 开发中 | 网关修复 + 通道状态 + 多项 Bug 修复 |
 | v0.2.0 | 📋 规划中 | Skill Pack 商店 + 可视化 + Persona + 用量分析 |
 | v0.3.0 | 📋 规划中 | 远程更新 + 白标交付 + 跨境电商第一期 |
+
+---
+
+## 九、当前 Bug 跟踪（v0.1.11）
+
+> 更新时间：2026-04-30（第二轮修复完成）
+
+### 9.1 已修复（代码已改，CI 全绿）
+
+#### BUG-001: Hermes 网关不启动 HTTP API Server
+- **优先级**：P0
+- **影响平台**：Windows + macOS
+- **现象**：Corey 显示"网关未启动"，但 `hermes gateway run` 进程在运行
+- **根因**：Hermes 要求 `.env` 中设置 `API_SERVER_ENABLED=true` 才会启动 8642 端口的 HTTP API。未设置时 gateway 只运行消息平台 + cron，不启动 API server
+- **修复**：
+  - `gateway.rs` — 新增 `ensure_api_server_env()`，在 `gateway_start()` 和 `gateway_restart()` 前自动写入 `API_SERVER_ENABLED=true`
+  - `bootstrap-windows.ps1` — Step 5.6 自动写入
+
+#### BUG-002: config.yaml 不存在时不自动创建
+- **优先级**：P0
+- **影响平台**：Windows + macOS
+- **现象**：首次安装后配置 LLM Profile，但 `~/.hermes/config.yaml` 不存在
+- **根因**：`seed_hermes_model_if_empty` 在 `read_view()` 失败时直接 return，不创建文件
+- **修复**：`llm_profiles.rs` — 构造空 `HermesConfigView` 继续执行写入
+
+#### BUG-003: Windows 网关进程随 Corey 退出
+- **优先级**：P0
+- **影响平台**：Windows
+- **现象**：关闭 Corey 后 Hermes gateway 进程也消失
+- **根因**：`CREATE_NO_WINDOW` 标志不够，子进程仍绑定在父进程组
+- **修复**：`gateway.rs` — 改用 `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW`，stdout/stderr 设为 null
+
+#### BUG-004: Windows 无法停止网关
+- **优先级**：P1
+- **影响平台**：Windows
+- **现象**：macOS 有 `hermes gateway stop`，Windows 无对应实现
+- **修复**：`gateway.rs` — 新增 `gateway_stop()`：读 `gateway.pid` → `taskkill /F /PID`，fallback 到 PowerShell 端口查找杀进程。新增 IPC `hermes_gateway_stop`
+
+#### BUG-005: QQ/钉钉扫码后无连接状态标识
+- **优先级**：P1
+- **影响平台**：Windows + macOS
+- **现象**：QQ/钉钉扫码登录成功后，平台通道卡片没有"在线"标识，用户无法确认是否连接
+- **根因**：`computeStatus()` 对 `has_qr_login=true` 的通道永远返回 `'qr'`，而 `ChannelCard` 在 `qr` 状态下隐藏 `LiveStatusPill`
+- **修复**：`computeStatus.ts` — QR 通道在 env 已配置时返回 `'configured'`，让 `LiveStatusPill`（在线 ✅ / 离线 ❌ / 未知）正常显示
+- **效果**：扫码前显示 `QR`（黄色）→ 扫码成功后显示 `已配置`（绿色）+ `在线`（绿色 ✅）
+
+#### BUG-006: macOS Node.js/Browser Runner 检测失败
+- **优先级**：P1
+- **影响平台**：macOS
+- **现象**：已安装 Node.js 但浏览器自动化页面显示"未找到"
+- **根因**：Tauri GUI 应用不加载 `.zshrc`/`.bashrc`，Homebrew/nvm 安装的 `node` 不在 PATH
+- **修复**：`browser_config.rs` — `detect_node()` 增加 macOS 常见路径（`/opt/homebrew/bin/node`、`~/.nvm/versions/node/current/bin/node`、`~/.volta/bin/node`、`~/.fnm/node/current/bin/node`）；`find_browser_runner` 增加 `CARGO_MANIFEST_DIR` 开发模式搜索
+
+### 9.2 待修复
+
+#### BUG-007: Windows 数据目录不一致（根因问题）
+- **优先级**：P0
+- **影响平台**：Windows
+- **现象**：`E:\Corey\data\` 和 `C:\Users\ADMI\.hermes\` 两个数据目录并存，skills/config/sessions 重复
+- **根因**：`paths.rs` 的 `platform_default()` 在 Windows 上检测到 `Corey.exe` 所在目录就返回 `<exe_dir>/data/`，而 Bootstrap 脚本设置 `HERMES_HOME=C:\Users\ADMI\.hermes`。两边指向不同目录
+- **修复**：`paths.rs` — 去掉 `Corey.exe` 检测逻辑，所有平台统一用 `~/.hermes/`；`bootstrap-windows.ps1` 清理死代码
+- **文件**：`src-tauri/src/paths.rs`、`src-tauri/assets/scripts/bootstrap-windows.ps1`
+
+#### BUG-008: Windows 对话白圈无回复
+- **优先级**：P0
+- **影响平台**：Windows
+- **现象**：发送消息后一直白圈转圈，无回复
+- **根因**：数据目录不一致（BUG-007），gateway 读不到 Corey 写的 `.env`/`config.yaml`
+- **修复**：随 BUG-007 解决
+
+#### BUG-009: Skills 和数据目录重复
+- **优先级**：P0
+- **影响平台**：Windows
+- **现象**：`E:\Corey\data\skills` 和 `E:\Corey\hermes-agent\skills` 都有相同的 skills 文件
+- **根因**：BUG-007 的直接后果
+- **修复**：随 BUG-007 解决
+
+#### BUG-010: BGE-M3 假装安装完成
+- **优先级**：P1
+- **影响平台**：Windows + macOS
+- **现象**：知识库点"安装"立刻提示 BGE-M3 安装完成，但文件不存在或为空
+- **根因**：`model_exists()` 只检查文件是否存在，不检查文件大小。空文件被当成已下载
+- **修复**：`embedding.rs` — `model_exists()` 增加文件大小校验（onnx≥1MB, onnx_data≥100MB, tokenizer≥100KB）；`knowledge.rs` — `rag_download_model` 空文件重新下载
+- **文件**：`src-tauri/src/ipc/embedding.rs`、`src-tauri/src/ipc/knowledge.rs`
+
+#### BUG-011: 会话列表混乱
+- **优先级**：P1
+- **影响平台**：Windows + macOS
+- **现象**：
+  1. 微信对话按话题分裂成多个会话
+  2. 存在空会话
+  3. Corey session 和 Gateway session 重复
+- **根因**：`gatewaySync` 按 Hermes session ID 逐个导入，不按来源分组
+- **修复**：
+  - 新增 `gateway_source_messages` IPC 按 source 聚合消息
+  - `gatewaySync` 改为按 source 分组创建 session
+  - `GatewaySection` 改为按 source 分组显示（如"微信对话"、"钉钉对话"）
+  - 每个 source 一个会话，消息按时间排序
+- **文件**：`gateway_sessions.rs`、`lib.rs`、`runtime.ts`、`chat.ts`、`chatTypes.ts`、`GatewaySection.tsx`
+
+#### BUG-012: 安装后 Skill/MCP 引导消失
+- **优先级**：P1
+- **影响平台**：Windows + macOS
+- **现象**：一键安装启动网关后，配置引导消失了
+- **根因**：`HermesInstallCard` 在 gateway online 后返回 `null`
+- **修复**：新增 `NextStepsCard` 组件，gateway online 后显示"配置 Skills → 配置 MCP → 连接通道"引导
+- **文件**：`src/features/home/HermesInstallCard.tsx`
+
+#### BUG-013: 语言设置显示不一致
+- **优先级**：P2
+- **影响平台**：Windows + macOS
+- **现象**：中文界面但设置页语言显示 English
+- **根因**：fallback 语言为 `'en'`，`zh-CN` 无法匹配
+- **修复**：`AppearanceSection.tsx` — 用 `split('-')[0]` 提取主语言代码，fallback 改为 `'zh'`
+- **文件**：`src/features/settings/AppearanceSection.tsx`
+
+#### BUG-014: 默认主题浅色
+- **优先级**：P2
+- **影响平台**：Windows + macOS
+- **现象**：首次启动应用主题为浅色
+- **修复**：`ui.ts` — 默认值从 `'dark'` 改为 `'system'` 跟随系统偏好
+- **文件**：`src/stores/ui.ts`
+
+#### BUG-015: QQ/钉钉扫码登录等待时间过长
+- **优先级**：P2
+- **影响平台**：Windows + macOS
+- **现象**：扫码后等了很久才提示登录成功
+- **修复**：`ChannelQrPanel.tsx` — 轮询间隔从 3 秒改为 2 秒
+- **文件**：`src/features/channels/ChannelQrPanel.tsx`
+
+### 9.2 待验证（需用户在 Windows 实测）
+
+- BUG-007~009：数据目录统一后，Windows 上旧的 `E:\Corey\data\` 目录需要手动删除
+- BUG-008：对话白圈需在 Windows 上实测确认已解决
+- BUG-010：BGE-M3 需实测下载流程（文件大小校验后应触发重新下载）
+
+### 9.3 功能缺失（非 Bug）
+
+#### FEAT-001: 卸载/重置功能
+- **优先级**：P2
+- **说明**：设置中需要"清除 Hermes 数据"和"重置 Corey 配置"按钮。帮助手册需完整卸载步骤
+- **卸载清单**：
+  - **Windows**：删安装目录 → 删 `~/.hermes/` → 删 `%APPDATA%/com.caduceus.app/` → 清环境变量
+  - **macOS**：删 `.app` → 删 `~/.hermes/` → 删 `~/Library/Application Support/com.caduceus.app/`
+
+### 9.4 CI 验证结果
+
+| 检查 | 结果 |
+|------|------|
+| `tsc --noEmit` | ✅ 0 错误 |
+| `cargo check` | ✅ 编译通过 |
+| `cargo test --lib` | ✅ 314 passed, 0 failed |
+| `pnpm build` | ✅ 7.26s 构建成功 |
+
+### 9.5 修改文件汇总
+
+| 文件 | 改动 |
+|------|------|
+| `src-tauri/src/hermes_config/gateway.rs` | `ensure_api_server_env`、`windows_gateway_spawn` 重写、`gateway_stop`/`windows_gateway_stop`、`check_port_8642` |
+| `src-tauri/src/ipc/llm_profiles.rs` | `seed_hermes_model_if_empty` 空容错 |
+| `src-tauri/src/ipc/hermes_config.rs` | 新增 `hermes_gateway_stop` IPC |
+| `src-tauri/src/hermes_config/mod.rs` | re-export `gateway_stop` |
+| `src-tauri/src/lib.rs` | 注册 `hermes_gateway_stop`、`gateway_source_messages` |
+| `src-tauri/assets/scripts/bootstrap-windows.ps1` | Step 5.6 `API_SERVER_ENABLED`、清理死代码 |
+| `src-tauri/src/ipc/browser_config.rs` | `detect_node` macOS 多路径、`find_browser_runner` 开发模式 |
+| `src-tauri/src/ipc/embedding.rs` | `model_exists` 文件大小校验 |
+| `src-tauri/src/ipc/knowledge.rs` | `rag_download_model` 空文件重新下载 |
+| `src-tauri/src/ipc/gateway_sessions.rs` | 新增 `gateway_source_messages` IPC |
+| `src-tauri/src/paths.rs` | `platform_default` 统一用 `~/.hermes/` |
+| `src/features/channels/computeStatus.ts` | QR 通道状态判断修复 |
+| `src/features/channels/ChannelQrPanel.tsx` | 轮询间隔 3s → 2s |
+| `src/features/chat/GatewaySection.tsx` | 按 source 分组显示 |
+| `src/features/home/HermesInstallCard.tsx` | 新增 `NextStepsCard` 引导 |
+| `src/features/settings/AppearanceSection.tsx` | 语言 fallback 修复 |
+| `src/stores/chat.ts` | `importGatewaySource` 按 source 分组 |
+| `src/stores/chatTypes.ts` | 新增 `importGatewaySource` 类型 |
+| `src/stores/ui.ts` | 默认主题 `system` |
+| `src/lib/ipc/runtime.ts` | 新增 `gatewaySourceMessages` |

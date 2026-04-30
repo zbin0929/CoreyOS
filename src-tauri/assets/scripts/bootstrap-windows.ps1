@@ -9,7 +9,19 @@
   Logs to %LOCALAPPDATA%\Corey\logs\bootstrap-windows.log
 #>
 [CmdletBinding()]
-param([switch]$SkipElevation, [switch]$VerboseLog)
+param(
+    [switch]$SkipElevation,
+    [switch]$VerboseLog,
+    [string]$COREY_INSTALL_DIR_ARG,
+    [string]$HERMES_HOME_ARG
+)
+
+if ($COREY_INSTALL_DIR_ARG -and -not $env:COREY_INSTALL_DIR) {
+    $env:COREY_INSTALL_DIR = $COREY_INSTALL_DIR_ARG
+}
+if ($HERMES_HOME_ARG -and -not $env:HERMES_HOME) {
+    $env:HERMES_HOME = $HERMES_HOME_ARG
+}
 
 $ErrorActionPreference = 'Stop'
 
@@ -49,9 +61,12 @@ function Test-Admin {
 }
 if (-not $SkipElevation -and -not (Test-Admin)) {
     Info "Requesting admin elevation (may be needed for prerequisites)..."
+    $passArgs = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"", "-SkipElevation")
+    if ($env:COREY_INSTALL_DIR) { $passArgs += "-COREY_INSTALL_DIR_ARG"; $passArgs += $env:COREY_INSTALL_DIR }
+    if ($env:HERMES_HOME) { $passArgs += "-HERMES_HOME_ARG"; $passArgs += $env:HERMES_HOME }
     try {
         Start-Process -FilePath "powershell.exe" `
-            -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`" -SkipElevation" `
+            -ArgumentList $passArgs `
             -Verb RunAs -Wait
         Info "Elevated process done. Log: $LogFile"
         exit 0
@@ -319,10 +334,24 @@ if (-not $script:HasApiKey) {
     Warn "You need at least one provider key to use Hermes."
 }
 
-# ── 6. Start gateway ──────────────────────────────────────────────
-Step "Starting Hermes gateway"
+# ── 5.6. Enable API server ────────────────────────────────────────
+Step "API server configuration"
 
+$envContent = if (Test-Path $envFile) { Get-Content $envFile -Encoding UTF8 -Raw } else { "" }
+if ($envContent -notmatch 'API_SERVER_ENABLED\s*=\s*true') {
+    $append = if ($envContent -and -not $envContent.EndsWith("`n")) { "`nAPI_SERVER_ENABLED=true`n" } else { "API_SERVER_ENABLED=true`n" }
+    Add-Content -Path $envFile -Value $append -Encoding UTF8
+    Info "Added API_SERVER_ENABLED=true to $envFile"
+} else {
+    Info "API_SERVER_ENABLED=true already set"
+}
+
+# ── 6. Start gateway ──────────────────────────────────────────────
+Step "Gateway start"
+
+Info "Gateway will be started by Corey after detection (avoids admin permission issues)"
 $gwRunning = $false
+
 try {
     $statusOut = hermes gateway status 2>&1
     if ($LASTEXITCODE -eq 0) {
@@ -332,28 +361,7 @@ try {
 } catch { }
 
 if (-not $gwRunning) {
-    try {
-        $gwOut = hermes gateway start 2>&1
-        Write-Log 'GATEWAY' $gwOut
-        if ($LASTEXITCODE -eq 0) {
-            Info "Gateway started"
-            $gwRunning = $true
-        } else {
-            Warn "gateway start not supported, trying gateway run in background..."
-            Start-Process -FilePath "powershell.exe" `
-                -ArgumentList "-ExecutionPolicy Bypass -Command `"cd '$HermesDir'; & .\venv\Scripts\Activate.ps1; hermes gateway run`"" `
-                -WindowStyle Normal
-            Info "Gateway run launched in separate window"
-            $gwRunning = $true
-        }
-    } catch {
-        Warn "Gateway start failed: $($_.Exception.Message)"
-        Warn "Starting gateway run in separate window..."
-        Start-Process -FilePath "powershell.exe" `
-            -ArgumentList "-ExecutionPolicy Bypass -Command `"cd '$HermesDir'; & .\venv\Scripts\Activate.ps1; hermes gateway run`"" `
-            -WindowStyle Normal
-        $gwRunning = $true
-    }
+    Info "Gateway not running. Corey will start it automatically."
 }
 
 # ── 7. Summary ────────────────────────────────────────────────────

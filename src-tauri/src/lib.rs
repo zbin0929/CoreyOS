@@ -130,6 +130,7 @@ pub fn run() {
             ipc::hermes_memory::hermes_session_cleanup,
             ipc::hermes_config::hermes_gateway_restart,
             ipc::hermes_config::hermes_gateway_start,
+            ipc::hermes_config::hermes_gateway_stop,
             ipc::hermes_config::hermes_detect,
             ipc::hermes_config::hermes_install_preflight,
             ipc::hermes_config::hermes_install,
@@ -276,6 +277,7 @@ pub fn run() {
             ipc::download::download_list,
             ipc::download::download_clear_completed,
             ipc::gateway_sessions::gateway_session_messages,
+            ipc::gateway_sessions::gateway_source_messages,
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");
