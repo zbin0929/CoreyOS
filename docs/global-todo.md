@@ -63,10 +63,16 @@
   - [x] **Stage 3a**：模板变量解析器（`3bf14d6`）
     - `${platform}` / `${pack_data_dir}` / `${pack_config.X}`
     - 未知变量保留原样、不递归扩展
-  - [ ] **Stage 3b**：Pack MCP ↔ Hermes config.yaml 双向同步
-    - 启用 → 模板替换 → 注入 mcp_servers + pack_id 标签
-    - 禁用 → 按 pack_id 反向移除
-    - 触发 `/reload-mcp` 软重启（避免 gateway 整重启）
+  - [x] **Stage 3b**：Pack MCP → Hermes config 翻译器（`9855db3`）
+    - 键命名规范 `pack__<pack_id>__<server_id>`（基于前缀识别 Pack 拥有的条目）
+    - argv `["./bin", "arg"]` → Hermes `{ command, args }` 翻译 + env 模板替换
+    - `enable_updates` / `disable_updates` 纯函数 + 12 单测
+  - [x] **Stage 3c**：Pack 开关 → 写 config.yaml + gateway 重启（`5d7b2bd`）
+    - `pack_set_enabled` IPC：先写 config.yaml，再持久化 enable bit
+    - 自动 `mkdir -p ~/.hermes/pack-data/<id>/` 首次启用
+    - 启用无 manifest 的 broken pack 直接拒绝
+    - 仅在 config 实际变化时异步触发 gateway restart
+    - Hermes 0.10 没 `/reload-mcp`，gateway restart 是唯一重载路径
   - [ ] **Stage 4**：Workflow / Schedule / Skill 注册管道（按 pack_id 标签）
   - [ ] **Stage 5**：12 个内置视图模板 + 渲染管道：
     - DataTable / MetricsCard / TimeSeriesChart / PivotTable
@@ -242,7 +248,7 @@ B-7 (卸载/重置)  独立
 | v0.1.11 | ✅ | BGE-M3 RAG + 统一下载中心 + updater 修复 + NSIS |
 | v0.1.12 | ✅ | 15 项 Bug 修复（详见 `docs/bug-history.md`）|
 | v0.1.13 | 📋 | Windows 端到端实测 + 验证收尾 |
-| v0.2.0-dev | 🟡 | B-2 white-label stage 1（`229ab57`）+ B-3 Pack 加载器 stage 1/2/3a（`7963f93` / `ea49667` / `3bf14d6`）|
+| v0.2.0-dev | 🟡 | B-2 white-label stage 1（`229ab57`）+ B-3 Pack 加载器 stage 1/2/3a/3b/3c（`7963f93` / `ea49667` / `3bf14d6` / `9855db3` / `5d7b2bd`）|
 | v0.2.0 | 📋 | 基座定制能力（白标 + Pack 加载器 + 12 视图模板 + license features） |
 | v0.3.0 | 📋 | 跨境电商 Pack 完整版 + 第一个真实客户 |
 
