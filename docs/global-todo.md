@@ -52,19 +52,28 @@
 - **依赖**：无
 
 #### B-3. Pack 加载器 + 12 视图模板
-- **状态**：🟡 进行中（v0.2.0-dev）
+- **状态**：🟡 进行中（v0.2.0-dev，stage 3a 已合）
 - **目标版本**：v0.2.0
-- **内容**：
-  - [ ] manifest.yaml schema_version=1 解析器
-  - [ ] Pack 扫描 + 启用 / 禁用 / 卸载生命周期
-  - [ ] MCP server 子进程管理（隔离 + 崩溃恢复 + 跨平台二进制选择）
-  - [ ] Workflow / Schedule / Skill 注册管道（按 pack_id 标签）
-  - [ ] 视图渲染管道 + **12 个内置视图模板**：
+- **分阶段交付**：
+  - [x] **Stage 1**：manifest.yaml schema_version=1 解析器（`7963f93`）
+  - [x] **Stage 2**：Pack 扫描器 + enable-state 持久化（`ea49667`）
+    - `scan_skill_packs_dir()`、`Registry::scan()`、`pack-state.json`
+    - IPC：`pack_list` / `pack_set_enabled`
+    - 副作用层为空：开关只持久化，不启 MCP / 不挂路由
+  - [x] **Stage 3a**：模板变量解析器（`3bf14d6`）
+    - `${platform}` / `${pack_data_dir}` / `${pack_config.X}`
+    - 未知变量保留原样、不递归扩展
+  - [ ] **Stage 3b**：Pack MCP ↔ Hermes config.yaml 双向同步
+    - 启用 → 模板替换 → 注入 mcp_servers + pack_id 标签
+    - 禁用 → 按 pack_id 反向移除
+    - 触发 `/reload-mcp` 软重启（避免 gateway 整重启）
+  - [ ] **Stage 4**：Workflow / Schedule / Skill 注册管道（按 pack_id 标签）
+  - [ ] **Stage 5**：12 个内置视图模板 + 渲染管道：
     - DataTable / MetricsCard / TimeSeriesChart / PivotTable
     - TrendsMatrix / Timeline / AlertList / WorkflowLauncher
     - SkillPalette / FormRunner / RadarChart / CompositeDashboard
   - [ ] ActionPanel 嵌入（视图旁的"决策归还"按钮）
-  - [ ] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖
+  - [ ] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖（架构文档已锁定）
   - [ ] Pack 升级前自动备份（zip 到 `~/.hermes/backups/`，保留 7 天）
   - [ ] manifest migrations 机制（跨版本字段迁移）
   - [ ] Pack 配置 UI（动态表单）+ 导入 zip 按钮 + 卸载 UI
@@ -233,7 +242,7 @@ B-7 (卸载/重置)  独立
 | v0.1.11 | ✅ | BGE-M3 RAG + 统一下载中心 + updater 修复 + NSIS |
 | v0.1.12 | ✅ | 15 项 Bug 修复（详见 `docs/bug-history.md`）|
 | v0.1.13 | 📋 | Windows 端到端实测 + 验证收尾 |
-| v0.2.0-dev | 🟡 | B-2 customer.yaml 白标第一阶段已合（`229ab57`）；B-3 Pack 加载器进行中 |
+| v0.2.0-dev | 🟡 | B-2 white-label stage 1（`229ab57`）+ B-3 Pack 加载器 stage 1/2/3a（`7963f93` / `ea49667` / `3bf14d6`）|
 | v0.2.0 | 📋 | 基座定制能力（白标 + Pack 加载器 + 12 视图模板 + license features） |
 | v0.3.0 | 📋 | 跨境电商 Pack 完整版 + 第一个真实客户 |
 
