@@ -1,5 +1,7 @@
 # Phase 9 · Workflow Engine
 
+**Status**: ✅ Shipped
+
 **Goal**: 让用户能定义多步骤、多 Agent 协同的自动化工作流。支持顺序执行、并行执行、条件分支、循环迭代、人工审批。通过可视化拖拽编辑器或 YAML 文件定义工作流，引擎负责解析依赖、调度步骤、传递上下文。
 
 **Est.**: ~3 weeks solo.

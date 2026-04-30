@@ -1,5 +1,7 @@
 # Phase 1 · Chat Core
 
+**Status**: ✅ Shipped
+
 **Goal**: Replace Hermes TUI for everyday chat. Real gateway, real sessions, real tool calls, attachments, model selection.
 
 **Est.**: 3–4 days solo.

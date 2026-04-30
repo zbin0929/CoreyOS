@@ -1,5 +1,7 @@
 # Phase 5 · Multi-Agent Console
 
+**Status**: ✅ Shipped
+
 **Goal**: Prove Corey is genuinely agent-agnostic. Implement at least two additional `AgentAdapter`s and make them first-class citizens: switch between agents in the topbar, unify session inboxes, unify model/usage/budget accounting across adapters.
 
 **Est.**: ~1 week solo.

@@ -1,5 +1,7 @@
 # Phase 3 · Platform Channels
 
+**Status**: ✅ Shipped
+
 **Goal**: Configure all 8 messaging channels Hermes supports — credentials, behavior, status — from one screen. Reach parity with `hermes-web-ui`.
 
 **Est.**: ~1 week solo.

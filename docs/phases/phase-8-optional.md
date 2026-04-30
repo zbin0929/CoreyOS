@@ -1,5 +1,7 @@
 # Phase 8 · Multimodal (conditional)
 
+**Status**: ✅ Shipped (voice/TTS)
+
 **Goal**: Add push-to-talk voice and Hermes-backed video analysis surfaces **iff** the product is still on the Control-Plane track and Phases 6 + 7 landed cleanly. This phase explicitly does NOT pursue the digital-human, desktop-avatar, or always-on voice directions — see `docs/06-backlog.md` § Will not do.
 
 **Est.**: 2–3 weeks solo, skippable.

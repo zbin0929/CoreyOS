@@ -1,5 +1,7 @@
 # Phase 7 · Agent Expansion
 
+**Status**: ✅ Shipped
+
 **Goal**: Surface three Hermes-native capabilities (MCP, memory, skills hub) through Corey-specific GUIs, plus one additive feature (skill-from-conversation distillation). Post-product-audit this phase is mostly **GUI wrappers over features Hermes already ships**, not parallel engines.
 
 **Est.**: ~1.5 weeks solo (post-audit, see `docs/10-product-audit-2026-04-23.md`). Was 3–4 weeks before T7.1 LangGraph adapter was replaced with MCP manager and T7.3 qdrant was replaced with `MEMORY.md` editor.

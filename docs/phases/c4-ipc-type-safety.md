@@ -1,5 +1,6 @@
 # C4 · IPC 类型安全评估
 
+**Status**: ✅ Resolved (manual TS bindings)
 **日期**: 2026-04-25
 **结论**: 暂不引入 tauri-specta，维持手动 TS 绑定
 

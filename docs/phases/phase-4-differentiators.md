@@ -1,5 +1,7 @@
 # Phase 4 · Differentiators
 
+**Status**: ✅ Shipped
+
 **Goal**: Ship the features that make Corey demonstrably better than any alternative in the ecosystem. Multi-model compare, visual skill editor, trajectory timeline, cost budgets with alerts, web terminal, automation runbooks.
 
 **Est.**: 1–2 weeks solo.

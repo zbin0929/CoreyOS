@@ -1,5 +1,7 @@
 # Phase 2 · Config & Ops
 
+**Status**: ✅ Shipped
+
 **Goal**: Everything the operator needs after chat works. Model management, settings, usage analytics, logs, profiles, gateway control.
 
 **Est.**: ~1 week solo.

@@ -1,6 +1,6 @@
 # Phase D · 体验细节打磨
 
-**Status**: 执行中
+**Status**: ✅ Shipped
 
 **Goal**: 清理调试残留、补全无障碍、增强侧边栏/Settings/Analytics 体验。移除"快速体验"卡片。不做移动端。
 

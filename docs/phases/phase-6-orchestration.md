@@ -1,5 +1,7 @@
 # Phase 6 · Orchestration Core
 
+**Status**: ✅ Shipped
+
 **Goal**: Turn Corey from a single-agent control panel into a **multi-Hermes orchestration plane**. Users can run several Hermes instances side-by-side, have one instance delegate to others, and feed the results back through a single chat pane. Also lands the 👍/👎 feedback loop, rules-based routing, channel schema repair + e2e proof, and a Scheduler refactor to wrap Hermes' native cron.
 
 **Est.**: ~2 weeks solo (post-audit, see `docs/10-product-audit-2026-04-23.md`). Was 3–4 weeks before the SURFACE/DROP reclassifications.
