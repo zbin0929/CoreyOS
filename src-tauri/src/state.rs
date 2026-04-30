@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 use crate::adapters::AdapterRegistry;
 use crate::channel_status::ChannelStatusCache;
 use crate::config::GatewayConfig;
+use crate::customer::CustomerConfig;
 use crate::db::Db;
 use crate::ipc::download::DownloadManager;
 #[cfg(feature = "rag")]
@@ -67,6 +68,12 @@ pub struct AppState {
     pub download_manager: Arc<DownloadManager>,
     #[cfg(feature = "rag")]
     pub embedder: Arc<Mutex<Option<BgeM3Embedder>>>,
+    /// White-label customization loaded from `~/.hermes/customer.yaml`
+    /// at startup. `None` when no file is present (default Corey
+    /// behaviour). `customer_error` carries any parse / read error
+    /// so the frontend can surface it via Settings → Help.
+    pub customer: Option<CustomerConfig>,
+    pub customer_error: Option<String>,
     // 2026-04-23 pm (T6.8): removed the `scheduler: Option<Arc<Scheduler>>`
     // field. Hermes' gateway owns cron scheduling now; Corey only
     // reads/writes `~/.hermes/cron/jobs.json`. See `hermes_cron.rs`.
@@ -101,6 +108,17 @@ impl AppState {
             download_manager: Arc::new(DownloadManager::new()),
             #[cfg(feature = "rag")]
             embedder: Arc::new(Mutex::new(None)),
+            customer: None,
+            customer_error: None,
         }
+    }
+
+    /// Replace the customer config slots after construction. Called
+    /// once during startup after we resolve `~/.hermes/`. Kept as a
+    /// post-construction setter so `AppState::new`'s signature
+    /// doesn't grow further.
+    pub fn set_customer(&mut self, cfg: Option<CustomerConfig>, err: Option<String>) {
+        self.customer = cfg;
+        self.customer_error = err;
     }
 }

@@ -9,6 +9,7 @@ mod changelog;
 mod channel_status;
 mod channels;
 mod config;
+mod customer;
 mod db;
 mod error;
 mod fs_atomic;
@@ -253,6 +254,7 @@ pub fn run() {
             ipc::license::license_install,
             ipc::license::license_clear,
             ipc::license::license_machine_id,
+            ipc::customer::customer_config_get,
             ipc::workflow::workflow_list,
             ipc::workflow::workflow_get,
             ipc::workflow::workflow_save,
@@ -428,7 +430,7 @@ pub fn run() {
             // on first IPC call — startup does no work here.
             let channel_status = Arc::new(channel_status::ChannelStatusCache::new());
 
-            let app_state = AppState::new(
+            let mut app_state = AppState::new(
                 registry,
                 cfg,
                 config_dir.clone(),
@@ -438,6 +440,36 @@ pub fn run() {
                 db_path,
                 channel_status,
             );
+
+            // Load `~/.hermes/customer.yaml` for white-label
+            // customization (Pack Architecture v2.0+). Best-effort:
+            // a missing file is the common case (default Corey),
+            // a malformed file is logged and the app launches with
+            // defaults. The frontend reads this via
+            // `customer_config_get` IPC at startup.
+            match paths::hermes_data_dir() {
+                Ok(hermes_dir) => match customer::load_from_dir(&hermes_dir) {
+                    customer::LoadOutcome::NotPresent => {
+                        info!("customer.yaml: not present (default Corey branding)");
+                    }
+                    customer::LoadOutcome::Loaded(cfg) => {
+                        info!(
+                            schema_version = cfg.schema_version,
+                            app_name = ?cfg.brand.app_name,
+                            hidden_routes = cfg.navigation.hidden_routes.len(),
+                            "customer.yaml: loaded white-label config"
+                        );
+                        app_state.set_customer(Some(cfg), None);
+                    }
+                    customer::LoadOutcome::Invalid(err) => {
+                        tracing::warn!(error = %err, "customer.yaml: invalid; ignoring");
+                        app_state.set_customer(None, Some(err));
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!(error = %e, "could not resolve hermes data dir; skipping customer.yaml");
+                }
+            }
 
             // Load sandbox.json (or seed ~/.hermes/ + stay in DevAllow on
             // first launch). Safe to call before `manage` — `authority` is

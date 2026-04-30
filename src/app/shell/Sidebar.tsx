@@ -1,18 +1,34 @@
 import { type ReactNode, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useRouterState } from '@tanstack/react-router';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { type LucideIcon, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { NAV, type NavEntry } from '@/app/nav-config';
 import { CoreyMark } from '@/components/ui/corey-mark';
 import { Icon } from '@/components/ui/icon';
 import { useAgentsStore } from '@/stores/agents';
+import { useBrandAppName, useBrandLogoUrl, useHiddenRoutes } from '@/stores/customer';
 import type { AdapterCapabilities, AdapterListEntry } from '@/lib/ipc';
 
 function entryVisible(entry: NavEntry, caps: AdapterCapabilities | null): boolean {
   if (!entry.requires || !caps) return true;
   if (entry.requires === 'channels') return caps.channels.length > 0;
   return Boolean(caps[entry.requires]);
+}
+
+/**
+ * Wrap `convertFileSrc` in a try/catch so the white-label brand
+ * logo never crashes the sidebar. Outside Tauri (vitest, web-only
+ * dev) the call throws — we fall back to the empty string, which
+ * the caller treats as "use default brand".
+ */
+function safeConvertFileSrc(path: string): string {
+  try {
+    return convertFileSrc(path);
+  } catch {
+    return '';
+  }
 }
 
 export function Sidebar() {
@@ -35,7 +51,18 @@ export function Sidebar() {
   })();
   const caps = activeEntry?.capabilities ?? null;
 
-  const visible = NAV.filter((n) => entryVisible(n, caps));
+  // White-label overrides loaded once at startup from
+  // `~/.hermes/customer.yaml`. Empty / null when no file is
+  // present, in which case we fall back to default Corey brand
+  // and the full NAV.
+  const hiddenRoutes = useHiddenRoutes();
+  const brandAppName = useBrandAppName(t('app.name'));
+  const brandLogoPath = useBrandLogoUrl();
+  const brandLogoSrc = brandLogoPath ? safeConvertFileSrc(brandLogoPath) : '';
+
+  const visible = NAV.filter(
+    (n) => entryVisible(n, caps) && !hiddenRoutes.has(n.id),
+  );
   const primary = visible.filter((n) => n.group === 'primary');
   const tools = visible.filter((n) => n.group === 'tools');
   const more = visible.filter((n) => n.group === 'more');
@@ -68,9 +95,19 @@ export function Sidebar() {
           'pl-20 [@media(display-mode:fullscreen)]:pl-4',
         )}
       >
-        <CoreyMark className="h-5 w-5 shrink-0" />
+        {brandLogoSrc ? (
+          <img
+            src={brandLogoSrc}
+            alt=""
+            role="presentation"
+            draggable={false}
+            className="h-5 w-5 shrink-0 select-none rounded-md object-contain"
+          />
+        ) : (
+          <CoreyMark className="h-5 w-5 shrink-0" />
+        )}
         <span className="truncate text-md font-semibold text-fg tracking-tight">
-          {t('app.name')}
+          {brandAppName}
         </span>
       </div>
 
