@@ -54,17 +54,19 @@
 ## 二、基座 TODO（按优先级排序）
 
 ### B-1. BGE-M3 知识库 RAG
-- **状态**：🔴 未开始
-- **目标版本**：v0.1.9
+- **状态**：✅ 已完成（v0.1.11）
+- **目标版本**：v0.1.11
 - **前置**：无
 - **内容**：
-  - [ ] 统一下载中心 UI（下载进度、暂停/重试、错误展示）
-  - [ ] BGE-M3 ONNX 模型下载（~1.2GB，国内 CDN）
-  - [ ] `ort` crate 本地 embedding 推理（1024 维）
-  - [ ] SQLite 向量存储 + BM25 全文索引
-  - [ ] 混合检索（向量 + 关键词 RRF 融合）
-  - [ ] Knowledge 页面"语义增强"开关
-  - [ ] 应用更新走统一下载中心
+  - [x] 统一下载中心 UI（下载进度、暂停/重试、错误展示）
+  - [x] BGE-M3 ONNX 模型下载（百度 PaddleNLP CDN，~2.1GB）
+  - [x] `ort` crate 本地 embedding 推理（1024 维，`rag` feature gate）
+  - [x] SQLite 向量存储 + cosine similarity
+  - [x] 混合检索（向量 + 关键词 RRF 融合，k=60）
+  - [x] Knowledge 页面"语义增强"状态卡片 + 一键下载
+  - [x] `rag_status` / `rag_download_model` IPC 命令
+  - [x] Windows NSIS 安装模式配置（installMode=both）
+  - [x] 应用更新修复（下载完手动重启，不再闪退）
 - **价值**：本地 RAG，数据不出机器。所有行业客户都需要（跨境电商查政策、财务查法规、物流查关税）
 - **参考**：`docs/plans/v0.1.9-bge-m3-rag.md`
 
@@ -330,8 +332,8 @@
 ## 四、执行路线图
 
 ```
-2026 Q2（v0.1.9 - v0.2.0）
-├── B-1  BGE-M3 RAG + 统一下载中心           ← v0.1.9
+2026 Q2（v0.1.11 - v0.2.0）
+├── B-1  BGE-M3 RAG + 统一下载中心           ← v0.1.11 ✅
 ├── B-2  Skill Pack 商店                     ← v0.2.0
 ├── B-3  数据可视化引擎                       ← v0.2.0
 ├── B-4  用量分析仪表盘                       ← v0.2.0
