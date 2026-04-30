@@ -481,13 +481,21 @@ fn build_specs() -> Vec<ChannelSpec> {
             display_name: "QQ Bot",
             yaml_root: "channels.qq",
             env_keys: vec![
+                // IMPORTANT: these MUST match the env var names
+                // Hermes' qqbot adapter reads (`gateway/platforms/
+                // qqbot/adapter.py` → `os.getenv("QQ_APP_ID")` /
+                // `os.getenv("QQ_CLIENT_SECRET")`). Earlier Corey
+                // builds wrote `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET`
+                // which Hermes silently ignored, so every scan was
+                // no-op theatre — Hermes kept whatever stale creds
+                // were in those names and the user saw "灵魂不在线".
                 EnvKeySpec {
-                    name: "QQ_BOT_APP_ID".into(),
+                    name: "QQ_APP_ID".into(),
                     required: true,
                     hint_key: "channels.qq.hint_app_id".into(),
                 },
                 EnvKeySpec {
-                    name: "QQ_BOT_APP_SECRET".into(),
+                    name: "QQ_CLIENT_SECRET".into(),
                     required: true,
                     hint_key: "channels.qq.hint_app_secret".into(),
                 },

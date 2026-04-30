@@ -285,9 +285,14 @@ def run_qqbot():
                     )
                     return
 
+                # MUST match the env var names Hermes' qqbot adapter
+                # reads (see gateway/platforms/qqbot/adapter.py —
+                # os.getenv("QQ_APP_ID") / os.getenv("QQ_CLIENT_SECRET")).
+                # Earlier versions wrote QQ_BOT_APP_ID / QQ_BOT_APP_SECRET
+                # which Hermes silently ignored.
                 _write_done("qq", {
-                    "QQ_BOT_APP_ID": str(app_id),
-                    "QQ_BOT_APP_SECRET": str(client_secret),
+                    "QQ_APP_ID": str(app_id),
+                    "QQ_CLIENT_SECRET": str(client_secret),
                 })
                 return
             elif status == BindStatus.EXPIRED:
