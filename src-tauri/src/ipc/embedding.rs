@@ -377,6 +377,7 @@ impl BgeM3Embedder {
 
 // ───────────────────────── Vector Storage ─────────────────────────
 
+#[allow(dead_code)]
 pub fn store_embedding(db: &Db, chunk_id: i64, vector: &[f32]) -> anyhow::Result<()> {
     let conn = db.conn_raw();
     let bytes: Vec<u8> = vector.iter().flat_map(|f| f.to_le_bytes()).collect();
@@ -387,6 +388,7 @@ pub fn store_embedding(db: &Db, chunk_id: i64, vector: &[f32]) -> anyhow::Result
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn search_by_vector(
     db: &Db,
     query_vector: &[f32],
@@ -441,6 +443,7 @@ pub fn search_by_vector(
     scored
 }
 
+#[allow(dead_code)]
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
     let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
@@ -453,6 +456,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 
 // ───────────────────────── RRF Fusion ─────────────────────────
 
+#[allow(dead_code)]
 pub fn rrf_fuse(
     keyword_results: &[(i64, String, String, usize, f64)],
     vector_results: &[(i64, String, String, usize, f64)],
