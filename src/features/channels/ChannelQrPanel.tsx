@@ -82,6 +82,8 @@ export function ChannelQrPanel({
 
   const isPending =
     state.kind === 'loaded' && (state.result.status === 'pending' || state.result.status === 'output');
+  const isConnecting =
+    state.kind === 'loaded' && state.result.status === 'connecting';
   const isDone =
     state.kind === 'loaded' && (state.result.status === 'confirmed' || state.result.status === 'done');
 
@@ -157,19 +159,32 @@ export function ChannelQrPanel({
           <div
             className={cn(
               'flex items-center gap-2 text-xs',
-              isDone ? 'text-emerald-500' : isPending ? 'text-gold-500' : 'text-fg-muted',
+              isDone
+                ? 'text-emerald-500'
+                : isConnecting
+                  ? 'text-sky-500'
+                  : isPending
+                    ? 'text-gold-500'
+                    : 'text-fg-muted',
             )}
           >
             <Icon
-              icon={isDone ? Check : isPending ? Loader2 : AlertTriangle}
+              icon={isDone ? Check : isConnecting || isPending ? Loader2 : AlertTriangle}
               size="xs"
-              className={cn(isPending && 'animate-spin')}
+              className={cn((isPending || isConnecting) && 'animate-spin')}
             />
             {isDone
-              ? t('channels.qr_confirmed', { defaultValue: '扫码成功！配置已保存。' })
-              : isPending
-                ? t('channels.qr_waiting', { defaultValue: '等待扫码确认…' })
-                : state.result.message}
+              ? t('channels.qr_confirmed', {
+                  defaultValue: '扫码成功！机器人已上线，可以在平台发消息了。',
+                })
+              : isConnecting
+                ? state.result.message ||
+                  t('channels.qr_connecting', {
+                    defaultValue: '凭据已保存，正在连接平台…（此步骤可能需要 10–30 秒）',
+                  })
+                : isPending
+                  ? t('channels.qr_waiting', { defaultValue: '等待扫码确认…' })
+                  : state.result.message}
           </div>
 
           {isDone && (

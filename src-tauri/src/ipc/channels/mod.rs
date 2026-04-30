@@ -366,7 +366,13 @@ fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
                 let s = session.get("status").and_then(|v| v.as_str()).unwrap_or("");
                 match s {
                     "done" => {
-                        let _ = std::fs::remove_file(&session_file);
+                        // Python reported credentials. Persist `.env`,
+                        // fire gateway restart, then transition to the
+                        // `connecting` phase — we do NOT return "done"
+                        // to the frontend until the channel's WSS is
+                        // actually up. That gap is what makes the QQ
+                        // platform reply "该机器人的灵魂不在线" when
+                        // users message the bot 2–30s after scanning.
                         if let Some(env) = session.get("env").and_then(|v| v.as_object()) {
                             let env_file = hermes_home.join(".env");
                             let mut env_content =
@@ -401,11 +407,65 @@ fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
                         if let Err(e) = crate::hermes_config::gateway::gateway_restart() {
                             tracing::warn!("qr-login: gateway restart after QR login failed: {e}");
                         }
+                        let since = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let connecting = serde_json::json!({
+                            "status": "connecting",
+                            "since": since,
+                        });
+                        if let Err(e) = std::fs::write(&session_file, connecting.to_string()) {
+                            tracing::warn!("qr-login: failed to write connecting marker: {e}");
+                        }
                         return Ok(ChannelQrSetupResult {
                             qr_url: None,
                             qr_data: None,
-                            status: "done".to_string(),
-                            message: "QR scan successful".to_string(),
+                            status: "connecting".to_string(),
+                            message: "凭据已保存，正在连接平台…".to_string(),
+                        });
+                    }
+                    "connecting" => {
+                        // Post-restart phase: poll gateway.log via the
+                        // existing `probe_all` heuristic. Only return
+                        // "done" once the channel is Online; on >90s
+                        // timeout surface an error so users know to
+                        // check Logs rather than thinking setup hung.
+                        let since = session.get("since").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let elapsed = now.saturating_sub(since);
+
+                        let probes = crate::channel_status::probe_all(None);
+                        let online = probes.iter().any(|p| {
+                            p.id == channel_id
+                                && p.state == crate::channel_status::LiveState::Online
+                        });
+                        if online {
+                            let _ = std::fs::remove_file(&session_file);
+                            return Ok(ChannelQrSetupResult {
+                                qr_url: None,
+                                qr_data: None,
+                                status: "done".to_string(),
+                                message: "机器人已上线，可以在平台发消息了".to_string(),
+                            });
+                        }
+                        if elapsed > 90 {
+                            let _ = std::fs::remove_file(&session_file);
+                            return Ok(ChannelQrSetupResult {
+                                qr_url: None,
+                                qr_data: None,
+                                status: "error".to_string(),
+                                message: "凭据已保存，但机器人 90 秒内未连上平台。请到 Logs 页查看原因。".to_string(),
+                            });
+                        }
+                        return Ok(ChannelQrSetupResult {
+                            qr_url: None,
+                            qr_data: None,
+                            status: "connecting".to_string(),
+                            message: format!("正在连接平台…（已等待 {elapsed}s）"),
                         });
                     }
                     _ => {
