@@ -533,7 +533,13 @@
     "quick_start_gateway": "连接网关",
     "quick_start_model": "配置模型",
     "quick_start_chat": "开始对话",
-    "quick_start_skills": "安装入门技能"
+    "quick_start_skills": "安装入门技能",
+    "action_new_chat": "新建对话",
+    "action_new_chat_desc": "与你的 AI Agent 开始对话",
+    "action_run_skill": "运行技能",
+    "action_run_skill_desc": "执行预置的提示词模板",
+    "action_mcp": "MCP 服务器",
+    "action_mcp_desc": "连接外部工具和数据源"
   },
   "agent_wizard": {
     "title": "新增 Agent",

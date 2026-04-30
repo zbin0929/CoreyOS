@@ -481,7 +481,13 @@
     "quick_start_gateway": "Connect gateway",
     "quick_start_model": "Configure model",
     "quick_start_chat": "Start chatting",
-    "quick_start_skills": "Install starter skills"
+    "quick_start_skills": "Install starter skills",
+    "action_new_chat": "New chat",
+    "action_new_chat_desc": "Start a conversation with your AI agent",
+    "action_run_skill": "Run a skill",
+    "action_run_skill_desc": "Execute a pre-built prompt template",
+    "action_mcp": "MCP servers",
+    "action_mcp_desc": "Connect external tools and data sources"
   },
   "agent_wizard": {
     "title": "Add a new agent",
