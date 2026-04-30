@@ -28,6 +28,7 @@
 mod manifest;
 mod scanner;
 mod state;
+mod templates;
 
 // Re-export only what IPC + AppState actually consume. The
 // ancillary manifest sub-types (McpServerSpec, ViewSpec, etc.)
