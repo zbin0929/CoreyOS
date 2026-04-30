@@ -11,6 +11,9 @@ mod channels;
 mod config;
 mod customer;
 mod db;
+// `pack` — Pack manifest schema + (later) scanner / lifecycle / MCP
+// supervision. v0.2.0-dev: schema parser only; nothing wired into
+// AppState yet. See `docs/01-architecture.md` § Pack Architecture.
 mod error;
 mod fs_atomic;
 mod hermes_config;
@@ -19,6 +22,7 @@ mod hermes_instances;
 mod hermes_logs;
 mod hermes_profiles;
 mod hermes_profiles_archive;
+mod pack;
 // llm_profiles — T8 multi-LLM model library (reusable {provider,
 // base_url, model, api_key_env} bundles referenced by Hermes instances
 // via `llm_profile_id`). Lives next to hermes_instances; similar
