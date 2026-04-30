@@ -19,7 +19,7 @@ import { useAgentsStore } from './agents';
 import { useAppStatusStore } from './appStatus';
 import { deriveTitle, fireWrite, newId, sessionFromDb } from './chatPersist';
 
-const GATEWAY_SOURCE_LABELS: Record<string, string> = {
+export const GATEWAY_SOURCE_LABELS: Record<string, string> = {
   weixin: '微信对话',
   dingtalk: '钉钉对话',
   feishu: '飞书对话',
@@ -36,22 +36,44 @@ const GATEWAY_SOURCE_LABELS: Record<string, string> = {
   cli: 'CLI 聊天记录',
 };
 
+/** Titles that mark a session as a "gateway default". Used both to
+ *  label new imported sessions and to detect ghost sessions at
+ *  hydrate time (see `hydrateFromDb`). */
+export const GATEWAY_DEFAULT_TITLES: ReadonlySet<string> = new Set(
+  Object.values(GATEWAY_SOURCE_LABELS),
+);
+
 function gatewayDefaultTitle(source: string | null | undefined): string {
   if (!source) return '聊天记录';
   return GATEWAY_SOURCE_LABELS[source] ?? `${source} 聊天记录`;
 }
 
+/** Pull fresh gateway sessions from Hermes' state.db and keep the
+ *  local chat store in sync:
+ *   - For each new gateway source, import it (creates a local
+ *     session + fetches full history).
+ *   - For each source that ALREADY has a local session, re-fetch
+ *     the history so new inbound messages show up within 60s even
+ *     if the user hasn't touched the session. `importGatewayMessages`
+ *     is idempotent: it dedupes by timestamp so we never double-append. */
 async function gatewaySync(get: () => ChatState) {
   const list = await gatewaySessionsList();
   if (list.length === 0) return;
   const sources = new Set(list.map((gs) => gs.source).filter(Boolean) as string[]);
-  const store = get();
   for (const source of sources) {
+    const store = get();
     const existing = store.orderedIds.find(
       (id) => store.sessions[id]?.gatewaySource === source && !store.sessions[id]?.gatewayId,
     );
     if (!existing) {
       get().importGatewaySource(source);
+      continue;
+    }
+    try {
+      const msgs = await gatewaySourceMessages(source);
+      get().importGatewayMessages(existing, msgs);
+    } catch (e) {
+      console.error('[gateway] refresh failed for source', source, e);
     }
   }
 }
@@ -98,9 +120,31 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (get().hydrated) return;
       const sessions: Record<string, ChatSession> = {};
       const orderedIds: string[] = [];
+      // Ghost-session cleanup. Older builds called `newSession()` with
+      // a default gateway title ("微信对话" / "钉钉对话" / ...) but
+      // never stamped the `gatewaySource` field. The result is an
+      // empty, un-badged duplicate that sits next to the real imported
+      // session and confuses users. Detect + remove here so we end up
+      // with exactly one row per channel.
+      const ghostIds: string[] = [];
       for (const row of rows) {
-        sessions[row.id] = sessionFromDb(row);
+        const s = sessionFromDb(row);
+        const isGhost =
+          !s.gatewaySource &&
+          s.messages.length === 0 &&
+          GATEWAY_DEFAULT_TITLES.has(s.title);
+        if (isGhost) {
+          ghostIds.push(row.id);
+          continue;
+        }
+        sessions[row.id] = s;
         orderedIds.push(row.id);
+      }
+      for (const gid of ghostIds) {
+        fireWrite(dbSessionDelete(gid), 'ghostSessionCleanup');
+      }
+      if (ghostIds.length > 0) {
+        console.info('[chat] removed', ghostIds.length, 'ghost gateway sessions');
       }
       set({
         sessions,
@@ -512,8 +556,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     sessionId: string,
     msgs: readonly { role: string; content: string; timestamp: number }[],
   ) => {
+    // Dedupe across repeated syncs: only append messages strictly
+    // newer than the latest one we already have. Hermes message
+    // timestamps are monotonic per session (state.db `messages`
+    // ORDER BY timestamp) so a single `max` is sufficient.
+    const session = get().sessions[sessionId];
+    const lastTs =
+      session && session.messages.length > 0
+        ? session.messages.reduce(
+            (m, cur) => (cur.createdAt > m ? cur.createdAt : m),
+            0,
+          )
+        : 0;
     for (let i = 0; i < msgs.length; i++) {
       const cur = msgs[i]!;
+      if (cur.timestamp <= lastTs) continue;
       if (cur.role === 'user' && cur.content) {
         get().appendMessage(sessionId, {
           id: newId('m'),

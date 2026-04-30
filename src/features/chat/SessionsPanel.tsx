@@ -5,7 +5,6 @@ import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/icon';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
-import { GatewaySection } from './GatewaySection';
 
 /**
  * Left-side session list inside the Chat feature. Lives *inside* the Chat
@@ -250,7 +249,6 @@ export function SessionsPanel() {
           </ul>
         )}
       </div>
-      <GatewaySection />
     </aside>
   );
 }
