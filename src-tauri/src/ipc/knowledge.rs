@@ -220,7 +220,7 @@ pub async fn knowledge_search(
         #[cfg(feature = "rag")]
         {
             if embedding::ensure_embedder(&embedder_arc) {
-                let mut guard = embedder_arc.lock().unwrap();
+                let mut guard = embedder_arc.lock().expect("embedder mutex poisoned");
                 if let Some(ref mut embedder) = *guard {
                     match embedder.embed(&q) {
                         Ok(query_vec) => {

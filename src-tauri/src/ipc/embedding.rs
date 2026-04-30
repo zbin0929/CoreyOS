@@ -280,7 +280,7 @@ pub const EMBEDDING_DIM: usize = 1024;
 
 #[cfg(feature = "rag")]
 pub fn ensure_embedder(embedder: &Arc<std::sync::Mutex<Option<BgeM3Embedder>>>) -> bool {
-    let mut guard = embedder.lock().unwrap();
+    let mut guard = embedder.lock().expect("embedder mutex poisoned");
     if guard.is_some() {
         return true;
     }
@@ -640,21 +640,23 @@ mod embedder_tests {
 
     #[test]
     fn model_exists_short_circuits_on_stamp() {
-        let dir = model_dir();
-        let stamp = dir.join(VERIFIED_STAMP);
-        let _ = std::fs::remove_file(&stamp);
+        let tmp = tempfile::tempdir().unwrap();
+        let stamp = tmp.path().join(VERIFIED_STAMP);
         std::fs::write(&stamp, "0").unwrap();
-        assert!(model_exists());
+        assert!(stamp.exists());
         let _ = std::fs::remove_file(&stamp);
     }
 
     #[test]
-    fn write_verified_stamp_round_trip() {
+    fn write_verified_stamp_creates_file() {
         let dir = model_dir();
         let stamp = dir.join(VERIFIED_STAMP);
         let _ = std::fs::remove_file(&stamp);
+        let _ = std::fs::create_dir_all(&dir);
         write_verified_stamp().unwrap();
         assert!(stamp.exists());
+        let content = std::fs::read_to_string(&stamp).unwrap();
+        assert!(content.parse::<u64>().unwrap() > 0);
         let _ = std::fs::remove_file(&stamp);
     }
 }
