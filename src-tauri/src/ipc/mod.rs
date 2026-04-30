@@ -27,6 +27,7 @@ pub mod mcp;
 pub mod memory;
 pub mod menu;
 pub mod model;
+pub mod pack;
 pub mod paths;
 pub mod preset;
 pub mod pty;

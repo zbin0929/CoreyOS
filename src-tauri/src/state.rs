@@ -14,6 +14,7 @@ use crate::db::Db;
 use crate::ipc::download::DownloadManager;
 #[cfg(feature = "rag")]
 use crate::ipc::embedding::BgeM3Embedder;
+use crate::pack::{Registry as PackRegistry, SharedRegistry as SharedPackRegistry};
 use crate::pty::Pty;
 use crate::sandbox::PathAuthority;
 
@@ -74,6 +75,12 @@ pub struct AppState {
     /// so the frontend can surface it via Settings → Help.
     pub customer: Option<CustomerConfig>,
     pub customer_error: Option<String>,
+    /// Pack registry built once at startup by scanning
+    /// `~/.hermes/skill-packs/` and reading
+    /// `~/.hermes/pack-state.json`. Held under an RwLock so the
+    /// rare enable/disable mutation doesn't block the frequent
+    /// `pack_list` reads.
+    pub packs: SharedPackRegistry,
     // 2026-04-23 pm (T6.8): removed the `scheduler: Option<Arc<Scheduler>>`
     // field. Hermes' gateway owns cron scheduling now; Corey only
     // reads/writes `~/.hermes/cron/jobs.json`. See `hermes_cron.rs`.
@@ -110,6 +117,7 @@ impl AppState {
             embedder: Arc::new(Mutex::new(None)),
             customer: None,
             customer_error: None,
+            packs: Arc::new(parking_lot::RwLock::new(PackRegistry::empty())),
         }
     }
 
@@ -120,5 +128,13 @@ impl AppState {
     pub fn set_customer(&mut self, cfg: Option<CustomerConfig>, err: Option<String>) {
         self.customer = cfg;
         self.customer_error = err;
+    }
+
+    /// Replace the Pack registry snapshot. Called once during
+    /// startup after `~/.hermes/` is resolved (scanner needs that
+    /// path). Stage 3+ may also call this on Pack import / refresh
+    /// flows.
+    pub fn set_packs(&mut self, registry: PackRegistry) {
+        self.packs = Arc::new(parking_lot::RwLock::new(registry));
     }
 }

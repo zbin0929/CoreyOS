@@ -25,8 +25,35 @@
 //!    change a name here, update the doc in the same commit.
 
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+
+/// Filename Corey expects inside each Pack folder.
+pub const MANIFEST_FILENAME: &str = "manifest.yaml";
+
+/// Read and parse `<pack_dir>/manifest.yaml`. Best-effort:
+/// missing file / unreadable file / parse error all surface as
+/// `ManifestLoadOutcome::Invalid` so the caller can decide whether
+/// to log, skip, or surface to UI.
+pub fn load_from_dir(pack_dir: &Path) -> ManifestLoadOutcome {
+    let path = pack_dir.join(MANIFEST_FILENAME);
+    if !path.exists() {
+        return ManifestLoadOutcome::Invalid(format!(
+            "{} not found in pack dir {}",
+            MANIFEST_FILENAME,
+            pack_dir.display()
+        ));
+    }
+    let raw = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            return ManifestLoadOutcome::Invalid(format!("read {}: {e}", path.display()));
+        }
+    };
+    parse(&raw)
+}
 
 /// Highest manifest schema version this binary knows how to load.
 /// Bump only when adding a field that older binaries genuinely

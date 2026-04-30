@@ -259,6 +259,8 @@ pub fn run() {
             ipc::license::license_clear,
             ipc::license::license_machine_id,
             ipc::customer::customer_config_get,
+            ipc::pack::pack_list,
+            ipc::pack::pack_set_enabled,
             ipc::workflow::workflow_list,
             ipc::workflow::workflow_get,
             ipc::workflow::workflow_save,
@@ -473,6 +475,22 @@ pub fn run() {
                 Err(e) => {
                     tracing::warn!(error = %e, "could not resolve hermes data dir; skipping customer.yaml");
                 }
+            }
+
+            // Scan `~/.hermes/skill-packs/` and load
+            // `~/.hermes/pack-state.json` into AppState.packs. Stage 2
+            // of the Pack subsystem rollout (see `pack/mod.rs`):
+            // discovery + persistence only — flipping the enable bit
+            // doesn't yet spawn MCPs / mount routes (that's stage 3+).
+            if let Ok(hermes_dir) = paths::hermes_data_dir() {
+                let registry = pack::Registry::scan(&hermes_dir);
+                info!(
+                    packs = registry.packs.len(),
+                    enabled = registry.packs.iter().filter(|p| p.enabled).count(),
+                    healthy = registry.packs.iter().filter(|p| p.manifest.is_some()).count(),
+                    "pack registry scanned"
+                );
+                app_state.set_packs(registry);
             }
 
             // Load sandbox.json (or seed ~/.hermes/ + stay in DevAllow on
