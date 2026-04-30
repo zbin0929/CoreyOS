@@ -15,7 +15,7 @@ All documentation classified by type and last-verified date.
 | File | Type | Last Verified | Description |
 |------|------|---------------|-------------|
 | `00-vision.md` | plan | 2026-04-23 | Product vision and positioning |
-| `01-architecture.md` | current | 2026-04-23 | System architecture overview |
+| `01-architecture.md` | current | 2026-05-01 | System architecture overview + Pack Architecture (v2.0+) |
 | `02-design-system.md` | current | 2026-04-23 | Design system tokens and patterns |
 | `03-agent-adapter.md` | current | 2026-04-23 | Agent/adapter abstraction docs |
 | `04-hermes-integration.md` | current | 2026-04-23 | Hermes gateway integration |
@@ -27,8 +27,10 @@ All documentation classified by type and last-verified date.
 | `09-conversational-scheduler.md` | plan | 2026-04-23 | Scheduler design doc |
 | `10-product-audit-2026-04-23.md` | current | 2026-04-23 | Product audit snapshot |
 | `current-feature-quality-review-2026-04-26.md` | current | 2026-04-26 | Code quality review |
+| `bug-history.md` | current | 2026-05-01 | Archived bug fixes (split from global-todo v1) |
+| `competitor-maiduo-ai.md` | current | 2026-04-30 | MaiduoX AI (eccang) competitive research + product implications |
 | `customization-plan.md` | plan | 2026-04-29 | White-label / customer.yaml customization product plan |
-| `global-todo.md` | plan + current | 2026-04-30 | Live TODO: base + industry packs + bug tracker |
+| `global-todo.md` | plan + current | 2026-05-01 | v2.0 — locked product direction (custom-only) + base v3 TODO + Pack roadmap |
 | `hermes-dependency-map.md` | current | 2026-04-29 | Hermes upstream dependency surface map |
 | `hermes-reality-check-2026-04-23.md` | current | 2026-04-23 | Hermes integration reality check |
 | `hermes-webui-analysis.md` | current | 2026-04-23 | EKKOLearnAI/hermes-web-ui competitive analysis |
