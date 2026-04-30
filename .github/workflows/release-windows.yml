@@ -87,8 +87,45 @@ jobs:
           
           echo "Uploading Windows artifacts to COS..."
           ./coscli.exe cp "${BUNDLE_DIR}/msi/" "cos://${BUCKET}/releases/${TAG}/" -r \
-            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.ap-guangzhou.myqcloud.com" || true
+            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.accelerate.myqcloud.com" || true
           ./coscli.exe cp "${BUNDLE_DIR}/nsis/" "cos://${BUCKET}/releases/${TAG}/" -r \
-            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.ap-guangzhou.myqcloud.com" || true
+            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "cos.accelerate.myqcloud.com" || true
           
           echo "Files uploaded to cos://${BUCKET}/releases/${TAG}/"
+
+      - name: Upload latest.json to COS (with COS URLs)
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.release_tag }}"
+          BUCKET="${{ secrets.COS_BUCKET }}"
+          REGION="cos.accelerate.myqcloud.com"
+          COS_BASE="https://${BUCKET}.${REGION}/releases/${TAG}"
+
+          LATEST_JSON_URL="https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}"
+          ASSET_URL=$(curl -sL -H "Authorization: token ${GITHUB_TOKEN}" "${LATEST_JSON_URL}" \
+            | python3 -c "import sys,json; assets=json.load(sys.stdin).get('assets',[]); print(next((a['browser_download_url'] for a in assets if a['name']=='latest.json'),''))")
+
+          if [ -n "${ASSET_URL}" ]; then
+            curl -sL "${ASSET_URL}" -o latest.json
+          else
+            echo "latest.json not found in release assets, skipping"
+            exit 0
+          fi
+
+          python3 -c "
+          import json
+          data = json.load(open('latest.json'))
+          base = '${COS_BASE}'
+          for p in data.get('platforms', {}).values():
+              old_url = p.get('url', '')
+              filename = old_url.split('/')[-1] if '/' in old_url else old_url
+              p['url'] = f'{base}/{filename}'
+          json.dump(data, open('latest.json', 'w'), indent=2)
+          "
+
+          echo "Uploading latest.json to COS..."
+          ./coscli.exe cp latest.json "cos://${BUCKET}/releases/latest.json" \
+            -i "${{ secrets.COS_SECRET_ID }}" -k "${{ secrets.COS_SECRET_KEY }}" -e "${REGION}"
+          echo "latest.json uploaded — URLs rewritten to COS"

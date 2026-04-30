@@ -76,13 +76,13 @@ jobs:
           ./coscli cp ./assets/ "cos://${BUCKET}/releases/${TAG}/" -r \
             -i "${{ secrets.COS_SECRET_ID }}" \
             -k "${{ secrets.COS_SECRET_KEY }}" \
-            -e "cos.ap-guangzhou.myqcloud.com"
+            -e "cos.accelerate.myqcloud.com"
 
       - name: Generate and upload latest.json
         run: |
           TAG="${{ inputs.release_tag || github.event.release.tag_name }}"
           BUCKET="${{ secrets.COS_BUCKET }}"
-          BASE="https://${BUCKET}.cos.ap-guangzhou.myqcloud.com/releases/${TAG}"
+          BASE="https://${BUCKET}.cos.accelerate.myqcloud.com/releases/${TAG}"
 
           ORIGINAL=$(cat ./assets/latest.json)
 
@@ -103,10 +103,10 @@ jobs:
           ./coscli cp ./latest.json "cos://${BUCKET}/releases/latest.json" \
             -i "${{ secrets.COS_SECRET_ID }}" \
             -k "${{ secrets.COS_SECRET_KEY }}" \
-            -e "cos.ap-guangzhou.myqcloud.com"
+            -e "cos.accelerate.myqcloud.com"
 
       - name: Verify
         run: |
           BUCKET="${{ secrets.COS_BUCKET }}"
-          echo "COS latest.json: https://${BUCKET}.cos.ap-guangzhou.myqcloud.com/releases/latest.json"
-          curl -sL "https://${BUCKET}.cos.ap-guangzhou.myqcloud.com/releases/latest.json" | head -5
+          echo "COS latest.json: https://${BUCKET}.cos.accelerate.myqcloud.com/releases/latest.json"
+          curl -sL "https://${BUCKET}.cos.accelerate.myqcloud.com/releases/latest.json" | head -5
