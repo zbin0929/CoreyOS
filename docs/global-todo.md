@@ -74,7 +74,7 @@
     - 仅在 config 实际变化时异步触发 gateway restart
     - Hermes 0.10 没 `/reload-mcp`，gateway restart 是唯一重载路径
   - [x] **Stage 4**：Skill 注册管道（按 pack_id 子目录）— Pack `manifest.skills` 拷到 `~/.hermes/skills/pack__<id>/`，启用时 install + 禁用时 rm -rf
-  - [ ] **Stage 4b**：Workflow + Schedule 注册管道（按 pack_id 前缀）
+  - [x] **Stage 4b**：Workflow + Schedule 注册管道（按 pack_id 前缀）— Pack 启用时拷贝 workflows 到 `~/.hermes/workflows/pack__<id>__*.yaml` + 写 schedules 进 `jobs.json`，禁用时整批清理
   - [ ] **Stage 5**：12 个内置视图模板 + 渲染管道：
     - DataTable / MetricsCard / TimeSeriesChart / PivotTable
     - TrendsMatrix / Timeline / AlertList / WorkflowLauncher
