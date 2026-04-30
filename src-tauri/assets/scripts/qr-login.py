@@ -197,6 +197,38 @@ def run_dingtalk():
 
 # ── QQ Bot ──────────────────────────────────────────────────────────────────
 
+
+def _verify_qq_credentials(app_id, client_secret):
+    """Exchange (appId, clientSecret) for an access token to confirm the
+    credentials QQ just handed us actually work. The QQ bind API is known
+    to occasionally return a secret that *decrypts cleanly* but is stale
+    (developer rotated it on the portal) or mis-bound (sandbox vs prod,
+    multi-bot account picked wrong bot). Without this check we happily
+    commit the broken creds and the user eventually sees "该机器人的灵魂
+    不在线" in QQ with zero diagnostic info.
+
+    Returns None on success, or a human-readable error string on failure.
+    """
+    try:
+        import httpx
+    except ImportError as exc:
+        return f"httpx not available: {exc}"
+    try:
+        resp = httpx.post(
+            "https://bots.qq.com/app/getAppAccessToken",
+            json={"appId": str(app_id), "clientSecret": str(client_secret)},
+            timeout=10,
+        )
+        data = resp.json()
+    except Exception as exc:
+        return f"token endpoint unreachable: {exc}"
+    if data.get("access_token"):
+        return None
+    code = data.get("code")
+    msg = data.get("message") or data.get("msg") or "unknown"
+    return f"QQ 拒绝凭据 (code={code}, msg={msg})"
+
+
 def run_qqbot():
     try:
         from gateway.platforms.qqbot.onboard import (
@@ -229,6 +261,30 @@ def run_qqbot():
                 if not app_id or not client_secret:
                     _write_error("qq", "COMPLETED but missing credentials")
                     return
+
+                # End-to-end verify. Retry up to 3 times with 5s gap in
+                # case QQ's provisioning is still propagating between
+                # the bind API and the token API (rare, but seen).
+                last_err = _verify_qq_credentials(app_id, client_secret)
+                for _ in range(2):
+                    if last_err is None:
+                        break
+                    time.sleep(5)
+                    last_err = _verify_qq_credentials(app_id, client_secret)
+
+                if last_err is not None:
+                    _write_error(
+                        "qq",
+                        (
+                            f"扫码已完成，但凭据换不到 access_token：{last_err}。\n"
+                            f"AppID={app_id}。请去 https://q.qq.com 开发者后台确认：\n"
+                            f"1) 机器人已『发布』（不是沙箱草稿）；\n"
+                            f"2) App Secret 未被重置；\n"
+                            f"3) 账号下的目标 Bot 与扫码时选中的一致。"
+                        ),
+                    )
+                    return
+
                 _write_done("qq", {
                     "QQ_BOT_APP_ID": str(app_id),
                     "QQ_BOT_APP_SECRET": str(client_secret),
