@@ -79,8 +79,13 @@
   - [x] **Stage 5b**：DataTable + AlertList 模板（`c25f336`）
   - [x] **Stage 5c**：TimeSeriesChart + TrendsMatrix + PivotTable 模板（`e057d57`）
   - [x] **Stage 5d**：剩余 6 个模板（Timeline / RadarChart / CompositeDashboard / WorkflowLauncher / SkillPalette / FormRunner）— **12 个模板全部 layout 完成，等 stage 5e 接数据**
-  - [ ] **Stage 5e**：数据 wiring（每个模板从 `data_source` 通过 MCP 拉真实数据并渲染）+ 点击 / 提交 / 刷新交互
-  - [ ] ActionPanel 嵌入（视图旁的"决策归还"按钮）
+  - [x] **Stage 5e**：数据 wiring（`pack_view_data` IPC + `usePackViewData` hook）— 9 个数据驱动模板已接通：
+    - **5e1**：MetricsCard + DataTable（`c33d59b`）— 引入 IPC + hook + 第一对模板
+    - **5e2**：AlertList + Timeline + RadarChart（`24e5651`）
+    - **5e3**：TimeSeriesChart + TrendsMatrix + PivotTable（本提交）— TrendsMatrix 含 Sparkline + 同比着色
+    - 当前仅支持 `data_source: { static: ... }`；`mcp:` / `http:` / `sql:` kinds 推到 stage 5f
+  - [ ] **Stage 5f**：MCP / HTTP / SQL 数据源 kinds（让 Pack 真的能拉远端数据）
+  - [ ] ActionPanel 嵌入（视图旁的"决策归还"按钮，绑 actions[].workflow / actions[].skill）
   - [ ] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖（架构文档已锁定）
   - [ ] Pack 升级前自动备份（zip 到 `~/.hermes/backups/`，保留 7 天）
   - [ ] manifest migrations 机制（跨版本字段迁移）
