@@ -172,11 +172,15 @@ See `docs/phases/`:
 | v0.1.6 | 2026-04-28 | Windows bootstrap script (PowerShell 5.1, ghfast.top mirror, gateway run) |
 | v0.1.7 | 2026-04-29 | Windows install dir fix, app version display, update error auto-dismiss |
 | v0.1.8 | 2026-04-29 | Gateway session auto-import + source badges, Windows gateway start fix, COS CDN updater, download progress bar, user manual update |
+| v0.1.9 | 2026-04-29 | Windows env var fix (COREY_INSTALL_DIR via -EncodedCommand), COS upload from release workflows |
+| v0.1.10 | 2026-04-29 | Version bump + minor stabilisation |
+| v0.1.11 | 2026-04-30 | BGE-M3 RAG (ONNX local embedding), unified download center, hybrid RAG search, updater fix (manual restart), NSIS installMode=both |
+| v0.1.12 | 2026-04-30 | 15 bug fixes: gateway API server / config.yaml auto-create / Windows process detach + stop / QR channel status / macOS Node detection / unified `~/.hermes/` data dir / BGE-M3 size validation / gateway session source grouping / NextStepsCard onboarding / language fallback / system theme default / 2s QR polling |
 
 ## Upcoming
 
 | Version | Plan | Key features |
 |---------|------|-------------|
-| v0.1.9 | `docs/plans/v0.1.9-bge-m3-rag.md` | BGE-M3 local embedding, unified download center, hybrid RAG search, update→download center integration |
+| v0.2.0 | `docs/plans/v0.2.0-b4-analytics.md` | Skill Pack store, data viz engine, usage analytics dashboard, Persona role management |
 
 Each phase file contains: goals, task breakdown (with owner/effort), file-level outputs, acceptance criteria, test plan, demo script.

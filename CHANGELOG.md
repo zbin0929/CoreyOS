@@ -6,6 +6,80 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-04-30 — v0.1.12 · 15 bug fixes (gateway, data dir, sessions, QR, theme, language)
+
+Third bug-fix sweep targeting first-run reliability on Windows and cross-platform UX polish. Code fixed; some Windows items still pending physical-device verification.
+
+### Fixed
+
+- **BUG-001 Gateway HTTP API not starting**: `gateway.rs` now writes `API_SERVER_ENABLED=true` into `~/.hermes/.env` before `gateway start/restart`; `bootstrap-windows.ps1` Step 5.6 mirrors this.
+- **BUG-002 `config.yaml` not auto-created**: `llm_profiles.rs::seed_hermes_model_if_empty` now constructs an empty `HermesConfigView` instead of bailing out when `read_view()` fails.
+- **BUG-003 Windows gateway dies with Corey**: `gateway.rs` switches to `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` and null-pipes stdio.
+- **BUG-004 Windows can't stop gateway**: New `gateway_stop()` reads `gateway.pid` → `taskkill /F /PID`, falls back to PowerShell port scan; new IPC `hermes_gateway_stop`.
+- **BUG-005 QR channels missing online status**: `computeStatus.ts` returns `'configured'` for QR channels when env is set so `LiveStatusPill` renders.
+- **BUG-006 macOS Node/Browser Runner detection**: `detect_node()` probes Homebrew/nvm/volta/fnm paths since Tauri GUI doesn't load shell rc files.
+- **BUG-007 Windows data-dir split-brain (root cause)**: `paths.rs::platform_default()` no longer returns `<exe_dir>/data/`; all platforms now use `~/.hermes/`. `bootstrap-windows.ps1` dead code removed.
+- **BUG-008 / BUG-009**: Resolved by BUG-007 unification (gateway and Corey now read/write the same dir).
+- **BUG-010 BGE-M3 fake-install**: `model_exists()` now validates file sizes (onnx ≥ 1 MB, onnx_data ≥ 100 MB, tokenizer ≥ 100 KB); `rag_download_model` re-downloads zero-byte files.
+- **BUG-011 Session list chaos**: New `gateway_source_messages` IPC aggregates by source; `importGatewaySource` groups WeChat/DingTalk/etc. into one session each, sorted by time.
+- **BUG-012 Onboarding disappears post-install**: New `NextStepsCard` shows "Configure Skills → MCP → Channels" after gateway online.
+- **BUG-013 Language mis-detection**: `AppearanceSection.tsx` extracts language code via `split('-')[0]` with `'zh'` fallback so `zh-CN` matches.
+- **BUG-014 Default theme too light**: `ui.ts` default flipped from `'dark'` to `'system'`.
+- **BUG-015 QR polling too slow**: `ChannelQrPanel.tsx` polling interval 3s → 2s.
+
+### Pending Windows verification
+
+- BUG-007~009: legacy `E:\Corey\data\` requires manual cleanup on existing installs.
+- BUG-010: real download flow needs to confirm size validation triggers re-download.
+
+### CI
+
+`tsc --noEmit` clean · `cargo check` ok · `cargo test --lib` 314/314 · `pnpm build` 7.26s.
+
+---
+
+## 2026-04-30 — v0.1.11 · BGE-M3 RAG + unified download center
+
+Local semantic search lands. All knowledge retrieval stays on-machine.
+
+### Shipped
+
+- **Unified download center UI**: progress bar, pause/retry, error display. Single panel for both app updater and model downloads.
+- **BGE-M3 ONNX model download** (~2.1 GB) from PaddleNLP CDN with size validation.
+- **`ort` crate local embedding inference**: 1024-dim, gated by `rag` Cargo feature.
+- **SQLite vector storage + cosine similarity**.
+- **Hybrid retrieval**: vector + keyword RRF fusion (k=60).
+- **Knowledge page**: "semantic enhancement" status card + one-click download.
+- **IPC**: `rag_status` / `rag_download_model`.
+- **Windows NSIS install mode**: `installMode=both` (per-user + per-machine).
+- **Updater fix**: download completes → manual restart button (no more crash-on-relaunch).
+
+### Reference
+
+`docs/plans/v0.1.11-bge-m3-rag.md`.
+
+---
+
+## 2026-04-30 — v0.1.10 · Stabilisation
+
+Version bump + minor fixes prior to BGE-M3 ship.
+
+---
+
+## 2026-04-29 — v0.1.9 · Windows env var fix + COS upload workflow
+
+### Shipped
+
+- **`COREY_INSTALL_DIR` via `-EncodedCommand`**: Windows env vars don't inherit through Tauri shell spawning; bootstrap now passes the install path inside the encoded PowerShell command instead of relying on env propagation.
+- **COS upload directly from release workflows**: `release-macos.yml` / `release-windows.yml` push artifacts to Tencent COS without needing the local `sync-cos.yml` middle-man.
+- **Local COS sync script**: backup/manual path.
+
+### Fixed
+
+- Windows bootstrap `HERMES_HOME` + `COREY_INSTALL_DIR` debug logging.
+
+---
+
 ## 2026-04-28 — System tray, QR channel setup, one-click install
 
 Major UX improvements targeting first-time Windows users and Hermes channel onboarding.

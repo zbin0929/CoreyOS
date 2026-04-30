@@ -574,8 +574,8 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 | Tauri Updater | 内置插件 | 不依赖 Hermes |
 | Instance 管理 | `ipc/hermes_instances.rs` | Corey 管理 API 端点配置 |
 | COS CDN 更新 | `.github/workflows/sync-cos.yml` | 腾讯云 COS 自动同步 release 产物 |
-| 统一下载中心 | `ipc/download.rs`（v0.1.9） | 应用更新 + 模型下载进度管理 |
-| BGE-M3 Embedding | `ipc/embedding.rs`（v0.1.9） | 本地 ONNX 推理，不依赖 Hermes |
+| 统一下载中心 | `ipc/download.rs`（v0.1.11） | 应用更新 + 模型下载进度管理 |
+| BGE-M3 Embedding | `ipc/embedding.rs`（v0.1.11） | 本地 ONNX 推理，不依赖 Hermes |
 
 **注意：** `ipc/learning/mod.rs` 虽然是 Corey 自有逻辑，但它写入 `MEMORY.md` 的格式遵循 Hermes 的 `## [auto]` 约定，如果 Hermes 变更 MEMORY.md 的注入格式，学习功能也需要适配。
 

@@ -1,6 +1,6 @@
 # CoreyOS 全局 TODO
 
-> 版本：v1.0 · 2026-04-29
+> 版本：v1.1 · 2026-04-30
 > 说明：所有待办事项，区分基座（Core 必做）和扩展（行业 Pack 按需做）
 > 完整的产品规划见 `docs/customization-plan.md`
 
@@ -68,7 +68,7 @@
   - [x] Windows NSIS 安装模式配置（installMode=both）
   - [x] 应用更新修复（下载完手动重启，不再闪退）
 - **价值**：本地 RAG，数据不出机器。所有行业客户都需要（跨境电商查政策、财务查法规、物流查关税）
-- **参考**：`docs/plans/v0.1.9-bge-m3-rag.md`
+- **参考**：`docs/plans/v0.1.11-bge-m3-rag.md`
 
 ### B-2. Skill Pack 商店
 - **状态**：🔴 未开始
@@ -469,16 +469,18 @@ skill-packs/cross-border-ecom/
 | 版本 | 状态 | 主要内容 |
 |------|------|---------|
 | v0.1.8 | ✅ 已发布 | 网关会话自动导入 + Windows 修复 + COS CDN + 进度条 |
-| v0.1.9 | 🔄 开发中 | BGE-M3 RAG + 统一下载中心 |
-| v0.1.11 | 🔄 开发中 | 网关修复 + 通道状态 + 多项 Bug 修复 |
+| v0.1.9 | ✅ 已发布 | Windows env var 修复 + COS upload 工作流 |
+| v0.1.10 | ✅ 已发布 | bootstrap COREY_INSTALL_DIR 传递修复 |
+| v0.1.11 | ✅ 已发布 | BGE-M3 RAG + 统一下载中心 + updater 修复 + NSIS 配置 |
+| v0.1.12 | ✅ 已发布 | 15 项 Bug 修复（网关/数据目录/会话/QR/主题/语言） |
 | v0.2.0 | 📋 规划中 | Skill Pack 商店 + 可视化 + Persona + 用量分析 |
 | v0.3.0 | 📋 规划中 | 远程更新 + 白标交付 + 跨境电商第一期 |
 
 ---
 
-## 九、当前 Bug 跟踪（v0.1.11）
+## 九、当前 Bug 跟踪（v0.1.12）
 
-> 更新时间：2026-04-30（第二轮修复完成）
+> 更新时间：2026-04-30（第三轮：BUG-007~015 代码已修复，待 Windows 实测）
 
 ### 9.1 已修复（代码已改，CI 全绿）
 
@@ -525,8 +527,6 @@ skill-packs/cross-border-ecom/
 - **现象**：已安装 Node.js 但浏览器自动化页面显示"未找到"
 - **根因**：Tauri GUI 应用不加载 `.zshrc`/`.bashrc`，Homebrew/nvm 安装的 `node` 不在 PATH
 - **修复**：`browser_config.rs` — `detect_node()` 增加 macOS 常见路径（`/opt/homebrew/bin/node`、`~/.nvm/versions/node/current/bin/node`、`~/.volta/bin/node`、`~/.fnm/node/current/bin/node`）；`find_browser_runner` 增加 `CARGO_MANIFEST_DIR` 开发模式搜索
-
-### 9.2 待修复
 
 #### BUG-007: Windows 数据目录不一致（根因问题）
 - **优先级**：P0
