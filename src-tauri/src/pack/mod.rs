@@ -28,6 +28,7 @@
 mod manifest;
 mod scanner;
 mod state;
+mod sync;
 mod templates;
 
 // Re-export only what IPC + AppState actually consume. The
