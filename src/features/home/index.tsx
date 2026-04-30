@@ -65,8 +65,8 @@ export function HomeRoute() {
         className="relative overflow-hidden border-b border-border"
         style={{
           background: isOnline
-            ? 'linear-gradient(135deg, hsl(var(--emerald-500) / 0.08) 0%, hsl(var(--bg-elev-1)) 60%)'
-            : 'linear-gradient(135deg, hsl(var(--gold-500) / 0.06) 0%, hsl(var(--bg-elev-1)) 60%)',
+            ? 'linear-gradient(135deg, hsl(var(--emerald-500) / 0.15) 0%, hsl(var(--bg-elev-1)) 70%)'
+            : 'linear-gradient(135deg, hsl(var(--gold-500) / 0.12) 0%, hsl(var(--bg-elev-1)) 70%)',
         }}
       >
         <div className="mx-auto flex w-full max-w-4xl items-center gap-5 px-6 py-6">
@@ -276,7 +276,7 @@ function ActionCard({ icon: Ico, title, desc, onClick, accent }: {
     <button
       type="button"
       onClick={onClick}
-      className={cn('group flex items-start gap-3 rounded-xl border border-border bg-bg-elev-1/60 p-4 text-left transition hover:border-border-strong', accents[accent])}
+      className={cn('group flex items-start gap-3 rounded-xl border border-border bg-bg-elev-1/60 p-4 text-left transition hover:border-border-strong hover:shadow-sm', accents[accent])}
     >
       <span className={cn('flex h-9 w-9 flex-none items-center justify-center rounded-lg', iconAccents[accent])}>
         <Icon icon={Ico} size="sm" />
@@ -293,10 +293,10 @@ function MetricCard({ icon: Ico, label, value, accent }: {
   icon: typeof Activity; label: string; value: string; accent: 'blue' | 'amber' | 'emerald' | 'purple';
 }) {
   const colors = {
-    blue: 'border-blue-500/20 bg-blue-500/[0.04]',
-    amber: 'border-amber-500/20 bg-amber-500/[0.04]',
-    emerald: 'border-emerald-500/20 bg-emerald-500/[0.04]',
-    purple: 'border-purple-500/20 bg-purple-500/[0.04]',
+    blue: 'border-blue-500/25 bg-blue-500/[0.06]',
+    amber: 'border-amber-500/25 bg-amber-500/[0.06]',
+    emerald: 'border-emerald-500/25 bg-emerald-500/[0.06]',
+    purple: 'border-purple-500/25 bg-purple-500/[0.06]',
   };
   const iconColors = { blue: 'text-blue-500', amber: 'text-amber-500', emerald: 'text-emerald-500', purple: 'text-purple-500' };
   return (
@@ -305,7 +305,7 @@ function MetricCard({ icon: Ico, label, value, accent }: {
         <Icon icon={Ico} size="xs" className={iconColors[accent]} />
         <span className="text-[11px] font-medium text-fg-subtle">{label}</span>
       </div>
-      <span className="text-2xl font-bold tracking-tight text-fg">{value}</span>
+      <span className={cn('text-2xl font-bold tracking-tight', iconColors[accent])}>{value}</span>
     </div>
   );
 }
