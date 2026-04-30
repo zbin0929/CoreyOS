@@ -32,20 +32,27 @@
 - **价值**：本地 RAG，所有行业 Pack 共用的知识检索基础
 - **参考**：`docs/plans/v0.1.11-bge-m3-rag.md`
 
-#### B-2. customer.yaml 白标机制
-- **状态**：🔴 未开始
+#### B-2. customer.yaml 白标机制 ✅ 第一阶段已完成
+- **状态**：� 第一阶段已交付（v0.2.0-dev）；剩余项与 B-3 一起做
 - **目标版本**：v0.2.0
-- **内容**：
-  - [ ] customer.yaml schema 设计 + 解析器（runtime 加载）
-  - [ ] 品牌定制（app_name / logo / primary_color 运行时替换）
-  - [ ] 导航定制（hidden_routes / pin_to_primary）
-  - [ ] Pack 预装 + 预填配置
-  - [ ] 文件系统监听（修改 customer.yaml 后提示重启）
+- **第一阶段（已完成）**：
+  - [x] customer.yaml schema 设计 + 解析器（schema_version=1，前向兼容）
+  - [x] runtime 加载 + AppState 集成 + `customer_config_get` IPC
+  - [x] 品牌定制（app_name 运行时替换；logo 通过 convertFileSrc 加载；primary_color hex→HSL 注入到 `--gold-500`）
+  - [x] 导航定制（hidden_routes 在 sidebar 过滤）
+  - [x] 测试：10 cargo + 13 vitest 单元测试
+  - 提交：`229ab57` + `17595af`（CI 修复）
+- **延后项（随 B-3 一起做）**：
+  - [ ] `pin_to_primary` 实现（需 Pack 路由先就绪）
+  - [ ] `packs.preinstall` 实现（需 Pack 加载器先就绪）
+  - [ ] `packs.config` 预填（需 Pack 配置系统先就绪）
+  - [ ] 隐藏路由的 URL 级守卫（v0.2.0 接受小漏，B-3 一起做）
+  - [ ] Settings → Help 面板显示 customer.yaml 的 parse error
 - **价值**：定制交付的核心载体——同一个二进制，靠 yaml 让客户看到不同产品
 - **依赖**：无
 
 #### B-3. Pack 加载器 + 12 视图模板
-- **状态**：🔴 未开始
+- **状态**：🟡 进行中（v0.2.0-dev）
 - **目标版本**：v0.2.0
 - **内容**：
   - [ ] manifest.yaml schema_version=1 解析器
@@ -226,6 +233,7 @@ B-7 (卸载/重置)  独立
 | v0.1.11 | ✅ | BGE-M3 RAG + 统一下载中心 + updater 修复 + NSIS |
 | v0.1.12 | ✅ | 15 项 Bug 修复（详见 `docs/bug-history.md`）|
 | v0.1.13 | 📋 | Windows 端到端实测 + 验证收尾 |
+| v0.2.0-dev | 🟡 | B-2 customer.yaml 白标第一阶段已合（`229ab57`）；B-3 Pack 加载器进行中 |
 | v0.2.0 | 📋 | 基座定制能力（白标 + Pack 加载器 + 12 视图模板 + license features） |
 | v0.3.0 | 📋 | 跨境电商 Pack 完整版 + 第一个真实客户 |
 
@@ -249,6 +257,31 @@ B-7 (卸载/重置)  独立
 | 12 | CompositeDashboard | 战场地图（栅格容器） |
 
 每个视图均支持 `actions:` 段（嵌入 Skill / Workflow 触发按钮，"决策归还"模式）。
+
+---
+
+## 七点五、提交前必跑的本地检查（CI 第一关）
+
+CI 在 Rust 任何 push 上跑这两个 gate；**本地不通过就别 push**，否则一定红灯：
+
+```bash
+# 1. rustfmt 必须一致（CI step 33 会 fail）
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+# 2. clippy::unwrap_used 不允许回归（baseline 见 scripts/clippy-unwrap-baseline.txt）
+node scripts/check-clippy-unwrap.mjs
+# 如果 baseline 因为新代码上升了，需要写 expect("...") 替代 unwrap()
+# 如果 baseline 因为重构下降了，跑 `pnpm check:clippy-unwrap -- --update` 锁定改善
+```
+
+**前端等价：**
+```bash
+pnpm tsc --noEmit       # 0 错误
+pnpm lint               # 0 警告
+pnpm vitest run         # 全绿
+```
+
+历史教训（2026-04-30）：连续两个 commit（license 修复、customer.yaml）都因为没本地跑这两个 gate 而 CI 红灯。`cargo test` 通过 ≠ CI 通过。
 
 ---
 
