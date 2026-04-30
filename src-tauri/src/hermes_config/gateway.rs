@@ -625,7 +625,6 @@ fn ensure_api_server_env() {
     match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .write(true)
         .open(&env_path)
     {
         Ok(mut f) => match std::io::Write::write_all(&mut f, append.as_bytes()) {
