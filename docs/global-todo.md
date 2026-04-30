@@ -73,7 +73,8 @@
     - 启用无 manifest 的 broken pack 直接拒绝
     - 仅在 config 实际变化时异步触发 gateway restart
     - Hermes 0.10 没 `/reload-mcp`，gateway restart 是唯一重载路径
-  - [ ] **Stage 4**：Workflow / Schedule / Skill 注册管道（按 pack_id 标签）
+  - [x] **Stage 4**：Skill 注册管道（按 pack_id 子目录）— Pack `manifest.skills` 拷到 `~/.hermes/skills/pack__<id>/`，启用时 install + 禁用时 rm -rf
+  - [ ] **Stage 4b**：Workflow + Schedule 注册管道（按 pack_id 前缀）
   - [ ] **Stage 5**：12 个内置视图模板 + 渲染管道：
     - DataTable / MetricsCard / TimeSeriesChart / PivotTable
     - TrendsMatrix / Timeline / AlertList / WorkflowLauncher
