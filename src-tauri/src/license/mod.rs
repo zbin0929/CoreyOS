@@ -470,10 +470,10 @@ mod tests {
             "is_persistent"
         ));
         let _ = fs::remove_dir_all(&base);
-        fs::create_dir_all(&base).unwrap();
+        fs::create_dir_all(&base).expect("create temp test dir");
         let primary = base.join("corey-machine-id");
         let cfg = base.join("cfg");
-        fs::create_dir_all(&cfg).unwrap();
+        fs::create_dir_all(&cfg).expect("create cfg subdir");
 
         let first = machine_id_at(&primary, &cfg);
         let second = machine_id_at(&primary, &cfg);

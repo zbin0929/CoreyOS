@@ -180,7 +180,7 @@ mod tests {
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&dir).expect("create test dir");
         match load_from_dir(&dir) {
             LoadOutcome::NotPresent => {}
             other => panic!("expected NotPresent, got {other:?}"),
@@ -272,18 +272,13 @@ future_field:
 
     #[test]
     fn load_from_dir_reads_and_parses() {
-        let dir = std::env::temp_dir().join(format!(
-            "corey-customer-test-{}-load",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("corey-customer-test-{}-load", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&dir).expect("create test dir");
         let path = dir.join(CUSTOMER_YAML_FILENAME);
-        fs::write(
-            &path,
-            "schema_version: 1\nbrand:\n  app_name: \"Loaded\"\n",
-        )
-        .unwrap();
+        fs::write(&path, "schema_version: 1\nbrand:\n  app_name: \"Loaded\"\n")
+            .expect("write test customer.yaml");
 
         match load_from_dir(&dir) {
             LoadOutcome::Loaded(cfg) => {
