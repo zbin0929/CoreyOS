@@ -51,6 +51,7 @@ const VoiceRoute = lazyFeature(() => import('@/features/voice'), 'VoiceRoute');
 const McpRoute = lazyFeature(() => import('@/features/mcp'), 'McpRoute');
 const WorkflowRoute = lazyFeature(() => import('@/features/workflow'), 'WorkflowRoute');
 const HelpRoute = lazyFeature(() => import('@/features/help'), 'HelpRoute');
+const PackRoute = lazyFeature(() => import('@/features/pack'), 'PackRoute');
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -200,6 +201,15 @@ const helpRoute = createRoute({
   component: HelpRoute,
 });
 
+// Dynamic Pack view route — `/pack/<packId>/<viewId>` resolves at
+// render time against the live `pack_views_list` IPC. Adding a Pack
+// at runtime does NOT need a router rebuild.
+const packRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/pack/$packId/$viewId',
+  component: PackRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   chatRoute,
@@ -222,6 +232,7 @@ const routeTree = rootRoute.addChildren([
   mcpRoute,
   workflowRoute,
   helpRoute,
+  packRoute,
   settingsRoute,
 ]);
 

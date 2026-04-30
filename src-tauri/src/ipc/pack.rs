@@ -24,6 +24,48 @@ use crate::pack::{
 };
 use crate::state::AppState;
 
+// Helper: convert a serde_yaml::Value into the JSON value the
+// frontend expects. Pack manifests use YAML for ergonomics
+// (multi-line strings, comments) but the IPC wire is JSON.
+fn yaml_to_json(v: &serde_yaml::Value) -> serde_json::Value {
+    match v {
+        serde_yaml::Value::Null => serde_json::Value::Null,
+        serde_yaml::Value::Bool(b) => serde_json::Value::Bool(*b),
+        serde_yaml::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                serde_json::Value::Number(serde_json::Number::from(i))
+            } else if let Some(u) = n.as_u64() {
+                serde_json::Value::Number(serde_json::Number::from(u))
+            } else if let Some(f) = n.as_f64() {
+                serde_json::Number::from_f64(f)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::Null)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        serde_yaml::Value::String(s) => serde_json::Value::String(s.clone()),
+        serde_yaml::Value::Sequence(s) => {
+            serde_json::Value::Array(s.iter().map(yaml_to_json).collect())
+        }
+        serde_yaml::Value::Mapping(m) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in m {
+                let key = match k {
+                    serde_yaml::Value::String(s) => s.clone(),
+                    other => serde_yaml::to_string(other)
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                        .unwrap_or_default(),
+                };
+                out.insert(key, yaml_to_json(v));
+            }
+            serde_json::Value::Object(out)
+        }
+        serde_yaml::Value::Tagged(tagged) => yaml_to_json(&tagged.value),
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackListEntry {
@@ -72,6 +114,93 @@ impl From<&RegistryEntry> for PackListEntry {
 pub async fn pack_list(state: State<'_, AppState>) -> IpcResult<Vec<PackListEntry>> {
     let registry = state.packs.read();
     Ok(registry.packs.iter().map(PackListEntry::from).collect())
+}
+
+/// One view declared by an ENABLED Pack. The DTO carries
+/// everything the frontend needs to render the right template plus
+/// dispatch action buttons. Disabled Packs' views are filtered out
+/// at the IPC boundary so the frontend doesn't have to think about
+/// it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackViewDto {
+    pub pack_id: String,
+    pub pack_title: String,
+    pub view_id: String,
+    pub title: String,
+    pub icon: String,
+    pub nav_section: String,
+    pub template: String,
+    pub data_source: serde_json::Value,
+    pub options: serde_json::Value,
+    pub actions: Vec<PackActionDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackActionDto {
+    pub label: String,
+    pub workflow: String,
+    pub skill: String,
+    pub confirm: bool,
+}
+
+/// Return every view declared by every CURRENTLY-ENABLED Pack.
+/// Stable ordering: by pack id, then by view id within each pack.
+#[tauri::command]
+pub async fn pack_views_list(state: State<'_, AppState>) -> IpcResult<Vec<PackViewDto>> {
+    let registry = state.packs.read();
+    let mut out = Vec::new();
+    for entry in &registry.packs {
+        if !entry.enabled {
+            continue;
+        }
+        let Some(manifest) = &entry.manifest else {
+            continue;
+        };
+        for view in &manifest.views {
+            let options: serde_json::Value = if view.options.is_empty() {
+                serde_json::Value::Object(serde_json::Map::new())
+            } else {
+                let mut obj = serde_json::Map::new();
+                for (k, v) in &view.options {
+                    obj.insert(k.clone(), yaml_to_json(v));
+                }
+                serde_json::Value::Object(obj)
+            };
+            out.push(PackViewDto {
+                pack_id: manifest.id.clone(),
+                pack_title: if manifest.title.is_empty() {
+                    manifest.id.clone()
+                } else {
+                    manifest.title.clone()
+                },
+                view_id: view.id.clone(),
+                title: view.title.clone(),
+                icon: view.icon.clone(),
+                nav_section: view.nav_section.clone(),
+                template: view.template.clone(),
+                data_source: yaml_to_json(&view.data_source),
+                options,
+                actions: view
+                    .actions
+                    .iter()
+                    .map(|a| PackActionDto {
+                        label: a.label.clone(),
+                        workflow: a.workflow.clone(),
+                        skill: a.skill.clone(),
+                        confirm: a.confirm,
+                    })
+                    .collect(),
+            });
+        }
+    }
+    out.sort_by(|a, b| {
+        a.pack_id
+            .cmp(&b.pack_id)
+            .then_with(|| a.view_id.cmp(&b.view_id))
+    });
+    Ok(out)
 }
 
 #[tauri::command]
