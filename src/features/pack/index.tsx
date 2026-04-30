@@ -22,6 +22,9 @@ import { packViewsList, type PackView } from '@/lib/ipc/pack';
 import { AlertListTemplate } from '@/features/pack/templates/AlertList';
 import { DataTableTemplate } from '@/features/pack/templates/DataTable';
 import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
+import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
+import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
+import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
 
 interface TemplateProps {
   view: PackView;
@@ -32,6 +35,9 @@ const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   AlertList: AlertListTemplate,
   DataTable: DataTableTemplate,
   MetricsCard: MetricsCardTemplate,
+  PivotTable: PivotTableTemplate,
+  TimeSeriesChart: TimeSeriesChartTemplate,
+  TrendsMatrix: TrendsMatrixTemplate,
 };
 
 export function PackRoute() {
