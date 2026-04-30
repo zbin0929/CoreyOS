@@ -219,27 +219,30 @@ pub async fn knowledge_search(
 
         #[cfg(feature = "rag")]
         {
-            let mut guard = embedder_arc.lock();
-            if let Some(ref mut embedder) = *guard {
-                match embedder.embed(&q) {
-                    Ok(query_vec) => {
-                        let vector_results = embedding::search_by_vector(&db, &query_vec, lim);
-                        if !vector_results.is_empty() {
-                            let fused = embedding::rrf_fuse(&keyword_results, &vector_results, 60);
-                            return Ok(fused
-                                .into_iter()
-                                .map(|r| KnowledgeSearchHit {
-                                    doc_id: String::new(),
-                                    doc_name: r.doc_name,
-                                    chunk_index: r.chunk_index,
-                                    content: r.content.chars().take(300).collect(),
-                                    score: r.score,
-                                })
-                                .collect());
+            if embedding::ensure_embedder(&embedder_arc) {
+                let mut guard = embedder_arc.lock().unwrap();
+                if let Some(ref mut embedder) = *guard {
+                    match embedder.embed(&q) {
+                        Ok(query_vec) => {
+                            let vector_results = embedding::search_by_vector(&db, &query_vec, lim);
+                            if !vector_results.is_empty() {
+                                let fused =
+                                    embedding::rrf_fuse(&keyword_results, &vector_results, 60);
+                                return Ok(fused
+                                    .into_iter()
+                                    .map(|r| KnowledgeSearchHit {
+                                        doc_id: String::new(),
+                                        doc_name: r.doc_name,
+                                        chunk_index: r.chunk_index,
+                                        content: r.content.chars().take(300).collect(),
+                                        score: r.score,
+                                    })
+                                    .collect());
+                            }
                         }
-                    }
-                    Err(e) => {
-                        tracing::warn!("embed failed, falling back to keyword: {e}");
+                        Err(e) => {
+                            tracing::warn!("embed failed, falling back to keyword: {e}");
+                        }
                     }
                 }
             }
@@ -391,6 +394,10 @@ pub async fn rag_download_model(app: AppHandle, state: State<'_, AppState>) -> I
                 message: format!("download {name}: {e:?}"),
             })?;
     }
+
+    embedding::write_verified_stamp().map_err(|e| IpcError::Internal {
+        message: format!("write verified stamp: {e}"),
+    })?;
 
     Ok(())
 }

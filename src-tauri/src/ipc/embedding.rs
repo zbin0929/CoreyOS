@@ -279,6 +279,30 @@ fn search_knowledge_chunks_jaccard(
 pub const EMBEDDING_DIM: usize = 1024;
 
 #[cfg(feature = "rag")]
+pub fn ensure_embedder(embedder: &Arc<std::sync::Mutex<Option<BgeM3Embedder>>>) -> bool {
+    let mut guard = embedder.lock().unwrap();
+    if guard.is_some() {
+        return true;
+    }
+    let dir = model_dir();
+    match BgeM3Embedder::load(&dir) {
+        Ok(e) => {
+            *guard = Some(e);
+            tracing::info!("BGE-M3 embedder loaded successfully");
+            true
+        }
+        Err(e) => {
+            tracing::warn!("BGE-M3 embedder load failed, removing stamp: {e}");
+            remove_verified_stamp();
+            false
+        }
+    }
+}
+
+#[cfg(feature = "rag")]
+use std::sync::Arc;
+
+#[cfg(feature = "rag")]
 pub struct BgeM3Embedder {
     session: ort::session::Session,
     tokenizer: tokenizers::Tokenizer,
@@ -511,26 +535,32 @@ pub fn model_dir() -> std::path::PathBuf {
     home.join(".hermes").join("models").join("bge-m3")
 }
 
+const VERIFIED_STAMP: &str = ".verified";
+
 pub fn model_exists() -> bool {
     let dir = model_dir();
-    let onnx = dir.join("model.onnx");
-    let data = dir.join("model.onnx_data");
-    let tok = dir.join("tokenizer.json");
-    if !onnx.exists() || !data.exists() || !tok.exists() {
-        return false;
+    if dir.join(VERIFIED_STAMP).exists() {
+        return true;
     }
-    let min_sizes: [(&std::path::PathBuf, u64); 3] =
-        [(&onnx, 1_000_000), (&data, 100_000_000), (&tok, 100_000)];
-    for (path, min) in min_sizes {
-        if let Ok(meta) = std::fs::metadata(path) {
-            if meta.len() < min {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-    true
+    all_model_files_present(&dir)
+}
+
+fn all_model_files_present(dir: &std::path::Path) -> bool {
+    MODEL_FILES.iter().all(|(name, _)| dir.join(name).exists())
+}
+
+pub fn write_verified_stamp() -> std::io::Result<()> {
+    let dir = model_dir();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    std::fs::write(dir.join(VERIFIED_STAMP), format!("{ts}"))
+}
+
+#[cfg(feature = "rag")]
+pub fn remove_verified_stamp() {
+    let _ = std::fs::remove_file(model_dir().join(VERIFIED_STAMP));
 }
 
 pub const MODEL_FILES: &[(&str, &str)] = &[
@@ -595,5 +625,36 @@ mod embedder_tests {
     fn model_dir_path() {
         let dir = model_dir();
         assert!(dir.to_string_lossy().contains("bge-m3"));
+    }
+
+    #[test]
+    fn all_model_files_present_checks_all_four() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        assert!(!all_model_files_present(dir));
+        for (name, _) in MODEL_FILES {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        assert!(all_model_files_present(dir));
+    }
+
+    #[test]
+    fn model_exists_short_circuits_on_stamp() {
+        let dir = model_dir();
+        let stamp = dir.join(VERIFIED_STAMP);
+        let _ = std::fs::remove_file(&stamp);
+        std::fs::write(&stamp, "0").unwrap();
+        assert!(model_exists());
+        let _ = std::fs::remove_file(&stamp);
+    }
+
+    #[test]
+    fn write_verified_stamp_round_trip() {
+        let dir = model_dir();
+        let stamp = dir.join(VERIFIED_STAMP);
+        let _ = std::fs::remove_file(&stamp);
+        write_verified_stamp().unwrap();
+        assert!(stamp.exists());
+        let _ = std::fs::remove_file(&stamp);
     }
 }
