@@ -19,6 +19,8 @@ import { useEffect, useState, type ComponentType } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { packViewsList, type PackView } from '@/lib/ipc/pack';
+import { AlertListTemplate } from '@/features/pack/templates/AlertList';
+import { DataTableTemplate } from '@/features/pack/templates/DataTable';
 import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
 
 interface TemplateProps {
@@ -27,6 +29,8 @@ interface TemplateProps {
 
 /** Template registry. Adding a new template = one entry here. */
 const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
+  AlertList: AlertListTemplate,
+  DataTable: DataTableTemplate,
   MetricsCard: MetricsCardTemplate,
 };
 
