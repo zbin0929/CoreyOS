@@ -18,7 +18,8 @@ use tauri::State;
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config;
 use crate::pack::{
-    disable_updates, enable_updates, install_skills, uninstall_skills, PackManifest, RegistryEntry,
+    disable_updates, enable_updates, install_schedules, install_skills, install_workflows,
+    uninstall_schedules, uninstall_skills, uninstall_workflows, PackManifest, RegistryEntry,
     TemplateContext,
 };
 use crate::state::AppState;
@@ -118,6 +119,19 @@ pub async fn pack_set_enabled(
         &hermes_dir,
         pack_dir.as_deref(),
     )?;
+
+    // Install / uninstall Pack workflows under
+    // `~/.hermes/workflows/pack__<id>__*.yaml`. Workflows are
+    // pure data files that the Corey workflow engine reads at
+    // runtime; we just copy them in / out.
+    sync_workflows(&pack_id, &manifest_arc, enabled, pack_dir.as_deref())?;
+
+    // Install / uninstall Pack cron schedules in
+    // `~/.hermes/cron/jobs.json`. These reference the prefixed
+    // workflow ids written above, so they go LAST in the enable
+    // sequence (workflows must exist before the cron tries to
+    // run them).
+    sync_schedules(&pack_id, &manifest_arc, enabled)?;
 
     // Persist the bool. Doing this AFTER config.yaml write means a
     // failure there leaves the user-visible enable state unchanged
@@ -224,6 +238,65 @@ fn sync_config_yaml(
         },
     )?;
     Ok(true)
+}
+
+/// Copy / remove Pack workflow YAMLs in `~/.hermes/workflows/`.
+fn sync_workflows(
+    pack_id: &str,
+    manifest: &Option<Arc<PackManifest>>,
+    enabled: bool,
+    pack_dir: Option<&std::path::Path>,
+) -> IpcResult<()> {
+    if enabled {
+        let (Some(manifest), Some(pack_dir)) = (manifest, pack_dir) else {
+            return Ok(());
+        };
+        if manifest.workflows.is_empty() {
+            return Ok(());
+        }
+        let n = install_workflows(manifest, pack_dir).map_err(|e| IpcError::Internal {
+            message: format!("install pack workflows: {e}"),
+        })?;
+        tracing::info!(pack_id, installed = n, "pack workflows installed");
+    } else {
+        let removed = uninstall_workflows(pack_id).map_err(|e| IpcError::Internal {
+            message: format!("uninstall pack workflows: {e}"),
+        })?;
+        tracing::info!(pack_id, removed, "pack workflows uninstalled");
+    }
+    Ok(())
+}
+
+/// Install / uninstall Pack cron schedules in jobs.json.
+fn sync_schedules(
+    pack_id: &str,
+    manifest: &Option<Arc<PackManifest>>,
+    enabled: bool,
+) -> IpcResult<()> {
+    if enabled {
+        let Some(manifest) = manifest else {
+            return Ok(());
+        };
+        if manifest.schedules.is_empty() {
+            // Be sure to clear stale entries from a previous
+            // version of the manifest that DID have schedules.
+            let _ = uninstall_schedules(pack_id).map_err(|e| IpcError::Internal {
+                message: format!("clear stale pack schedules: {e}"),
+            });
+            return Ok(());
+        }
+        let (installed, replaced) =
+            install_schedules(manifest).map_err(|e| IpcError::Internal {
+                message: format!("install pack schedules: {e}"),
+            })?;
+        tracing::info!(pack_id, installed, replaced, "pack schedules installed");
+    } else {
+        let removed = uninstall_schedules(pack_id).map_err(|e| IpcError::Internal {
+            message: format!("uninstall pack schedules: {e}"),
+        })?;
+        tracing::info!(pack_id, removed, "pack schedules uninstalled");
+    }
+    Ok(())
 }
 
 /// Copy / remove the Pack's skills under `~/.hermes/skills/pack__<id>/`.

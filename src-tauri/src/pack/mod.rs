@@ -27,10 +27,12 @@
 
 mod manifest;
 mod scanner;
+mod schedules;
 mod skills;
 mod state;
 mod sync;
 mod templates;
+mod workflows;
 
 // Re-export only what IPC + AppState actually consume. The
 // ancillary manifest sub-types (McpServerSpec, ViewSpec, etc.)
@@ -44,10 +46,12 @@ mod templates;
 #[allow(unused_imports)]
 pub use manifest::{load_from_dir, parse, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME};
 pub use scanner::scan_skill_packs_dir;
+pub use schedules::{install_schedules, uninstall_schedules};
 pub use skills::{install_skills, uninstall_skills};
 pub use state::PackStateFile;
 pub use sync::{disable_updates, enable_updates};
 pub use templates::{current_platform, TemplateContext};
+pub use workflows::{install_workflows, uninstall_workflows};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
