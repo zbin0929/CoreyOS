@@ -95,6 +95,49 @@ export function schedulerExtractIntent(message: string): Promise<SchedulerIntent
   return invoke<SchedulerIntent>('scheduler_extract_intent', { message });
 }
 
+// ───────────────────────── Download Center ─────────────────────────
+
+export interface DownloadTask {
+  id: string;
+  url: string;
+  target_path: string;
+  filename: string;
+  label: string;
+  status: DownloadStatus;
+  downloaded: number;
+  total: number;
+  speed_bps: number;
+}
+
+export type DownloadStatus =
+  | { kind: 'pending' }
+  | { kind: 'downloading' }
+  | { kind: 'completed' }
+  | { kind: 'error'; message: string }
+  | { kind: 'cancelled' };
+
+export interface DownloadStartRequest {
+  url: string;
+  target_path: string;
+  label: string;
+}
+
+export function downloadStart(req: DownloadStartRequest): Promise<string> {
+  return invoke<string>('download_start', { req });
+}
+
+export function downloadCancel(taskId: string): Promise<void> {
+  return invoke<void>('download_cancel', { taskId });
+}
+
+export function downloadList(): Promise<DownloadTask[]> {
+  return invoke<DownloadTask[]>('download_list');
+}
+
+export function downloadClearCompleted(): Promise<void> {
+  return invoke<void>('download_clear_completed');
+}
+
 // ───────────────────────── Knowledge base ─────────────────────────
 //
 // `ragSearch` / `ragIndexRecent` / `RagSearchResult` / `RagIndexResult`
@@ -138,6 +181,27 @@ export interface KnowledgeSearchHit {
 
 export function knowledgeSearch(query: string, limit?: number): Promise<KnowledgeSearchHit[]> {
   return invoke<KnowledgeSearchHit[]>('knowledge_search', { query, limit });
+}
+
+export interface ModelFileStatus {
+  name: string;
+  exists: boolean;
+  size_bytes: number;
+  download_url: string;
+}
+
+export interface RagStatus {
+  model_installed: boolean;
+  model_dir: string;
+  files: ModelFileStatus[];
+}
+
+export function ragStatus(): Promise<RagStatus> {
+  return invoke<RagStatus>('rag_status');
+}
+
+export function ragDownloadModel(): Promise<void> {
+  return invoke<void>('rag_download_model');
 }
 
 // ───────────────────────── Voice ─────────────────────────

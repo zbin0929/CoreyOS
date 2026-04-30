@@ -11,9 +11,10 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
+use crate::db::Db;
 use crate::error::{IpcError, IpcResult};
 use crate::fs_atomic;
 use crate::ipc::embedding;
@@ -202,6 +203,9 @@ pub async fn knowledge_search(
         return Ok(Vec::new());
     }
 
+    #[cfg(feature = "rag")]
+    let embedder_arc = state.embedder.clone();
+
     tokio::task::spawn_blocking(move || -> IpcResult<Vec<KnowledgeSearchHit>> {
         let q = query.trim().to_string();
         if q.is_empty() {
@@ -211,23 +215,76 @@ pub async fn knowledge_search(
         let expanded = embedding::expand_query(&q);
         let full_query = expanded.join(" ");
 
-        let results = embedding::hybrid_search(&db, &full_query, lim);
+        let keyword_results = search_knowledge_chunks_jaccard_raw(&db, &full_query, lim);
 
+        #[cfg(feature = "rag")]
+        {
+            let mut guard = embedder_arc.lock();
+            if let Some(ref mut embedder) = *guard {
+                match embedder.embed(&q) {
+                    Ok(query_vec) => {
+                        let vector_results = embedding::search_by_vector(&db, &query_vec, lim);
+                        if !vector_results.is_empty() {
+                            let fused = embedding::rrf_fuse(&keyword_results, &vector_results, 60);
+                            return Ok(fused
+                                .into_iter()
+                                .map(|r| KnowledgeSearchHit {
+                                    doc_id: String::new(),
+                                    doc_name: r.doc_name,
+                                    chunk_index: r.chunk_index,
+                                    content: r.content.chars().take(300).collect(),
+                                    score: r.score,
+                                })
+                                .collect());
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("embed failed, falling back to keyword: {e}");
+                    }
+                }
+            }
+        }
+
+        let results = keyword_results;
         Ok(results
             .into_iter()
-            .map(|r| KnowledgeSearchHit {
-                doc_id: String::new(),
-                doc_name: r.doc_name,
-                chunk_index: r.chunk_index,
-                content: r.content.chars().take(300).collect(),
-                score: r.score,
-            })
+            .map(
+                |(_, doc_name, content, chunk_index, score)| KnowledgeSearchHit {
+                    doc_id: String::new(),
+                    doc_name,
+                    chunk_index,
+                    content: content.chars().take(300).collect(),
+                    score,
+                },
+            )
             .collect())
     })
     .await
     .map_err(|e| IpcError::Internal {
         message: format!("knowledge_search join: {e}"),
     })?
+}
+
+fn search_knowledge_chunks_jaccard_raw(
+    db: &Db,
+    query: &str,
+    limit: usize,
+) -> Vec<(i64, String, String, usize, f64)> {
+    let query_tokens: std::collections::HashSet<String> = query
+        .to_lowercase()
+        .split_whitespace()
+        .filter(|w| w.len() > 2)
+        .map(String::from)
+        .collect();
+
+    if query_tokens.is_empty() {
+        return Vec::new();
+    }
+
+    embedding::hybrid_search(db, query, limit)
+        .into_iter()
+        .map(|r| (0i64, r.doc_name, r.content, r.chunk_index, r.score))
+        .collect()
 }
 
 #[cfg(test)]
@@ -262,4 +319,74 @@ mod tests {
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0], "Hello world");
     }
+}
+
+// ───────────────────────── RAG Status ─────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RagStatus {
+    pub model_installed: bool,
+    pub model_dir: String,
+    pub files: Vec<ModelFileStatus>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelFileStatus {
+    pub name: String,
+    pub exists: bool,
+    pub size_bytes: u64,
+    pub download_url: String,
+}
+
+#[tauri::command]
+pub fn rag_status() -> IpcResult<RagStatus> {
+    let dir = embedding::model_dir();
+    let dir_str = dir.to_string_lossy().to_string();
+
+    let files: Vec<ModelFileStatus> = embedding::MODEL_FILES
+        .iter()
+        .map(|(name, url)| {
+            let path = dir.join(name);
+            let meta = std::fs::metadata(&path).ok();
+            ModelFileStatus {
+                name: name.to_string(),
+                exists: path.exists(),
+                size_bytes: meta.map(|m| m.len()).unwrap_or(0),
+                download_url: url.to_string(),
+            }
+        })
+        .collect();
+
+    Ok(RagStatus {
+        model_installed: embedding::model_exists(),
+        model_dir: dir_str,
+        files,
+    })
+}
+
+#[tauri::command]
+pub async fn rag_download_model(app: AppHandle, state: State<'_, AppState>) -> IpcResult<()> {
+    let dir = embedding::model_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| IpcError::Internal {
+        message: format!("create model dir: {e}"),
+    })?;
+
+    for (name, url) in embedding::MODEL_FILES {
+        let target = dir.join(name);
+        if target.exists() {
+            continue;
+        }
+        let req = crate::ipc::download::DownloadStartRequest {
+            url: url.to_string(),
+            target_path: target.to_string_lossy().to_string(),
+            label: format!("BGE-M3: {name}"),
+        };
+        crate::ipc::download::download_start(app.clone(), state.clone(), req)
+            .await
+            .map_err(|e| IpcError::Internal {
+                message: format!("download {name}: {e:?}"),
+            })?;
+    }
+
+    Ok(())
 }

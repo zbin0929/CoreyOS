@@ -75,7 +75,6 @@ export function useAppUpdater() {
       });
 
       setState({ kind: 'downloaded', version });
-      await relaunch();
     } catch (e) {
       setState({ kind: 'error', message: String(e) });
     }

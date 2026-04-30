@@ -1,6 +1,6 @@
 [package]
 name = "caduceus"
-version = "0.1.10"
+version = "0.1.11"
 description = "Corey — control plane for AI agents"
 authors = ["Corey Contributors"]
 default-run = "Corey"
@@ -46,6 +46,7 @@ tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2"
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "io-util", "process"] }
+tokio-util = "0.7"
 async-trait = "0.1"
 futures = "0.3"
 once_cell = "1"
@@ -134,13 +135,16 @@ cron = "0.12"
 cpal = "0.15"
 hound = "3.5"
 
+ort = { version = "2.0.0-rc.12", features = ["load-dynamic"], optional = true }
+ndarray = { version = "0.17", optional = true }
+tokenizers = { version = "0.21", optional = true }
+
 [dev-dependencies]
-# Scratch-dir fixtures for preset install tests (ipc::preset). Keeps
-# unit tests hermetic; nothing touches a real ~/.hermes.
 tempfile = "3"
 
 [features]
 default = ["custom-protocol"]
+rag = ["dep:ort", "dep:ndarray", "dep:tokenizers"]
 custom-protocol = ["tauri/custom-protocol"]
 
 [workspace]

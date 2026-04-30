@@ -10,6 +10,9 @@ use crate::adapters::AdapterRegistry;
 use crate::channel_status::ChannelStatusCache;
 use crate::config::GatewayConfig;
 use crate::db::Db;
+use crate::ipc::download::DownloadManager;
+#[cfg(feature = "rag")]
+use crate::ipc::embedding::BgeM3Embedder;
 use crate::pty::Pty;
 use crate::sandbox::PathAuthority;
 
@@ -61,6 +64,9 @@ pub struct AppState {
     /// long-completed runs since they're a few bytes each and the
     /// HashMap's lifetime is bounded by the app session anyway.
     pub workflow_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    pub download_manager: Arc<DownloadManager>,
+    #[cfg(feature = "rag")]
+    pub embedder: Arc<Mutex<Option<BgeM3Embedder>>>,
     // 2026-04-23 pm (T6.8): removed the `scheduler: Option<Arc<Scheduler>>`
     // field. Hermes' gateway owns cron scheduling now; Corey only
     // reads/writes `~/.hermes/cron/jobs.json`. See `hermes_cron.rs`.
@@ -92,6 +98,9 @@ impl AppState {
             ptys: Arc::new(Mutex::new(HashMap::new())),
             workflow_runs: Arc::new(Mutex::new(HashMap::new())),
             workflow_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            download_manager: Arc::new(DownloadManager::new()),
+            #[cfg(feature = "rag")]
+            embedder: Arc::new(Mutex::new(None)),
         }
     }
 }

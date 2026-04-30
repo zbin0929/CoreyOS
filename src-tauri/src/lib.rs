@@ -225,6 +225,8 @@ pub fn run() {
             ipc::knowledge::knowledge_list,
             ipc::knowledge::knowledge_delete,
             ipc::knowledge::knowledge_search,
+            ipc::knowledge::rag_status,
+            ipc::knowledge::rag_download_model,
             ipc::voice::voice_transcribe,
             ipc::voice::tts::voice_tts,
             ipc::voice::voice_get_config,
@@ -269,6 +271,10 @@ pub fn run() {
             ipc::browser_config::browser_config_set,
             ipc::browser_config::browser_diagnose,
             ipc::gateway_sessions::gateway_sessions_list,
+            ipc::download::download_start,
+            ipc::download::download_cancel,
+            ipc::download::download_list,
+            ipc::download::download_clear_completed,
             ipc::gateway_sessions::gateway_session_messages,
         ])
         .setup(|app| {

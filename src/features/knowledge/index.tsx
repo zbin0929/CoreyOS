@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
+  Brain,
+  CheckCircle2,
+  Download,
   FileText,
   Loader2,
   Plus,
@@ -24,6 +27,7 @@ import {
   type KnowledgeDoc,
   type KnowledgeSearchHit,
 } from '@/lib/ipc';
+import { useRagStatus, formatBytes } from '@/lib/useRagStatus';
 
 export function KnowledgeRoute() {
   const { t } = useTranslation();
@@ -34,6 +38,7 @@ export function KnowledgeRoute() {
   const [searchResults, setSearchResults] = useState<KnowledgeSearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const rag = useRagStatus();
 
   const load = useCallback(async () => {
     setError(null);
@@ -169,6 +174,53 @@ export function KnowledgeRoute() {
             <span>{error}</span>
           </div>
         )}
+
+        {/* RAG Status Card */}
+        <div className="mb-4 rounded-lg border border-border bg-bg-elev-1 px-4 py-3" data-testid="rag-status-card">
+          <div className="flex items-center gap-2">
+            <Icon icon={Brain} size="md" className="text-gold-500" />
+            <span className="text-sm font-medium text-fg">{t('knowledge.rag_title')}</span>
+            {rag.modelInstalled ? (
+              <span className="ml-auto flex items-center gap-1 text-xs text-green-600">
+                <Icon icon={CheckCircle2} size="xs" />
+                {t('knowledge.rag_installed')}
+              </span>
+            ) : (
+              <span className="ml-auto text-xs text-fg-subtle">{t('knowledge.rag_not_installed')}</span>
+            )}
+          </div>
+          {!rag.modelInstalled && (
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-xs text-fg-muted">
+                {t('knowledge.rag_download_size', { size: formatBytes(rag.totalSize || 2266820608) })}
+              </span>
+              <Button
+                size="xs"
+                variant="primary"
+                onClick={() => void rag.downloadModel()}
+                disabled={rag.downloading}
+              >
+                <Icon icon={rag.downloading ? Loader2 : Download} size="xs" className={cn(rag.downloading && 'animate-spin')} />
+                {rag.downloading ? t('knowledge.rag_downloading') : t('knowledge.rag_download')}
+              </Button>
+            </div>
+          )}
+          {rag.status && !rag.modelInstalled && rag.status.files.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1">
+              {rag.status.files.map((f) => (
+                <div key={f.name} className="flex items-center gap-2 text-xs">
+                  {f.exists ? (
+                    <Icon icon={CheckCircle2} size="xs" className="text-green-600" />
+                  ) : (
+                    <span className="inline-block h-3 w-3 rounded-full border border-border" />
+                  )}
+                  <span className={f.exists ? 'text-fg' : 'text-fg-subtle'}>{f.name}</span>
+                  <span className="text-fg-subtle">({formatBytes(f.size_bytes || 0)})</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Drop zone */}
         <div

@@ -9,6 +9,7 @@ pub mod chat;
 pub mod config;
 pub mod db;
 pub mod demo;
+pub mod download;
 pub mod embedding;
 pub mod gateway_sessions;
 pub mod health;

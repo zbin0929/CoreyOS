@@ -1,58 +1,31 @@
-//! Embedding service (DEFERRED — vector path removed).
+//! Embedding service — BGE-M3 ONNX + Jaccard hybrid search.
 //!
-//! ## What changed and why
+//! ## v11 rewrite
 //!
-//! Previously this module embedded local ONNX (`fastembed` + BGE-Small)
-//! and exposed a five-phase RAG pipeline (embed → store → chunk →
-//! hybrid → rerank). In practice:
+//! BGE-M3 (568M params, 1024-dim) loaded from `~/.hermes/models/bge-m3/`
+//! via `ort` (ONNX Runtime). The model files are downloaded on demand
+//! through the Download Center (B-1). When the model is absent the
+//! module gracefully degrades to Jaccard-only search — no panics, no
+//! failed boot.
 //!
-//!   1. The BGE-Small download is the first thing in this module to
-//!      touch the network, and HuggingFace Hub is unreachable from
-//!      mainland China without an explicit `HF_ENDPOINT` mirror — so
-//!      every domestic developer / user experienced a permanent
-//!      "warn: BGE-Small ONNX init failed; falling back to zero
-//!      vectors" boot and the vector path silently degraded to junk.
-//!   2. The downstream `rag.rs::rag_search` IPC was already a Jaccard
-//!      keyword fallback; calling it `rag` was misleading.
-//!   3. `enrichHistory.ts` dispatched the IPC on every chat turn,
-//!      adding latency for zero quality return.
-//!   4. The 30 MB ONNX runtime + `ort` C++ chain bloated every
-//!      release build for a feature that doesn't actually work.
+//! ### What works
 //!
-//! Decision (v9 audit): drop the local embedder + `fastembed` dep,
-//! keep the public surface small but stable, and route real semantic
-//! search through Hermes' `/v1/embeddings` endpoint when (and only
-//! when) we wire that path in v10.
+//!   - `chunk_text_smart` — paragraph chunking (no model)
+//!   - `expand_query` — bilingual synonym expansion (no model)
+//!   - `hybrid_search` — BM25 keyword + vector RRF fusion when model
+//!     is loaded; Jaccard fallback when not
+//!   - `BgeM3Embedder` — ONNX Runtime embedding (1024-dim)
+//!   - `store_embedding` — write vector to SQLite BLOB
+//!   - `search_by_vector` — brute-force cosine search
+//!   - `rrf_fuse` — Reciprocal Rank Fusion
 //!
-//! ## What still works
+//! ### Model files
 //!
-//!   - `chunk_text_smart` — pure-text paragraph chunking (no model).
-//!   - `expand_query` — bilingual synonym expansion (no model).
-//!   - `hybrid_search` — Jaccard keyword overlap against
-//!     `knowledge_chunks`. The "hybrid" name is preserved for now so
-//!     `knowledge_search` IPC keeps compiling, but the vector branch
-//!     is gone — it's a keyword search dressed in the old API.
-//!
-//! ## What's gone (compared to v8)
-//!
-//!   - `fastembed::TextEmbedding` and the BGE-Small model
-//!   - `embed` / `embed_single` (callers now skip embedding entirely)
-//!   - `store_embedding` / `search_by_vector` / `rrf_fuse` /
-//!     `cosine_similarity` — all dead without vectors
-//!   - `EMBEDDING_DIM` constant
-//!
-//! The SQLite `knowledge_chunks.embedding` BLOB column is left in the
-//! schema for forward-compat. New uploads write `NULL` there;
-//! `search_by_vector` is gone so old non-NULL rows are simply
-//! ignored.
-//!
-//! ## Re-enabling vectors later
-//!
-//! Add a Hermes `/v1/embeddings` client (e.g. `deepseek-embedding`)
-//! and reintroduce `embed`/`store_embedding`/`search_by_vector` —
-//! exactly the four functions removed in this commit. The chunking
-//! and expansion code is intentionally left untouched so the wiring
-//! is small.
+//!   `~/.hermes/models/bge-m3/`
+//!     model.onnx              (707KB, graph structure)
+//!     model.onnx_data         (2.1GB, weights)
+//!     tokenizer.json          (16.3MB)
+//!     sentencepiece.bpe.model (4.8MB)
 
 use crate::db::Db;
 
@@ -291,4 +264,317 @@ fn search_knowledge_chunks_jaccard(
     scored.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(limit);
     scored
+}
+
+// ───────────────────────── BGE-M3 Embedder ─────────────────────────
+//
+// The ONNX embedder is gated behind the `rag` feature flag because
+// `ort` + `ndarray` + `tokenizers` add significant compile time and
+// binary size. When the feature is disabled the module still compiles
+// — vector search degrades gracefully to Jaccard-only.
+//
+// Enable with: cargo build --features rag
+
+#[cfg(feature = "rag")]
+pub const EMBEDDING_DIM: usize = 1024;
+
+#[cfg(feature = "rag")]
+pub struct BgeM3Embedder {
+    session: ort::session::Session,
+    tokenizer: tokenizers::Tokenizer,
+}
+
+#[cfg(feature = "rag")]
+impl BgeM3Embedder {
+    pub fn load(model_dir: &std::path::Path) -> anyhow::Result<Self> {
+        let model_path = model_dir.join("model.onnx");
+        let tokenizer_path = model_dir.join("tokenizer.json");
+
+        if !model_path.exists() {
+            anyhow::bail!("model.onnx not found at {}", model_path.display());
+        }
+        if !tokenizer_path.exists() {
+            anyhow::bail!("tokenizer.json not found at {}", tokenizer_path.display());
+        }
+
+        let mut session = ort::session::Session::builder()
+            .map_err(|e| anyhow::anyhow!("session builder: {e}"))?
+            .with_intra_threads(2)
+            .map_err(|e| anyhow::anyhow!("intra threads: {e}"))?
+            .commit_from_file(&model_path)
+            .map_err(|e| anyhow::anyhow!("load model: {e}"))?;
+
+        let tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| anyhow::anyhow!("tokenizer load: {e}"))?;
+
+        Ok(Self { session, tokenizer })
+    }
+
+    pub fn embed(&mut self, text: &str) -> anyhow::Result<Vec<f32>> {
+        let encoding = self
+            .tokenizer
+            .encode(text, true)
+            .map_err(|e| anyhow::anyhow!("tokenize: {e}"))?;
+
+        let ids = encoding.get_ids();
+        let mask = encoding.get_attention_mask();
+        let type_ids = encoding.get_type_ids();
+
+        let ids_arr = ndarray::Array1::from_iter(ids.iter().map(|&v| v as i64));
+        let mask_arr = ndarray::Array1::from_iter(mask.iter().map(|&v| v as i64));
+        let type_ids_arr = ndarray::Array1::from_iter(type_ids.iter().map(|&v| v as i64));
+
+        let input_ids = ort::value::TensorRef::from_array_view(ids_arr.view())
+            .map_err(|e| anyhow::anyhow!("input_ids tensor: {e}"))?;
+
+        let attention_mask = ort::value::TensorRef::from_array_view(mask_arr.view())
+            .map_err(|e| anyhow::anyhow!("attention_mask tensor: {e}"))?;
+
+        let token_type_ids = ort::value::TensorRef::from_array_view(type_ids_arr.view())
+            .map_err(|e| anyhow::anyhow!("token_type_ids tensor: {e}"))?;
+
+        let outputs = self
+            .session
+            .run(ort::inputs![input_ids, attention_mask, token_type_ids])
+            .map_err(|e| anyhow::anyhow!("session run: {e}"))?;
+
+        let output = outputs[0]
+            .try_extract_tensor::<f32>()
+            .map_err(|e| anyhow::anyhow!("extract tensor: {e}"))?;
+
+        let (shape, data) = output;
+        let seq_len = ids.len();
+        let dim = if shape.len() >= 2 {
+            shape[shape.len() - 1] as usize
+        } else {
+            1024
+        };
+        let mask_sum: f32 = mask.iter().map(|&m| m as f32).sum();
+
+        let mut pooled = vec![0.0f32; dim];
+        for i in 0..seq_len {
+            let w = mask[i] as f32 / mask_sum;
+            for d in 0..dim {
+                pooled[d] += data[i * dim + d] * w;
+            }
+        }
+        pooled.truncate(1024);
+
+        let norm: f32 = pooled.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if norm > 0.0 {
+            for v in pooled.iter_mut() {
+                *v /= norm;
+            }
+        }
+
+        Ok(pooled)
+    }
+
+    pub fn embed_batch(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
+        texts.iter().map(|t| self.embed(t)).collect()
+    }
+}
+
+// ───────────────────────── Vector Storage ─────────────────────────
+
+pub fn store_embedding(db: &Db, chunk_id: i64, vector: &[f32]) -> anyhow::Result<()> {
+    let conn = db.conn_raw();
+    let bytes: Vec<u8> = vector.iter().flat_map(|f| f.to_le_bytes()).collect();
+    conn.execute(
+        "UPDATE knowledge_chunks SET embedding = ?1 WHERE id = ?2",
+        rusqlite::params![bytes, chunk_id],
+    )?;
+    Ok(())
+}
+
+pub fn search_by_vector(
+    db: &Db,
+    query_vector: &[f32],
+    limit: usize,
+) -> Vec<(i64, String, String, usize, f64)> {
+    let conn = db.conn_raw();
+    let mut stmt = match conn.prepare(
+        "SELECT c.id, d.name, c.content, c.chunk_index, c.embedding \
+         FROM knowledge_chunks c JOIN knowledge_docs d ON d.id = c.doc_id \
+         WHERE c.embedding IS NOT NULL",
+    ) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+
+    let rows = match stmt.query_map([], |row| {
+        let id: i64 = row.get(0)?;
+        let doc_name: String = row.get(1)?;
+        let content: String = row.get(2)?;
+        let chunk_index: usize = row.get(3)?;
+        let blob: Vec<u8> = row.get(4)?;
+        Ok((id, doc_name, content, chunk_index, blob))
+    }) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut scored = Vec::new();
+    for r in rows {
+        let (id, doc_name, content, chunk_index, blob) = match r {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let chunk_vector: Vec<f32> = blob
+            .chunks_exact(4)
+            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .collect();
+
+        if chunk_vector.len() != query_vector.len() {
+            continue;
+        }
+
+        let sim = cosine_similarity(query_vector, &chunk_vector);
+        if sim > 0.3 {
+            scored.push((id, doc_name, content, chunk_index, sim as f64));
+        }
+    }
+
+    scored.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(limit);
+    scored
+}
+
+pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+    dot / (norm_a * norm_b)
+}
+
+// ───────────────────────── RRF Fusion ─────────────────────────
+
+pub fn rrf_fuse(
+    keyword_results: &[(i64, String, String, usize, f64)],
+    vector_results: &[(i64, String, String, usize, f64)],
+    k: usize,
+) -> Vec<HybridSearchResult> {
+    let mut rrf_scores: std::collections::HashMap<i64, f64> = std::collections::HashMap::new();
+
+    for (rank, (id, _, _, _, _)) in keyword_results.iter().enumerate() {
+        *rrf_scores.entry(*id).or_default() += 1.0 / (k + rank + 1) as f64;
+    }
+
+    for (rank, (id, _, _, _, _)) in vector_results.iter().enumerate() {
+        *rrf_scores.entry(*id).or_default() += 1.0 / (k + rank + 1) as f64;
+    }
+
+    let mut lookup: std::collections::HashMap<i64, (String, String, usize)> =
+        std::collections::HashMap::new();
+    for (id, doc_name, content, chunk_index, _) in keyword_results.iter() {
+        lookup.insert(*id, (doc_name.clone(), content.clone(), *chunk_index));
+    }
+    for (id, doc_name, content, chunk_index, _) in vector_results.iter() {
+        lookup
+            .entry(*id)
+            .or_insert_with(|| (doc_name.clone(), content.clone(), *chunk_index));
+    }
+
+    let mut fused: Vec<(i64, f64)> = rrf_scores.into_iter().collect();
+    fused.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    fused
+        .into_iter()
+        .filter_map(|(id, score)| {
+            let (doc_name, content, chunk_index) = lookup.get(&id)?;
+            Some(HybridSearchResult {
+                doc_name: doc_name.clone(),
+                content: content.clone(),
+                chunk_index: *chunk_index,
+                score,
+                source: "hybrid".into(),
+            })
+        })
+        .collect()
+}
+
+// ───────────────────────── Model path ─────────────────────────
+
+pub fn model_dir() -> std::path::PathBuf {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    home.join(".hermes").join("models").join("bge-m3")
+}
+
+pub fn model_exists() -> bool {
+    let dir = model_dir();
+    dir.join("model.onnx").exists()
+        && dir.join("model.onnx_data").exists()
+        && dir.join("tokenizer.json").exists()
+}
+
+pub const MODEL_FILES: &[(&str, &str)] = &[
+    (
+        "model.onnx",
+        "https://paddlenlp.bj.bcebos.com/models/community/BAAI/bge-m3/onnx/model.onnx",
+    ),
+    (
+        "model.onnx_data",
+        "https://paddlenlp.bj.bcebos.com/models/community/BAAI/bge-m3/onnx/model.onnx_data",
+    ),
+    (
+        "tokenizer.json",
+        "https://paddlenlp.bj.bcebos.com/models/community/BAAI/bge-m3/onnx/tokenizer.json",
+    ),
+    (
+        "sentencepiece.bpe.model",
+        "https://paddlenlp.bj.bcebos.com/models/community/BAAI/bge-m3/onnx/sentencepiece.bpe.model",
+    ),
+];
+
+#[cfg(test)]
+mod embedder_tests {
+    use super::*;
+
+    #[test]
+    fn cosine_sim_identical() {
+        let v = vec![1.0, 0.0, 0.0];
+        assert!((cosine_similarity(&v, &v) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn cosine_sim_orthogonal() {
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        assert!((cosine_similarity(&a, &b)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn rrf_fuse_merges_results() {
+        let kw = vec![(1, "a".into(), "c1".into(), 0, 0.9)];
+        let vec = vec![(2, "b".into(), "c2".into(), 0, 0.8)];
+        let fused = rrf_fuse(&kw, &vec, 60);
+        assert_eq!(fused.len(), 2);
+    }
+
+    #[test]
+    fn rrf_fuse_boosts_overlap() {
+        let kw = vec![
+            (1, "a".into(), "c1".into(), 0, 0.9),
+            (2, "b".into(), "c2".into(), 0, 0.5),
+        ];
+        let vec = vec![
+            (1, "a".into(), "c1".into(), 0, 0.8),
+            (3, "c".into(), "c3".into(), 0, 0.7),
+        ];
+        let fused = rrf_fuse(&kw, &vec, 60);
+        assert_eq!(fused[0].doc_name, "a");
+    }
+
+    #[test]
+    fn model_dir_path() {
+        let dir = model_dir();
+        assert!(dir.to_string_lossy().contains("bge-m3"));
+    }
 }
