@@ -4,6 +4,8 @@ import {
   Activity,
   ArrowRight,
   CalendarClock,
+  CheckCircle2,
+  Circle,
   FlaskConical,
   Globe,
   Loader2,
@@ -169,6 +171,15 @@ export function HomeRoute() {
                   <SideAction icon={Settings} label={t('home.action_settings')} color="gray" onClick={() => void navigate({ to: '/settings' })} />
                 </div>
               </Card>
+
+              <Card title={t('home.system_overview')}>
+                <div className="flex flex-col gap-0.5">
+                  <OverviewRow ok={isOnline} label="Gateway" detail={isOnline ? t('home.status_online') : t('home.status_offline')} />
+                  <OverviewRow ok={hermes?.installed ?? false} label="Hermes" detail={hermes?.version_parsed ? `v${hermes.version_parsed.join('.')}` : undefined} />
+                  <OverviewRow ok={mcpServers.length > 0} label="MCP" detail={mcpServers.length > 0 ? `${mcpServers.length} ${t('home.status_connected')}` : undefined} />
+                  <OverviewRow ok={activeCronJobs.length > 0} label="Cron" detail={activeCronJobs.length > 0 ? `${activeCronJobs.length} ${t('home.status_active')}` : undefined} />
+                </div>
+              </Card>
             </div>
           </div>
         )}
@@ -236,3 +247,13 @@ function SideAction({ icon: Ico, label, color, onClick }: {
   );
 }
 
+function OverviewRow({ ok, label, detail }: { ok: boolean; label: string; detail?: string }) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg px-3 py-2">
+      <Icon icon={ok ? CheckCircle2 : Circle} size="xs" className={ok ? 'text-emerald-500' : 'text-fg-subtle/40'} />
+      <span className="text-sm text-fg">{label}</span>
+      {detail && <span className="ml-auto font-mono text-[11px] text-fg-muted">{detail}</span>}
+      {!detail && <span className="ml-auto text-[11px] text-fg-subtle">—</span>}
+    </div>
+  );
+}

@@ -490,10 +490,17 @@
     "action_mcp_desc": "Connect external tools and data sources",
     "action_title": "Quick actions",
     "action_settings": "Settings",
+    "system_overview": "System",
+    "status_online": "online",
+    "status_offline": "offline",
     "status_connected": "connected",
     "status_active": "active",
     "statusbar_messages": "messages",
     "statusbar_search": "Search"
+  },
+  "statusbar": {
+    "skills": "skills",
+    "cron": "cron"
   },
   "agent_wizard": {
     "title": "Add a new agent",

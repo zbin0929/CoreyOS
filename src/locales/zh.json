@@ -542,10 +542,17 @@
     "action_mcp_desc": "连接外部工具和数据源",
     "action_title": "快捷操作",
     "action_settings": "设置",
+    "system_overview": "系统",
+    "status_online": "在线",
+    "status_offline": "离线",
     "status_connected": "已连接",
     "status_active": "活跃",
     "statusbar_messages": "条消息",
     "statusbar_search": "搜索"
+  },
+  "statusbar": {
+    "skills": "技能",
+    "cron": "定时任务"
   },
   "agent_wizard": {
     "title": "新增 Agent",
