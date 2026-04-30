@@ -8,6 +8,7 @@ import {
   Cpu,
   Loader2,
   MessageSquare,
+  Package,
   Plug,
   Radio,
   Wifi,
@@ -22,6 +23,7 @@ import { cn } from '@/lib/cn';
 import { useAppStatusStore } from '@/stores/appStatus';
 import { FirstRunModal } from './FirstRunModal';
 import { HermesInstallCard } from './HermesInstallCard';
+import { PresetCard } from './PresetCard';
 import { useDashboard } from './useDashboard';
 
 function formatTokens(n: number): string {
@@ -87,6 +89,9 @@ export function HomeRoute() {
         {/* Install prompt — only when Hermes not detected */}
         {hermes && !hermes.installed && <HermesInstallCard />}
 
+        {/* Starter content — auto-hides once skills are installed */}
+        <PresetCard />
+
         {loading && (
           <div className="flex items-center justify-center py-12 text-fg-muted">
             <Icon icon={Loader2} size="lg" className="animate-spin" />
@@ -112,6 +117,10 @@ export function HomeRoute() {
                   <Button size="sm" variant="secondary" onClick={() => void navigate({ to: '/chat' })}>
                     <Icon icon={MessageSquare} size="xs" />
                     {t('home.quick_start_chat')}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => void navigate({ to: '/skills' })}>
+                    <Icon icon={Package} size="xs" />
+                    {t('home.quick_start_skills')}
                   </Button>
                 </div>
               </section>

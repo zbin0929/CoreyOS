@@ -532,7 +532,8 @@
     "quick_start_desc": "三步启动你的 AI 控制台：连接网关 → 配置模型 → 开始对话。",
     "quick_start_gateway": "连接网关",
     "quick_start_model": "配置模型",
-    "quick_start_chat": "开始对话"
+    "quick_start_chat": "开始对话",
+    "quick_start_skills": "安装入门技能"
   },
   "agent_wizard": {
     "title": "新增 Agent",

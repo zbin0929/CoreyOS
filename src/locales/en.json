@@ -480,7 +480,8 @@
     "quick_start_desc": "Set up your AI control plane in three steps: connect the gateway, configure a model, then start chatting.",
     "quick_start_gateway": "Connect gateway",
     "quick_start_model": "Configure model",
-    "quick_start_chat": "Start chatting"
+    "quick_start_chat": "Start chatting",
+    "quick_start_skills": "Install starter skills"
   },
   "agent_wizard": {
     "title": "Add a new agent",
