@@ -731,7 +731,11 @@ pub fn gateway_stop() -> io::Result<String> {
             stderr, stdout
         )));
     }
-    Ok(if stdout.trim().is_empty() { stderr } else { stdout })
+    Ok(if stdout.trim().is_empty() {
+        stderr
+    } else {
+        stdout
+    })
 }
 
 #[cfg(target_os = "windows")]
@@ -744,14 +748,17 @@ fn windows_gateway_stop() -> io::Result<String> {
         .and_then(|s| s.trim().lines().next().map(|l| l.to_string()))
         .and_then(|s| {
             let parsed: u32 = s.parse().ok()?;
-            if parsed > 0 { Some(parsed.to_string()) } else { None }
+            if parsed > 0 {
+                Some(parsed.to_string())
+            } else {
+                None
+            }
         });
 
     if let Some(ref pid_s) = pid_str {
-        let pid: u32 = pid_s.parse().map_err(|_| io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid PID in gateway.pid",
-        ))?;
+        let pid: u32 = pid_s.parse().map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "invalid PID in gateway.pid")
+        })?;
         let mut kill_cmd = std::process::Command::new("taskkill");
         kill_cmd.args(["/F", "/PID", &pid.to_string()]);
         let output = kill_cmd.output()?;
@@ -983,7 +990,10 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
             if f.exists() {
                 match std::fs::remove_file(&f) {
                     Ok(()) => tracing::info!("cleaned gateway lock file: {}", f.display()),
-                    Err(e) => tracing::warn!("cannot remove {}: {e}, gateway may have been started by admin", f.display()),
+                    Err(e) => tracing::warn!(
+                        "cannot remove {}: {e}, gateway may have been started by admin",
+                        f.display()
+                    ),
                 }
             }
         }
@@ -1035,7 +1045,9 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
             gw_log.display()
         ))
     } else {
-        tracing::warn!("gateway spawned (pid {pid}) but port 8642 not yet listening — may still be starting");
+        tracing::warn!(
+            "gateway spawned (pid {pid}) but port 8642 not yet listening — may still be starting"
+        );
         Ok(format!(
             "gateway started (pid {pid}), still initializing, log: {}",
             gw_log.display()

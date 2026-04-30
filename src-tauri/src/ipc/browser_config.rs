@@ -125,7 +125,10 @@ fn detect_node() -> (bool, Option<String>) {
 
     for candidate in &node_candidates {
         if candidate.exists() {
-            if let Ok(output) = std::process::Command::new(candidate).arg("--version").output() {
+            if let Ok(output) = std::process::Command::new(candidate)
+                .arg("--version")
+                .output()
+            {
                 if output.status.success() {
                     let v = String::from_utf8_lossy(&output.stdout).trim().to_string();
                     return (true, Some(v));

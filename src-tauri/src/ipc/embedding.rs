@@ -519,11 +519,8 @@ pub fn model_exists() -> bool {
     if !onnx.exists() || !data.exists() || !tok.exists() {
         return false;
     }
-    let min_sizes: [(&std::path::PathBuf, u64); 3] = [
-        (&onnx, 1_000_000),
-        (&data, 100_000_000),
-        (&tok, 100_000),
-    ];
+    let min_sizes: [(&std::path::PathBuf, u64); 3] =
+        [(&onnx, 1_000_000), (&data, 100_000_000), (&tok, 100_000)];
     for (path, min) in min_sizes {
         if let Ok(meta) = std::fs::metadata(path) {
             if meta.len() < min {
