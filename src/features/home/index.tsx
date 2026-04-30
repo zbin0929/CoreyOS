@@ -83,7 +83,7 @@ export function HomeRoute() {
         </div>
 
         {/* ── Alerts: install / preset ────────────── */}
-        {hermes && !hermes.installed && <div className="mb-4"><HermesInstallCard /></div>}
+        <div className="mb-4"><HermesInstallCard /></div>
         <div className="mb-4"><PresetCard /></div>
 
         {loading ? (

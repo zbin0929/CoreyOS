@@ -11,7 +11,7 @@ import { test, expect } from './fixtures/test';
 test.describe('shell', () => {
   test('home route loads with nav + tagline', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: /Welcome to Corey/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /CoreyOS/i })).toBeVisible();
     // Sidebar is always mounted — check a couple of nav entries by role.
     await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Chat' })).toBeVisible();
