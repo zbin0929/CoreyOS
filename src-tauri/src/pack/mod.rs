@@ -27,6 +27,7 @@
 
 mod manifest;
 mod scanner;
+mod skills;
 mod state;
 mod sync;
 mod templates;
@@ -43,6 +44,7 @@ mod templates;
 #[allow(unused_imports)]
 pub use manifest::{load_from_dir, parse, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME};
 pub use scanner::scan_skill_packs_dir;
+pub use skills::{install_skills, uninstall_skills};
 pub use state::PackStateFile;
 pub use sync::{disable_updates, enable_updates};
 pub use templates::{current_platform, TemplateContext};

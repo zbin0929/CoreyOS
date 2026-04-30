@@ -17,7 +17,10 @@ use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config;
-use crate::pack::{disable_updates, enable_updates, PackManifest, RegistryEntry, TemplateContext};
+use crate::pack::{
+    disable_updates, enable_updates, install_skills, uninstall_skills, PackManifest, RegistryEntry,
+    TemplateContext,
+};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -80,11 +83,12 @@ pub async fn pack_set_enabled(
     // file I/O so the registry stays available for concurrent
     // pack_list calls during the (potentially slow) gateway
     // restart that follows.
-    let (manifest_arc, hermes_dir) = {
+    let (manifest_arc, hermes_dir, pack_dir) = {
         let registry = state.packs.read();
         let entry = registry.packs.iter().find(|p| matches_pack_id(p, &pack_id));
         let manifest = entry.and_then(|p| p.manifest.clone());
-        (manifest, registry.hermes_dir.clone())
+        let pack_dir = entry.map(|p| p.dir_path.clone());
+        (manifest, registry.hermes_dir.clone(), pack_dir)
     };
 
     if enabled && manifest_arc.is_none() {
@@ -99,6 +103,21 @@ pub async fn pack_set_enabled(
 
     // Sync to config.yaml (only if Pack actually has MCP servers).
     let config_changed = sync_config_yaml(&pack_id, &manifest_arc, enabled, &hermes_dir, &journal)?;
+
+    // Install / uninstall Pack skills under
+    // `~/.hermes/skills/pack__<id>/`. Skills are independent of MCP
+    // servers — a Pack with no MCP can still ship pure-prompt
+    // skills. Errors here don't roll back the config.yaml change
+    // we just made: skills failing to install is annoying but not
+    // critical, and rolling back would risk leaving Hermes
+    // half-configured.
+    sync_skills(
+        &pack_id,
+        &manifest_arc,
+        enabled,
+        &hermes_dir,
+        pack_dir.as_deref(),
+    )?;
 
     // Persist the bool. Doing this AFTER config.yaml write means a
     // failure there leaves the user-visible enable state unchanged
@@ -205,6 +224,46 @@ fn sync_config_yaml(
         },
     )?;
     Ok(true)
+}
+
+/// Copy / remove the Pack's skills under `~/.hermes/skills/pack__<id>/`.
+///
+/// On enable: copy each `manifest.skills` entry from the Pack
+/// folder to the Hermes skills tree. On disable: remove the
+/// `pack__<id>` subdirectory entirely.
+///
+/// `pack_dir` is `None` when the Pack folder is gone (user
+/// uninstalled before disabling) — we still attempt to remove the
+/// skills directory so stale files don't linger.
+fn sync_skills(
+    pack_id: &str,
+    manifest: &Option<Arc<PackManifest>>,
+    enabled: bool,
+    hermes_dir: &std::path::Path,
+    pack_dir: Option<&std::path::Path>,
+) -> IpcResult<()> {
+    if enabled {
+        let (Some(manifest), Some(pack_dir)) = (manifest, pack_dir) else {
+            // No manifest / no folder: nothing to copy. (We've
+            // already rejected enable-with-broken-manifest at the
+            // top of pack_set_enabled, so this branch is mostly
+            // defensive.)
+            return Ok(());
+        };
+        if manifest.skills.is_empty() {
+            return Ok(());
+        }
+        let n = install_skills(manifest, pack_dir, hermes_dir).map_err(|e| IpcError::Internal {
+            message: format!("install pack skills: {e}"),
+        })?;
+        tracing::info!(pack_id, installed = n, "pack skills installed");
+    } else {
+        uninstall_skills(pack_id, hermes_dir).map_err(|e| IpcError::Internal {
+            message: format!("uninstall pack skills: {e}"),
+        })?;
+        tracing::info!(pack_id, "pack skills uninstalled");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
