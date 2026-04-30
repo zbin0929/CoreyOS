@@ -95,6 +95,28 @@ export function HomeRoute() {
 
         {!loading && (
           <>
+            {/* Onboarding quick-start — shown when system is empty */}
+            {totalSessions === 0 && gateway !== 'online' && (
+              <section className="flex flex-col gap-3 rounded-lg border border-gold-500/30 bg-gold-500/[0.04] p-4">
+                <h2 className="text-sm font-semibold text-fg">{t('home.quick_start_title')}</h2>
+                <p className="text-xs text-fg-muted">{t('home.quick_start_desc')}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="primary" onClick={() => void navigate({ to: '/settings' })}>
+                    <Icon icon={Radio} size="xs" />
+                    {t('home.quick_start_gateway')}
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => void navigate({ to: '/models' })}>
+                    <Icon icon={Cpu} size="xs" />
+                    {t('home.quick_start_model')}
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => void navigate({ to: '/chat' })}>
+                    <Icon icon={MessageSquare} size="xs" />
+                    {t('home.quick_start_chat')}
+                  </Button>
+                </div>
+              </section>
+            )}
+
             {/* Metrics row */}
             <div className="grid grid-cols-4 gap-3">
               <MetricCard

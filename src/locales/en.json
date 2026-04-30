@@ -475,7 +475,12 @@
     "status_gateway": "Gateway",
     "status_hermes": "Hermes",
     "status_mcp": "MCP",
-    "status_cron": "Cron"
+    "status_cron": "Cron",
+    "quick_start_title": "Get started",
+    "quick_start_desc": "Set up your AI control plane in three steps: connect the gateway, configure a model, then start chatting.",
+    "quick_start_gateway": "Connect gateway",
+    "quick_start_model": "Configure model",
+    "quick_start_chat": "Start chatting"
   },
   "agent_wizard": {
     "title": "Add a new agent",
