@@ -75,11 +75,11 @@
     - Hermes 0.10 没 `/reload-mcp`，gateway restart 是唯一重载路径
   - [x] **Stage 4**：Skill 注册管道（按 pack_id 子目录）— Pack `manifest.skills` 拷到 `~/.hermes/skills/pack__<id>/`，启用时 install + 禁用时 rm -rf
   - [x] **Stage 4b**：Workflow + Schedule 注册管道（按 pack_id 前缀）— Pack 启用时拷贝 workflows 到 `~/.hermes/workflows/pack__<id>__*.yaml` + 写 schedules 进 `jobs.json`，禁用时整批清理
-  - [x] **Stage 5a**：视图渲染管道 + 第一个模板（`1e2136a`）— `pack_views_list` IPC + `/pack/$packId/$viewId` 动态路由 + 模板注册表 + MetricsCard 模板（占位数据，stage 5b 接 MCP）
-  - [ ] **Stage 5b-d**：剩余 11 个视图模板：
-    - DataTable / TimeSeriesChart / PivotTable
-    - TrendsMatrix / Timeline / AlertList / WorkflowLauncher
-    - SkillPalette / FormRunner / RadarChart / CompositeDashboard
+  - [x] **Stage 5a**：视图渲染管道 + 第一个模板（`1e2136a`）— `pack_views_list` IPC + `/pack/$packId/$viewId` 动态路由 + 模板注册表 + MetricsCard
+  - [x] **Stage 5b**：DataTable + AlertList 模板（`c25f336`）
+  - [x] **Stage 5c**：TimeSeriesChart + TrendsMatrix + PivotTable 模板（`e057d57`）
+  - [x] **Stage 5d**：剩余 6 个模板（Timeline / RadarChart / CompositeDashboard / WorkflowLauncher / SkillPalette / FormRunner）— **12 个模板全部 layout 完成，等 stage 5e 接数据**
+  - [ ] **Stage 5e**：数据 wiring（每个模板从 `data_source` 通过 MCP 拉真实数据并渲染）+ 点击 / 提交 / 刷新交互
   - [ ] ActionPanel 嵌入（视图旁的"决策归还"按钮）
   - [ ] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖（架构文档已锁定）
   - [ ] Pack 升级前自动备份（zip 到 `~/.hermes/backups/`，保留 7 天）
