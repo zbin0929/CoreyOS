@@ -999,9 +999,9 @@
     "binary_warn": "\"{{name}}\" 是 .{{ext}} 文件。二进制格式可能无法正确提取为纯文本。继续？",
     "size_warn": "\"{{name}}\" 大小为 {{sizeKB}}KB。大文件可能会被截断。继续？",
     "rag_title": "语义增强",
-    "rag_installed": "BGE-M3 已安装",
+    "rag_installed": "语义模型已安装",
     "rag_not_installed": "未安装",
-    "rag_download_size": "需要下载 BGE-M3 语义模型（约 {{size}}）",
+    "rag_download_size": "需要下载语义模型（约 {{size}}）",
     "rag_download": "下载并启用",
     "rag_downloading": "下载中…"
   },

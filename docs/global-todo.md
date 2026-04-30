@@ -254,7 +254,7 @@ B-7 (卸载/重置)  独立
 | v0.1.10 | ✅ | bootstrap COREY_INSTALL_DIR 传递修复 |
 | v0.1.11 | ✅ | BGE-M3 RAG + 统一下载中心 + updater 修复 + NSIS |
 | v0.1.12 | ✅ | 15 项 Bug 修复（详见 `docs/bug-history.md`）|
-| v0.1.13-dev | 🟡 | QQ Bot sandbox 兼容 + 分析用量修复 + updater CI 修复 + 通道在线标识 |
+| v0.1.13-dev | 🟡 | QQ Bot sandbox 兼容 + 分析用量修复 + updater CI 修复 + 通道在线标识 + StatusBar 上下文感知 + BGE-M3 验证戳机制 |
 | v0.1.13 | 📋 | Windows 端到端实测 + 验证收尾 |
 | v0.2.0-dev | 🟡 | B-2 white-label stage 1（`229ab57`）+ B-3 Pack 加载器 stage 1/2/3a/3b/3c（`7963f93` / `ea49667` / `3bf14d6` / `9855db3` / `5d7b2bd`）|
 | v0.2.0 | 📋 | 基座定制能力（白标 + Pack 加载器 + 12 视图模板 + license features） |
@@ -337,12 +337,16 @@ pnpm vitest run         # 全绿
 - **Updater 不提示新版本**：CI workflow 只上传构建产物但未同步 `latest.json` 到 COS，已修复
 - **分析面板不自动刷新**：加 30s 定时轮询
 - **通道卡片无在线标识**：在线通道左上角绿色对勾 + 绿色边框
+- **BGE-M3 模型误判未安装**：`model_exists()` 用文件大小阈值检测，`model.onnx` 实际 724KB 低于 1MB 阈值导致误判。改用 `.verified` 戳文件机制：下载成功写戳、ONNX 加载失败删戳、无戳时回退文件存在性检查
+- **首页缺少底部状态栏**：新增全局 `StatusBar` 组件，左=会话标题+消息数/页面名，中=技能数+MCP数+定时任务数，右=Corey 版本
+- **首页右侧栏太空**：加回「系统概览」卡片（Gateway/Hermes/MCP/Cron 四行状态）
+- **E2E smoke 测试失败**：首页标题从 "Welcome to Corey" 改为 "CoreyOS"，`HermesInstallCard` 移除 `!hermes.installed` 门控条件
 
 ### 待 Windows 实测验证（v0.1.13 目标）
 
 - BUG-007~009：数据目录统一后，Windows 上旧的 `E:\Corey\data\` 需手动删除
 - BUG-008：对话白圈在 Windows 实测确认已解决
-- BUG-010：BGE-M3 文件大小校验后触发重新下载
+- BUG-010：BGE-M3 验证戳机制已替代文件大小校验，需 Windows 实测确认
 
 ### 当前已知功能缺失
 

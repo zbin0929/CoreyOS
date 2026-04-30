@@ -999,9 +999,9 @@
     "binary_warn": "\"{{name}}\" is a .{{ext}} file. Binary formats may not extract correctly as plain text. Continue?",
     "size_warn": "\"{{name}}\" is {{sizeKB}}KB. Large files may be truncated. Continue?",
     "rag_title": "Semantic Enhancement",
-    "rag_installed": "BGE-M3 installed",
+    "rag_installed": "Semantic model installed",
     "rag_not_installed": "Not installed",
-    "rag_download_size": "Download BGE-M3 semantic model (~{{size}})",
+    "rag_download_size": "Download semantic model (~{{size}})",
     "rag_download": "Download & Enable",
     "rag_downloading": "Downloading…"
   },
