@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   hermesDetect,
   schedulerListJobs,
@@ -12,34 +12,31 @@ import {
 import { useAppStatusStore } from '@/stores/appStatus';
 import { useChatStore } from '@/stores/chat';
 
-export interface DashboardData {
-  gateway: 'online' | 'offline' | 'unknown';
+interface DashboardCache {
   hermes: HermesDetection | null;
-  todayMessages: number;
-  todayTokens: number;
-  totalSessions: number;
-  recentSessionIds: string[];
-  activeCronJobs: SchedulerJob[];
+  analytics: AnalyticsSummaryDto | null;
+  cronJobs: SchedulerJob[];
   mcpServers: McpServer[];
-  loading: boolean;
+  fetchedAt: number;
 }
 
-export function useDashboard() {
-  const gateway = useAppStatusStore((s) => s.gateway);
-  const sessions = useChatStore((s) => s.sessions);
-  const orderedIds = useChatStore((s) => s.orderedIds);
+const CACHE_TTL = 30_000;
 
-  const [hermes, setHermes] = useState<HermesDetection | null>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsSummaryDto | null>(null);
-  const [cronJobs, setCronJobs] = useState<SchedulerJob[]>([]);
-  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-  const [loading, setLoading] = useState(true);
+const cache: DashboardCache = {
+  hermes: null,
+  analytics: null,
+  cronJobs: [],
+  mcpServers: [],
+  fetchedAt: 0,
+};
 
-  useEffect(() => {
-    let cancelled = false;
+let inflight: Promise<void> | null = null;
 
-    async function fetch() {
-      setLoading(true);
+async function refreshCache() {
+  if (inflight) return inflight;
+
+  inflight = (async () => {
+    try {
       const results = await Promise.allSettled([
         hermesDetect(),
         analyticsSummary(),
@@ -47,19 +44,46 @@ export function useDashboard() {
         mcpServerList(),
       ]);
 
-      if (cancelled) return;
+      if (results[0].status === 'fulfilled') cache.hermes = results[0].value;
+      if (results[1].status === 'fulfilled') cache.analytics = results[1].value as AnalyticsSummaryDto;
+      if (results[2].status === 'fulfilled') cache.cronJobs = results[2].value;
+      if (results[3].status === 'fulfilled') cache.mcpServers = results[3].value;
+      cache.fetchedAt = Date.now();
+    } finally {
+      inflight = null;
+    }
+  })();
 
-      if (results[0].status === 'fulfilled') setHermes(results[0].value);
-      if (results[1].status === 'fulfilled') setAnalytics(results[1].value as AnalyticsSummaryDto);
-      if (results[2].status === 'fulfilled') setCronJobs(results[2].value);
-      if (results[3].status === 'fulfilled') setMcpServers(results[3].value);
+  return inflight;
+}
 
-      setLoading(false);
+export function useDashboard() {
+  const gateway = useAppStatusStore((s) => s.gateway);
+  const sessions = useChatStore((s) => s.sessions);
+  const orderedIds = useChatStore((s) => s.orderedIds);
+
+  const [, setTick] = useState(0);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+
+    const stale = Date.now() - cache.fetchedAt > CACHE_TTL;
+    const has = cache.fetchedAt > 0;
+
+    if (stale || !has) {
+      void refreshCache().then(() => {
+        if (mounted.current) setTick((n) => n + 1);
+      });
     }
 
-    void fetch();
-    return () => { cancelled = true; };
+    return () => { mounted.current = false; };
   }, []);
+
+  const hermes = cache.hermes;
+  const analytics = cache.analytics;
+  const cronJobs = cache.cronJobs;
+  const mcpServers = cache.mcpServers;
 
   const recentSessionIds = useMemo(
     () => orderedIds.slice(0, 5),
@@ -84,6 +108,8 @@ export function useDashboard() {
   }, [analytics, todayStr]);
 
   const totalSessions = analytics?.totals.sessions ?? Object.keys(sessions).length;
+
+  const loading = cache.fetchedAt === 0;
 
   return {
     gateway,
