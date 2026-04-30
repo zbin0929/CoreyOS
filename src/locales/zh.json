@@ -539,7 +539,11 @@
     "action_run_skill": "运行技能",
     "action_run_skill_desc": "执行预置的提示词模板",
     "action_mcp": "MCP 服务器",
-    "action_mcp_desc": "连接外部工具和数据源"
+    "action_mcp_desc": "连接外部工具和数据源",
+    "action_title": "快捷操作",
+    "action_settings": "设置",
+    "status_connected": "已连接",
+    "status_active": "活跃"
   },
   "agent_wizard": {
     "title": "新增 Agent",

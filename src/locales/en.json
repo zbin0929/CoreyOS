@@ -487,7 +487,11 @@
     "action_run_skill": "Run a skill",
     "action_run_skill_desc": "Execute a pre-built prompt template",
     "action_mcp": "MCP servers",
-    "action_mcp_desc": "Connect external tools and data sources"
+    "action_mcp_desc": "Connect external tools and data sources",
+    "action_title": "Quick actions",
+    "action_settings": "Settings",
+    "status_connected": "connected",
+    "status_active": "active"
   },
   "agent_wizard": {
     "title": "Add a new agent",
