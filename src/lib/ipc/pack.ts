@@ -54,3 +54,13 @@ export function packSetEnabled(packId: string, enabled: boolean): Promise<void> 
 export function packViewsList(): Promise<PackView[]> {
   return invoke<PackView[]>('pack_views_list');
 }
+
+/**
+ * Fetch the rendered payload for one Pack view, resolving its
+ * `data_source` directive on the backend. Returns `{}` when the
+ * view has no data source declared (templates render their own
+ * "no data" state).
+ */
+export function packViewData(packId: string, viewId: string): Promise<unknown> {
+  return invoke<unknown>('pack_view_data', { packId, viewId });
+}

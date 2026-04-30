@@ -262,6 +262,7 @@ pub fn run() {
             ipc::pack::pack_list,
             ipc::pack::pack_set_enabled,
             ipc::pack::pack_views_list,
+            ipc::pack::pack_view_data,
             ipc::workflow::workflow_list,
             ipc::workflow::workflow_get,
             ipc::workflow::workflow_save,

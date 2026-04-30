@@ -145,6 +145,55 @@ pub struct PackActionDto {
     pub confirm: bool,
 }
 
+/// Resolve a Pack view's `data_source` directive into the JSON
+/// payload its template renders.
+///
+/// Stage 5e supports the simplest data-source kind:
+///
+/// ```yaml
+/// data_source:
+///   static:
+///     metrics: { revenue: 12345, cost: 8000, profit: 4345 }
+/// ```
+///
+/// Future kinds (MCP call, HTTP fetch, SQLite query) plug into
+/// the same dispatcher. Unknown / missing kinds return an empty
+/// object so the template renders its own "no data" state rather
+/// than the IPC throwing.
+#[tauri::command]
+pub async fn pack_view_data(
+    pack_id: String,
+    view_id: String,
+    state: State<'_, AppState>,
+) -> IpcResult<serde_json::Value> {
+    let data_source = {
+        let registry = state.packs.read();
+        let entry = registry.packs.iter().find(|p| matches_pack_id(p, &pack_id));
+        let manifest = entry.and_then(|p| p.manifest.as_ref());
+        let view = manifest.and_then(|m| m.views.iter().find(|v| v.id == view_id));
+        view.map(|v| v.data_source.clone())
+    };
+    let Some(ds) = data_source else {
+        return Err(IpcError::Internal {
+            message: format!("view not found: {pack_id}/{view_id}"),
+        });
+    };
+    Ok(resolve_data_source(&ds))
+}
+
+fn resolve_data_source(ds: &serde_yaml::Value) -> serde_json::Value {
+    let json = yaml_to_json(ds);
+    if let Some(obj) = json.as_object() {
+        if let Some(static_value) = obj.get("static") {
+            return static_value.clone();
+        }
+        // `mcp`, `http`, `sql` etc land in stage 5f. For now they
+        // return an empty object so the template can still render
+        // its skeleton.
+    }
+    serde_json::Value::Object(serde_json::Map::new())
+}
+
 /// Return every view declared by every CURRENTLY-ENABLED Pack.
 /// Stable ordering: by pack id, then by view id within each pack.
 #[tauri::command]
