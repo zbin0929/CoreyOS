@@ -19,6 +19,7 @@ pub fn find_browser_runner() -> std::path::PathBuf {
         .unwrap_or(std::path::Path::new("."))
         .to_path_buf();
 
+    #[allow(unused_mut)]
     let mut candidates: Vec<std::path::PathBuf> = vec![
         exe_dir.join("scripts/browser-runner"),
         exe_dir.join("../scripts/browser-runner"),
