@@ -160,8 +160,16 @@ pub fn status(config_dir: &Path) -> Verdict {
 /// config dir, and we'd rather degrade noisily than silently bind a
 /// license to a transient id.
 pub fn machine_id(config_dir: &Path) -> String {
-    let path = machine_id_path();
-    if let Ok(existing) = fs::read_to_string(&path) {
+    machine_id_at(&machine_id_path(), config_dir)
+}
+
+/// Inner implementation that takes the primary path explicitly. Lets
+/// tests redirect the side-effecting write away from the developer's
+/// real `$HOME/.corey-machine-id` (which 314-test parallel runs would
+/// otherwise race on, and which would clobber an installed Corey's
+/// machine binding on the dev's machine).
+fn machine_id_at(primary_path: &Path, config_dir: &Path) -> String {
+    if let Ok(existing) = fs::read_to_string(primary_path) {
         let trimmed = existing.trim();
         if !trimmed.is_empty() {
             return trimmed.to_string();
@@ -171,15 +179,15 @@ pub fn machine_id(config_dir: &Path) -> String {
     if let Ok(existing) = fs::read_to_string(&legacy_path) {
         let trimmed = existing.trim();
         if !trimmed.is_empty() {
-            let _ = fs::write(&path, trimmed);
+            let _ = fs::write(primary_path, trimmed);
             return trimmed.to_string();
         }
     }
     let fresh = uuid::Uuid::new_v4().to_string();
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = primary_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let _ = fs::write(&path, &fresh);
+    let _ = fs::write(primary_path, &fresh);
     fresh
 }
 
@@ -450,19 +458,29 @@ mod tests {
         assert_match(&portable, "bbbbb", "valid");
     }
 
-    /// `machine_id()` is idempotent: second call returns the value
-    /// the first call persisted.
+    /// `machine_id_at()` is idempotent: second call returns the value
+    /// the first call persisted. Uses an explicit primary path so this
+    /// test can run safely in parallel with the rest of the test
+    /// suite without racing on `$HOME/.corey-machine-id`.
     #[test]
     fn machine_id_is_persistent() {
-        let dir =
-            std::env::temp_dir().join(format!("corey-machine-id-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let first = machine_id(&dir);
-        let second = machine_id(&dir);
+        let base = std::env::temp_dir().join(format!(
+            "corey-machine-id-test-{}-{}",
+            std::process::id(),
+            "is_persistent"
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let primary = base.join("corey-machine-id");
+        let cfg = base.join("cfg");
+        fs::create_dir_all(&cfg).unwrap();
+
+        let first = machine_id_at(&primary, &cfg);
+        let second = machine_id_at(&primary, &cfg);
         assert_eq!(first, second, "second read should return persisted id");
         assert_eq!(first.len(), 36, "uuid v4 string is 36 chars");
-        let _ = fs::remove_dir_all(&dir);
+
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
