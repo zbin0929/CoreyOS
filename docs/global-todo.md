@@ -75,8 +75,9 @@
     - Hermes 0.10 没 `/reload-mcp`，gateway restart 是唯一重载路径
   - [x] **Stage 4**：Skill 注册管道（按 pack_id 子目录）— Pack `manifest.skills` 拷到 `~/.hermes/skills/pack__<id>/`，启用时 install + 禁用时 rm -rf
   - [x] **Stage 4b**：Workflow + Schedule 注册管道（按 pack_id 前缀）— Pack 启用时拷贝 workflows 到 `~/.hermes/workflows/pack__<id>__*.yaml` + 写 schedules 进 `jobs.json`，禁用时整批清理
-  - [ ] **Stage 5**：12 个内置视图模板 + 渲染管道：
-    - DataTable / MetricsCard / TimeSeriesChart / PivotTable
+  - [x] **Stage 5a**：视图渲染管道 + 第一个模板（`1e2136a`）— `pack_views_list` IPC + `/pack/$packId/$viewId` 动态路由 + 模板注册表 + MetricsCard 模板（占位数据，stage 5b 接 MCP）
+  - [ ] **Stage 5b-d**：剩余 11 个视图模板：
+    - DataTable / TimeSeriesChart / PivotTable
     - TrendsMatrix / Timeline / AlertList / WorkflowLauncher
     - SkillPalette / FormRunner / RadarChart / CompositeDashboard
   - [ ] ActionPanel 嵌入（视图旁的"决策归还"按钮）
