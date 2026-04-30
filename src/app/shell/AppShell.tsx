@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Download, RefreshCw, X, AlertCircle } from 'lucide-react';
 
 import { Sidebar } from './Sidebar';
+import { StatusBar } from './StatusBar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from '@/components/command-palette/Palette';
 import { ShortcutsDialog } from '@/components/shortcuts/ShortcutsDialog';
@@ -22,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         <main className="flex min-h-0 flex-1 flex-col overflow-auto">{children}</main>
+        <StatusBar />
       </div>
       <CommandPalette />
       <ShortcutsDialog />
