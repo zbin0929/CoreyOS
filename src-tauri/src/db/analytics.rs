@@ -221,6 +221,7 @@ mod tests {
             updated_at: ts,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         }
     }
 
@@ -254,6 +255,7 @@ mod tests {
                 updated_at: (i as i64) * 1_000,
                 adapter_id: (*adapter).into(),
                 llm_profile_id: None,
+                gateway_source: None,
             })
             .unwrap();
         }
@@ -278,6 +280,7 @@ mod tests {
             updated_at: 1_000,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         })
         .unwrap();
         db.upsert_session(&SessionRow {
@@ -288,6 +291,7 @@ mod tests {
             updated_at: 2_000,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         })
         .unwrap();
 

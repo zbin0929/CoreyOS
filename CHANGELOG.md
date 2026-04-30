@@ -6,6 +6,23 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-01 — v0.1.13-dev · QQ Bot sandbox + analytics + updater CI
+
+### Fixed
+
+- **QQ Bot "灵魂不在线"**: Corey-side `patch_qqbot_sandbox()` rewrites Hermes `constants.py` at gateway start — sandbox/production auto-switch based on `QQ_SANDBOX` env var. No Hermes source changes.
+- **Analytics empty for platform channels**: `gateway_source` was frontend-only, never persisted to DB. Added migration v13 (`ALTER TABLE sessions ADD COLUMN gateway_source`), Rust struct + upsert, TypeScript hydration. Gateway sessions now survive app restart and messages accumulate in analytics.
+- **Token usage missing for platform messages**: Hermes state.db has `token_count` always NULL. Added `tokenCount` to `GatewayMessage` Rust struct + SQL; frontend `estimateTokens()` fallback (CJK÷1.5, ASCII÷4) writes `prompt_tokens`/`completion_tokens` via `dbMessageSetUsage`. Real Hermes token data used when available.
+- **Updater not showing v0.1.12**: COS `latest.json` stuck at v0.1.11 — release workflows uploaded build artifacts but not `latest.json`. Added "Upload latest.json to COS" step to both `release-macos.yml` and `release-windows.yml` with URL rewriting (GitHub → COS).
+
+### Improved
+
+- **Analytics auto-refresh**: Dashboard now polls `analyticsSummary()` every 30s (was manual-only).
+- **Channel card online indicator**: Online channels show solid green border + green checkmark badge at top-left corner.
+- **QQ channel i18n**: Added `hint_sandbox` key in en.json and zh.json for `QQ_SANDBOX` env var tooltip.
+
+---
+
 ## 2026-04-30 — v0.1.12 · 15 bug fixes (gateway, data dir, sessions, QR, theme, language)
 
 Third bug-fix sweep targeting first-run reliability on Windows and cross-platform UX polish. Code fixed; some Windows items still pending physical-device verification.

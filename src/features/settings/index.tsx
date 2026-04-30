@@ -35,6 +35,7 @@ import { LicenseSection } from './sections/LicenseSection';
 import { MemorySection } from './sections/MemorySection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
 import { HermesToolPermissionsSection } from './sections/HermesToolPermissionsSection';
+import { HermesUpdateSection } from './sections/HermesUpdateSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
 import { StorageSection } from './sections/StorageSection';
 import { useAppStatusStore } from '@/stores/appStatus';
@@ -369,6 +370,8 @@ export function SettingsRoute() {
               vs the other. Killed the "I locked sandbox but Hermes
               still ran ls ~/Desktop" confusion the v9 audit logged. */}
           <HermesToolPermissionsSection />
+
+          <HermesUpdateSection />
 
           <BrowserLLMSection />
 

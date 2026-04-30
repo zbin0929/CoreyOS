@@ -5,6 +5,7 @@ import {
   dbAttachmentInsert,
   dbLoadAll,
   dbMessageSetFeedback,
+  dbMessageSetUsage,
   dbMessageUpsert,
   dbSessionDelete,
   dbSessionUpsert,
@@ -46,6 +47,17 @@ export const GATEWAY_DEFAULT_TITLES: ReadonlySet<string> = new Set(
 function gatewayDefaultTitle(source: string | null | undefined): string {
   if (!source) return '聊天记录';
   return GATEWAY_SOURCE_LABELS[source] ?? `${source} 聊天记录`;
+}
+
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  let cjk = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (ch.charCodeAt(0) > 0x2e7f) cjk++;
+    else other++;
+  }
+  return Math.ceil(cjk / 1.5 + other / 4);
 }
 
 /** Pull fresh gateway sessions from Hermes' state.db and keep the
@@ -234,6 +246,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // it would NULL-out any future flip until the next
         // setSessionLlmProfile write.
         llm_profile_id: null,
+        gateway_source: null,
       }),
       'newSession',
     );
@@ -291,6 +304,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           // column each write, so forgetting it would silently drop the
           // user’s profile selection on every rename.
           llm_profile_id: sess.llmProfileId ?? null,
+          gateway_source: sess.gatewaySource ?? null,
         }),
         'renameSession',
       );
@@ -321,6 +335,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           adapter_id: sess.adapterId,
           // Preserve the profile pin; see renameSession for why.
           llm_profile_id: sess.llmProfileId ?? null,
+          gateway_source: sess.gatewaySource ?? null,
         }),
         'setSessionModel',
       );
@@ -361,6 +376,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           updated_at: now,
           adapter_id: sess.adapterId,
           llm_profile_id: profileId,
+          gateway_source: sess.gatewaySource ?? null,
         }),
         'setSessionLlmProfile',
       );
@@ -410,6 +426,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           adapter_id: sess.adapterId,
           // Preserve the profile pin; see renameSession for why.
           llm_profile_id: sess.llmProfileId ?? null,
+          gateway_source: sess.gatewaySource ?? null,
         }),
         'appendMessage.session',
       );
@@ -554,12 +571,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   importGatewayMessages: (
     sessionId: string,
-    msgs: readonly { role: string; content: string; timestamp: number }[],
+    msgs: readonly { role: string; content: string; timestamp: number; tokenCount?: number | null }[],
   ) => {
-    // Dedupe across repeated syncs: only append messages strictly
-    // newer than the latest one we already have. Hermes message
-    // timestamps are monotonic per session (state.db `messages`
-    // ORDER BY timestamp) so a single `max` is sufficient.
     const session = get().sessions[sessionId];
     const lastTs =
       session && session.messages.length > 0
@@ -571,17 +584,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     for (let i = 0; i < msgs.length; i++) {
       const cur = msgs[i]!;
       if (cur.timestamp <= lastTs) continue;
+      let msgId: string | null = null;
       if (cur.role === 'user' && cur.content) {
+        msgId = newId('m');
         get().appendMessage(sessionId, {
-          id: newId('m'),
+          id: msgId,
           role: 'user',
           content: cur.content,
           createdAt: cur.timestamp,
           pending: false,
         });
       } else if (cur.role === 'assistant' && cur.content) {
+        msgId = newId('m');
         get().appendMessage(sessionId, {
-          id: newId('m'),
+          id: msgId,
           role: 'assistant',
           content: cur.content,
           createdAt: cur.timestamp,
@@ -591,8 +607,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         try {
           const data = JSON.parse(cur.content);
           if (data.approval) {
+            msgId = newId('m');
             get().appendMessage(sessionId, {
-              id: newId('m'),
+              id: msgId,
               role: 'assistant',
               content: `⚠️ **${data.approval}**`,
               createdAt: cur.timestamp,
@@ -602,6 +619,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         } catch {
           // not JSON, skip
         }
+      }
+      if (msgId) {
+        const tokens = cur.tokenCount ?? estimateTokens(cur.content);
+        const isUser = cur.role === 'user';
+        fireWrite(
+          dbMessageSetUsage({
+            messageId: msgId,
+            promptTokens: isUser ? tokens : null,
+            completionTokens: isUser ? null : tokens,
+          }),
+          'importGatewayMessages.usage',
+        );
       }
     }
   },
@@ -633,7 +662,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         },
       },
     }));
-    fireWrite(dbSessionUpsert({ id, title, model: null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes' }), 'importGatewaySource');
+    fireWrite(dbSessionUpsert({ id, title, model: null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes', gateway_source: source }), 'importGatewaySource');
     gatewaySourceMessages(source).then((msgs) => {
       get().importGatewayMessages(id, msgs);
     }).catch((e) => {
@@ -669,7 +698,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         },
       },
     }));
-    fireWrite(dbSessionUpsert({ id, title: gs.title || `Gateway: ${gs.source ?? 'unknown'}`, model: gs.model ?? null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes' }), 'importGatewaySession');
+    fireWrite(dbSessionUpsert({ id, title: gs.title || `Gateway: ${gs.source ?? 'unknown'}`, model: gs.model ?? null, created_at: Date.now(), updated_at: Date.now(), adapter_id: 'hermes', gateway_source: gs.source ?? null }), 'importGatewaySession');
     gatewaySessionMessages(gs.id).then((msgs) => {
       get().importGatewayMessages(id, msgs);
     }).catch((e) => {

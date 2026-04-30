@@ -884,3 +884,42 @@ pub async fn workflow_active_runs(state: State<'_, AppState>) -> IpcResult<Vec<W
     })?;
     Ok(active)
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HermesOneshotResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub status: i32,
+    pub cli_available: bool,
+}
+
+#[tauri::command]
+pub async fn hermes_oneshot(prompt: String) -> IpcResult<HermesOneshotResult> {
+    tokio::task::spawn_blocking(move || -> IpcResult<HermesOneshotResult> {
+        let output = std::process::Command::new("hermes")
+            .arg("-z")
+            .arg(&prompt)
+            .output();
+        match output {
+            Ok(o) => Ok(HermesOneshotResult {
+                stdout: String::from_utf8_lossy(&o.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&o.stderr).into_owned(),
+                status: o.status.code().unwrap_or(-1),
+                cli_available: true,
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(HermesOneshotResult {
+                stdout: String::new(),
+                stderr: format!("hermes CLI not found: {e}"),
+                status: -1,
+                cli_available: false,
+            }),
+            Err(e) => Err(IpcError::Internal {
+                message: format!("hermes -z spawn: {e}"),
+            }),
+        }
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("hermes_oneshot join: {e}"),
+    })?
+}

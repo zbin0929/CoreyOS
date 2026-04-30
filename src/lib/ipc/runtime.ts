@@ -25,6 +25,8 @@ export interface SchedulerJob {
   last_run_error: string | null;
   created_at: number;
   updated_at: number;
+  workdir?: string;
+  context_from?: string;
 }
 
 export interface SchedulerJobUpsert {
@@ -34,6 +36,8 @@ export interface SchedulerJobUpsert {
   prompt: string;
   adapter_id?: string;
   enabled?: boolean;
+  workdir?: string;
+  context_from?: string;
 }
 
 export interface SchedulerValidateResult {
@@ -484,6 +488,17 @@ export function workflowActiveRuns(): Promise<WorkflowRunResult[]> {
   return invoke('workflow_active_runs');
 }
 
+export interface HermesOneshotResult {
+  stdout: string;
+  stderr: string;
+  status: number;
+  cli_available: boolean;
+}
+
+export function hermesOneshot(prompt: string): Promise<HermesOneshotResult> {
+  return invoke<HermesOneshotResult>('hermes_oneshot', { prompt });
+}
+
 /**
  * MRU-first list of every persisted workflow run (terminal + active),
  * optionally filtered to one workflow id. Used by the History view.
@@ -660,6 +675,7 @@ export interface GatewayMessage {
   role: string;
   content: string;
   timestamp: number;
+  tokenCount: number | null;
 }
 
 export function gatewaySessionsList(): Promise<GatewaySession[]> {

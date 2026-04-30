@@ -2,8 +2,8 @@ use super::*;
 use std::collections::HashSet;
 
 #[test]
-fn catalog_has_exactly_seventeen_channels_with_unique_ids() {
-    assert_eq!(CHANNEL_SPECS.len(), 17);
+fn catalog_has_exactly_nineteen_channels_with_unique_ids() {
+    assert_eq!(CHANNEL_SPECS.len(), 19);
     let mut ids = HashSet::new();
     for s in CHANNEL_SPECS.iter() {
         assert!(ids.insert(s.id), "duplicate channel id: {}", s.id);

@@ -333,6 +333,17 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    if version < 13 {
+        conn.execute_batch(
+            r#"
+            ALTER TABLE sessions ADD COLUMN gateway_source TEXT;
+            CREATE INDEX IF NOT EXISTS idx_sessions_gateway_source
+                ON sessions(gateway_source) WHERE gateway_source IS NOT NULL;
+            PRAGMA user_version = 13;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 

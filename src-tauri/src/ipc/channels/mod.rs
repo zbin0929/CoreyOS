@@ -403,6 +403,22 @@ fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
                             if let Err(e) = std::fs::write(&env_file, &env_content) {
                                 tracing::error!("qr-login: failed to write .env: {e}");
                             }
+                            if !env_content
+                                .lines()
+                                .any(|l| l.trim().starts_with("QQ_SANDBOX="))
+                            {
+                                if let Err(e) = std::fs::OpenOptions::new()
+                                    .append(true)
+                                    .open(&env_file)
+                                    .and_then(|mut f| {
+                                        std::io::Write::write_all(&mut f, b"QQ_SANDBOX=true\n")
+                                    })
+                                {
+                                    tracing::warn!(
+                                        "qr-login: failed to append QQ_SANDBOX=true: {e}"
+                                    );
+                                }
+                            }
                         }
                         if let Err(e) = crate::hermes_config::gateway::gateway_restart() {
                             tracing::warn!("qr-login: gateway restart after QR login failed: {e}");
@@ -458,7 +474,9 @@ fn run_qr_login(channel_id: &str) -> IpcResult<ChannelQrSetupResult> {
                                 qr_url: None,
                                 qr_data: None,
                                 status: "error".to_string(),
-                                message: "凭据已保存，但机器人 90 秒内未连上平台。请到 Logs 页查看原因。".to_string(),
+                                message:
+                                    "凭据已保存，但机器人 90 秒内未连上平台。请到 Logs 页查看原因。"
+                                        .to_string(),
                             });
                         }
                         return Ok(ChannelQrSetupResult {

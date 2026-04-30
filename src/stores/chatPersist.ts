@@ -21,6 +21,7 @@ export function sessionFromDb(s: DbSessionWithMessages): ChatSession {
     updatedAt: s.updated_at,
     adapterId: s.adapter_id,
     llmProfileId: s.llm_profile_id ?? null,
+    gatewaySource: s.gateway_source ?? null,
     messages: s.messages.map((m) => ({
       id: m.id,
       role: (m.role === 'user' ? 'user' : 'assistant') as UiMessage['role'],

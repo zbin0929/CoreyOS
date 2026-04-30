@@ -1,4 +1,7 @@
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -7,6 +10,9 @@ use crate::adapters::hermes::gateway::ChatStreamEvent;
 use crate::adapters::{AgentAdapter, ChatMessageDto, ChatTurn};
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
+
+static STREAM_TASKS: Lazy<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// T5.5b — resolve the adapter the UI wants this request routed to.
 /// `None` means "follow the registry default", matching the pre-T5.5b
@@ -146,7 +152,8 @@ pub async fn chat_stream_start(
     let msg_count = turn.messages.len();
     let handle_log = handle_out.clone();
 
-    tokio::spawn(async move {
+    let task_key = handle_out.clone();
+    let stream_task = tokio::spawn(async move {
         let start = std::time::Instant::now();
         tracing::info!(
             handle = %handle_log,
@@ -178,9 +185,31 @@ pub async fn chat_stream_start(
                 let _ = app.emit(&err_event, ipc_err);
             }
         }
+        if let Ok(mut tasks) = STREAM_TASKS.lock() {
+            tasks.remove(&task_key);
+        }
     });
 
+    if let Ok(mut tasks) = STREAM_TASKS.lock() {
+        tasks.insert(handle_out.clone(), stream_task);
+    }
+
     Ok(handle_out)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChatStreamCancelArgs {
+    handle: String,
+}
+
+#[tauri::command]
+pub async fn chat_stream_cancel(args: ChatStreamCancelArgs) -> IpcResult<()> {
+    if let Ok(mut tasks) = STREAM_TASKS.lock() {
+        if let Some(task) = tasks.remove(&args.handle) {
+            task.abort();
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]

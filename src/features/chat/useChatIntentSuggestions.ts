@@ -51,6 +51,8 @@ export function useChatIntentSuggestions({
           cron_expression: sug.payload.cron_expression as string,
           prompt: sug.payload.prompt as string,
           enabled: true,
+          workdir: (sug.payload.workdir as string) || undefined,
+          context_from: (sug.payload.context_from as string) || undefined,
         });
         patchSuggestionStatus(sessionId, msgId, sug.id, 'done', t('suggestion.schedule_created'));
       } catch {

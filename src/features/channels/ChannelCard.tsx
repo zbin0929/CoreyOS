@@ -197,13 +197,23 @@ export function ChannelCard({
     <article
       data-testid={`channel-card-${channel.id}`}
       className={cn(
-        'flex flex-col gap-3 rounded-md border bg-bg-elev-1 p-3 transition-colors',
-        status === 'configured' && 'border-emerald-500/40',
-        status === 'partial' && 'border-amber-500/50',
-        status === 'unconfigured' && 'border-border',
-        status === 'qr' && 'border-gold-500/40',
+        'relative flex flex-col gap-3 rounded-md border bg-bg-elev-1 p-3 transition-colors',
+        liveStatus?.state === 'online' && 'border-emerald-500',
+        liveStatus?.state !== 'online' && status === 'configured' && 'border-emerald-500/40',
+        liveStatus?.state !== 'online' && status === 'partial' && 'border-amber-500/50',
+        liveStatus?.state !== 'online' && status === 'unconfigured' && 'border-border',
+        liveStatus?.state !== 'online' && status === 'qr' && 'border-gold-500/40',
       )}
     >
+      {liveStatus?.state === 'online' && (
+        <span
+          className="absolute -left-2 -top-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm"
+          title={t('channels.live.online')}
+          data-testid={`channel-online-check-${channel.id}`}
+        >
+          <Icon icon={Check} size={12} strokeWidth={3} />
+        </span>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

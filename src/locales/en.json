@@ -744,6 +744,16 @@
       "saved": "Saved (effective on the next tool call)",
       "save": "Save"
     },
+    "hermes_update": {
+      "title": "Hermes updates",
+      "desc": "Check if a newer version of Hermes Agent is available. Run 'hermes update' in a terminal to upgrade.",
+      "check": "Check for updates",
+      "idle": "Not checked yet",
+      "checking": "Checking…",
+      "not_installed": "Hermes CLI not found",
+      "up_to_date": "Up to date (v{{version}})",
+      "available": "Update available: v{{current}} → v{{latest}}. Run 'hermes update' in a terminal to upgrade."
+    },
     "model": {
       "title": "Default language model",
       "desc": "Which LLM the Hermes agent uses when a chat doesn't specify one. Individual chats can override this from the composer.",
@@ -890,7 +900,8 @@
     "install_title": "Install a skill",
     "install_slug": "Skill slug",
     "install_hint": "Full slug including source prefix, e.g. official/security/1password",
-    "install": "Install"
+    "install": "Install",
+    "reload_hint": "Skill installed. Send /reload-skills in chat to activate without restarting the gateway."
   },
   "mcp": {
     "title": "MCP servers",
@@ -1155,7 +1166,8 @@
     "qq": {
       "hint_app_id": "QQ Open Platform → App ID.",
       "hint_app_secret": "QQ bot App Secret.",
-      "hint_allowed_users": "Comma-separated QQ user IDs allowed to talk to the bot."
+      "hint_allowed_users": "Comma-separated QQ user IDs allowed to talk to the bot.",
+      "hint_sandbox": "Set to 'true' for sandbox/development bots (uses sandbox.api.sgroup.qq.com). Set to 'false' after bot is published."
     },
     "signal": {
       "hint_phone_number": "Phone number linked to your signal-cli instance (e.g. +1234567890).",
@@ -1351,6 +1363,10 @@
     "field_prompt": "Prompt",
     "field_prompt_placeholder": "Summarize yesterday's standup notes and list today's blockers.",
     "field_enabled": "Enabled",
+    "field_workdir": "Working directory",
+    "field_workdir_placeholder": "/path/to/project",
+    "field_context_from": "Context source",
+    "field_context_from_placeholder": "session_id or file path for context injection",
     "cron_hint": "Example: '0 0 9 * * *' = every day at 09:00. Use '0 */5 * * * *' for every 5 minutes. Hermes also accepts 'every 2h', '30m', or ISO timestamps.",
     "cron_valid": "Valid schedule.",
     "invalid_cron": "Invalid schedule.",

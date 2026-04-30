@@ -21,7 +21,7 @@
 //! rather than erroring — matches the "missing file → empty" pattern
 //! we use in memory_read and mcp_server_list.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
@@ -64,7 +64,6 @@ pub async fn session_search(
         return Ok(Vec::new());
     }
     let lim = limit.unwrap_or(50).min(100) as i64;
-    let sanitized = sanitize_fts5_query(&q);
 
     tokio::task::spawn_blocking(move || -> IpcResult<Vec<SessionSearchHit>> {
         let path = state_db_path().map_err(|e| IpcError::Internal {
@@ -82,24 +81,39 @@ pub async fn session_search(
             message: format!("open state.db: {e}"),
         })?;
 
-        // `snippet(tbl, col, start, end, ellipsis, tokens)` is FTS5's
-        // built-in highlighter. Col index 0 is `content`. We bound
-        // tokens at 32 so snippets stay inline-sized.
-        let sql = "SELECT \
-                   m.session_id, \
-                   s.title, \
-                   COALESCE(s.source, '') AS source, \
-                   m.role, \
-                   snippet(messages_fts, 0, '>>>', '<<<', '…', 32) AS snip, \
-                   m.timestamp \
-                 FROM messages_fts \
-                 JOIN messages m ON m.id = messages_fts.rowid \
-                 JOIN sessions s ON s.id = m.session_id \
-                 WHERE messages_fts MATCH ?1 \
-                 ORDER BY m.timestamp DESC \
-                 LIMIT ?2";
+        let trigram_available = has_trigram_table(&conn);
 
-        let mut stmt = conn.prepare(sql).map_err(|e| IpcError::Internal {
+        // Trigram tokenizer requires >= 3 characters per token.
+        // Short queries (e.g. "hi", "你好") won't match in trigram
+        // mode, so fall back to the original FTS5 table for those.
+        let has_short_token = sanitize_fts5_query(&q, false)
+            .split_whitespace()
+            .any(|tok| tok.trim_matches('"').chars().count() < 3);
+
+        let (fts_table, use_trigram) = if trigram_available && !has_short_token {
+            ("messages_fts_trigram", true)
+        } else {
+            ("messages_fts", false)
+        };
+        let sanitized = sanitize_fts5_query(&q, use_trigram);
+
+        let sql = format!(
+            "SELECT \
+               m.session_id, \
+               s.title, \
+               COALESCE(s.source, '') AS source, \
+               m.role, \
+               snippet({fts_table}, 0, '>>>', '<<<', '…', 32) AS snip, \
+               m.timestamp \
+             FROM {fts_table} \
+             JOIN messages m ON m.id = {fts_table}.rowid \
+             JOIN sessions s ON s.id = m.session_id \
+             WHERE {fts_table} MATCH ?1 \
+             ORDER BY m.timestamp DESC \
+             LIMIT ?2"
+        );
+
+        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
             message: format!("prepare search: {e}"),
         })?;
 
@@ -139,22 +153,31 @@ pub async fn session_search(
 }
 
 fn state_db_path() -> std::io::Result<PathBuf> {
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "neither $HOME nor %USERPROFILE% set",
-            )
-        })?;
-    Ok(Path::new(&home).join(".hermes").join("state.db"))
+    Ok(crate::paths::hermes_data_dir()?.join("state.db"))
+}
+
+fn has_trigram_table(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='messages_fts_trigram'",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .ok()
+    .unwrap_or(0)
+        > 0
 }
 
 /// Port of Hermes' `_sanitize_fts5_query`: strips unmatched quotes,
 /// wraps hyphenated terms in double quotes (FTS5 treats `-` as
 /// exclusion), and drops dangling boolean operators. Matches upstream
 /// behaviour so a query that works in Hermes' CLI also works here.
-fn sanitize_fts5_query(raw: &str) -> String {
+///
+/// When `trigram` is true, the FTS5 table uses the trigram tokenizer
+/// (Hermes >= 0.12). Trigram queries need double-quoted strings for
+/// substring matching: `"herm"` matches "hermes". Without quotes,
+/// FTS5 treats each character as a separate trigram token which
+/// produces unexpected results.
+fn sanitize_fts5_query(raw: &str, trigram: bool) -> String {
     // Balance double quotes. If there's an odd count, strip them all
     // to avoid a parse error — the user's intent was probably just a
     // typo.
@@ -185,6 +208,14 @@ fn sanitize_fts5_query(raw: &str) -> String {
         }
     }
 
+    if trigram && !tokens.is_empty() {
+        for tok in &mut tokens {
+            if !tok.starts_with('"') {
+                *tok = format!("\"{}\"", tok);
+            }
+        }
+    }
+
     tokens.join(" ")
 }
 
@@ -195,32 +226,49 @@ mod tests {
     #[test]
     fn sanitize_balances_quotes() {
         // Odd quote count → strip them all (not a parse error).
-        assert_eq!(sanitize_fts5_query(r#"foo "bar"#), "foo bar");
+        assert_eq!(sanitize_fts5_query(r#"foo "bar"#, false), "foo bar");
         // Even count → leave intact.
-        assert_eq!(sanitize_fts5_query(r#"foo "bar""#), r#"foo "bar""#);
+        assert_eq!(sanitize_fts5_query(r#"foo "bar""#, false), r#"foo "bar""#);
     }
 
     #[test]
     fn sanitize_wraps_hyphenated_terms() {
         // FTS5 treats `-` as exclusion; wrap in quotes to make it a
         // phrase match instead.
-        assert_eq!(sanitize_fts5_query("chat-send"), "\"chat-send\"");
+        assert_eq!(sanitize_fts5_query("chat-send", false), "\"chat-send\"");
         assert_eq!(
-            sanitize_fts5_query("logs chat-send error"),
+            sanitize_fts5_query("logs chat-send error", false),
             "logs \"chat-send\" error"
         );
     }
 
     #[test]
     fn sanitize_drops_trailing_operators() {
-        assert_eq!(sanitize_fts5_query("hello AND"), "hello");
-        assert_eq!(sanitize_fts5_query("hello AND OR NOT"), "hello");
-        assert_eq!(sanitize_fts5_query("hello AND world"), "hello AND world");
+        assert_eq!(sanitize_fts5_query("hello AND", false), "hello");
+        assert_eq!(sanitize_fts5_query("hello AND OR NOT", false), "hello");
+        assert_eq!(
+            sanitize_fts5_query("hello AND world", false),
+            "hello AND world"
+        );
     }
 
     #[test]
     fn empty_and_whitespace_queries_sanitise_to_empty() {
-        assert_eq!(sanitize_fts5_query(""), "");
-        assert_eq!(sanitize_fts5_query("   \t\n  "), "");
+        assert_eq!(sanitize_fts5_query("", false), "");
+        assert_eq!(sanitize_fts5_query("   \t\n  ", false), "");
+    }
+
+    #[test]
+    fn trigram_wraps_tokens_in_quotes() {
+        assert_eq!(sanitize_fts5_query("herm", true), "\"herm\"");
+        assert_eq!(
+            sanitize_fts5_query("hello world", true),
+            "\"hello\" \"world\""
+        );
+        assert_eq!(sanitize_fts5_query("chat-send", true), "\"chat-send\"");
+        assert_eq!(
+            sanitize_fts5_query(r#"already "quoted""#, true),
+            r#""already" "quoted""#
+        );
     }
 }

@@ -29,6 +29,8 @@ export function JobEditor({
   );
   const [prompt, setPrompt] = useState(initial?.prompt ?? '');
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const [workdir, setWorkdir] = useState(initial?.workdir ?? '');
+  const [contextFrom, setContextFrom] = useState(initial?.context_from ?? '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [validation, setValidation] = useState<SchedulerValidateResult | null>(null);
@@ -74,6 +76,8 @@ export function JobEditor({
         prompt: prompt.trim(),
         adapter_id: initial?.adapter_id ?? 'hermes',
         enabled,
+        workdir: workdir.trim() || undefined,
+        context_from: contextFrom.trim() || undefined,
       });
       await onSaved();
     } catch (e2) {
@@ -177,6 +181,34 @@ export function JobEditor({
         />
         {t('scheduler_page.field_enabled')}
       </label>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-fg-muted" htmlFor="sched-workdir">
+          {t('scheduler_page.field_workdir')}
+        </label>
+        <input
+          id="sched-workdir"
+          className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+          value={workdir}
+          onChange={(e) => setWorkdir(e.target.value)}
+          placeholder={t('scheduler_page.field_workdir_placeholder')}
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-fg-muted" htmlFor="sched-context-from">
+          {t('scheduler_page.field_context_from')}
+        </label>
+        <input
+          id="sched-context-from"
+          className="rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-sm text-fg focus:border-accent focus:outline-none"
+          value={contextFrom}
+          onChange={(e) => setContextFrom(e.target.value)}
+          placeholder={t('scheduler_page.field_context_from_placeholder')}
+          spellCheck={false}
+        />
+      </div>
 
       {err && (
         <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">

@@ -222,6 +222,7 @@ function NotInstalledCard({
       const msg = await hermesInstall();
       setInstallError(null);
       setInstallMessage(msg || 'Bootstrap started');
+      await onRecheck();
     } catch (e) {
       setInstallError(ipcErrorMessage(e));
     } finally {

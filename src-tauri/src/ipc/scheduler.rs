@@ -52,6 +52,10 @@ pub struct SchedulerJobView {
     pub last_run_error: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workdir: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_from: Option<String>,
 }
 
 impl SchedulerJobView {
@@ -70,6 +74,8 @@ impl SchedulerJobView {
             last_run_error: None,
             created_at,
             updated_at,
+            workdir: job.workdir.clone(),
+            context_from: job.context_from.clone(),
         }
     }
 }
@@ -95,6 +101,10 @@ pub struct SchedulerJobUpsert {
     pub workflow_id: Option<String>,
     #[serde(default)]
     pub workflow_inputs: Option<serde_json::Value>,
+    #[serde(default)]
+    pub workdir: Option<String>,
+    #[serde(default)]
+    pub context_from: Option<String>,
 }
 
 fn default_enabled() -> bool {
@@ -200,6 +210,8 @@ pub async fn scheduler_upsert_job(
         job.corey_updated_at = Some(now);
         job.workflow_id = args.workflow_id.clone();
         job.workflow_inputs = args.workflow_inputs.clone();
+        job.workdir = args.workdir.clone();
+        job.context_from = args.context_from.clone();
 
         // Upsert back into the list.
         if let Some(slot) = jobs.iter_mut().find(|j| j.id == id) {

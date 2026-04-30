@@ -34,6 +34,8 @@ pub struct SessionRow {
     /// chat model picker doesn't migrate the session to another agent.
     #[serde(default)]
     pub llm_profile_id: Option<String>,
+    #[serde(default)]
+    pub gateway_source: Option<String>,
 }
 
 fn default_adapter_id() -> String {
@@ -63,21 +65,15 @@ impl Db {
     pub fn upsert_session(&self, s: &SessionRow) -> rusqlite::Result<()> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO sessions (id, title, model, created_at, updated_at, adapter_id, llm_profile_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO sessions (id, title, model, created_at, updated_at, adapter_id, llm_profile_id, gateway_source)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET
                  title = excluded.title,
                  model = excluded.model,
                  updated_at = excluded.updated_at,
-                 -- T5.5c — don't let a late upsert migrate a session across
-                 -- adapters. adapter_id is set at creation and frozen for
-                 -- the session's lifetime; the COALESCE preserves whatever
-                 -- was there even if the caller forgets to pass it.
                  adapter_id = COALESCE(sessions.adapter_id, excluded.adapter_id),
-                 -- v10: llm_profile_id IS mutable (user flips it from the
-                 -- chat model picker). Replace with the new value each
-                 -- upsert so clearing it (Some → None) actually sticks.
-                 llm_profile_id = excluded.llm_profile_id",
+                 llm_profile_id = excluded.llm_profile_id,
+                 gateway_source = COALESCE(sessions.gateway_source, excluded.gateway_source)",
             params![
                 s.id,
                 s.title,
@@ -86,6 +82,7 @@ impl Db {
                 s.updated_at,
                 s.adapter_id,
                 s.llm_profile_id,
+                s.gateway_source,
             ],
         )?;
         Ok(())
@@ -109,7 +106,7 @@ impl Db {
         // written via a buggy path that left it NULL.
         let mut stmt = conn.prepare(
             "SELECT id, title, model, created_at, updated_at,
-                    COALESCE(adapter_id, 'hermes'), llm_profile_id
+                    COALESCE(adapter_id, 'hermes'), llm_profile_id, gateway_source
              FROM sessions ORDER BY updated_at DESC",
         )?;
         let sessions: Vec<SessionRow> = stmt
@@ -122,6 +119,7 @@ impl Db {
                     updated_at: row.get(4)?,
                     adapter_id: row.get(5)?,
                     llm_profile_id: row.get(6)?,
+                    gateway_source: row.get(7)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -236,6 +234,7 @@ mod tests {
             updated_at: ts,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         }
     }
 
@@ -300,6 +299,7 @@ mod tests {
             updated_at: 100,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         })
         .unwrap();
         db.upsert_session(&SessionRow {
@@ -310,6 +310,7 @@ mod tests {
             updated_at: 200,
             adapter_id: "claude_code".into(),
             llm_profile_id: None,
+            gateway_source: None,
         })
         .unwrap();
 
@@ -333,6 +334,7 @@ mod tests {
             updated_at: 500,
             adapter_id: "aider".into(), // attempted hijack — should be ignored
             llm_profile_id: None,
+            gateway_source: None,
         })
         .unwrap();
         let tree = db.load_all().unwrap();
@@ -361,6 +363,7 @@ mod tests {
             updated_at: 1,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         })
         .unwrap();
         let row = db.load_all().unwrap().into_iter().next().unwrap().session;
@@ -375,6 +378,7 @@ mod tests {
             updated_at: 2,
             adapter_id: "hermes".into(),
             llm_profile_id: Some("glm".into()),
+            gateway_source: None,
         })
         .unwrap();
         assert_eq!(
@@ -391,6 +395,7 @@ mod tests {
             updated_at: 3,
             adapter_id: "hermes".into(),
             llm_profile_id: Some("deepseek".into()),
+            gateway_source: None,
         })
         .unwrap();
         assert_eq!(
@@ -407,6 +412,7 @@ mod tests {
             updated_at: 4,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         })
         .unwrap();
         assert_eq!(db.load_all().unwrap()[0].session.llm_profile_id, None);
@@ -442,5 +448,42 @@ mod tests {
 
         let tree = db.load_all().unwrap();
         assert_eq!(tree.len(), 0);
+    }
+
+    #[test]
+    fn v13_gateway_source_roundtrips_and_is_frozen() {
+        let db = Db::open_in_memory().unwrap();
+        db.upsert_session(&SessionRow {
+            id: "s-gw".into(),
+            title: "QQ对话".into(),
+            model: None,
+            created_at: 100,
+            updated_at: 100,
+            adapter_id: "hermes".into(),
+            llm_profile_id: None,
+            gateway_source: Some("qqbot".into()),
+        })
+        .unwrap();
+        let row = db.load_all().unwrap().into_iter().next().unwrap().session;
+        assert_eq!(row.gateway_source.as_deref(), Some("qqbot"));
+
+        db.upsert_session(&SessionRow {
+            id: "s-gw".into(),
+            title: "QQ对话 v2".into(),
+            model: None,
+            created_at: 100,
+            updated_at: 200,
+            adapter_id: "hermes".into(),
+            llm_profile_id: None,
+            gateway_source: None,
+        })
+        .unwrap();
+        let row = db.load_all().unwrap().into_iter().next().unwrap().session;
+        assert_eq!(row.title, "QQ对话 v2");
+        assert_eq!(
+            row.gateway_source.as_deref(),
+            Some("qqbot"),
+            "gateway_source must be frozen at creation (COALESCE preserves it)"
+        );
     }
 }

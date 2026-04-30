@@ -82,7 +82,7 @@ pub fn gateway_session_messages(session_id: String) -> Result<Vec<GatewayMessage
 
     let mut stmt = conn
         .prepare(
-            "SELECT role, COALESCE(content, '') AS content, timestamp
+            "SELECT role, COALESCE(content, '') AS content, timestamp, token_count
              FROM messages
              WHERE session_id = ?
              ORDER BY timestamp ASC
@@ -96,6 +96,7 @@ pub fn gateway_session_messages(session_id: String) -> Result<Vec<GatewayMessage
                 role: row.get(0)?,
                 content: row.get(1)?,
                 timestamp: row.get(2)?,
+                token_count: row.get(3).unwrap_or(None),
             })
         })
         .map_err(|e| format!("query: {e}"))?;
@@ -113,6 +114,7 @@ pub struct GatewayMessage {
     pub role: String,
     pub content: String,
     pub timestamp: f64,
+    pub token_count: Option<i64>,
 }
 
 #[tauri::command]
@@ -127,7 +129,7 @@ pub fn gateway_source_messages(source: String) -> Result<Vec<GatewayMessage>, St
 
     let mut stmt = conn
         .prepare(
-            "SELECT m.role, COALESCE(m.content, '') AS content, m.timestamp
+            "SELECT m.role, COALESCE(m.content, '') AS content, m.timestamp, m.token_count
              FROM messages m
              JOIN sessions s ON m.session_id = s.id
              WHERE s.source = ?
@@ -142,6 +144,7 @@ pub fn gateway_source_messages(source: String) -> Result<Vec<GatewayMessage>, St
                 role: row.get(0)?,
                 content: row.get(1)?,
                 timestamp: row.get(2)?,
+                token_count: row.get(3).unwrap_or(None),
             })
         })
         .map_err(|e| format!("query: {e}"))?;
@@ -187,7 +190,8 @@ mod tests {
                 session_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
-                timestamp REAL NOT NULL
+                timestamp REAL NOT NULL,
+                token_count INTEGER
             );
             INSERT INTO sessions (id, title, model, source, message_count, started_at)
                 VALUES ('s1', 'CLI chat', 'gpt-4o', 'cli', 2, 1000.0);

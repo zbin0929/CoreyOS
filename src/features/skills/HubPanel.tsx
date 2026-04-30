@@ -195,6 +195,16 @@ export function HubPanel() {
         </div>
       )}
 
+      {last && lastCommand && /install/.test(lastCommand) && last.status === 0 && (
+        <div
+          className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-fg-muted"
+          data-testid="skill-hub-reload-hint"
+        >
+          <Icon icon={Package} size="sm" className="flex-none text-accent" />
+          <span>{t('skill_hub.reload_hint')}</span>
+        </div>
+      )}
+
       {last && (
         <section
           className="flex flex-col gap-2 rounded-md border border-border bg-bg-elev-1 p-3"

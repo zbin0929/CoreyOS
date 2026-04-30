@@ -174,3 +174,12 @@ pub async fn hermes_install(app: tauri::AppHandle) -> IpcResult<String> {
             message: format!("run bootstrap: {e}"),
         })
 }
+
+#[tauri::command]
+pub async fn hermes_update_check() -> IpcResult<hermes_config::HermesUpdateCheck> {
+    tokio::task::spawn_blocking(hermes_config::hermes_update_check)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("hermes_update_check join: {e}"),
+        })
+}

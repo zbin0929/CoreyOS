@@ -504,6 +504,11 @@ fn build_specs() -> Vec<ChannelSpec> {
                     required: false,
                     hint_key: "channels.qq.hint_allowed_users".into(),
                 },
+                EnvKeySpec {
+                    name: "QQ_SANDBOX".into(),
+                    required: false,
+                    hint_key: "channels.qq.hint_sandbox".into(),
+                },
             ],
             yaml_fields: vec![YamlFieldSpec {
                 path: "mention_required".into(),
@@ -672,6 +677,79 @@ fn build_specs() -> Vec<ChannelSpec> {
             hot_reloadable: false,
             has_qr_login: false,
         },
+        // ── Microsoft Teams ────────────────────────────────────────────
+        ChannelSpec {
+            id: "teams",
+            display_name: "Microsoft Teams",
+            yaml_root: "channels.teams",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "TEAMS_CLIENT_ID".into(),
+                    required: true,
+                    hint_key: "channels.teams.hint_client_id".into(),
+                },
+                EnvKeySpec {
+                    name: "TEAMS_CLIENT_SECRET".into(),
+                    required: true,
+                    hint_key: "channels.teams.hint_client_secret".into(),
+                },
+                EnvKeySpec {
+                    name: "TEAMS_TENANT_ID".into(),
+                    required: true,
+                    hint_key: "channels.teams.hint_tenant_id".into(),
+                },
+                EnvKeySpec {
+                    name: "TEAMS_ALLOWED_USERS".into(),
+                    required: false,
+                    hint_key: "channels.teams.hint_allowed_users".into(),
+                },
+            ],
+            yaml_fields: vec![YamlFieldSpec {
+                path: "mention_required".into(),
+                kind: FieldKind::Bool,
+                label_key: "channels.field.mention_required".into(),
+                default_bool: Some(true),
+                default_string: None,
+            }],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
+        // ── Yuanbao (腾讯元宝) ────────────────────────────────────────
+        ChannelSpec {
+            id: "yuanbao",
+            display_name: "Yuanbao",
+            yaml_root: "channels.yuanbao",
+            env_keys: vec![
+                EnvKeySpec {
+                    name: "YUANBAO_APP_ID".into(),
+                    required: true,
+                    hint_key: "channels.yuanbao.hint_app_id".into(),
+                },
+                EnvKeySpec {
+                    name: "YUANBAO_APP_SECRET".into(),
+                    required: true,
+                    hint_key: "channels.yuanbao.hint_app_secret".into(),
+                },
+                EnvKeySpec {
+                    name: "YUANBAO_WS_URL".into(),
+                    required: false,
+                    hint_key: "channels.yuanbao.hint_ws_url".into(),
+                },
+                EnvKeySpec {
+                    name: "YUANBAO_API_DOMAIN".into(),
+                    required: false,
+                    hint_key: "channels.yuanbao.hint_api_domain".into(),
+                },
+                EnvKeySpec {
+                    name: "YUANBAO_ALLOWED_USERS".into(),
+                    required: false,
+                    hint_key: "channels.yuanbao.hint_allowed_users".into(),
+                },
+            ],
+            yaml_fields: vec![],
+            hot_reloadable: false,
+            has_qr_login: false,
+        },
         // ── Webhook ───────────────────────────────────────────────────
         ChannelSpec {
             id: "webhook",
@@ -699,7 +777,7 @@ fn build_specs() -> Vec<ChannelSpec> {
 /// The catalog. Built once at first access.
 pub static CHANNEL_SPECS: Lazy<Vec<ChannelSpec>> = Lazy::new(build_specs);
 
-/// Lookup a channel by its stable slug. `O(n)` over 17 entries — fine.
+/// Lookup a channel by its stable slug. `O(n)` over 19 entries — fine.
 pub fn find_spec(id: &str) -> Option<&'static ChannelSpec> {
     CHANNEL_SPECS.iter().find(|s| s.id == id)
 }

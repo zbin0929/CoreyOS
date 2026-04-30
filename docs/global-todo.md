@@ -254,6 +254,7 @@ B-7 (卸载/重置)  独立
 | v0.1.10 | ✅ | bootstrap COREY_INSTALL_DIR 传递修复 |
 | v0.1.11 | ✅ | BGE-M3 RAG + 统一下载中心 + updater 修复 + NSIS |
 | v0.1.12 | ✅ | 15 项 Bug 修复（详见 `docs/bug-history.md`）|
+| v0.1.13-dev | 🟡 | QQ Bot sandbox 兼容 + 分析用量修复 + updater CI 修复 + 通道在线标识 |
 | v0.1.13 | 📋 | Windows 端到端实测 + 验证收尾 |
 | v0.2.0-dev | 🟡 | B-2 white-label stage 1（`229ab57`）+ B-3 Pack 加载器 stage 1/2/3a/3b/3c（`7963f93` / `ea49667` / `3bf14d6` / `9855db3` / `5d7b2bd`）|
 | v0.2.0 | 📋 | 基座定制能力（白标 + Pack 加载器 + 12 视图模板 + license features） |
@@ -327,6 +328,15 @@ pnpm vitest run         # 全绿
 ## 九、当前 Bug 跟踪
 
 > 历史 Bug 修复见 `docs/bug-history.md`。
+
+### v0.1.13-dev 已修复（2026-05-01）
+
+- **QQ Bot "灵魂不在线"**：Corey 侧 `patch_qqbot_sandbox()` 在 gateway 启动时按 `QQ_SANDBOX` 环境变量自动切换沙箱/正式 API，不改 Hermes 源码
+- **平台通道用量为零**：`gateway_source` 未持久化到 DB，导致 app 重启后 session 丢失、消息无法累积。DB migration v13 修复
+- **Token 用量缺失**：Hermes state.db 不记录 token_count，Corey 侧增加估算回退
+- **Updater 不提示新版本**：CI workflow 只上传构建产物但未同步 `latest.json` 到 COS，已修复
+- **分析面板不自动刷新**：加 30s 定时轮询
+- **通道卡片无在线标识**：在线通道左上角绿色对勾 + 绿色边框
 
 ### 待 Windows 实测验证（v0.1.13 目标）
 

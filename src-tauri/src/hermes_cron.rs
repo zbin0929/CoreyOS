@@ -115,6 +115,11 @@ pub struct HermesJob {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow_inputs: Option<serde_json::Value>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workdir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_from: Option<String>,
+
     /// Catch-all for any fields Hermes adds that we don't model yet.
     /// Kept as raw JSON so `load_jobs → save_jobs` is lossless. Serde's
     /// `flatten` on a `Value::Object` is the standard pattern.

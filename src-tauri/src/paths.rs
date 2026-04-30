@@ -156,6 +156,12 @@ pub fn hermes_data_dir() -> io::Result<PathBuf> {
     if let Some(p) = read_override() {
         return Ok(p);
     }
+    if let Some(env) = std::env::var_os("HERMES_HOME") {
+        let p = PathBuf::from(env);
+        if !p.as_os_str().is_empty() && p.is_dir() {
+            return Ok(p);
+        }
+    }
     platform_default()
 }
 

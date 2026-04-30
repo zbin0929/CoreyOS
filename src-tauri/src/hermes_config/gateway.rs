@@ -26,8 +26,14 @@ use std::path::{Path, PathBuf};
 /// `~/.hermes/sessions/*.jsonl` + VACUUM on `state.db` — that's
 /// strictly additive (Corey's session-cleanup panel still works,
 /// just with smaller residue to clean).
+///
+/// 2026-05-01: bumped MAX_TESTED to 0.12 after v0.12 compatibility
+/// review. Core paths used by Corey remain compatible: `/health`,
+/// `/v1/chat/completions` SSE, `/v1/models`, `config.yaml` existing
+/// keys, and `.env` names are unchanged. Verified additive-only
+/// upgrades around gateway plugins/providers and cron schema fields.
 const HERMES_MIN_SUPPORTED: (u32, u32) = (0, 10);
-const HERMES_MAX_TESTED: (u32, u32) = (0, 11);
+const HERMES_MAX_TESTED: (u32, u32) = (0, 12);
 
 /// Compatibility verdict between the running Hermes binary and what
 /// Corey was built/tested against. Drives the Home-page banner.
@@ -46,6 +52,71 @@ pub enum HermesCompatibility {
     /// binary with custom version banner). Treat as untested but
     /// with a different banner copy.
     Unknown,
+}
+
+pub fn patch_qqbot_sandbox() {
+    let hermes_dir = match crate::paths::hermes_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    let is_sandbox = std::fs::read_to_string(hermes_dir.join(".env"))
+        .map(|raw| {
+            raw.lines().any(|line| {
+                let trimmed = line.trim();
+                trimmed == "QQ_SANDBOX=true" || trimmed == "QQ_SANDBOX=1"
+            })
+        })
+        .unwrap_or(false);
+
+    let constants_path = hermes_dir
+        .join("hermes-agent")
+        .join("gateway")
+        .join("platforms")
+        .join("qqbot")
+        .join("constants.py");
+
+    let mut constants = match std::fs::read_to_string(&constants_path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut patched = false;
+
+    if is_sandbox {
+        let prod_base = "API_BASE = \"https://api.sgroup.qq.com\"";
+        let sandbox_base = "API_BASE = \"https://sandbox.api.sgroup.qq.com\"";
+        if constants.contains(prod_base) {
+            constants = constants.replace(prod_base, sandbox_base);
+            patched = true;
+        }
+        let prod_path = "GATEWAY_URL_PATH = \"/gateway\"";
+        let sandbox_path = "GATEWAY_URL_PATH = \"/gateway/bot\"";
+        if constants.contains(prod_path) && !constants.contains(sandbox_path) {
+            constants = constants.replace(prod_path, sandbox_path);
+            patched = true;
+        }
+    } else {
+        let sandbox_base = "API_BASE = \"https://sandbox.api.sgroup.qq.com\"";
+        let prod_base = "API_BASE = \"https://api.sgroup.qq.com\"";
+        if constants.contains(sandbox_base) {
+            constants = constants.replace(sandbox_base, prod_base);
+            patched = true;
+        }
+        let sandbox_path = "GATEWAY_URL_PATH = \"/gateway/bot\"";
+        let prod_path = "GATEWAY_URL_PATH = \"/gateway\"";
+        if constants.contains(sandbox_path) {
+            constants = constants.replace(sandbox_path, prod_path);
+            patched = true;
+        }
+    }
+
+    if patched {
+        match std::fs::write(&constants_path, constants) {
+            Ok(()) => tracing::info!("patch_qqbot_sandbox: applied (sandbox={})", is_sandbox),
+            Err(e) => tracing::warn!(error = %e, "patch_qqbot_sandbox: write failed"),
+        }
+    }
 }
 
 /// First-run detection. Returns a structured view of whether Hermes is
@@ -669,6 +740,7 @@ pub fn gateway_start() -> io::Result<String> {
     };
     patch_approval_sse();
     patch_dangerous_patterns();
+    patch_qqbot_sandbox();
     Ok(result)
 }
 
@@ -710,6 +782,7 @@ pub fn gateway_restart() -> io::Result<String> {
     };
     patch_approval_sse();
     patch_dangerous_patterns();
+    patch_qqbot_sandbox();
     Ok(result)
 }
 
@@ -953,6 +1026,92 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
     cmd.output()
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HermesUpdateCheck {
+    pub cli_available: bool,
+    pub update_available: bool,
+    pub current_version: Option<String>,
+    pub latest_version: Option<String>,
+    pub message: String,
+}
+
+pub fn hermes_update_check() -> HermesUpdateCheck {
+    let binary = match resolve_hermes_binary() {
+        Ok(b) => b,
+        Err(_) => {
+            return HermesUpdateCheck {
+                cli_available: false,
+                update_available: false,
+                current_version: None,
+                latest_version: None,
+                message: "Hermes CLI not found".into(),
+            }
+        }
+    };
+
+    let current_version = match run_hermes(&binary, &["--version"]) {
+        Ok(out) if out.status.success() => {
+            let v = String::from_utf8_lossy(&out.stdout);
+            v.lines().next().and_then(|line| {
+                let s = line.trim();
+                let start = s.find("v0.")?;
+                let rest = &s[start + 1..];
+                let end = rest.find(|c: char| !c.is_ascii_digit() && c != '.')?;
+                Some(rest[..end].to_string())
+            })
+        }
+        _ => None,
+    };
+
+    let output = match run_hermes(&binary, &["update", "--check"]) {
+        Ok(o) => o,
+        Err(e) => {
+            return HermesUpdateCheck {
+                cli_available: true,
+                update_available: false,
+                current_version,
+                latest_version: None,
+                message: format!("update --check failed: {e}"),
+            }
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let combined = format!("{stdout}{stderr}");
+
+    let update_available =
+        combined.contains("Update available") || combined.contains("update available");
+
+    let latest_version = if update_available {
+        combined
+            .lines()
+            .find(|l| l.contains("v0.") || l.contains("version"))
+            .and_then(|l| {
+                let start = l.find("v0.")?;
+                let rest = &l[start + 1..];
+                let end = rest.find(|c: char| !c.is_ascii_digit() && c != '.')?;
+                Some(rest[..end].to_string())
+            })
+    } else {
+        None
+    };
+
+    HermesUpdateCheck {
+        cli_available: true,
+        update_available,
+        current_version,
+        latest_version,
+        message: if update_available {
+            combined.lines().take(3).collect::<Vec<_>>().join(" ")
+        } else if output.status.success() {
+            "Up to date".into()
+        } else {
+            combined.lines().take(3).collect::<Vec<_>>().join(" ")
+        },
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn check_port_8642() -> bool {
     use std::net::TcpStream;
@@ -968,7 +1127,6 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     use std::os::windows::process::CommandExt;
     use std::process::Stdio;
 
-    const DETACHED_PROCESS: u32 = 0x00000008;
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -1004,48 +1162,101 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf());
 
+    let gw_out_log = log_dir.join("gateway-stdout.log");
+    let gw_err_log = log_dir.join("gateway-stderr.log");
+
+    let out_file = std::fs::File::create(&gw_out_log)
+        .map_err(|e| io::Error::other(format!("create {}: {e}", gw_out_log.display())))?;
+    let err_file = std::fs::File::create(&gw_err_log)
+        .map_err(|e| io::Error::other(format!("create {}: {e}", gw_err_log.display())))?;
+
     let mut run_cmd = std::process::Command::new(binary);
     run_cmd
         .args(["gateway", "run"])
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+        .stdout(out_file)
+        .stderr(err_file)
+        .creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
 
     if let Some(ref dir) = &hermes_dir {
         run_cmd.current_dir(dir);
     }
     inject_hermes_home(&mut run_cmd);
 
+    let hermes_home_val = crate::paths::hermes_data_dir()
+        .ok()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let binary_str = binary.to_string_lossy();
+    let cwd = hermes_dir
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
     let _ = std::fs::write(
         &gw_log,
         format!(
-            "[{}] spawning detached 'gateway run'\n",
-            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            "[{}] spawning detached 'gateway run'\n  binary={}\n  cwd={}\n  HERMES_HOME={}\n  stdout={}\n  stderr={}\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+            binary_str,
+            cwd,
+            hermes_home_val,
+            gw_out_log.display(),
+            gw_err_log.display(),
         ),
     );
 
-    let child = run_cmd.spawn()?;
+    let child = run_cmd.spawn().map_err(|e| {
+        let _ = std::fs::write(
+            &gw_log,
+            format!(
+                "[{}] SPAWN FAILED: {e}\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            ),
+        );
+        io::Error::other(format!("gateway spawn: {e}"))
+    })?;
     let pid = child.id();
 
     tracing::info!("gateway spawned as detached process (pid {pid})");
 
-    std::thread::sleep(std::time::Duration::from_secs(6));
+    std::thread::sleep(std::time::Duration::from_secs(8));
 
     let listening = check_port_8642();
 
     patch_approval_sse();
     patch_dangerous_patterns();
+    patch_qqbot_sandbox();
 
     if listening {
         tracing::info!("gateway API server confirmed listening on 127.0.0.1:8642");
+        let _ = std::fs::write(
+            &gw_log,
+            format!(
+                "[{}] gateway listening on :8642 (pid {pid})\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            ),
+        );
         Ok(format!(
             "gateway started (pid {pid}), API server on :8642, log: {}",
             gw_log.display()
         ))
     } else {
+        let err_content = std::fs::read_to_string(&gw_err_log).unwrap_or_default();
+        let out_content = std::fs::read_to_string(&gw_out_log).unwrap_or_default();
         tracing::warn!(
-            "gateway spawned (pid {pid}) but port 8642 not yet listening — may still be starting"
+            "gateway spawned (pid {pid}) but port 8642 not yet listening — stdout={} bytes, stderr={} bytes",
+            out_content.len(),
+            err_content.len()
+        );
+        let _ = std::fs::write(
+            &gw_log,
+            format!(
+                "[{}] gateway NOT listening after 8s (pid {pid})\n  stderr tail: {}\n  stdout tail: {}\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                &err_content[err_content.len().saturating_sub(500)..],
+                &out_content[out_content.len().saturating_sub(500)..],
+            ),
         );
         Ok(format!(
             "gateway started (pid {pid}), still initializing, log: {}",

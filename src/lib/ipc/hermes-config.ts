@@ -214,6 +214,18 @@ export function hermesInstall(): Promise<string> {
   return invoke<string>('hermes_install');
 }
 
+export interface HermesUpdateCheck {
+  cli_available: boolean;
+  update_available: boolean;
+  current_version: string | null;
+  latest_version: string | null;
+  message: string;
+}
+
+export function hermesUpdateCheck(): Promise<HermesUpdateCheck> {
+  return invoke<HermesUpdateCheck>('hermes_update_check');
+}
+
 /** `hermes gateway start` — used by Home's "Start gateway" button
  *  when the binary is present but the /health probe fails. */
 export function hermesGatewayStart(): Promise<string> {

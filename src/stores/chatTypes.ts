@@ -151,7 +151,7 @@ export interface ChatState {
 
   importGatewayMessages: (
     sessionId: string,
-    msgs: readonly { role: string; content: string; timestamp: number }[],
+    msgs: readonly { role: string; content: string; timestamp: number; tokenCount?: number | null }[],
   ) => void;
 
   importGatewaySource: (source: string) => string;

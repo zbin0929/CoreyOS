@@ -744,6 +744,16 @@
       "saved": "已保存（下次工具调用立即生效）",
       "save": "保存"
     },
+    "hermes_update": {
+      "title": "Hermes 更新",
+      "desc": "检查是否有新版本 Hermes Agent。在终端运行 'hermes update' 即可升级。",
+      "check": "检查更新",
+      "idle": "尚未检查",
+      "checking": "检查中…",
+      "not_installed": "未找到 Hermes CLI",
+      "up_to_date": "已是最新版（v{{version}}）",
+      "available": "有新版本：v{{current}} → v{{latest}}。在终端运行 'hermes update' 升级。"
+    },
     "model": {
       "title": "默认语言模型",
       "desc": "Hermes Agent 在会话未指定时使用的默认模型。单个会话可在输入栏覆盖。",
@@ -890,7 +900,8 @@
     "install_title": "安装技能",
     "install_slug": "技能 slug",
     "install_hint": "带来源前缀的完整 slug，例如 official/security/1password",
-    "install": "安装"
+    "install": "安装",
+    "reload_hint": "技能已安装。在聊天中发送 /reload-skills 即可生效，无需重启网关。"
   },
   "mcp": {
     "title": "MCP 服务",
@@ -1174,7 +1185,8 @@
     "qq": {
       "hint_app_id": "QQ 开放平台 → App ID。",
       "hint_app_secret": "QQ 机器人 App Secret。",
-      "hint_allowed_users": "逗号分隔的允许用户 ID 列表。"
+      "hint_allowed_users": "逗号分隔的允许用户 ID 列表。",
+      "hint_sandbox": "开发/审核中的机器人设为 true（使用沙箱网关）。发布上线后改为 false。"
     },
     "signal": {
       "hint_phone_number": "绑定的 signal-cli 手机号（如 +8613800138000）。",
@@ -1351,6 +1363,10 @@
     "field_prompt": "提示词",
     "field_prompt_placeholder": "总结昨天的站会记录，列出今天的阻塞点。",
     "field_enabled": "启用",
+    "field_workdir": "工作目录",
+    "field_workdir_placeholder": "/项目路径",
+    "field_context_from": "上下文来源",
+    "field_context_from_placeholder": "会话 ID 或文件路径，用于注入上下文",
     "cron_hint": "示例：'0 0 9 * * *' = 每天 09:00。'0 */5 * * * *' = 每 5 分钟一次。Hermes 也支持 'every 2h'、'30m' 或 ISO 时间戳。",
     "cron_valid": "计划有效。",
     "invalid_cron": "无效的计划。",

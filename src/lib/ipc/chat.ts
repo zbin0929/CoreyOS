@@ -56,8 +56,7 @@ export interface ChatStreamDone {
 }
 
 export interface ChatStreamHandle {
-  /** Cancel all listeners. The server-side task continues to completion; we
-   *  simply stop receiving its events (cheap cancel). */
+  /** Cancel listeners and ask backend to abort the running stream task. */
   cancel: () => Promise<void>;
 }
 
@@ -148,7 +147,12 @@ export async function chatStream(
   }
 
   return {
-    cancel: () => disposeAll(unlistens),
+    cancel: async () => {
+      await Promise.allSettled([
+        invoke('chat_stream_cancel', { args: { handle } }),
+        disposeAll(unlistens),
+      ]);
+    },
   };
 }
 
@@ -242,6 +246,7 @@ export interface DbSessionRow {
    *  `adapter_id` (which continues to drive sidebar grouping).
    *  Null/absent = no profile pin. Mutable across upserts. */
   llm_profile_id?: string | null;
+  gateway_source?: string | null;
 }
 
 export interface DbMessageRow {
@@ -407,7 +412,7 @@ export function attachmentPreview(
 ): Promise<string> {
   return invoke<string>('attachment_preview', {
     path,
-    mime: mime ?? null,
+    mime,
   });
 }
 

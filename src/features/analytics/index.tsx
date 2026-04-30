@@ -61,6 +61,8 @@ export function AnalyticsRoute() {
 
   useEffect(() => {
     void load();
+    const id = setInterval(() => void load(), 30_000);
+    return () => clearInterval(id);
   }, []);
 
   return (

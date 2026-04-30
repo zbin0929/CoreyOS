@@ -269,6 +269,7 @@ mod tests {
             updated_at: ts,
             adapter_id: "hermes".into(),
             llm_profile_id: None,
+            gateway_source: None,
         }
     }
 
