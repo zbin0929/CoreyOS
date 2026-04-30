@@ -752,7 +752,8 @@
       "checking": "Checking…",
       "not_installed": "Hermes CLI not found",
       "up_to_date": "Up to date (v{{version}})",
-      "available": "Update available: v{{current}} → v{{latest}}. Run 'hermes update' in a terminal to upgrade."
+      "available": "Update available: v{{current}} → v{{latest}}. Run 'hermes update' in a terminal to upgrade.",
+      "available_unknown_latest": "Update available for v{{current}} (latest version not reported by CLI). Run 'hermes update' in a terminal to upgrade."
     },
     "model": {
       "title": "Default language model",

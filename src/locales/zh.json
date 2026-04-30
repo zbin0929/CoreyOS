@@ -752,7 +752,8 @@
       "checking": "检查中…",
       "not_installed": "未找到 Hermes CLI",
       "up_to_date": "已是最新版（v{{version}}）",
-      "available": "有新版本：v{{current}} → v{{latest}}。在终端运行 'hermes update' 升级。"
+      "available": "有新版本：v{{current}} → v{{latest}}。在终端运行 'hermes update' 升级。",
+      "available_unknown_latest": "当前 v{{current}} 检测到有更新（CLI 未返回最新版本号）。在终端运行 'hermes update' 升级。"
     },
     "model": {
       "title": "默认语言模型",

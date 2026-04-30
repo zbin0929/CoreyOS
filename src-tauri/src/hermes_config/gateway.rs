@@ -1080,8 +1080,9 @@ pub fn hermes_update_check() -> HermesUpdateCheck {
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let combined = format!("{stdout}{stderr}");
 
-    let update_available =
-        combined.contains("Update available") || combined.contains("update available");
+    let is_commits_behind = combined.contains("commits behind");
+    let update_available = !is_commits_behind
+        && (combined.contains("Update available") || combined.contains("update available"));
 
     let latest_version = if update_available {
         combined

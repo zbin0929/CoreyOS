@@ -56,10 +56,14 @@ export function HermesUpdateSection() {
             <span className="inline-flex items-start gap-1 text-amber-500">
               <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
               <span>
-                {t('settings.hermes_update.available', {
-                  current: result.current_version ?? '?',
-                  latest: result.latest_version ?? '?',
-                })}
+                {result.latest_version
+                  ? t('settings.hermes_update.available', {
+                      current: result.current_version ?? '?',
+                      latest: result.latest_version,
+                    })
+                  : t('settings.hermes_update.available_unknown_latest', {
+                      current: result.current_version ?? '?',
+                    })}
               </span>
             </span>
           )}
