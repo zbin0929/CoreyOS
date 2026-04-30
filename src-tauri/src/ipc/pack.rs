@@ -1,17 +1,23 @@
 //! IPC surface for the Pack subsystem.
 //!
-//! Stage 2 commands:
+//! Commands:
 //! - `pack_list`: read all installed Packs + their enable state.
-//! - `pack_set_enabled`: flip a Pack's enable bit, persisted to
-//!   `~/.hermes/pack-state.json`. Stage 2 has no side effects
-//!   beyond persistence; stages 3+ wire MCP spawn/kill, view
-//!   mount/unmount, etc.
+//! - `pack_set_enabled`: flip a Pack's enable bit AND sync its
+//!   MCP servers into `~/.hermes/config.yaml` (stage 3c). The
+//!   gateway is restarted asynchronously after a successful sync
+//!   so Hermes picks up the change without the user having to do
+//!   it manually.
+
+use std::collections::BTreeMap;
+use std::fs;
+use std::sync::Arc;
 
 use serde::Serialize;
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
-use crate::pack::{PackManifest, RegistryEntry};
+use crate::hermes_config;
+use crate::pack::{disable_updates, enable_updates, PackManifest, RegistryEntry, TemplateContext};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -70,14 +76,135 @@ pub async fn pack_set_enabled(
     enabled: bool,
     state: State<'_, AppState>,
 ) -> IpcResult<()> {
-    let mut registry = state.packs.write();
-    registry
-        .set_enabled(&pack_id, enabled)
-        .map_err(|e| IpcError::Internal {
-            message: format!("persist pack-state.json: {e}"),
-        })?;
-    tracing::info!(pack_id, enabled, "pack enable state changed");
+    // Snapshot what we need under a read lock, drop it before any
+    // file I/O so the registry stays available for concurrent
+    // pack_list calls during the (potentially slow) gateway
+    // restart that follows.
+    let (manifest_arc, hermes_dir) = {
+        let registry = state.packs.read();
+        let entry = registry.packs.iter().find(|p| matches_pack_id(p, &pack_id));
+        let manifest = entry.and_then(|p| p.manifest.clone());
+        (manifest, registry.hermes_dir.clone())
+    };
+
+    if enabled && manifest_arc.is_none() {
+        return Err(IpcError::Unsupported {
+            capability: format!(
+                "pack {pack_id:?} cannot be enabled: manifest is missing or invalid"
+            ),
+        });
+    }
+
+    let journal = state.changelog_path.clone();
+
+    // Sync to config.yaml (only if Pack actually has MCP servers).
+    let config_changed = sync_config_yaml(&pack_id, &manifest_arc, enabled, &hermes_dir, &journal)?;
+
+    // Persist the bool. Doing this AFTER config.yaml write means a
+    // failure there leaves the user-visible enable state unchanged
+    // — better than half-applied state.
+    {
+        let mut registry = state.packs.write();
+        registry
+            .set_enabled(&pack_id, enabled)
+            .map_err(|e| IpcError::Internal {
+                message: format!("persist pack-state.json: {e}"),
+            })?;
+    }
+
+    tracing::info!(
+        pack_id,
+        enabled,
+        config_changed,
+        "pack enable state changed"
+    );
+
+    // Trigger a Hermes gateway restart so the new mcp_servers
+    // entries become live. Hermes 0.10 has no `/reload-mcp`
+    // endpoint (verified in mcp_server::register_with_hermes),
+    // so restart is the only mechanism. Skip when nothing in
+    // config.yaml changed (e.g. Pack with no MCP servers, or
+    // toggle that turned out to be a no-op).
+    if config_changed {
+        tauri::async_runtime::spawn(async {
+            let result = tokio::task::spawn_blocking(hermes_config::gateway_restart).await;
+            match result {
+                Ok(Ok(_)) => tracing::info!("pack toggle: hermes gateway restarted"),
+                Ok(Err(e)) => tracing::warn!(error = %e, "pack toggle: gateway restart failed"),
+                Err(e) => tracing::warn!(error = %e, "pack toggle: restart join error"),
+            }
+        });
+    }
+
     Ok(())
+}
+
+/// True when `entry`'s canonical Pack id matches `pack_id`. The
+/// canonical id is `manifest.id` for healthy entries and falls
+/// back to the directory name for broken ones (so the UI can
+/// still target them for cleanup).
+fn matches_pack_id(entry: &RegistryEntry, pack_id: &str) -> bool {
+    let entry_id = entry
+        .manifest
+        .as_ref()
+        .map(|m| m.id.as_str())
+        .unwrap_or(entry.dir_name.as_str());
+    entry_id == pack_id
+}
+
+/// Translate the Pack's mcp_servers section to / from
+/// `~/.hermes/config.yaml`. Returns `true` when at least one
+/// entry was written (caller uses this to decide whether to
+/// trigger a gateway restart).
+fn sync_config_yaml(
+    pack_id: &str,
+    manifest: &Option<Arc<PackManifest>>,
+    enabled: bool,
+    hermes_dir: &std::path::Path,
+    journal: &std::path::Path,
+) -> IpcResult<bool> {
+    let Some(manifest) = manifest else {
+        // No manifest, nothing to sync. Stage 3c+ may add a
+        // fallback that scans config.yaml for stale prefixed
+        // entries and removes them; for now disable on a broken
+        // Pack is a no-op on config.yaml.
+        return Ok(false);
+    };
+    if manifest.mcp_servers.is_empty() {
+        return Ok(false);
+    }
+
+    let pack_data_dir = hermes_dir.join("pack-data").join(pack_id);
+    if enabled {
+        // Make sure ~/.hermes/pack-data/<id>/ exists before the
+        // MCP server tries to write into it.
+        if let Err(e) = fs::create_dir_all(&pack_data_dir) {
+            return Err(IpcError::Internal {
+                message: format!("create pack-data dir: {e}"),
+            });
+        }
+    }
+
+    // Stage 3c uses an empty pack_config; stage 4 adds the config
+    // form UI that populates `pack-data/<id>/config.json`.
+    let ctx = TemplateContext {
+        platform: crate::pack::current_platform().to_string(),
+        pack_data_dir,
+        pack_config: BTreeMap::new(),
+    };
+
+    let updates = if enabled {
+        enable_updates(manifest, &ctx)
+    } else {
+        disable_updates(manifest)
+    };
+
+    hermes_config::write_channel_yaml_fields("mcp_servers", &updates, Some(journal)).map_err(
+        |e| IpcError::Internal {
+            message: format!("write mcp_servers to config.yaml: {e}"),
+        },
+    )?;
+    Ok(true)
 }
 
 #[cfg(test)]

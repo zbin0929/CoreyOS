@@ -44,6 +44,8 @@ mod templates;
 pub use manifest::{load_from_dir, parse, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME};
 pub use scanner::scan_skill_packs_dir;
 pub use state::PackStateFile;
+pub use sync::{disable_updates, enable_updates};
+pub use templates::{current_platform, TemplateContext};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

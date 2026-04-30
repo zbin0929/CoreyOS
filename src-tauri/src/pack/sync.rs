@@ -145,7 +145,6 @@ pub fn apply_enable(
 /// before disabling, the caller should fall back to scanning
 /// config.yaml for keys with the `pack__<id>__` prefix —
 /// `disable_updates_from_keys` covers that path.
-#[allow(dead_code)] // wired in stage 3c
 pub fn disable_updates(manifest: &PackManifest) -> HashMap<String, serde_json::Value> {
     let mut updates = HashMap::with_capacity(manifest.mcp_servers.len());
     for spec in &manifest.mcp_servers {

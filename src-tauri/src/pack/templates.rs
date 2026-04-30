@@ -64,7 +64,6 @@ impl TemplateContext {
 /// Return the platform slug for the running host. Stable strings;
 /// don't change them without bumping a manifest schema field —
 /// Pack folder layouts depend on these names.
-#[allow(dead_code)] // wired in stage 3b
 pub fn current_platform() -> &'static str {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     {
