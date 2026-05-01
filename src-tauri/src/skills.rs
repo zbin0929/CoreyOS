@@ -79,7 +79,10 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<SkillSummary>) -> anyhow::Result<
         let path = entry.path();
         if ft.is_dir() {
             walk(root, &path, out)?;
-        } else if ft.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+        } else if ft.is_file()
+            && path.extension().and_then(|s| s.to_str()) == Some("md")
+            && path.file_name().and_then(|s| s.to_str()) == Some("SKILL.md")
+        {
             let meta = entry.metadata()?;
             let size = meta.len();
             let updated_at_ms = meta
@@ -91,17 +94,20 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<SkillSummary>) -> anyhow::Result<
             let rel = path.strip_prefix(root).unwrap_or(&path);
             let rel_str = rel.to_string_lossy().replace('\\', "/");
             let name = rel
-                .file_stem()
+                .parent()
+                .and_then(|p| p.file_name())
                 .and_then(|s| s.to_str())
                 .unwrap_or("unnamed")
                 .to_string();
             let group = rel.parent().and_then(|p| {
-                let s = p.to_string_lossy().replace('\\', "/");
-                if s.is_empty() {
-                    None
-                } else {
-                    Some(s)
-                }
+                p.parent().and_then(|gp| {
+                    let s = gp.to_string_lossy().replace('\\', "/");
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s)
+                    }
+                })
             });
             let description = read_h1_title(&path);
             out.push(SkillSummary {
@@ -368,17 +374,19 @@ mod tests {
     fn list_sees_nested_dirs_and_sorts_mru_first() {
         let tmp = tempdir();
         let _g = HomeGuard::new(&tmp);
-        save("a.md", "a", false).unwrap();
+        save("a/SKILL.md", "a", false).unwrap();
         // Small delay to guarantee distinct mtimes even on fast filesystems.
         std::thread::sleep(std::time::Duration::from_millis(20));
-        save("work/b.md", "b", false).unwrap();
+        save("work/b/SKILL.md", "b", false).unwrap();
 
         let rows = list().unwrap();
         assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].path, "work/b.md");
+        assert_eq!(rows[0].path, "work/b/SKILL.md");
+        assert_eq!(rows[0].name, "b");
         assert_eq!(rows[0].group.as_deref(), Some("work"));
-        assert_eq!(rows[1].path, "a.md");
-        assert_eq!(rows[1].group, None);
+        assert_eq!(rows[1].path, "a/SKILL.md");
+        assert_eq!(rows[1].name, "a");
+        assert_eq!(rows[1].group.as_deref(), None);
     }
 
     #[test]
@@ -398,39 +406,39 @@ mod tests {
         // ATX-style heading at the top, with leading whitespace + extra
         // `#`s + trailing newline. Title is what humans actually read,
         // independent of the file name.
-        save("daily.md", "# 每日报告 Daily Report\n\nbody…", false).expect("seed daily");
+        save("daily/SKILL.md", "# 每日报告 Daily Report\n\nbody…", false).expect("seed daily");
         // No H1 → description stays None.
-        save("plain.md", "no heading here\nstill nothing", false).expect("seed plain");
+        save("plain/SKILL.md", "no heading here\nstill nothing", false).expect("seed plain");
         // H2 is accepted too — the goal is "first human-readable
         // title", not strict H1-only semantics. Many community skills
         // start with `## Description` after a frontmatter block.
-        save("h2-only.md", "## Sub heading\n\nbody", false).expect("seed h2-only");
+        save("h2-only/SKILL.md", "## Sub heading\n\nbody", false).expect("seed h2-only");
         // Empty H1 (just `#`) → None. Validates the empty-title guard.
-        save("blank-h1.md", "#\nbody", false).expect("seed blank-h1");
+        save("blank-h1/SKILL.md", "#\nbody", false).expect("seed blank-h1");
         // Hermes-style file: YAML frontmatter THEN an H1 in the body.
         // The screenshot regression — without frontmatter skipping
         // we'd bail on line 1 (`---`) and return None.
         save(
-            "fm.md",
+            "fm/SKILL.md",
             "---\nname: findmy\ndescription: Track Apple devices.\n---\n\n# Find My (Apple)\n\nbody",
             false,
         )
-        .expect("seed fm.md");
+        .expect("seed fm/SKILL.md");
         // Frontmatter present but no body H1 in the window — fall
         // back to the frontmatter's `display_name` (preferred) or
         // `name` field.
         save(
-            "fm-no-h1.md",
+            "fm-no-h1/SKILL.md",
             "---\nname: code-review\ndisplay_name: 代码评审\n---\n\nplain body, no heading\n",
             false,
         )
-        .expect("seed fm-no-h1.md");
+        .expect("seed fm-no-h1/SKILL.md");
         save(
-            "fm-only-name.md",
+            "fm-only-name/SKILL.md",
             "---\nname: alt slug\n---\n\nplain body, no heading\n",
             false,
         )
-        .expect("seed fm-only-name.md");
+        .expect("seed fm-only-name/SKILL.md");
 
         let rows = list().expect("list skills");
         let by_path: std::collections::HashMap<_, _> = rows
@@ -438,31 +446,40 @@ mod tests {
             .map(|r| (r.path.clone(), r.description.clone()))
             .collect();
         assert_eq!(
-            by_path.get("daily.md").expect("daily.md row").as_deref(),
+            by_path.get("daily/SKILL.md").expect("daily row").as_deref(),
             Some("每日报告 Daily Report"),
         );
-        assert_eq!(by_path.get("plain.md").expect("plain row").as_deref(), None);
         assert_eq!(
-            by_path.get("h2-only.md").expect("h2 row").as_deref(),
+            by_path.get("plain/SKILL.md").expect("plain row").as_deref(),
+            None
+        );
+        assert_eq!(
+            by_path.get("h2-only/SKILL.md").expect("h2 row").as_deref(),
             Some("Sub heading")
         );
         assert_eq!(
-            by_path.get("blank-h1.md").expect("blank-h1 row").as_deref(),
+            by_path
+                .get("blank-h1/SKILL.md")
+                .expect("blank-h1 row")
+                .as_deref(),
             None
         );
         // Frontmatter is skipped; the body H1 wins.
         assert_eq!(
-            by_path.get("fm.md").expect("fm row").as_deref(),
+            by_path.get("fm/SKILL.md").expect("fm row").as_deref(),
             Some("Find My (Apple)"),
         );
         // No body heading: prefer `display_name` over `name`.
         assert_eq!(
-            by_path.get("fm-no-h1.md").expect("fm-no-h1 row").as_deref(),
+            by_path
+                .get("fm-no-h1/SKILL.md")
+                .expect("fm-no-h1 row")
+                .as_deref(),
             Some("代码评审"),
         );
         assert_eq!(
             by_path
-                .get("fm-only-name.md")
+                .get("fm-only-name/SKILL.md")
                 .expect("fm-only-name row")
                 .as_deref(),
             Some("alt slug"),

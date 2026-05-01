@@ -22,7 +22,7 @@ import { HubPanel } from './HubPanel';
 import { NewSkillPrompt } from './NewSkillPrompt';
 import { SkillHistoryDrawer } from './SkillHistoryDrawer';
 import { SkillsTree } from './SkillsTree';
-import { groupByFolder, stripMdExt, type Selection } from './helpers';
+import { groupByFolder, type Selection } from './helpers';
 import './skills.css';
 
 /**
@@ -136,8 +136,9 @@ export function SkillsRoute() {
   const createNew = useCallback(async (rawName: string) => {
     const name = rawName.trim();
     if (!name) return;
-    const path = name.endsWith('.md') ? name : `${name}.md`;
-    const body = `# ${stripMdExt(path)}\n\nWrite your prompt here. Supports {{params}}.\n`;
+    const stem = name.replace(/\.md$/i, '').replace(/\/SKILL\.md$/i, '');
+    const path = `${stem}/SKILL.md`;
+    const body = `# ${stem.split('/').pop()}\n\nWrite your prompt here. Supports {{params}}.\n`;
     try {
       const fresh = await skillSave(path, body, true);
       setSel({ kind: 'open', path, loaded: fresh, dirty: fresh.body });
