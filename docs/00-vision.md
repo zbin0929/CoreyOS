@@ -1,6 +1,6 @@
 # 00 · Vision
 
-**Status as of 2026-04-23 pm**: Phase 0 – 7 shipped. M1 / M2 / M3 metrics (below) all hit. Phase 8 (multimodal) is conditional. Product direction is stable; next phase is polishing, documentation, and early user acquisition rather than more feature work. See `CHANGELOG.md` for dated milestone entries and `10-product-audit-2026-04-23.md` for the audit that reshaped Phase 6/7.
+**Status as of 2026-05-02**: Phase 0–12 all shipped. v0.2.0 shipped (white-label + Pack loader + 12 view templates + license + analytics). Current release: **v0.2.2**. Next: v0.3.0 (cross-border e-commerce Pack). Business model: **B2B custom delivery only** (no SaaS). See `global-todo.md` for the locked product direction.
 
 ## One-line
 
@@ -8,11 +8,11 @@
 
 ## Who it's for
 
-- **Power users** running Hermes Agent (or any agent) as a personal assistant across Telegram/Discord/Slack/WhatsApp, on a VPS, laptop, or serverless.
-- **Developers** building agents who need a clean cockpit to inspect traces, compare models, and iterate on skills.
-- **Small teams** sharing a cost budget across multiple agents and models, who want visibility without standing up Grafana.
+- **Developers / heavy AI users** who need a control plane to manage agents, models, skills, and MCP servers.
+- **Operations / automation users** who want repeatable workflows with approval gates and audit trails.
+- **B2B customers** who need industry-specific Skill Packs (e.g. cross-border e-commerce) with local deployment.
 
-Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Single-user desktop-first, with an optional headless web mode for VPS scenarios.
+Non-goals: enterprise RBAC, multi-tenant SaaS, consumer chat products, AI digital humans.
 
 ## Positioning vs. existing tools
 
@@ -54,16 +54,18 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, browser-only hosted offering. Sin
 ## What Corey explicitly is *not*
 
 - Not a Hermes fork or rewrite. We consume Hermes via its public surface (gateway HTTP, CLI, config files).
-- Not a hosted SaaS. Single-binary desktop app + optional self-hosted web mode. No accounts, no telemetry by default.
-- Not an LLM router. Model routing lives in Hermes / your provider. We show, configure, and budget.
+- Not a hosted SaaS. Single-binary desktop app, local deployment only. No accounts, no telemetry.
+- Not an LLM router. Model routing lives in Hermes / your provider.
+- Not a consumer product. B2B custom delivery; no app store, no subscription.
 
 ## Success metrics (self-imposed)
 
-- **M1** ✅ (Phase 1, 2026-04-22): run Hermes + CoreyOS and never touch the Hermes TUI again — chat, sessions, channels, skills all accessible from the GUI.
-- **M2** ✅ (Phase 4, 2026-04-22): at least one feature is demonstrably better than any alternative in the ecosystem. Candidates shipped: multi-model compare, trajectory timeline, cost-budget alerts.
-- **M3** ✅ (Phase 5, 2026-04-23): drive ≥ 2 non-Hermes agents through the same UI. Claude Code + Aider adapters ship as mocks; users can add any OpenAI-compatible endpoint as a "Hermes instance" (T6.2) for real usage.
-- **M4 (new, 2026-04-23 pm)**: wrap Hermes' native capabilities rather than duplicate them. MCP (T7.1), Memory (T7.3), Skill Hub (T7.4), and Scheduler (T6.8) all shipped as thin GUIs over upstream, not parallel engines.
-- **Perf**: still self-imposed, not formally measured. Cold start <1 s and idle RAM <100 MB hold on a 2020 MacBook Air; no Chromebook-class benchmarks run yet.
+- **M1** ✅ (Phase 1): replace the Hermes TUI for everyday chat.
+- **M2** ✅ (Phase 4): at least one best-in-class feature (multi-model compare, trajectory, cost budgets).
+- **M3** ✅ (Phase 5): drive ≥ 2 non-Hermes agents through the same UI.
+- **M4** ✅ (Phase 7): wrap Hermes native capabilities (MCP, Memory, Skill Hub, Scheduler) as thin GUIs.
+- **M5** ✅ (v0.2.0): Pack architecture + white-label + license = B2B delivery pipeline ready.
+- **M6** 🔧 (v0.3.0): first real industry Pack (cross-border e-commerce, 9 capabilities).
 
 ## Brand
 

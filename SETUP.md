@@ -1,4 +1,4 @@
-# Setup (Phase 0 bootstrap)
+# Setup
 
 First-time setup after pulling the repo.
 
@@ -8,7 +8,7 @@ First-time setup after pulling the repo.
 |------------|--------------|-----------------------|
 | Node.js    | ≥ 20         | `node --version`      |
 | pnpm       | ≥ 9          | `pnpm --version`      |
-| Rust       | stable ≥ 1.77| `rustc --version`     |
+| Rust       | stable ≥ 1.80| `rustc --version`     |
 
 ### Install the missing ones (macOS)
 
@@ -74,9 +74,9 @@ Expected on first run:
 
 1. Vite starts on `:5173`.
 2. Cargo compiles `src-tauri/` (~1–2 min cold, ~seconds on rebuild).
-3. A 1280×820 window opens with the Caduceus shell.
-4. ⌘K (macOS) / Ctrl+K (Win/Linux) opens the command palette.
-5. Clicking sidebar items navigates through empty-state routes.
+3. A 1280×820 window opens with CoreyOS.
+4. ⌘K (macOS) / Ctrl+K (Windows) opens the command palette.
+5. Clicking sidebar items navigates through the app.
 
 ## Run the web-only dev server (no Rust)
 
@@ -125,7 +125,5 @@ the brand lands, and rerun the `tauri icon` command.
 
 ## Next steps
 
-Phase 0 is the foundation only. See `docs/phases/phase-1-chat.md` for the
-real Chat integration. Before starting Phase 1, verify the Hermes surfaces
-flagged in `docs/04-hermes-integration.md` against a live Hermes (SSE
-extension fields, CLI `--json` output).
+See [`docs/global-todo.md`](./docs/global-todo.md) for the current roadmap and active TODO items.
+For architecture details, see [`docs/01-architecture.md`](./docs/01-architecture.md).

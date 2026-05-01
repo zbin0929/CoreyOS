@@ -168,11 +168,11 @@ npx eslint src/     # Lint
 # Rust
 cd src-tauri
 cargo check         # Compile check
-cargo test --lib    # Run 258+ tests
+cargo test --lib    # Run 419 tests
 cargo fmt           # Format (required by CI)
 
 # E2E
-pnpm exec playwright test  # Run 81 specs
+pnpm exec playwright test  # Run 77 specs
 
 # Full CI simulation
 npx tsc --noEmit && cargo check --manifest-path src-tauri/Cargo.toml && cargo test --lib --manifest-path src-tauri/Cargo.toml && pnpm build

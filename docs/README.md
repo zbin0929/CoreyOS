@@ -1,7 +1,7 @@
 # CoreyOS Documentation
 
-Top-level entry for the CoreyOS docs tree. If you're new here, start in
-**Orient yourself** below — the rest of the tree is reference material.
+Top-level entry for the CoreyOS docs tree (last audit: **2026-05-02**).
+If you're new here, start in **Orient yourself** below.
 
 > Looking for a complete inventory with last-verified dates? See
 > [`document-index.md`](./document-index.md).
@@ -36,28 +36,36 @@ After that, dip into the topical docs as the work demands.
 | [`07-release.md`](./07-release.md) | Cutting a release |
 | [`icon-audit.md`](./icon-audit.md), [`logo.md`](./logo.md) | Brand assets |
 
-## Planning + state-of-the-product
+## Active planning
 
 | Doc | Purpose |
 |-----|---------|
-| [`06-backlog.md`](./06-backlog.md) | Feature backlog |
-| [`optimization-backlog.md`](./optimization-backlog.md) | Prioritized UX / platform improvements |
-| [`10-product-audit-2026-04-23.md`](./10-product-audit-2026-04-23.md) | Last full product audit |
-| [`current-feature-quality-review-2026-04-26.md`](./current-feature-quality-review-2026-04-26.md) | Most recent code-quality review |
-| [`hermes-reality-check-2026-04-23.md`](./hermes-reality-check-2026-04-23.md) | What Hermes integration actually does today |
+| [`global-todo.md`](./global-todo.md) | **Primary TODO** — locked product direction + base TODO + Pack roadmap |
+| [`hermes-dependency-map.md`](./hermes-dependency-map.md) | Hermes upstream dependency surface map |
+| [`hermes-v0.12-impact-analysis.md`](./hermes-v0.12-impact-analysis.md) | Hermes v0.12 upgrade impact |
+| [`licensing.zh.md`](./licensing.zh.md) | License system usage manual |
+
+## Historical (archived, kept for reference)
+
+| Doc | Purpose |
+|-----|---------|
+| [`06-backlog.md`](./06-backlog.md) | Feature backlog (pre-v0.2.0, superseded by global-todo.md) |
+| [`optimization-backlog.md`](./optimization-backlog.md) | UX improvements (actions completed) |
+| [`10-product-audit-2026-04-23.md`](./10-product-audit-2026-04-23.md) | Product audit snapshot |
+| [`current-feature-quality-review-2026-04-26.md`](./current-feature-quality-review-2026-04-26.md) | Code quality review (actions completed) |
+| [`hermes-reality-check-2026-04-23.md`](./hermes-reality-check-2026-04-23.md) | Hermes integration reality check (issues fixed) |
+| [`customization-plan.md`](./customization-plan.md) | White-label plan (implemented in v0.2.0) |
+| [`competitor-maiduo-ai.md`](./competitor-maiduo-ai.md) | MaiduoX AI competitive research |
 
 ## Subdirectories
 
-- [`phases/`](./phases) — historical phase plans (Phase 0 through Phase E
-  + ad-hoc tracks like `c4-ipc-type-safety`). All marked **Shipped** in
-  `05-roadmap.md`. **Read these only when you need context for *why*
-  something exists** — they're not maintained as live references.
-- [`agent/`](./agent) — internal analyst notes from the AI agents
-  helping maintain the project. The change-log style file
-  [`agent/00-操作日志.md`](./agent/00-操作日志.md) is appended to as a
-  rolling journal.
-- [`user/`](./user) — end-user documentation (currently a Chinese
-  user manual at [`user/用户手册.md`](./user/用户手册.md)).
+- [`phases/`](./phases) — historical phase plans (all shipped). See
+  [`phases/README.md`](./phases/README.md) for summary.
+- [`agent/`](./agent) — AI analysis notes and architecture decisions
+  (auto-compress, memory strategy, session storage, workflow positioning).
+- [`plans/`](./plans) — per-version implementation plans (shipped).
+- [`user/`](./user) — end-user documentation
+  ([`user/用户手册.md`](./user/用户手册.md)).
 
 ## Conventions
 

@@ -1,6 +1,6 @@
 # CoreyOS 全局 TODO
 
-> 版本：v2.0 · 2026-05-01
+> 版本：v2.0 · 2026-05-02
 > 商业模式：**只做定制**（B2B 直签 + 本地部署，不做 SaaS）
 > 架构原则：**唯一基座 + 数据驱动定制**（详见 `docs/01-architecture.md` § Pack Architecture）
 > 配套文档：`docs/competitor-maiduo-ai.md`、`docs/customization-plan.md`、`docs/licensing.zh.md`
@@ -335,7 +335,9 @@ B-7 (卸载/重置)  独立
 | v0.1.14 | ✅ | Windows CMD 弹窗修复 + 图标灰边二次修复 |
 | v0.1.15 | ✅ | Windows 实测通过 + suppress_window 全覆盖 + 图标边缘纯黑 |
 | v0.2.0 | ✅ | 白标 + Pack 加载器 + 12 视图模板 + license features + preinstall + pin_to_primary + BGE-M3 离线导入 |
-| v0.3.0 | � | 跨境电商助手 骨架完成 + 数据层待接 + 第一个真实客户 |
+| v0.2.1 | ✅ | MCP 数据流 + dashboard 视图 + stdio 修复 |
+| v0.2.2 | ✅ | CI 修复（Windows clippy + embedding stamp test）|
+| v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + 第一个真实客户 |
 
 ---
 
@@ -368,7 +370,7 @@ CI 在 Rust 任何 push 上跑这两个 gate；**本地不通过就别 push**，
 # 1. rustfmt 必须一致（CI step 33 会 fail）
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 
-# 2. clippy::unwrap_used 不允许回归（baseline 见 scripts/clippy-unwrap-baseline.txt）
+# 2. clippy::unwrap_used 不允许回归（baseline=548，见 scripts/clippy-unwrap-baseline.txt）
 node scripts/check-clippy-unwrap.mjs
 # 如果 baseline 因为新代码上升了，需要写 expect("...") 替代 unwrap()
 # 如果 baseline 因为重构下降了，跑 `pnpm check:clippy-unwrap -- --update` 锁定改善
