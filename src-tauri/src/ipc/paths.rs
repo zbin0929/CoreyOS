@@ -156,7 +156,6 @@ pub async fn corey_config_reset(state: State<'_, AppState>) -> IpcResult<()> {
 
 #[cfg(test)]
 mod reset_tests {
-    use super::*;
     use std::fs;
 
     #[test]
