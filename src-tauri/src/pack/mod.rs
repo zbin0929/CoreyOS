@@ -25,6 +25,7 @@
 //! 4. Workflow / Skill / Schedule / View registration pipelines.
 //! 5. 12 view templates wired through the renderer.
 
+pub(crate) mod backup;
 mod manifest;
 mod scanner;
 mod schedules;
@@ -43,6 +44,7 @@ mod workflows;
 // code path doesn't use yet — they're consumed only by tests today
 // and by stage 3+ code tomorrow. Removing the allow once stage 3
 // lands is the test that the public API is wired.
+pub use backup::backup_pack;
 #[allow(unused_imports)]
 pub use manifest::{load_from_dir, parse, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME};
 pub use scanner::scan_skill_packs_dir;

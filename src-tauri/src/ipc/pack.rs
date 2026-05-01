@@ -630,8 +630,7 @@ fn sync_config_yaml(
 
     let pack_data_dir = hermes_dir.join("pack-data").join(pack_id);
     if enabled {
-        // Make sure ~/.hermes/pack-data/<id>/ exists before the
-        // MCP server tries to write into it.
+        let _ = crate::pack::backup::backup_pack(&hermes_dir, pack_id);
         if let Err(e) = fs::create_dir_all(&pack_data_dir) {
             return Err(IpcError::Internal {
                 message: format!("create pack-data dir: {e}"),

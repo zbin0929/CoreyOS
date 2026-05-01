@@ -85,8 +85,8 @@
     - **5e3**：TimeSeriesChart + TrendsMatrix + PivotTable（本提交）— TrendsMatrix 含 Sparkline + 同比着色
     - 当前仅支持 `data_source: { static: ... }`；`mcp:` / `http:` / `sql:` kinds 推到 stage 5f
   - [x] **Stage 5f**：MCP / HTTP 数据源 kinds（`resolve_http_source` + `resolve_mcp_source`）
-  - [ ] ActionPanel 嵌入（视图旁的"决策归还"按钮，绑 actions[].workflow / actions[].skill）
-  - [ ] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖（架构文档已锁定）
+  - [x] ActionPanel 嵌入（视图旁的"决策归还"按钮，绑 actions[].workflow / actions[].skill）
+  - [x] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖（架构文档已锁定，代码已执行）
   - [ ] Pack 升级前自动备份（zip 到 `~/.hermes/backups/`，保留 7 天）
   - [ ] manifest migrations 机制（跨版本字段迁移）
   - [ ] Pack 配置 UI（动态表单）+ 导入 zip 按钮 + 卸载 UI
