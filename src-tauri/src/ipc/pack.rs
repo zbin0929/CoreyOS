@@ -17,6 +17,7 @@ use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config;
+use crate::license::{self, Verdict};
 use crate::pack::{
     disable_updates, enable_updates, install_schedules, install_skills, install_workflows,
     uninstall_schedules, uninstall_skills, uninstall_workflows, PackManifest, RegistryEntry,
@@ -91,6 +92,11 @@ pub struct PackListEntry {
     /// True when manifest parsed; false means the entry is
     /// surfaced for visibility but not actually usable.
     pub healthy: bool,
+    /// True when the Pack declares a `license_feature` that is
+    /// NOT present in the active license. The UI should show
+    /// a "requires authorization" placeholder and disable the
+    /// enable toggle.
+    pub license_gated: bool,
 }
 
 impl From<&RegistryEntry> for PackListEntry {
@@ -106,14 +112,41 @@ impl From<&RegistryEntry> for PackListEntry {
             enabled: e.enabled,
             error: e.error.clone(),
             healthy: m.is_some(),
+            license_gated: false,
         }
     }
 }
 
+fn resolve_license_features(config_dir: &std::path::Path) -> Vec<String> {
+    match license::status(config_dir) {
+        Verdict::Valid { payload } => payload.features,
+        _ => Vec::new(),
+    }
+}
+
+fn pack_is_gated(manifest: &PackManifest, features: &[String]) -> bool {
+    if manifest.license_feature.is_empty() {
+        return false;
+    }
+    !features.contains(&manifest.license_feature)
+}
+
 #[tauri::command]
 pub async fn pack_list(state: State<'_, AppState>) -> IpcResult<Vec<PackListEntry>> {
+    let config_dir = state.config_dir.clone();
+    let features = tokio::task::spawn_blocking(move || resolve_license_features(&config_dir))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("license_features join: {e}"),
+        })?;
     let registry = state.packs.read();
-    Ok(registry.packs.iter().map(PackListEntry::from).collect())
+    let mut entries: Vec<PackListEntry> = registry.packs.iter().map(PackListEntry::from).collect();
+    for (i, entry) in registry.packs.iter().enumerate() {
+        if let Some(m) = entry.manifest.as_deref() {
+            entries[i].license_gated = pack_is_gated(m, &features);
+        }
+    }
+    Ok(entries)
 }
 
 #[tauri::command]
@@ -121,8 +154,20 @@ pub async fn pack_rescan(state: State<'_, AppState>) -> IpcResult<Vec<PackListEn
     let hermes_dir = crate::paths::hermes_data_dir().map_err(|e| IpcError::Internal {
         message: e.to_string(),
     })?;
+    let config_dir = state.config_dir.clone();
+    let features = tokio::task::spawn_blocking(move || resolve_license_features(&config_dir))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("license_features join: {e}"),
+        })?;
     let new_registry = crate::pack::Registry::scan(&hermes_dir);
-    let entries: Vec<PackListEntry> = new_registry.packs.iter().map(PackListEntry::from).collect();
+    let mut entries: Vec<PackListEntry> =
+        new_registry.packs.iter().map(PackListEntry::from).collect();
+    for (i, entry) in new_registry.packs.iter().enumerate() {
+        if let Some(m) = entry.manifest.as_deref() {
+            entries[i].license_gated = pack_is_gated(m, &features);
+        }
+    }
     {
         let mut reg = state.packs.write();
         *reg = new_registry;
@@ -212,6 +257,12 @@ fn resolve_data_source(ds: &serde_yaml::Value) -> serde_json::Value {
 /// Stable ordering: by pack id, then by view id within each pack.
 #[tauri::command]
 pub async fn pack_views_list(state: State<'_, AppState>) -> IpcResult<Vec<PackViewDto>> {
+    let config_dir = state.config_dir.clone();
+    let features = tokio::task::spawn_blocking(move || resolve_license_features(&config_dir))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("license_features join: {e}"),
+        })?;
     let registry = state.packs.read();
     let mut out = Vec::new();
     for entry in &registry.packs {
@@ -221,6 +272,9 @@ pub async fn pack_views_list(state: State<'_, AppState>) -> IpcResult<Vec<PackVi
         let Some(manifest) = &entry.manifest else {
             continue;
         };
+        if pack_is_gated(manifest, &features) {
+            continue;
+        }
         for view in &manifest.views {
             let options: serde_json::Value = if view.options.is_empty() {
                 serde_json::Value::Object(serde_json::Map::new())
@@ -290,6 +344,26 @@ pub async fn pack_set_enabled(
                 "pack {pack_id:?} cannot be enabled: manifest is missing or invalid"
             ),
         });
+    }
+
+    if enabled {
+        if let Some(m) = manifest_arc.as_deref() {
+            let config_dir = state.config_dir.clone();
+            let features =
+                tokio::task::spawn_blocking(move || resolve_license_features(&config_dir))
+                    .await
+                    .map_err(|e| IpcError::Internal {
+                        message: format!("license_features join: {e}"),
+                    })?;
+            if pack_is_gated(m, &features) {
+                return Err(IpcError::Unauthorized {
+                    detail: format!(
+                        "pack {:?} requires license feature {:?}",
+                        pack_id, m.license_feature
+                    ),
+                });
+            }
+        }
     }
 
     let journal = state.changelog_path.clone();
@@ -607,5 +681,32 @@ mod tests {
         assert_eq!(dtos.len(), 1);
         assert_eq!(dtos[0].manifest_id, "test_pack");
         assert!(dtos[0].healthy);
+    }
+
+    #[test]
+    fn pack_is_gated_returns_true_when_feature_missing() {
+        let yaml =
+            "schema_version: 1\nid: pro_pack\nversion: \"1.0.0\"\nlicense_feature: pro_analytics\n";
+        let manifest = match crate::pack::parse(yaml) {
+            crate::pack::ManifestLoadOutcome::Loaded(m) => m,
+            other => panic!("expected Loaded, got {other:?}"),
+        };
+        assert!(pack_is_gated(&manifest, &[]));
+        assert!(pack_is_gated(&manifest, &["basic".into()]));
+        assert!(!pack_is_gated(&manifest, &["pro_analytics".into()]));
+        assert!(!pack_is_gated(
+            &manifest,
+            &["basic".into(), "pro_analytics".into()]
+        ));
+    }
+
+    #[test]
+    fn pack_is_gated_returns_false_when_no_license_feature() {
+        let yaml = "schema_version: 1\nid: free_pack\nversion: \"1.0.0\"\n";
+        let manifest = match crate::pack::parse(yaml) {
+            crate::pack::ManifestLoadOutcome::Loaded(m) => m,
+            other => panic!("expected Loaded, got {other:?}"),
+        };
+        assert!(!pack_is_gated(&manifest, &[]));
     }
 }

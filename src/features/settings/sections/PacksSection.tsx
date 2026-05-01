@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Package, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Lock, Package, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -75,12 +75,18 @@ export function PacksSection() {
                   {p.error && (
                     <div className="mt-1 text-red-500">{p.error}</div>
                   )}
+                  {p.licenseGated && (
+                    <div className="mt-1 flex items-center gap-1 text-amber-500">
+                      <Icon icon={Lock} size="xs" />
+                      {t('settings.packs.license_required')}
+                    </div>
+                  )}
                 </div>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  disabled={Boolean(p.error)}
+                  disabled={Boolean(p.error) || p.licenseGated}
                   onClick={() => void setEnabled(p.manifestId, !p.enabled)}
                   title={p.enabled ? t('settings.packs.disable') : t('settings.packs.enable')}
                 >

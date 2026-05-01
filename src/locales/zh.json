@@ -624,7 +624,8 @@
       "disable": "停用",
       "on": "开",
       "off": "关",
-      "rescan": "重新扫描"
+      "rescan": "重新扫描",
+      "license_required": "需要授权许可"
     },
     "appearance": {
       "title": "外观",

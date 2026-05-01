@@ -624,7 +624,8 @@
       "disable": "Disable",
       "on": "On",
       "off": "Off",
-      "rescan": "Rescan"
+      "rescan": "Rescan",
+      "license_required": "Requires license authorization"
     },
     "appearance": {
       "title": "Appearance",

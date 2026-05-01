@@ -15,6 +15,7 @@ export interface PackListEntry {
   enabled: boolean;
   error: string | null;
   healthy: boolean;
+  licenseGated: boolean;
 }
 
 export interface PackAction {
