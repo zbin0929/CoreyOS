@@ -32,8 +32,8 @@
 - **价值**：本地 RAG，所有行业 Pack 共用的知识检索基础
 - **参考**：`docs/plans/v0.1.11-bge-m3-rag.md`
 
-#### B-2. customer.yaml 白标机制 ✅ 第一阶段已完成
-- **状态**：� 第一阶段已交付（v0.2.0-dev）；剩余项与 B-3 一起做
+#### B-2. customer.yaml 白标机制 ✅ 已完成（v0.2.0）
+- **状态**：✅ 已完成（v0.2.0）
 - **目标版本**：v0.2.0
 - **第一阶段（已完成）**：
   - [x] customer.yaml schema 设计 + 解析器（schema_version=1，前向兼容）
@@ -262,8 +262,7 @@ B-7 (卸载/重置)  独立
 | v0.1.13 | ✅ | Skills 树修复 + macOS 图标修复 + E2E 修复 + 文档同步 |
 | v0.1.14 | ✅ | Windows CMD 弹窗修复 + 图标灰边二次修复 |
 | v0.1.15 | ✅ | Windows 实测通过 + suppress_window 全覆盖 + 图标边缘纯黑 |
-| v0.2.0-dev | 🟡 | B-2 white-label stage 1（`229ab57`）+ B-3 Pack 加载器 stage 1/2/3a/3b/3c（`7963f93` / `ea49667` / `3bf14d6` / `9855db3` / `5d7b2bd`）|
-| v0.2.0 | 📋 | 基座定制能力（白标 + Pack 加载器 + 12 视图模板 + license features） |
+| v0.2.0 | ✅ | 白标 + Pack 加载器 + 12 视图模板 + license features + preinstall + pin_to_primary + BGE-M3 离线导入 |
 | v0.3.0 | 📋 | 跨境电商 Pack 完整版 + 第一个真实客户 |
 
 ---

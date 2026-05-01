@@ -6,6 +6,23 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-01 — v0.2.0 · White-label + Pack system + License gating
+
+### Shipped
+
+- **B-2 customer.yaml white-label**: Brand name, logo, primary color, hidden routes, packs.preinstall, packs.pin_to_primary, packs.config defaults — all from a single yaml, no binary changes.
+- **B-3 Pack loader + 12 view templates**: manifest.yaml parser, scanner, enable/disable persistence, MCP sync, config UI, import zip, uninstall, backup before upgrade, manifest migrations. 12 templates: AlertList, CompositeDashboard, DataTable, FormRunner, MetricsCard, PivotTable, RadarChart, SkillPalette, TimeSeriesChart, Timeline, TrendsMatrix, WorkflowLauncher.
+- **B-4 License features × Pack gating**: `manifest.license_feature` checked against license `payload.features`. Gated packs show 🔒 in Settings → Packs; enable toggle disabled; views hidden from sidebar.
+- **B-5 BGE-M3 offline zip import**: `rag_import_offline_zip` IPC + Knowledge page "Import offline model" button + `scripts/pack-bge-m3-offline.sh` packaging script.
+
+### Fixed
+
+- Clippy warnings (unused imports, needless_borrow, unnecessary_get_then_check)
+- Pack view not updating after rescan (switched to usePackStore)
+- Radar chart i18n keys (analytics.radar → analytics.chart.radar)
+
+---
+
 ## 2026-05-01 — v0.1.13-dev · Bug fix batch 2 (model refresh, token overhead, gateway lock, semantic model, MCP nav, log path)
 
 ### Fixed
