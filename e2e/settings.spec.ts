@@ -44,10 +44,12 @@ test.describe('settings', () => {
     await page.getByRole('option', { name: 'English' }).click();
   });
 
-  test('gateway config section shows Hermes data dir', async ({ page }) => {
+  test('settings page shows Hermes updates section', async ({ page }) => {
     await page.goto('/settings');
 
-    await expect(page.getByText(/Hermes/i)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Hermes updates/i }),
+    ).toBeVisible();
   });
 
   test('storage panel renders all four paths from app_paths', async ({ page }) => {
