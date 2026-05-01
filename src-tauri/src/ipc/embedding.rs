@@ -558,6 +558,7 @@ fn all_model_files_present(dir: &std::path::Path) -> bool {
 
 pub fn write_verified_stamp() -> std::io::Result<()> {
     let dir = model_dir();
+    std::fs::create_dir_all(&dir)?;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
