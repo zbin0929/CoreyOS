@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen } from 'lucide-react';
+import { Check, Copy, FolderOpen } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -10,17 +11,34 @@ import { Section } from '../shared';
 export function CustomerSection({ hermesDataDir }: { hermesDataDir?: string }) {
   const { t } = useTranslation();
   const cfg = useCustomerConfig();
+  const [copied, setCopied] = useState(false);
   const loading = cfg === null;
   const present = !loading && cfg.present;
   const hasError = !loading && Boolean(cfg.error);
   const hiddenRoutes = !loading ? cfg.navigation.hiddenRoutes : [];
   const customerYamlPath = hermesDataDir ? `${hermesDataDir}/customer.yaml` : 'customer.yaml';
+  const sample = `schema_version: 1
+brand:
+  app_name: My Company AI
+navigation:
+  hidden_routes:
+    - analytics`;
 
   async function openCustomerDir() {
     if (!hermesDataDir) return;
     try {
       const { open } = await import('@tauri-apps/plugin-shell');
       await open(hermesDataDir);
+    } catch (err) {
+      void err;
+    }
+  }
+
+  async function copyExample() {
+    try {
+      await navigator.clipboard.writeText(sample);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
     } catch (err) {
       void err;
     }
@@ -82,13 +100,14 @@ export function CustomerSection({ hermesDataDir }: { hermesDataDir?: string }) {
               </Button>
             </div>
             <div className="mt-2 text-fg-subtle">{t('settings.customer.recovery_example_label')}</div>
+            <div className="mt-2">
+              <Button type="button" size="sm" variant="ghost" onClick={() => void copyExample()}>
+                <Icon icon={copied ? Check : Copy} size="sm" className={copied ? 'text-emerald-500' : undefined} />
+                {copied ? t('settings.customer.copied') : t('settings.customer.copy_example')}
+              </Button>
+            </div>
             <pre className="mt-1 overflow-x-auto rounded border border-border/70 bg-bg-elev-1 px-2 py-1.5 text-[11px] leading-5 text-fg">
-{`schema_version: 1
-brand:
-  app_name: My Company AI
-navigation:
-  hidden_routes:
-    - analytics`}
+{sample}
             </pre>
           </div>
         )}

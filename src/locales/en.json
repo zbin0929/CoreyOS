@@ -608,6 +608,8 @@
       "none_hidden": "None",
       "unset": "(unset)",
       "open_dir": "Open directory",
+      "copy_example": "Copy example",
+      "copied": "Copied",
       "recovery_path_label": "Fix file at",
       "recovery_example_label": "Minimal valid example",
       "hint": "To apply changes, edit customer.yaml in your Hermes data directory and restart Corey."
