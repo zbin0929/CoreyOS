@@ -237,20 +237,175 @@ pub async fn pack_view_data(
             message: format!("view not found: {pack_id}/{view_id}"),
         });
     };
-    Ok(resolve_data_source(&ds))
+    resolve_data_source_async(&ds, &state.authority).await
 }
 
-fn resolve_data_source(ds: &serde_yaml::Value) -> serde_json::Value {
+async fn resolve_data_source_async(
+    ds: &serde_yaml::Value,
+    authority: &Arc<crate::sandbox::PathAuthority>,
+) -> IpcResult<serde_json::Value> {
     let json = yaml_to_json(ds);
-    if let Some(obj) = json.as_object() {
-        if let Some(static_value) = obj.get("static") {
-            return static_value.clone();
-        }
-        // `mcp`, `http`, `sql` etc land in stage 5f. For now they
-        // return an empty object so the template can still render
-        // its skeleton.
+    let Some(obj) = json.as_object() else {
+        return Ok(serde_json::Value::Object(serde_json::Map::new()));
+    };
+    if let Some(static_value) = obj.get("static") {
+        return Ok(static_value.clone());
     }
-    serde_json::Value::Object(serde_json::Map::new())
+    if let Some(http_cfg) = obj.get("http") {
+        return resolve_http_source(http_cfg).await;
+    }
+    if let Some(mcp_cfg) = obj.get("mcp") {
+        return resolve_mcp_source(mcp_cfg, authority).await;
+    }
+    Ok(serde_json::Value::Object(serde_json::Map::new()))
+}
+
+async fn resolve_http_source(cfg: &serde_json::Value) -> IpcResult<serde_json::Value> {
+    let url = cfg
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or(IpcError::Internal {
+            message: "http data_source missing 'url'".into(),
+        })?;
+    let method = cfg
+        .get("method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("GET")
+        .to_uppercase();
+    let timeout_secs = cfg
+        .get("timeout_secs")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(15);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .build()
+        .map_err(|e| IpcError::Internal {
+            message: format!("http client build: {e}"),
+        })?;
+    let mut req = match method.as_str() {
+        "POST" => client.post(url),
+        _ => client.get(url),
+    };
+    if let Some(headers) = cfg.get("headers").and_then(|v| v.as_object()) {
+        for (k, v) in headers {
+            if let Some(val) = v.as_str() {
+                req = req.header(k, val);
+            }
+        }
+    }
+    if let Some(body) = cfg.get("body") {
+        req = req.json(body);
+    }
+    let resp = req.send().await.map_err(|e| IpcError::Internal {
+        message: format!("http fetch failed: {e}"),
+    })?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(IpcError::Internal {
+            message: format!("http {status}: {body}"),
+        });
+    }
+    resp.json::<serde_json::Value>()
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("http json parse: {e}"),
+        })
+}
+
+async fn resolve_mcp_source(
+    cfg: &serde_json::Value,
+    authority: &Arc<crate::sandbox::PathAuthority>,
+) -> IpcResult<serde_json::Value> {
+    let server_name = cfg
+        .get("server")
+        .and_then(|v| v.as_str())
+        .ok_or(IpcError::Internal {
+            message: "mcp data_source missing 'server'".into(),
+        })?;
+    let tool = cfg
+        .get("tool")
+        .and_then(|v| v.as_str())
+        .ok_or(IpcError::Internal {
+            message: "mcp data_source missing 'tool'".into(),
+        })?;
+    let params = cfg
+        .get("params")
+        .cloned()
+        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let timeout_secs = cfg
+        .get("timeout_secs")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30);
+
+    let authority_clone = authority.clone();
+    let server_name_owned = server_name.to_string();
+    let tool_owned = tool.to_string();
+    let server_url = tokio::task::spawn_blocking(move || -> IpcResult<String> {
+        let doc = super::mcp::read_config_yaml(&authority_clone).map_err(|e| IpcError::Internal {
+            message: format!("read config.yaml: {e}"),
+        })?;
+        let servers = super::mcp::extract_servers(&doc);
+        let srv = servers.into_iter().find(|s| s.id == server_name_owned).ok_or_else(|| IpcError::Internal {
+            message: format!("mcp server '{server_name_owned}' not found in config.yaml"),
+        })?;
+        srv.config.get("url").and_then(|v| v.as_str()).map(String::from).ok_or_else(|| IpcError::Internal {
+            message: format!("mcp server '{server_name_owned}' has no url field (stdio servers not supported for data_source)"),
+        })
+    })
+    .await
+    .map_err(|e| IpcError::Internal { message: format!("mcp join: {e}") })?
+    .map_err(|e: IpcError| e)?;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .build()
+        .map_err(|e| IpcError::Internal {
+            message: format!("mcp client build: {e}"),
+        })?;
+
+    let rpc_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("time")
+        .as_millis();
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": rpc_id,
+        "method": "tools/call",
+        "params": { "name": tool_owned, "arguments": params }
+    });
+
+    let resp = client
+        .post(format!("{server_url}messages"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("mcp call failed: {e}"),
+        })?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(IpcError::Internal {
+            message: format!("mcp {status}: {text}"),
+        });
+    }
+    let result: serde_json::Value = resp.json().await.map_err(|e| IpcError::Internal {
+        message: format!("mcp json parse: {e}"),
+    })?;
+    let content = result
+        .get("result")
+        .and_then(|r| r.get("content"))
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("text"))
+        .and_then(|t| t.as_str());
+    if let Some(text) = content {
+        Ok(serde_json::from_str(text)
+            .unwrap_or_else(|_| serde_json::Value::String(text.to_string())))
+    } else {
+        Ok(result)
+    }
 }
 
 /// Return every view declared by every CURRENTLY-ENABLED Pack.
@@ -708,5 +863,37 @@ mod tests {
             other => panic!("expected Loaded, got {other:?}"),
         };
         assert!(!pack_is_gated(&manifest, &[]));
+    }
+
+    #[test]
+    fn resolve_data_source_async_returns_static_data() {
+        let ds: serde_yaml::Value =
+            serde_yaml::from_str("static: { metrics: { revenue: 123 } }").expect("yaml");
+        let authority = Arc::new(crate::sandbox::PathAuthority::new());
+        let rt = tokio::runtime::Runtime::new().expect("rt");
+        let result = rt
+            .block_on(resolve_data_source_async(&ds, &authority))
+            .expect("resolve");
+        assert_eq!(result["metrics"]["revenue"], 123);
+    }
+
+    #[test]
+    fn resolve_data_source_async_returns_empty_for_unknown_kind() {
+        let ds: serde_yaml::Value =
+            serde_yaml::from_str("sql: { query: \"SELECT 1\" }").expect("yaml");
+        let authority = Arc::new(crate::sandbox::PathAuthority::new());
+        let rt = tokio::runtime::Runtime::new().expect("rt");
+        let result = rt
+            .block_on(resolve_data_source_async(&ds, &authority))
+            .expect("resolve");
+        assert!(result.as_object().map(|o| o.is_empty()).unwrap_or(true));
+    }
+
+    #[test]
+    fn resolve_http_source_rejects_missing_url() {
+        let cfg = serde_json::json!({});
+        let rt = tokio::runtime::Runtime::new().expect("rt");
+        let result = rt.block_on(resolve_http_source(&cfg));
+        assert!(result.is_err());
     }
 }

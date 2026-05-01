@@ -258,7 +258,7 @@ fn validate_id(id: &str) -> IpcResult<()> {
 /// `YamlValue::Null`. Sibling of `ipc::channels::read_config_yaml_value`
 /// but not reused because that function is private to the channels
 /// module. Duplicating four lines costs less than threading a `pub` out.
-fn read_config_yaml(authority: &Arc<PathAuthority>) -> std::io::Result<YamlValue> {
+pub fn read_config_yaml(authority: &Arc<PathAuthority>) -> std::io::Result<YamlValue> {
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .ok_or_else(|| {
@@ -280,7 +280,7 @@ fn read_config_yaml(authority: &Arc<PathAuthority>) -> std::io::Result<YamlValue
 /// Pull every server out of the top-level `mcp_servers:` map. Order
 /// follows YAML map iteration (insertion order for serde_yaml) — we
 /// don't sort here so the UI can show the user's own grouping intent.
-fn extract_servers(doc: &YamlValue) -> Vec<McpServer> {
+pub fn extract_servers(doc: &YamlValue) -> Vec<McpServer> {
     let Some(map) = doc.as_mapping() else {
         return Vec::new();
     };

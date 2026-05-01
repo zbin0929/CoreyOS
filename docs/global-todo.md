@@ -46,8 +46,8 @@
   - [ ] `pin_to_primary` 实现（需 Pack 路由先就绪）
   - [ ] `packs.preinstall` 实现（需 Pack 加载器先就绪）
   - [ ] `packs.config` 预填（需 Pack 配置系统先就绪）
-  - [ ] 隐藏路由的 URL 级守卫（v0.2.0 接受小漏，B-3 一起做）
-  - [ ] Settings → Help 面板显示 customer.yaml 的 parse error
+  - [x] 隐藏路由的 URL 级守卫（rootRoute beforeLoad redirect）
+  - [x] Settings → Help 面板显示 customer.yaml 的 parse error（已有 CustomerSection）
 - **价值**：定制交付的核心载体——同一个二进制，靠 yaml 让客户看到不同产品
 - **依赖**：无
 
