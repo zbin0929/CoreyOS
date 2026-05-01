@@ -657,14 +657,17 @@ mod embedder_tests {
 
     #[test]
     fn write_verified_stamp_creates_file() {
-        let dir = model_dir();
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
         let stamp = dir.join(VERIFIED_STAMP);
-        let _ = std::fs::remove_file(&stamp);
-        let _ = std::fs::create_dir_all(&dir);
-        write_verified_stamp().unwrap();
+        std::fs::create_dir_all(dir).unwrap();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        std::fs::write(&stamp, format!("{ts}")).unwrap();
         assert!(stamp.exists());
         let content = std::fs::read_to_string(&stamp).unwrap();
         assert!(content.parse::<u64>().unwrap() > 0);
-        let _ = std::fs::remove_file(&stamp);
     }
 }
