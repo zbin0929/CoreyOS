@@ -114,11 +114,16 @@ pub async fn hermes_data_reset() -> IpcResult<()> {
             message: format!("read hermes dir: {e}"),
         })?;
         for entry in entries.flatten() {
-            let ft = entry.file_type().map_err(|e| crate::error::IpcError::Internal {
-                message: format!("file_type: {e}"),
-            })?;
-            if ft.is_dir() { let _ = std::fs::remove_dir_all(entry.path()); }
-            else { let _ = std::fs::remove_file(entry.path()); }
+            let ft = entry
+                .file_type()
+                .map_err(|e| crate::error::IpcError::Internal {
+                    message: format!("file_type: {e}"),
+                })?;
+            if ft.is_dir() {
+                let _ = std::fs::remove_dir_all(entry.path());
+            } else {
+                let _ = std::fs::remove_file(entry.path());
+            }
         }
         Ok(())
     })
@@ -168,13 +173,20 @@ mod reset_tests {
 
         for entry in fs::read_dir(&dir).expect("read_dir").flatten() {
             let ft = entry.file_type().expect("file_type");
-            if ft.is_dir() { let _ = fs::remove_dir_all(entry.path()); }
-            else { let _ = fs::remove_file(entry.path()); }
+            if ft.is_dir() {
+                let _ = fs::remove_dir_all(entry.path());
+            } else {
+                let _ = fs::remove_file(entry.path());
+            }
         }
 
         let mut entries: Vec<_> = fs::read_dir(&dir).expect("read_dir").flatten().collect();
         entries.retain(|e| e.file_name() != ".DS_Store");
-        assert!(entries.is_empty(), "dir should be empty but found {:?}", entries.iter().map(|e| e.file_name()).collect::<Vec<_>>());
+        assert!(
+            entries.is_empty(),
+            "dir should be empty but found {:?}",
+            entries.iter().map(|e| e.file_name()).collect::<Vec<_>>()
+        );
         assert!(dir.is_dir());
 
         let _ = fs::remove_dir_all(&dir);
