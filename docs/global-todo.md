@@ -120,7 +120,7 @@
 ### 第 2 层 — 应做（影响交付质量）
 
 #### B-6. 用量 / 费用分析仪表盘
-- **状态**：🟢 Sprint 1-3 已完成，Sprint 4（P2）待做
+- **状态**：🟢 Sprint 1-4 全部完成
 - **目标版本**：v0.2.0
 - **内容**：见 `docs/plans/v0.2.0-b4-analytics.md`
   - [x] Token 消耗统计（按 Agent / 模型 / 天）
@@ -129,8 +129,8 @@
   - [x] 延迟追踪（DB v14 + P50/P95/P99 + 按模型延迟）
   - [x] 错误率统计（ErrorStats + Top Errors + >5% 红色警告）
   - [x] CSV 导出（Blob download，含 Summary/Daily/Cost/Errors）
-  - [ ] 预算使用进度（关联 Budgets）
-  - [ ] 高级图表（热力图/雷达图）
+  - [x] 预算使用进度（关联 Budgets + 进度条 + 超额警告）
+  - [x] 健康雷达图（六维：延迟/成本效率/可靠性/工具使用/反馈/活跃度）
 - **价值**：客户付费后必问"花了多少钱"
 - **依赖**：B-3（用 MetricsCard + TimeSeriesChart 模板渲染）
 
