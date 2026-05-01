@@ -1,0 +1,92 @@
+import { useTranslation } from 'react-i18next';
+
+import { useCustomerConfig } from '@/stores/customer';
+
+import { Section } from '../shared';
+
+export function CustomerSection() {
+  const { t } = useTranslation();
+  const cfg = useCustomerConfig();
+  const loading = cfg === null;
+  const present = !loading && cfg.present;
+  const hasError = !loading && Boolean(cfg.error);
+  const hiddenRoutes = !loading ? cfg.navigation.hiddenRoutes : [];
+
+  return (
+    <Section
+      id="settings-customer"
+      title={t('settings.customer.title')}
+      description={t('settings.customer.desc')}
+    >
+      <div className="rounded-md border border-border bg-bg-elev-1 p-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-fg-subtle">{t('settings.customer.status_label')}</span>
+          {loading ? (
+            <span className="rounded-full border border-border px-2 py-0.5 text-fg-muted">
+              {t('settings.customer.status_loading')}
+            </span>
+          ) : hasError ? (
+            <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-red-500">
+              {t('settings.customer.status_invalid')}
+            </span>
+          ) : present ? (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-500">
+              {t('settings.customer.status_loaded')}
+            </span>
+          ) : (
+            <span className="rounded-full border border-border px-2 py-0.5 text-fg-muted">
+              {t('settings.customer.status_absent')}
+            </span>
+          )}
+          {!loading && (
+            <span className="text-fg-subtle">
+              {t('settings.customer.schema')}: v{cfg.schemaVersion}
+            </span>
+          )}
+        </div>
+
+        {!loading && cfg.error && (
+          <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-2 text-red-500">
+            {cfg.error}
+          </div>
+        )}
+
+        {!loading && present && (
+          <div className="mt-3 grid gap-2">
+            <Row
+              label={t('settings.customer.brand_name')}
+              value={cfg.brand.appName || t('settings.customer.unset')}
+            />
+            <Row
+              label={t('settings.customer.brand_logo')}
+              value={cfg.brand.logo || t('settings.customer.unset')}
+            />
+            <Row
+              label={t('settings.customer.primary_color')}
+              value={cfg.brand.primaryColor || t('settings.customer.unset')}
+            />
+            <Row
+              label={t('settings.customer.hidden_routes')}
+              value={
+                hiddenRoutes.length > 0
+                  ? hiddenRoutes.join(', ')
+                  : t('settings.customer.none_hidden')
+              }
+            />
+          </div>
+        )}
+
+        <p className="mt-3 text-fg-subtle">{t('settings.customer.hint')}</p>
+      </div>
+    </Section>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="min-w-[130px] text-fg-subtle">{label}</span>
+      <code className="min-w-0 flex-1 break-all text-fg">{value}</code>
+    </div>
+  );
+}

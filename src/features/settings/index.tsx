@@ -12,6 +12,7 @@ import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
 import { ContextSection } from './sections/ContextSection';
+import { CustomerSection } from './sections/CustomerSection';
 import { LicenseSection } from './sections/LicenseSection';
 import { MemorySection } from './sections/MemorySection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
@@ -33,6 +34,7 @@ const SETTINGS_ANCHORS = [
   { id: 'settings-sandbox', labelKey: 'settings.sandbox.title' },
   { id: 'settings-scopes', labelKey: 'settings.sandbox_scopes.title' },
   { id: 'settings-hermes-tools', labelKey: 'settings.hermes_security.title' },
+  { id: 'settings-customer', labelKey: 'settings.customer.title' },
   { id: 'settings-storage', labelKey: 'settings.storage.title' },
 ] as const;
 
@@ -134,6 +136,8 @@ export function SettingsRoute() {
               vs the other. Killed the "I locked sandbox but Hermes
               still ran ls ~/Desktop" confusion the v9 audit logged. */}
           <HermesToolPermissionsSection />
+
+          <CustomerSection />
 
           <HermesUpdateSection />
 

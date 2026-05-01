@@ -592,6 +592,23 @@
     "help_page": "全局偏好 + Hermes 连接。语言、主题、快捷键仅在本设备生效。网关 URL + API Key + 默认模型用于连接本地 Hermes 网关（通常 http://127.0.0.1:8642）。“Hermes 实例”区允许添加额外的 OpenAI 兼容端点（自部署 LLM、远程 Hermes 等）。“Sandbox 范围”区可按 agent 隔离文件访问权限。",
     "subtitle": "偏好 · 网关 · 存储",
     "loading": "正在加载当前配置…",
+    "customer": {
+      "title": "客户白标配置",
+      "desc": "应用启动时从 customer.yaml 读取的只读快照。",
+      "status_label": "customer.yaml",
+      "status_loading": "加载中",
+      "status_loaded": "已加载",
+      "status_absent": "未找到",
+      "status_invalid": "无效",
+      "schema": "Schema",
+      "brand_name": "品牌名称",
+      "brand_logo": "品牌 Logo",
+      "primary_color": "主色",
+      "hidden_routes": "隐藏路由",
+      "none_hidden": "无",
+      "unset": "（未设置）",
+      "hint": "修改 Hermes 数据目录下的 customer.yaml 后，重启 Corey 生效。"
+    },
     "appearance": {
       "title": "外观",
       "desc": "仅保存在本机的视觉偏好。",

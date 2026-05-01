@@ -70,6 +70,10 @@ export function useBrandLogoUrl(): string {
   return selectBrandLogoUrl(cfg);
 }
 
+export function useCustomerConfig(): CustomerConfig | null {
+  return useCustomerStore((s) => s.config);
+}
+
 /**
  * Fetch `customer_config_get` from the backend, store the snapshot,
  * and apply DOM-level side effects (document.title, primary-color
