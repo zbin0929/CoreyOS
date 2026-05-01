@@ -476,6 +476,10 @@ export const tauriMockInitScript = /* js */ `
       case 'app_paths':
         return state.appPaths;
 
+      case 'hermes_data_reset':
+      case 'corey_config_reset':
+        return null;
+
       case 'sandbox_get_state':
         return JSON.parse(JSON.stringify(state.sandbox));
 

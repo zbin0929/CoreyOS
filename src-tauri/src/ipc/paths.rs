@@ -99,3 +99,107 @@ pub async fn app_data_dir_clear() -> IpcResult<()> {
     })?;
     Ok(())
 }
+
+/// Delete all contents under `~/.hermes/` (skills, config, .env, logs,
+/// memories, cron, etc.) but preserve the directory itself so Hermes
+/// can re-initialise on next launch. Does NOT touch Corey's own
+/// config_dir / data_dir / license / packs.
+#[tauri::command]
+pub async fn hermes_data_reset() -> IpcResult<()> {
+    let dir = paths::hermes_data_dir().map_err(|e| crate::error::IpcError::Internal {
+        message: format!("resolve hermes dir: {e}"),
+    })?;
+    tokio::task::spawn_blocking(move || {
+        let entries = std::fs::read_dir(&dir).map_err(|e| crate::error::IpcError::Internal {
+            message: format!("read hermes dir: {e}"),
+        })?;
+        for entry in entries.flatten() {
+            let ft = entry.file_type().map_err(|e| crate::error::IpcError::Internal {
+                message: format!("file_type: {e}"),
+            })?;
+            if ft.is_dir() { let _ = std::fs::remove_dir_all(entry.path()); }
+            else { let _ = std::fs::remove_file(entry.path()); }
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| crate::error::IpcError::Internal {
+        message: format!("task join: {e}"),
+    })?
+}
+
+/// Delete Corey's own persisted state (SQLite DB, changelog, gateway
+/// config) but preserve the license file and Pack state. The app
+/// should be restarted after this call.
+#[tauri::command]
+pub async fn corey_config_reset(state: State<'_, AppState>) -> IpcResult<()> {
+    let db_path = state.db_path.clone();
+    let changelog = state.changelog_path.clone();
+    let config_dir = state.config_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&changelog);
+        let gw = config_dir.join("gateway.json");
+        let _ = std::fs::remove_file(gw);
+        Ok(())
+    })
+    .await
+    .map_err(|e| crate::error::IpcError::Internal {
+        message: format!("task join: {e}"),
+    })?
+}
+
+#[cfg(test)]
+mod reset_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn hermes_data_reset_clears_contents() {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("corey-reset-test-{ts}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("skills")).expect("mkdir");
+        fs::write(dir.join("skills").join("test.md"), "hello").expect("write");
+        fs::write(dir.join(".env"), "KEY=1").expect("write");
+
+        for entry in fs::read_dir(&dir).expect("read_dir").flatten() {
+            let ft = entry.file_type().expect("file_type");
+            if ft.is_dir() { let _ = fs::remove_dir_all(entry.path()); }
+            else { let _ = fs::remove_file(entry.path()); }
+        }
+
+        let mut entries: Vec<_> = fs::read_dir(&dir).expect("read_dir").flatten().collect();
+        entries.retain(|e| e.file_name() != ".DS_Store");
+        assert!(entries.is_empty(), "dir should be empty but found {:?}", entries.iter().map(|e| e.file_name()).collect::<Vec<_>>());
+        assert!(dir.is_dir());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn corey_config_reset_removes_db_and_changelog() {
+        let dir = std::env::temp_dir().join("corey-test-config-reset");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let db = dir.join("caduceus.db");
+        let cl = dir.join("changelog.jsonl");
+        let gw = dir.join("gateway.json");
+        fs::write(&db, "db").expect("write");
+        fs::write(&cl, "cl").expect("write");
+        fs::write(&gw, "gw").expect("write");
+
+        let _ = fs::remove_file(&db);
+        let _ = fs::remove_file(&cl);
+        let _ = fs::remove_file(&gw);
+
+        assert!(!db.exists());
+        assert!(!cl.exists());
+        assert!(!gw.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

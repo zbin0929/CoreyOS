@@ -890,7 +890,15 @@
       "change": "更改",
       "reset": "恢复默认",
       "copy": "复制",
-      "copied": "已复制"
+      "copied": "已复制",
+      "danger_zone": "危险操作",
+      "hermes_reset_title": "清除 Hermes 数据",
+      "hermes_reset_desc": "删除 ~/.hermes 下所有内容（技能、配置、.env、日志、记忆）。目录本身保留。需重启应用。",
+      "hermes_reset_btn": "清除 Hermes 数据",
+      "corey_reset_title": "重置 Corey 配置",
+      "corey_reset_desc": "删除 SQLite 数据库、变更日志和网关配置。许可证和 Pack 状态保留。需重启应用。",
+      "corey_reset_btn": "重置 Corey 配置",
+      "confirm": "再次点击确认"
     },
     "sandbox": {
       "title": "文件沙箱",

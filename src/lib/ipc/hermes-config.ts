@@ -62,6 +62,14 @@ export function appDataDirClear(): Promise<void> {
   return invoke<void>('app_data_dir_clear');
 }
 
+export function hermesDataReset(): Promise<void> {
+  return invoke<void>('hermes_data_reset');
+}
+
+export function coreyConfigReset(): Promise<void> {
+  return invoke<void>('corey_config_reset');
+}
+
 // ───────────────────────── Presets ─────────────────────────
 
 /** Bundled starter content shipped inside the app (skills + MCP +

@@ -891,7 +891,15 @@
       "change": "Change",
       "reset": "Reset",
       "copy": "Copy",
-      "copied": "Copied"
+      "copied": "Copied",
+      "danger_zone": "Danger zone",
+      "hermes_reset_title": "Clear Hermes data",
+      "hermes_reset_desc": "Delete all contents under ~/.hermes (skills, config, .env, logs, memories). The directory itself is preserved. Restart required.",
+      "hermes_reset_btn": "Clear Hermes data",
+      "corey_reset_title": "Reset Corey config",
+      "corey_reset_desc": "Delete the SQLite database, changelog, and gateway config. License and Pack state are preserved. Restart required.",
+      "corey_reset_btn": "Reset Corey config",
+      "confirm": "Click again to confirm"
     },
     "sandbox": {
       "title": "File sandbox",

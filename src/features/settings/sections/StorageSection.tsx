@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Copy, FolderOpen, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Check, Copy, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -8,6 +8,8 @@ import {
   appDataDirClear,
   appDataDirSet,
   appPaths,
+  coreyConfigReset,
+  hermesDataReset,
   ipcErrorMessage,
   type AppPaths,
 } from '@/lib/ipc';
@@ -63,6 +65,8 @@ export function StorageSection({
           ))}
         </ul>
       </details>
+
+      <DangerZone />
     </Section>
   );
 }
@@ -193,5 +197,73 @@ function PathRow({ label, value }: { label: string; value: string }) {
         )}
       </button>
     </li>
+  );
+}
+
+function DangerZone() {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [confirmHermes, setConfirmHermes] = useState(false);
+  const [confirmCorey, setConfirmCorey] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onHermesReset() {
+    if (!confirmHermes) { setConfirmHermes(true); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      await hermesDataReset();
+      setConfirmHermes(false);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onCoreyReset() {
+    if (!confirmCorey) { setConfirmCorey(true); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      await coreyConfigReset();
+      setConfirmCorey(false);
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-danger/30 bg-danger/5 p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-danger">
+        <Icon icon={AlertTriangle} size="md" />
+        {t('settings.storage.danger_zone')}
+      </div>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-medium text-fg">{t('settings.storage.hermes_reset_title')}</div>
+            <div className="text-[11px] text-fg-muted">{t('settings.storage.hermes_reset_desc')}</div>
+          </div>
+          <Button size="sm" variant="danger" disabled={busy} onClick={() => void onHermesReset()} data-testid="btn-hermes-reset">
+            <Icon icon={Trash2} size="xs" />
+            {confirmHermes ? t('settings.storage.confirm') : t('settings.storage.hermes_reset_btn')}
+          </Button>
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-medium text-fg">{t('settings.storage.corey_reset_title')}</div>
+            <div className="text-[11px] text-fg-muted">{t('settings.storage.corey_reset_desc')}</div>
+          </div>
+          <Button size="sm" variant="danger" disabled={busy} onClick={() => void onCoreyReset()} data-testid="btn-corey-reset">
+            <Icon icon={RotateCcw} size="xs" />
+            {confirmCorey ? t('settings.storage.confirm') : t('settings.storage.corey_reset_btn')}
+          </Button>
+        </div>
+      </div>
+      {error && <div className="mt-2 text-xs text-danger">{error}</div>}
+    </div>
   );
 }

@@ -158,6 +158,8 @@ pub fn run() {
             ipc::paths::app_paths,
             ipc::paths::app_data_dir_set,
             ipc::paths::app_data_dir_clear,
+            ipc::paths::hermes_data_reset,
+            ipc::paths::corey_config_reset,
             ipc::channels::hermes_channel_list,
             ipc::channels::hermes_channel_save,
             ipc::channels::probe::hermes_channel_probe_token,
