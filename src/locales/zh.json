@@ -1038,7 +1038,9 @@
     "rag_not_installed": "未安装",
     "rag_download_size": "需要下载语义模型（约 {{size}}）",
     "rag_download": "下载并启用",
-    "rag_downloading": "下载中…"
+    "rag_downloading": "下载中…",
+    "rag_import_offline": "导入离线包",
+    "rag_importing": "导入中…"
   },
   "voice": {
     "title": "语音设置",

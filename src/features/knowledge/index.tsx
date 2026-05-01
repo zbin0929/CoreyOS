@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
+  Archive,
   Brain,
   CheckCircle2,
   Download,
@@ -202,6 +203,24 @@ export function KnowledgeRoute() {
               >
                 <Icon icon={rag.downloading ? Loader2 : Download} size="xs" className={cn(rag.downloading && 'animate-spin')} />
                 {rag.downloading ? t('knowledge.rag_downloading') : t('knowledge.rag_download')}
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={async () => {
+                  const { open } = await import('@tauri-apps/plugin-dialog');
+                  const selected = await open({
+                    multiple: false,
+                    filters: [{ name: 'ZIP', extensions: ['zip'] }],
+                  });
+                  if (typeof selected === 'string' && selected) {
+                    await rag.importOfflineZip(selected);
+                  }
+                }}
+                disabled={rag.importing}
+              >
+                <Icon icon={rag.importing ? Loader2 : Archive} size="xs" className={cn(rag.importing && 'animate-spin')} />
+                {rag.importing ? t('knowledge.rag_importing') : t('knowledge.rag_import_offline')}
               </Button>
             </div>
           )}

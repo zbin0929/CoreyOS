@@ -13,6 +13,7 @@ use chrono::Utc;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
+use zip::ZipArchive;
 
 use crate::db::Db;
 use crate::error::{IpcError, IpcResult};
@@ -424,4 +425,187 @@ pub async fn rag_download_model(app: AppHandle, state: State<'_, AppState>) -> I
     })?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn rag_import_offline_zip(
+    zip_path: String,
+    _state: State<'_, AppState>,
+) -> IpcResult<()> {
+    let model_dir = embedding::model_dir();
+    let zip_path = PathBuf::from(&zip_path);
+    if !zip_path.exists() {
+        return Err(IpcError::Internal {
+            message: format!("zip file not found: {}", zip_path.display()),
+        });
+    }
+
+    tokio::task::spawn_blocking(move || {
+        let file = std::fs::File::open(&zip_path).map_err(|e| IpcError::Internal {
+            message: format!("open zip: {e}"),
+        })?;
+        let mut archive = ZipArchive::new(file).map_err(|e| IpcError::Internal {
+            message: format!("read zip: {e}"),
+        })?;
+
+        std::fs::create_dir_all(&model_dir).map_err(|e| IpcError::Internal {
+            message: format!("create model dir: {e}"),
+        })?;
+
+        let expected_names: Vec<&str> = embedding::MODEL_FILES.iter().map(|(n, _)| *n).collect();
+        let mut extracted: Vec<String> = Vec::new();
+
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i).map_err(|e| IpcError::Internal {
+                message: format!("zip entry {i}: {e}"),
+            })?;
+            let name = entry.name().to_string();
+            let file_name = PathBuf::from(&name)
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if !expected_names.contains(&file_name.as_str()) {
+                continue;
+            }
+            let target = model_dir.join(&file_name);
+            let mut out = std::fs::File::create(&target).map_err(|e| IpcError::Internal {
+                message: format!("create {}: {e}", target.display()),
+            })?;
+            io::copy(&mut entry, &mut out).map_err(|e| IpcError::Internal {
+                message: format!("extract {}: {e}", file_name),
+            })?;
+            extracted.push(file_name);
+        }
+
+        for expected in &expected_names {
+            if !extracted.iter().any(|e| e == expected) {
+                return Err(IpcError::Internal {
+                    message: format!("zip missing required file: {expected}"),
+                });
+            }
+        }
+
+        for (name, _) in embedding::MODEL_FILES {
+            let path = model_dir.join(name);
+            let meta = std::fs::metadata(&path).map_err(|e| IpcError::Internal {
+                message: format!("stat {}: {e}", name),
+            })?;
+            if meta.len() == 0 {
+                return Err(IpcError::Internal {
+                    message: format!("{name} is empty after extraction"),
+                });
+            }
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("import join: {e}"),
+    })??;
+
+    #[cfg(feature = "rag")]
+    {
+        match embedding::validate_model_load() {
+            Ok(_) => {
+                tracing::info!("offline zip import: model load validation passed");
+            }
+            Err(e) => {
+                tracing::warn!("offline zip import: model load validation failed: {e}");
+                return Err(IpcError::Internal {
+                    message: format!("model files extracted but load validation failed: {e}"),
+                });
+            }
+        }
+    }
+
+    embedding::write_verified_stamp().map_err(|e| IpcError::Internal {
+        message: format!("write verified stamp: {e}"),
+    })?;
+
+    tracing::info!("offline zip import completed successfully");
+    Ok(())
+}
+
+#[cfg(test)]
+mod import_tests {
+    use super::*;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+
+    fn make_zip(entries: &[(&str, &[u8])]) -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let zip_path = tmp.path().join("test.zip");
+        let zip_file = std::fs::File::create(&zip_path).expect("create zip");
+        let mut writer = zip::ZipWriter::new(zip_file);
+        for (name, data) in entries {
+            writer
+                .start_file(*name, SimpleFileOptions::default())
+                .expect("start file");
+            writer.write_all(data).expect("write");
+        }
+        writer.finish().expect("finish");
+        tmp
+    }
+
+    #[test]
+    fn extract_rejects_zip_missing_required_files() {
+        let tmp = make_zip(&[("readme.txt", b"not a model")]);
+        let zip_path = tmp.path().join("test.zip");
+        let _model_dir = tempfile::tempdir().expect("model tempdir");
+
+        let file = std::fs::File::open(&zip_path).expect("open zip");
+        let mut archive = ZipArchive::new(file).expect("read zip");
+        let expected_names: Vec<&str> = embedding::MODEL_FILES.iter().map(|(n, _)| *n).collect();
+        let mut extracted: Vec<String> = Vec::new();
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i).expect("entry");
+            let name = entry.name().to_string();
+            let file_name = PathBuf::from(&name)
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if expected_names.contains(&file_name.as_str()) {
+                extracted.push(file_name);
+            }
+        }
+        for expected in &expected_names {
+            assert!(
+                !extracted.iter().any(|e| e == expected),
+                "should be missing: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn extract_finds_model_files_at_root() {
+        let entries: Vec<(&str, &[u8])> = embedding::MODEL_FILES
+            .iter()
+            .map(|(n, _)| (*n, b"placeholder" as &[u8]))
+            .collect();
+        let tmp = make_zip(&entries);
+        let zip_path = tmp.path().join("test.zip");
+
+        let file = std::fs::File::open(&zip_path).expect("open zip");
+        let mut archive = ZipArchive::new(file).expect("read zip");
+        let expected_names: Vec<&str> = embedding::MODEL_FILES.iter().map(|(n, _)| *n).collect();
+        let mut extracted: Vec<String> = Vec::new();
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i).expect("entry");
+            let name = entry.name().to_string();
+            let file_name = PathBuf::from(&name)
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if expected_names.contains(&file_name.as_str()) {
+                extracted.push(file_name);
+            }
+        }
+        for expected in &expected_names {
+            assert!(
+                extracted.iter().any(|e| e == expected),
+                "should be present: {expected}"
+            );
+        }
+    }
 }

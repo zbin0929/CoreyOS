@@ -1038,7 +1038,9 @@
     "rag_not_installed": "Not installed",
     "rag_download_size": "Download semantic model (~{{size}})",
     "rag_download": "Download & Enable",
-    "rag_downloading": "Downloading…"
+    "rag_downloading": "Downloading…",
+    "rag_import_offline": "Import Offline Zip",
+    "rag_importing": "Importing…"
   },
   "voice": {
     "title": "Voice",

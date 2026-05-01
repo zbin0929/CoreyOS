@@ -208,6 +208,10 @@ export function ragDownloadModel(): Promise<void> {
   return invoke<void>('rag_download_model');
 }
 
+export function ragImportOfflineZip(zipPath: string): Promise<void> {
+  return invoke<void>('rag_import_offline_zip', { zipPath });
+}
+
 // ───────────────────────── Voice ─────────────────────────
 
 export interface VoiceTranscribeResult {

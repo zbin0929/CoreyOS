@@ -235,6 +235,7 @@ pub fn run() {
             ipc::knowledge::knowledge_search,
             ipc::knowledge::rag_status,
             ipc::knowledge::rag_download_model,
+            ipc::knowledge::rag_import_offline_zip,
             ipc::voice::voice_transcribe,
             ipc::voice::tts::voice_tts,
             ipc::voice::voice_get_config,

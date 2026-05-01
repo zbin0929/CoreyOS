@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ragStatus, ragDownloadModel } from '@/lib/ipc/runtime';
+import { ragStatus, ragDownloadModel, ragImportOfflineZip } from '@/lib/ipc/runtime';
 import type { RagStatus } from '@/lib/ipc/runtime';
 
 export function useRagStatus() {
   const [status, setStatus] = useState<RagStatus | null>(null);
   const [downloading, setDownloading] = useState(false);
+
+  const [importing, setImporting] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -28,6 +30,16 @@ export function useRagStatus() {
     }
   }, [refresh]);
 
+  const importOfflineZip = useCallback(async (zipPath: string) => {
+    setImporting(true);
+    try {
+      await ragImportOfflineZip(zipPath);
+    } finally {
+      setImporting(false);
+      await refresh();
+    }
+  }, [refresh]);
+
   const missingFiles = status
     ? status.files.filter((f) => !f.exists)
     : [];
@@ -40,6 +52,8 @@ export function useRagStatus() {
     status,
     downloading,
     downloadModel,
+    importing,
+    importOfflineZip,
     refresh,
     modelInstalled: status?.model_installed ?? false,
     missingFiles,
