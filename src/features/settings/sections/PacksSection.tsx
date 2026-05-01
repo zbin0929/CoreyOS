@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Package, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Package, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -26,6 +26,18 @@ export function PacksSection() {
       title={t('settings.packs.title')}
       description={t('settings.packs.desc')}
     >
+      <div className="mb-2 flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={loading}
+          onClick={() => void refresh()}
+        >
+          <Icon icon={RefreshCw} size="sm" className={loading ? 'animate-spin' : undefined} />
+          {t('settings.packs.rescan')}
+        </Button>
+      </div>
       <div className="rounded-md border border-border bg-bg-elev-1 p-3 text-xs">
         {loading && (
           <span className="text-fg-muted">{t('settings.packs.loading')}</span>

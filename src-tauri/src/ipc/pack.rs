@@ -116,6 +116,18 @@ pub async fn pack_list(state: State<'_, AppState>) -> IpcResult<Vec<PackListEntr
     Ok(registry.packs.iter().map(PackListEntry::from).collect())
 }
 
+#[tauri::command]
+pub async fn pack_rescan(state: State<'_, AppState>) -> IpcResult<Vec<PackListEntry>> {
+    let hermes_dir = crate::paths::hermes_data_dir().map_err(|e| IpcError::Other(e.to_string()))?;
+    let new_registry = crate::pack::Registry::scan(&hermes_dir);
+    let entries: Vec<PackListEntry> = new_registry.packs.iter().map(PackListEntry::from).collect();
+    {
+        let mut reg = state.packs.write();
+        *reg = new_registry;
+    }
+    Ok(entries)
+}
+
 /// One view declared by an ENABLED Pack. The DTO carries
 /// everything the frontend needs to render the right template plus
 /// dispatch action buttons. Disabled Packs' views are filtered out
@@ -573,5 +585,24 @@ mod tests {
         let r = Registry::empty();
         let dtos: Vec<PackListEntry> = r.packs.iter().map(PackListEntry::from).collect();
         assert!(dtos.is_empty());
+    }
+
+    #[test]
+    fn rescan_produces_same_dto_shape_as_list() {
+        // Verify that scanning a temp dir with one Pack and mapping
+        // through the same DTO path produces a healthy entry.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let pack_dir = tmp.path().join("test_pack");
+        std::fs::create_dir_all(&pack_dir).expect("mkdir");
+        std::fs::write(
+            pack_dir.join("manifest.yaml"),
+            "schema_version: 1\nid: test_pack\nversion: \"0.1.0\"\ntitle: Test\n",
+        )
+        .expect("write manifest");
+        let registry = Registry::scan(tmp.path());
+        let dtos: Vec<PackListEntry> = registry.packs.iter().map(PackListEntry::from).collect();
+        assert_eq!(dtos.len(), 1);
+        assert_eq!(dtos[0].manifest_id, "test_pack");
+        assert!(dtos[0].healthy);
     }
 }

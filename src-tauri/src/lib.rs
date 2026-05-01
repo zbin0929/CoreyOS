@@ -262,6 +262,7 @@ pub fn run() {
             ipc::license::license_machine_id,
             ipc::customer::customer_config_get,
             ipc::pack::pack_list,
+            ipc::pack::pack_rescan,
             ipc::pack::pack_set_enabled,
             ipc::pack::pack_views_list,
             ipc::pack::pack_view_data,

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { packList, packSetEnabled, packViewsList, type PackListEntry, type PackView } from '@/lib/ipc/pack';
+import { packRescan, packSetEnabled, packViewsList, type PackListEntry, type PackView } from '@/lib/ipc/pack';
 
 export type { PackListEntry, PackView } from '@/lib/ipc/pack';
 
@@ -22,7 +22,7 @@ export const usePackStore = create<PackState>((set, get) => ({
   refresh: async () => {
     set({ loading: true, error: null });
     try {
-      const [packs, views] = await Promise.all([packList(), packViewsList()]);
+      const [packs, views] = await Promise.all([packRescan(), packViewsList()]);
       set({ packs, views, loading: false });
     } catch (err) {
       set({ error: String(err), loading: false });

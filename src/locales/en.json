@@ -623,7 +623,8 @@
       "enable": "Enable",
       "disable": "Disable",
       "on": "On",
-      "off": "Off"
+      "off": "Off",
+      "rescan": "Rescan"
     },
     "appearance": {
       "title": "Appearance",

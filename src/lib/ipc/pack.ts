@@ -47,6 +47,10 @@ export function packList(): Promise<PackListEntry[]> {
   return invoke<PackListEntry[]>('pack_list');
 }
 
+export function packRescan(): Promise<PackListEntry[]> {
+  return invoke<PackListEntry[]>('pack_rescan');
+}
+
 export function packSetEnabled(packId: string, enabled: boolean): Promise<void> {
   return invoke<void>('pack_set_enabled', { packId, enabled });
 }
