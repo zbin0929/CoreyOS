@@ -342,11 +342,20 @@ pnpm vitest run         # 全绿
 - **首页右侧栏太空**：加回「系统概览」卡片（Gateway/Hermes/MCP/Cron 四行状态）
 - **E2E smoke 测试失败**：首页标题从 "Welcome to Corey" 改为 "CoreyOS"，`HermesInstallCard` 移除 `!hermes.installed` 门控条件
 
-### 待 Windows 实测验证（v0.1.13 目标）
+### v0.1.13-dev Bug fix batch 2（2026-05-01）
 
-- BUG-007~009：数据目录统一后，Windows 上旧的 `E:\Corey\data\` 需手动删除
-- BUG-008：对话白圈在 Windows 实测确认已解决
-- BUG-010：BGE-M3 验证戳机制已替代文件大小校验，需 Windows 实测确认
+- **#1 设默认模型后顶部/会话模型未刷新**：`LlmProfilesSection.setAsDefault` 写了 Hermes config 但未更新 `useAppStatusStore.currentModel`，加 `setCurrentModel()` 调用
+- **#4 语义模型点安装后立刻显示已安装**：加最小文件大小校验 + ONNX session 加载验证（`validate_model_load`），验证通过才写 `.verified` 戳
+- **#5 首页"配置MCP"跳转到设置页**：路由从 `/settings` 改为 `/mcp`
+- **#6 日志页路径不对（Windows）**：`log_path()` 从 `$HOME` 改为 `hermes_data_dir()`
+- **#7 简单问候消耗 11K token**：移除 `enrichHistoryWithContext` 中重复的 `memoryRead('user')` 注入（Hermes Layer 6 已注入 USER.md）
+- **#9 Win重开卡死（lock file PermissionError）**：清理 lock 文件失败时先杀残留 gateway 进程再重试
+- **设置页移除网关表单**：Base URL / API Key / 默认模型表单移除，改由 Models 页管理
+
+### 已知低优先问题
+
+- **#8 Windows 中文乱码**：部分 Windows 机器终端输出编码问题，低优先
+- **Token 固定开销 ~11K**：Hermes 架构固有（31 工具定义 ~8.7K + Skills Index ~3K + 系统提示词 ~3-8K），建议选支持 prompt caching 的模型（DeepSeek cache hit 90% 折扣）
 
 ### 当前已知功能缺失
 

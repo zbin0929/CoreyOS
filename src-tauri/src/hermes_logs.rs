@@ -47,14 +47,10 @@ impl LogKind {
 /// the tail operation handles missing-file as an empty response so a
 /// brand-new Hermes install doesn't look like an error.
 pub fn log_path(kind: LogKind, home_override: Option<&Path>) -> PathBuf {
-    let home = home_override.map(Path::to_path_buf).unwrap_or_else(|| {
-        // `std::env::home_dir` is deprecated but `dirs` already pulled in.
-        // Re-resolve with the same fallback the rest of the crate uses.
-        std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."))
-    });
-    home.join(".hermes/logs").join(kind.filename())
+    let home = home_override
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| crate::paths::hermes_data_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    home.join("logs").join(kind.filename())
 }
 
 /// Response shape for the `hermes_log_tail` IPC. Carries the resolved
@@ -218,6 +214,6 @@ mod tests {
     #[test]
     fn log_path_honors_home_override() {
         let p = log_path(LogKind::Agent, Some(Path::new("/tmp/fakehome")));
-        assert_eq!(p, PathBuf::from("/tmp/fakehome/.hermes/logs/agent.log"));
+        assert_eq!(p, PathBuf::from("/tmp/fakehome/logs/agent.log"));
     }
 }

@@ -3,7 +3,6 @@ import {
   learningSearchSimilar,
   knowledgeSearch,
   learningReadLearnings,
-  memoryRead,
 } from '@/lib/ipc';
 
 // v9: `ragSearch` removed. The Rust-side `rag_search` IPC was a
@@ -65,18 +64,6 @@ export async function enrichHistoryWithContext(
     }
   } catch {
     // non-critical — proceed without learnings
-  }
-
-  try {
-    const mem = await memoryRead('user');
-    if (mem.content && mem.content.trim().length > 5) {
-      enriched.unshift({
-        role: 'system',
-        content: `[User preferences]\n${mem.content.slice(0, 600)}`,
-      });
-    }
-  } catch {
-    // non-critical — proceed without user profile
   }
 
   return enriched;

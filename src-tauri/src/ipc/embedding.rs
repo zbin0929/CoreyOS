@@ -279,6 +279,13 @@ fn search_knowledge_chunks_jaccard(
 pub const EMBEDDING_DIM: usize = 1024;
 
 #[cfg(feature = "rag")]
+pub fn validate_model_load() -> anyhow::Result<()> {
+    let dir = model_dir();
+    BgeM3Embedder::load(&dir)?;
+    Ok(())
+}
+
+#[cfg(feature = "rag")]
 pub fn ensure_embedder(embedder: &Arc<std::sync::Mutex<Option<BgeM3Embedder>>>) -> bool {
     let mut guard = embedder.lock().expect("embedder mutex poisoned");
     if guard.is_some() {

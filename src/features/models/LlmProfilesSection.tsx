@@ -14,6 +14,7 @@ import {
   type LlmProfile,
 } from '@/lib/ipc';
 
+import { useAppStatusStore } from '@/stores/appStatus';
 import { LlmProfileCard, type LlmProbeState } from './LlmProfileCard';
 import { LlmProfileRow } from './LlmProfileRow';
 
@@ -118,6 +119,7 @@ export function LlmProfilesSection() {
         base_url: profile.base_url,
       });
       setDefaultProfileId(profile.id);
+      useAppStatusStore.getState().setCurrentModel(profile.model);
     } catch {
       // silent — the star button just won't stick
     }

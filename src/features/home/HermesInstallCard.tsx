@@ -590,7 +590,7 @@ function NextStepsCard() {
   const { t } = useTranslation();
   const steps = [
     { label: t('home.next_skills', { defaultValue: '配置 Skills' }), to: '/skills' as const },
-    { label: t('home.next_mcp', { defaultValue: '配置 MCP' }), to: '/settings' as const },
+    { label: t('home.next_mcp', { defaultValue: '配置 MCP' }), to: '/mcp' as const },
     { label: t('home.next_channel', { defaultValue: '连接通道' }), to: '/channels' as const },
   ];
   return (

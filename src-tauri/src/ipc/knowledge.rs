@@ -376,9 +376,16 @@ pub async fn rag_download_model(app: AppHandle, state: State<'_, AppState>) -> I
 
     for (name, url) in embedding::MODEL_FILES {
         let target = dir.join(name);
+        let min_size: u64 = match *name {
+            "model.onnx_data" => 100_000_000,
+            "model.onnx" => 400_000,
+            "tokenizer.json" => 400_000,
+            "sentencepiece.bpe.model" => 500_000,
+            _ => 1,
+        };
         if target.exists() {
             if let Ok(meta) = std::fs::metadata(&target) {
-                if meta.len() > 0 {
+                if meta.len() >= min_size {
                     continue;
                 }
             }
@@ -393,6 +400,23 @@ pub async fn rag_download_model(app: AppHandle, state: State<'_, AppState>) -> I
             .map_err(|e| IpcError::Internal {
                 message: format!("download {name}: {e:?}"),
             })?;
+    }
+
+    #[cfg(feature = "rag")]
+    {
+        match embedding::validate_model_load() {
+            Ok(_) => {
+                tracing::info!("model load validation passed, writing verified stamp");
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "model load validation failed after download: {e}, stamp NOT written"
+                );
+                return Err(IpcError::Internal {
+                    message: format!("model files downloaded but load validation failed: {e}"),
+                });
+            }
+        }
     }
 
     embedding::write_verified_stamp().map_err(|e| IpcError::Internal {

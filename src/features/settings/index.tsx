@@ -1,30 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Loader2,
-  RotateCcw,
-  Save,
-  Wifi,
-} from 'lucide-react';
 
 import { PageHeader } from '@/app/shell/PageHeader';
-import { Button } from '@/components/ui/button';
-import { Combobox } from '@/components/ui/combobox';
-import { Icon } from '@/components/ui/icon';
 import { InfoHint } from '@/components/ui/info-hint';
-import { cn } from '@/lib/cn';
 import {
   appPaths,
-  configGet,
-  configSet,
-  configTest,
-  ipcErrorMessage,
   type AppPaths,
-  type GatewayConfigDto,
 } from '@/lib/ipc';
 
 import { AppearanceSection } from './AppearanceSection';
@@ -38,38 +19,14 @@ import { HermesToolPermissionsSection } from './sections/HermesToolPermissionsSe
 import { HermesUpdateSection } from './sections/HermesUpdateSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
 import { StorageSection } from './sections/StorageSection';
-import { useAppStatusStore } from '@/stores/appStatus';
 import { WorkspaceSection } from './sections/WorkspaceSection';
-import { Field, Section } from './shared';
-import { inputCls } from './styles';
 
 // Re-exported here so the rest of the app's imports
 // (`features/agents` etc.) keep resolving without churn.
 export { HermesInstancesSection };
 
-type TestStatus =
-  | { kind: 'idle' }
-  | { kind: 'probing' }
-  | { kind: 'ok'; latencyMs: number }
-  | { kind: 'err'; message: string };
-
-type SaveStatus =
-  | { kind: 'idle' }
-  | { kind: 'saving' }
-  | { kind: 'saved' }
-  | { kind: 'err'; message: string };
-
-const MODEL_SUGGESTIONS = [
-  'deepseek-reasoner',
-  'deepseek-chat',
-  'gpt-4o-mini',
-  'claude-3-5-sonnet-20241022',
-];
-
 const SETTINGS_ANCHORS = [
   { id: 'settings-appearance', labelKey: 'settings.appearance.title' },
-  { id: 'settings-gateway', labelKey: 'settings.gateway.title' },
-  { id: 'settings-model', labelKey: 'settings.model.title' },
   { id: 'settings-context', labelKey: 'settings.context.title' },
   { id: 'settings-memory', labelKey: 'settings.memory.title' },
   { id: 'settings-routing', labelKey: 'settings.routing_rules.title' },
@@ -82,98 +39,19 @@ const SETTINGS_ANCHORS = [
 export function SettingsRoute() {
   const { t } = useTranslation();
 
-  // Loaded snapshot from the backend; used for the Reset button.
-  const [loaded, setLoaded] = useState<GatewayConfigDto | null>(null);
-
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [defaultModel, setDefaultModel] = useState('');
-  const [showKey, setShowKey] = useState(false);
-
-  const [test, setTest] = useState<TestStatus>({ kind: 'idle' });
-  const [save, setSave] = useState<SaveStatus>({ kind: 'idle' });
-
-  // Storage section — paths resolved once at app startup, cached on
-  // AppState. Load in parallel with the gateway config.
   const [paths, setPaths] = useState<AppPaths | null>(null);
 
-  // Load current config + paths on mount.
   useEffect(() => {
     let alive = true;
-    configGet()
-      .then((cfg) => {
-        if (!alive) return;
-        setLoaded(cfg);
-        setBaseUrl(cfg.base_url ?? '');
-        setApiKey(cfg.api_key ?? '');
-        setDefaultModel(cfg.default_model ?? '');
-      })
-      .catch((e) => {
-        if (!alive) return;
-        setSave({ kind: 'err', message: ipcErrorMessage(e) });
-      });
     appPaths()
       .then((p) => {
         if (alive) setPaths(p);
       })
-      .catch(() => {
-        /* Storage section just hides on failure — not blocking. */
-      });
+      .catch(() => {});
     return () => {
       alive = false;
     };
   }, []);
-
-  const draft: GatewayConfigDto = {
-    base_url: baseUrl.trim(),
-    api_key: apiKey.trim() || null,
-    default_model: defaultModel.trim() || null,
-  };
-
-  const dirty =
-    loaded !== null &&
-    (draft.base_url !== loaded.base_url ||
-      (draft.api_key ?? '') !== (loaded.api_key ?? '') ||
-      (draft.default_model ?? '') !== (loaded.default_model ?? ''));
-
-  async function onTest() {
-    if (test.kind === 'probing') return;
-    setTest({ kind: 'probing' });
-    try {
-      const probe = await configTest(draft);
-      setTest({ kind: 'ok', latencyMs: probe.latency_ms });
-    } catch (e) {
-      setTest({ kind: 'err', message: ipcErrorMessage(e) });
-    }
-  }
-
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (save.kind === 'saving') return;
-    setSave({ kind: 'saving' });
-    try {
-      await configSet(draft);
-      setLoaded(draft);
-      setSave({ kind: 'saved' });
-      if (draft.default_model) {
-        useAppStatusStore.getState().setCurrentModel(draft.default_model);
-      }
-      window.setTimeout(() => {
-        setSave((s) => (s.kind === 'saved' ? { kind: 'idle' } : s));
-      }, 2000);
-    } catch (err) {
-      setSave({ kind: 'err', message: ipcErrorMessage(err) });
-    }
-  }
-
-  function onReset() {
-    if (!loaded) return;
-    setBaseUrl(loaded.base_url ?? '');
-    setApiKey(loaded.api_key ?? '');
-    setDefaultModel(loaded.default_model ?? '');
-    setTest({ kind: 'idle' });
-    setSave({ kind: 'idle' });
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -221,120 +99,6 @@ export function SettingsRoute() {
           {/* Appearance is independent of gateway config — render first and
               always, even while the gateway config is still loading. */}
           <AppearanceSection />
-
-          {loaded === null ? (
-            <div className="flex items-center gap-2 text-fg-muted">
-              <Icon icon={Loader2} size="md" className="animate-spin" />
-              {t('settings.loading')}
-            </div>
-          ) : (
-            <form onSubmit={onSubmit} className="flex flex-col gap-6">
-              <Section
-                id="settings-gateway"
-                title={t('settings.gateway.title')}
-                description={t('settings.gateway.desc')}
-              >
-                <Field
-                  label={t('settings.gateway.base_url')}
-                  hint={t('settings.gateway.base_url_hint')}
-                >
-                  <input
-                    type="url"
-                    value={baseUrl}
-                    onChange={(e) => {
-                      setBaseUrl(e.target.value);
-                      setTest({ kind: 'idle' });
-                    }}
-                    placeholder="http://127.0.0.1:8642"
-                    className={inputCls}
-                    required
-                  />
-                </Field>
-
-                <Field
-                  label={t('settings.gateway.api_key')}
-                  hint={t('settings.gateway.api_key_hint')}
-                >
-                  <div className="relative">
-                    <input
-                      type={showKey ? 'text' : 'password'}
-                      value={apiKey}
-                      onChange={(e) => {
-                        setApiKey(e.target.value);
-                        setTest({ kind: 'idle' });
-                      }}
-                      placeholder={t('settings.gateway.api_key_placeholder')}
-                      className={cn(inputCls, 'pr-10')}
-                      autoComplete="off"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKey((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg"
-                      aria-label={
-                        showKey
-                          ? t('settings.gateway.hide_key')
-                          : t('settings.gateway.show_key')
-                      }
-                      tabIndex={-1}
-                    >
-                      <Icon icon={showKey ? EyeOff : Eye} size="md" />
-                    </button>
-                  </div>
-                </Field>
-              </Section>
-
-              <Section
-                id="settings-model"
-                title={t('settings.model.title')}
-                description={t('settings.model.desc')}
-              >
-                <Field label={t('settings.model.label')}>
-                  <Combobox
-                    value={defaultModel}
-                    onChange={setDefaultModel}
-                    placeholder="deepseek-reasoner"
-                    options={MODEL_SUGGESTIONS.map((m) => ({ value: m }))}
-                  />
-                </Field>
-              </Section>
-
-              <TestRow status={test} onTest={onTest} />
-
-              <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-                <SaveStatusMsg status={save} dirty={dirty} />
-                <div className="flex items-center gap-2">
-                  {dirty && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={onReset}
-                      disabled={save.kind === 'saving'}
-                    >
-                      <Icon icon={RotateCcw} size="sm" />
-                      {t('settings.gateway.reset')}
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={!dirty || save.kind === 'saving' || !baseUrl.trim()}
-                  >
-                    {save.kind === 'saving' ? (
-                      <Icon icon={Loader2} size="md" className="animate-spin" />
-                    ) : (
-                      <Icon icon={Save} size="md" />
-                    )}
-                    {t('settings.gateway.save')}
-                  </Button>
-                </div>
-              </div>
-            </form>
-          )}
-
-          {/* T8 — Hermes instances moved to a top-level /agents tab.
-              Settings keeps the primary gateway only; the Agents page
-              lists additional instances and opens the wizard. */}
 
           {/* v9 — Auto-context-compression knobs. Lives between gateway
               and routing because it's a Hermes-config concern (same
@@ -390,68 +154,3 @@ export function SettingsRoute() {
   );
 }
 
-function TestRow({ status, onTest }: { status: TestStatus; onTest: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-bg-elev-1 px-3 py-2.5">
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={onTest}
-        disabled={status.kind === 'probing'}
-      >
-        {status.kind === 'probing' ? (
-          <Icon icon={Loader2} size="sm" className="animate-spin" />
-        ) : (
-          <Icon icon={Wifi} size="sm" />
-        )}
-        {t('settings.gateway.test')}
-      </Button>
-      <div className="min-w-0 flex-1 text-xs">
-        {status.kind === 'idle' && (
-          <span className="text-fg-subtle">{t('settings.gateway.test_hint')}</span>
-        )}
-        {status.kind === 'probing' && (
-          <span className="text-fg-muted">{t('settings.gateway.testing')}</span>
-        )}
-        {status.kind === 'ok' && (
-          <span className="inline-flex items-center gap-1 text-emerald-500">
-            <Icon icon={CheckCircle2} size="sm" />
-            {t('settings.gateway.test_ok', { ms: status.latencyMs })}
-          </span>
-        )}
-        {status.kind === 'err' && (
-          <span className="inline-flex items-start gap-1 text-danger">
-            <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
-            <span className="break-all">{status.message}</span>
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SaveStatusMsg({ status, dirty }: { status: SaveStatus; dirty: boolean }) {
-  const { t } = useTranslation();
-  if (status.kind === 'saved') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-        <Icon icon={CheckCircle2} size="sm" />
-        {t('settings.gateway.saved')}
-      </span>
-    );
-  }
-  if (status.kind === 'err') {
-    return (
-      <span className="inline-flex items-start gap-1 text-xs text-danger">
-        <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
-        <span className="break-all">{status.message}</span>
-      </span>
-    );
-  }
-  if (dirty) {
-    return <span className="text-xs text-fg-muted">{t('settings.gateway.dirty')}</span>;
-  }
-  return <span className="text-xs text-fg-subtle">{t('settings.gateway.clean')}</span>;
-}

@@ -6,6 +6,23 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-01 — v0.1.13-dev · Bug fix batch 2 (model refresh, token overhead, gateway lock, semantic model, MCP nav, log path)
+
+### Fixed
+
+- **Model default not refreshing in topbar/chat (#1)**: `LlmProfilesSection.setAsDefault` wrote Hermes config but never updated `useAppStatusStore.currentModel`. Added `setCurrentModel()` call so topbar and chat picker update immediately.
+- **Windows gateway lock file PermissionError (#9)**: On Windows restart, stale `gateway.pid`/`gateway.lock` caused `PermissionError` and app freeze. Now kills the stale gateway process first, then retries file cleanup.
+- **Semantic model shows "installed" before validation (#4)**: `rag_download_model` previously only checked `file.size > 0`. Added minimum size thresholds per file type + ONNX session load validation (`validate_model_load`) before writing the `.verified` stamp.
+- **"配置 MCP" navigates to settings instead of /mcp (#5)**: Home page quick action button was linking to `/settings`. Fixed to `/mcp`.
+- **Log page shows wrong file path on Windows (#6)**: `log_path()` used `$HOME` which doesn't exist on Windows. Changed to `hermes_data_dir()` which resolves `%USERPROFILE%/.hermes` correctly.
+- **Redundant USER.md injection inflating tokens (#7)**: `enrichHistoryWithContext` injected `memoryRead('user')` as a system message, but Hermes already injects USER.md in Layer 6 of every system prompt. Removed the duplicate, saving ~200-300 tokens/turn.
+
+### Removed
+
+- **Settings page gateway form**: Removed Base URL / API Key / default model form from settings — these are now managed via the Models page (LLM Profiles + Agents).
+
+---
+
 ## 2026-05-01 — v0.1.13-dev · QQ Bot sandbox + analytics + updater CI
 
 ### Fixed

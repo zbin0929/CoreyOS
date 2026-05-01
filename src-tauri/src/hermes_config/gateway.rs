@@ -1148,10 +1148,18 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
             if f.exists() {
                 match std::fs::remove_file(&f) {
                     Ok(()) => tracing::info!("cleaned gateway lock file: {}", f.display()),
-                    Err(e) => tracing::warn!(
-                        "cannot remove {}: {e}, gateway may have been started by admin",
-                        f.display()
-                    ),
+                    Err(_) => {
+                        tracing::warn!(
+                            "cannot remove {} — killing stale gateway process first",
+                            f.display()
+                        );
+                        let _ = windows_gateway_stop();
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        match std::fs::remove_file(&f) {
+                            Ok(()) => tracing::info!("cleaned {} after stop", f.display()),
+                            Err(e2) => tracing::warn!("still cannot remove {}: {e2}", f.display()),
+                        }
+                    }
                 }
             }
         }
