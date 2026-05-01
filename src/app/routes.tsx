@@ -4,12 +4,14 @@ import {
   createRoute,
   createRouter,
   Outlet,
+  redirect,
 } from '@tanstack/react-router';
 import { AppShell } from '@/app/shell/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteFallback } from '@/app/shell/RouteFallback';
 import { HomeRoute } from '@/features/home';
 import { ChatRoute } from '@/features/chat';
+import { selectHiddenRoutes, useCustomerStore } from '@/stores/customer';
 
 // T4.2b follow-up — code-split the leaf feature routes. `Home` and
 // `Chat` stay eager because they're the primary entry points (Home on
@@ -53,7 +55,39 @@ const WorkflowRoute = lazyFeature(() => import('@/features/workflow'), 'Workflow
 const HelpRoute = lazyFeature(() => import('@/features/help'), 'HelpRoute');
 const PackRoute = lazyFeature(() => import('@/features/pack'), 'PackRoute');
 
+const PATH_TO_NAV_ID: Record<string, string> = {
+  '/': 'home',
+  '/chat': 'chat',
+  '/workflows': 'workflows',
+  '/models': 'models',
+  '/agents': 'agents',
+  '/compare': 'compare',
+  '/analytics': 'analytics',
+  '/terminal': 'terminal',
+  '/logs': 'logs',
+  '/skills': 'skills',
+  '/trajectory': 'trajectory',
+  '/channels': 'channels',
+  '/scheduler': 'scheduler',
+  '/profiles': 'profiles',
+  '/runbooks': 'runbooks',
+  '/budgets': 'budgets',
+  '/memory': 'memory',
+  '/knowledge': 'knowledge',
+  '/voice': 'voice',
+  '/mcp': 'mcp',
+  '/settings': 'settings',
+  '/help': 'help',
+};
+
 const rootRoute = createRootRoute({
+  beforeLoad: ({ location }) => {
+    const navId = PATH_TO_NAV_ID[location.pathname];
+    if (navId) {
+      const hidden = selectHiddenRoutes(useCustomerStore.getState().config);
+      if (hidden.has(navId)) throw redirect({ to: '/' });
+    }
+  },
   component: () => (
     <AppShell>
       <ErrorBoundary>
