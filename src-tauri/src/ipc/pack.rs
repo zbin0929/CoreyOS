@@ -593,6 +593,147 @@ pub async fn pack_set_enabled(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn pack_config_get(
+    pack_id: String,
+    state: State<'_, AppState>,
+) -> IpcResult<serde_json::Value> {
+    let hermes_dir = state.packs.read().hermes_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        let path = hermes_dir.join("pack-data").join(&pack_id).join("config.json");
+        if !path.exists() {
+            return Ok(serde_json::Value::Object(serde_json::Map::new()));
+        }
+        let raw = fs::read_to_string(&path).map_err(|e| IpcError::Internal {
+            message: format!("read config: {e}"),
+        })?;
+        serde_json::from_str(&raw).map_err(|e| IpcError::Internal {
+            message: format!("parse config: {e}"),
+        })
+    })
+    .await
+    .map_err(|e| IpcError::Internal { message: format!("config_get join: {e}") })?
+}
+
+#[tauri::command]
+pub async fn pack_config_set(
+    pack_id: String,
+    config: serde_json::Value,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    let hermes_dir = state.packs.read().hermes_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        let dir = hermes_dir.join("pack-data").join(&pack_id);
+        fs::create_dir_all(&dir).map_err(|e| IpcError::Internal {
+            message: format!("create pack-data dir: {e}"),
+        })?;
+        let path = dir.join("config.json");
+        let tmp = path.with_extension("json.tmp");
+        let body = serde_json::to_string_pretty(&config).map_err(|e| IpcError::Internal {
+            message: format!("serialize config: {e}"),
+        })?;
+        fs::write(&tmp, body).map_err(|e| IpcError::Internal {
+            message: format!("write config tmp: {e}"),
+        })?;
+        fs::rename(&tmp, &path).map_err(|e| IpcError::Internal {
+            message: format!("rename config: {e}"),
+        })
+    })
+    .await
+    .map_err(|e| IpcError::Internal { message: format!("config_set join: {e}") })?
+}
+
+#[tauri::command]
+pub async fn pack_import_zip(
+    zip_path: String,
+    state: State<'_, AppState>,
+) -> IpcResult<String> {
+    let hermes_dir = state.packs.read().hermes_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        let src = std::path::Path::new(&zip_path);
+        if !src.exists() {
+            return Err(IpcError::Internal {
+                message: format!("zip not found: {zip_path}"),
+            });
+        }
+        let packs_dir = hermes_dir.join("skill-packs");
+        fs::create_dir_all(&packs_dir).map_err(|e| IpcError::Internal {
+            message: format!("create skill-packs dir: {e}"),
+        })?;
+        let file = fs::File::open(src).map_err(|e| IpcError::Internal {
+            message: format!("open zip: {e}"),
+        })?;
+        let mut archive = zip::ZipArchive::new(file).map_err(|e| IpcError::Internal {
+            message: format!("read zip: {e}"),
+        })?;
+        let first_entry = archive.by_index(0).map_err(|e| IpcError::Internal {
+            message: format!("zip empty: {e}"),
+        })?;
+        let top_dir = first_entry
+            .name()
+            .split('/')
+            .next()
+            .unwrap_or("unknown")
+            .to_string();
+        drop(first_entry);
+
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i).map_err(|e| IpcError::Internal {
+                message: format!("zip entry {i}: {e}"),
+            })?;
+            let out_path = packs_dir.join(entry.name());
+            if entry.is_dir() {
+                fs::create_dir_all(&out_path).map_err(|e| IpcError::Internal {
+                    message: format!("mkdir {}: {e}", entry.name()),
+                })?;
+            } else {
+                if let Some(parent) = out_path.parent() {
+                    fs::create_dir_all(parent).map_err(|e| IpcError::Internal {
+                        message: format!("mkdir parent: {e}"),
+                    })?;
+                }
+                let mut buf = Vec::new();
+                std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| IpcError::Internal {
+                    message: format!("read zip entry: {e}"),
+                })?;
+                fs::write(&out_path, &buf).map_err(|e| IpcError::Internal {
+                    message: format!("write {}: {e}", entry.name()),
+                })?;
+            }
+        }
+        Ok(top_dir)
+    })
+    .await
+    .map_err(|e| IpcError::Internal { message: format!("import join: {e}") })?
+}
+
+#[tauri::command]
+pub async fn pack_uninstall(
+    pack_id: String,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    let (hermes_dir, pack_dir) = {
+        let registry = state.packs.read();
+        let entry = registry.packs.iter().find(|p| matches_pack_id(p, &pack_id));
+        let pack_dir = entry.map(|p| p.dir_path.clone());
+        (registry.hermes_dir.clone(), pack_dir)
+    };
+
+    tokio::task::spawn_blocking(move || {
+        let _ = crate::pack::backup::backup_pack(&hermes_dir, &pack_id);
+        if let Some(dir) = pack_dir {
+            if dir.exists() {
+                fs::remove_dir_all(&dir).map_err(|e| IpcError::Internal {
+                    message: format!("remove pack dir: {e}"),
+                })?;
+            }
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| IpcError::Internal { message: format!("uninstall join: {e}") })?
+}
+
 /// True when `entry`'s canonical Pack id matches `pack_id`. The
 /// canonical id is `manifest.id` for healthy entries and falls
 /// back to the directory name for broken ones (so the UI can

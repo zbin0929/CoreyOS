@@ -69,3 +69,19 @@ export function packViewsList(): Promise<PackView[]> {
 export function packViewData(packId: string, viewId: string): Promise<unknown> {
   return invoke<unknown>('pack_view_data', { packId, viewId });
 }
+
+export function packConfigGet(packId: string): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('pack_config_get', { packId });
+}
+
+export function packConfigSet(packId: string, config: Record<string, unknown>): Promise<void> {
+  return invoke<void>('pack_config_set', { packId, config });
+}
+
+export function packImportZip(zipPath: string): Promise<string> {
+  return invoke<string>('pack_import_zip', { zipPath });
+}
+
+export function packUninstall(packId: string): Promise<void> {
+  return invoke<void>('pack_uninstall', { packId });
+}

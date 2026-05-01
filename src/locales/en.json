@@ -651,7 +651,13 @@
       "on": "On",
       "off": "Off",
       "rescan": "Rescan",
-      "license_required": "Requires license authorization"
+      "license_required": "Requires license authorization",
+      "import_zip": "Import ZIP",
+      "uninstall": "Uninstall",
+      "configure": "Configure",
+      "config_for": "Config for {{id}}",
+      "save_config": "Save",
+      "cancel": "Cancel"
     },
     "appearance": {
       "title": "Appearance",

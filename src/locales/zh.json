@@ -650,7 +650,13 @@
       "on": "开",
       "off": "关",
       "rescan": "重新扫描",
-      "license_required": "需要授权许可"
+      "license_required": "需要授权许可",
+      "import_zip": "导入 ZIP",
+      "uninstall": "卸载",
+      "configure": "配置",
+      "config_for": "{{id}} 的配置",
+      "save_config": "保存",
+      "cancel": "取消"
     },
     "appearance": {
       "title": "外观",

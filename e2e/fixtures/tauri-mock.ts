@@ -1330,6 +1330,24 @@ export const tauriMockInitScript = /* js */ `
         return null;
       case 'license_machine_id':
         return '00000000-0000-0000-0000-000000000000';
+      case 'pack_list':
+        return [];
+      case 'pack_rescan':
+        return [];
+      case 'pack_set_enabled':
+        return null;
+      case 'pack_config_get':
+        return {};
+      case 'pack_config_set':
+        return null;
+      case 'pack_import_zip':
+        return 'imported-pack';
+      case 'pack_uninstall':
+        return null;
+      case 'pack_views_list':
+        return [];
+      case 'pack_view_data':
+        return {};
     }
 
     // Anything we don't recognise is a real bug in the test — surface it loudly.
