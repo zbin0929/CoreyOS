@@ -594,7 +594,8 @@ mod tests {
         // Verify that scanning a temp dir with one Pack and mapping
         // through the same DTO path produces a healthy entry.
         let tmp = tempfile::tempdir().expect("tempdir");
-        let pack_dir = tmp.path().join("test_pack");
+        let packs_dir = tmp.path().join("skill-packs");
+        let pack_dir = packs_dir.join("test_pack");
         std::fs::create_dir_all(&pack_dir).expect("mkdir");
         std::fs::write(
             pack_dir.join("manifest.yaml"),
