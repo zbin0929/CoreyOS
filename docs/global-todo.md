@@ -160,32 +160,104 @@
 
 ## 三、扩展 Pack TODO
 
-### P-1. 跨境电商 Pack（首发，对标麦多AI 9 能力）
+### P-1. 跨境电商助手（首发，对标麦多AI 9 能力）
 
-- **状态**：🔴 未开始
+- **状态**：� 骨架完成，数据层待接
 - **目标版本**：v0.3.0
 - **交付方式**：**一次性全做完**（不分 P-1.1 / P-1.2，第一版上线即完整）
-- **前置**：B-2 + B-3 + B-4（基座 v0.2.0 必须就绪）
+- **前置**：B-2 + B-3 + B-4（基座 v0.2.0 ✅ 已就绪）
 - **前置外部**：申请 Amazon SP-API 开发者账号（审核 1-2 周，建议 v0.2.0 启动时同步申请）
 - **9 能力清单**（对标 `docs/competitor-maiduo-ai.md`）：
 
-| # | 能力 | CoreyOS 实现 | 用到的视图 |
-|---|------|------------|-----------|
-| 1 | 战场地图 | CompositeDashboard 多视图组合 | CompositeDashboard + MetricsCard + TrendsMatrix + DataTable |
-| 2 | AI 智能体（总管） | Hermes 多 Agent 编排（已具备） | 对话 + ActionPanel |
-| 3 | 广告守卫机器人 | Workflow + SP-API MCP + Skill | DataTable + AlertList |
-| 4 | 库存哨兵机器人 | Scheduler + MCP | AlertList |
-| 5 | 差评监控机器人 | Workflow + MCP | AlertList + 文档 |
-| 6 | 数据分析机器人 | Skill + RAG（销量历史） | DocViewer + ActionPanel |
-| 7 | 市场分析机器人 | Skill + 报告生成 | DocViewer |
-| 8 | 战场雷达机器人 | Workflow + Browser Automation 抓竞品 | Timeline |
-| 9 | 六维诊断机器人 | Skill + 多维评分 | RadarChart + AlertList |
+| # | 能力 | CoreyOS 实现 | 用到的视图 | 状态 |
+|---|------|------------|-----------|------|
+| 1 | 战场地图 | CompositeDashboard 多视图组合 | CompositeDashboard + MetricsCard + DataTable + AlertList + RadarChart | ✅ UI 完成 |
+| 2 | AI 智能体（总管） | Hermes 多 Agent 编排（已具备） | 对话 + ActionPanel | ✅ 已具备 |
+| 3 | 广告守卫机器人 | Workflow + Browser MCP + Skill | DataTable + AlertList | 🟡 Skill ✅ Workflow ✅ MCP 骨架 ✅ 数据提取待写 |
+| 4 | 库存哨兵机器人 | Scheduler + MCP | DataTable + AlertList | 🟡 Skill ✅ Workflow ✅ MCP 骨架 ✅ 数据提取待写 |
+| 5 | 差评监控机器人 | Workflow + MCP | AlertList | 🟡 Skill ✅ Workflow ✅ MCP 骨架 ✅ 数据提取待写 |
+| 6 | 数据分析机器人 | Skill + RAG（销量历史） | 对话 + ActionPanel | ✅ Skill ✅ |
+| 7 | 市场分析机器人 | Skill + 报告生成 | 对话 + ActionPanel | ✅ Skill ✅ |
+| 8 | 战场雷达机器人 | Workflow + Browser Automation 抓竞品 | Timeline | 🟡 Skill ✅ 数据源待接 |
+| 9 | 六维诊断机器人 | Skill + 多维评分 | RadarChart | ✅ Skill ✅ 视图 ✅ |
 
-- **核心交付物**：
-  - [ ] `mcp-amazon-sp` MCP Server（Rust 或 Python，跨平台预编译，约 5-7 天）
-  - [ ] manifest.yaml + 9 个 view 配置 + 12 个 Skill + 5 个 Workflow + 5 个 Schedule
-  - [ ] 行业 Persona（prompts/soul.md）
-  - [ ] 出厂数据（关键词词典 / 品类映射 / 合规术语）
+- **已完成项**：
+  - [x] manifest.yaml + 6 个 view 配置（dashboard/kpi/orders/alerts/radar + ad_monitor/inventory/reviews/diagnostic）
+  - [x] 7 个 Skill（analyst/ad_guard/inventory_sentinel/review_monitor/market_analyst/radar_bot/diagnostic_six）
+  - [x] 3 个 Workflow（ad_daily_check/inventory_alert/review_alert）— 格式已修复
+  - [x] 3 个 Schedule（daily-ad-check/inventory-check/review-check）
+  - [x] 行业 Persona（prompts/soul.md）
+  - [x] Browser Automation MCP Server 骨架（6 tools：login_status/get_kpi_metrics/get_ad_campaigns/get_fba_inventory/get_recent_reviews/get_orders）
+  - [x] 侧边栏 Pack 分组折叠
+  - [x] CompositeDashboard 子模板渲染 + 运营摘要条 + 风险等级条 + 建议动作按钮
+  - [x] 模板视觉美化 v1（中文标签/状态色胶囊/告警排序/雷达进度条/KPI 业务语义着色）
+  - [x] 模板视觉美化 v2（MetricsCard icon+趋势+sparkline / DataTable 可排序+hover+空状态 / AlertList severity icon+折叠+汇总 / RadarChart 轴标签+色条+顶点 / CompositeDashboard 分区布局+卡片阴影）
+  - [x] CompositeDashboard 支持 `ref` 引用（子视图不再内联重复数据，manifest 去重）
+  - [x] manifest.yaml 清理：移除不存在的 DocViewer 模板引用
+  - [x] `resolve_mcp_source` 支持 stdio MCP server（spawn 进程 + JSON-RPC initialize + tools/call + 超时保护 + Windows CREATE_NO_WINDOW）
+  - [x] MCP Server 新增 `login_interactive` tool（headless=False 可见浏览器 + cookie 持久化 + 超时控制）
+  - [x] CompositeDashboard 日期筛选器骨架（7d/14d/30d/90d 切换按钮）
+
+- **剩余未做（按优先级分层）**：
+
+  #### P0 — 不做就无法交付（数据维度 + 交互基础）
+
+  - [x] 费用拆解看板：PivotTable + 可折叠分组 + 同比色标 + 中文列名 — 已完成（13 行示例数据）
+  - [x] ASIN 级利润下钻：DataTable expandable rows（children 展开/收起 + 缩进子行 + chevron 图标）— 已完成
+  - [x] 日期筛选器 dateRange → MCP params 全链路：usePackViewData 接收 params → IPC 传 runtime_params → resolve_mcp_source 合并到 tool arguments — 已完成
+  - [x] KPI 同比计算：MCP server 返回 `_delta` 字段 → MetricsCard TrendBadge 自动渲染绿红箭头 — 已完成
+  - [x] DateRange Context：CompositeDashboard 选择日期范围 → 子视图自动注入 date_range 参数到 MCP 调用 — 已完成
+  - [x] 流量结构视图：MetricsCard（sessions / page_views / organic_traffic_pct / paid_traffic_pct）— 已完成
+  - [x] 转化漏斗视图：DataTable + 自动标红（high_ctr_low_cvr/low_cvr/drop 状态色标）+ 5 步漏斗示例数据 — 已完成
+  - [x] MCP Server 数据提取函数：返回模板兼容的结构化 mock 数据（KPI+广告+库存+评价+订单）— 已完成，真实 CSS 选择器待登录后补充
+  - [x] 浏览器登录流程：`login_interactive` MCP tool（headless=False 弹可见窗口 → 用户手动登录 → cookie 持久化）— 已完成
+  - [x] Dashboard KPI 视图切到 `data_source: mcp`（server + tool + ${config.marketplace} 模板变量解析）— 已完成
+  - [x] 其余视图从 static 切 mcp：ad_monitor/inventory/reviews/orders 全部切到 MCP data_source — 已完成
+  - [x] `resolve_mcp_source` stdio 支持：spawn subprocess + JSON-RPC initialize/tools_call + 超时 + Windows 兼容 — 已完成
+  - [x] Browser MCP 打包方案已决策：Phase 1 = Python venv + setup.sh（当前）; Phase 2 = PyInstaller per-platform binary（发布前）— setup.sh 已创建
+
+  #### P1 — 不做会显得粗糙（自动化深度 + 关键监控）
+
+  - [ ] 广告规则引擎：Target ACOS 自动调 bid / 预算再分配（低 ACOS campaign 加预算）/ 自动否词（20 次点击无转化自动加否）
+  - [ ] 分时投放 Dayparting：按小时级 metrics 展示，高转化时段加 bid / 低转化时段降 bid
+  - [ ] 库存补货建议卡片：安全库存量 + 建议补货量 + 供应商交期，MetricsCard 或新模板
+  - [ ] 断货自动停广告：库存不足时自动降广告预算 / 暂停 campaign（SellerApp 标配）
+  - [ ] 在途跟踪：Inbound shipment 物流状态 + 预计到仓时间（Jungle Scout 标配）
+  - [ ] 关键词排名追踪：核心词自然排名位置 / 收录词数量 / 排名变动趋势，新增视图或 Timeline
+  - [ ] Buy Box 份额监控：购物车赢得率 + 跟卖告警（Keepa/SellerApp 标配）
+  - [ ] 退货率 + NCX Rate：退货率趋势 / 退货原因分析 / NCX Rate 预警（Amazon Voice of Customer）
+  - [ ] 账户健康监控：ODR（订单缺陷率）/ IPI（库存绩效指标）/ IP 投诉率，超阈值自动告警
+  - [ ] `mcp-amazon-sp` SP-API MCP Server（接口对齐 amazon-browser，未来无缝切换）
+
+  #### P2 — 锦上添花但竞品都有（工作流 + 通道 + 导出）
+
+  - [ ] 新品推广期 Workflow：关键词排名追踪 → 自动调 bid → 自然占比达标后降预算
+  - [ ] Listing 优化 Workflow：收录检测 → 文案重写建议 → 重新提交
+  - [ ] FBA 索赔 Workflow：自动检测丢失/损坏 → 生成索赔 → 跟进进度（Carbon6/Sellerise 标配）
+  - [ ] 竞品防御 Workflow：Buy Box 丢失 → 价格调整建议 → 跟卖投诉
+  - [ ] 促销节奏 Workflow：秒杀报名 → 库存预留 → 广告配合
+  - [ ] IM 推送集成：告警推到微信/钉钉/QQ（必盈/数跨境标配）
+  - [ ] 数据导出：DataTable 加 CSV/Excel 导出按钮
+  - [ ] 多店铺切换：顶部店铺选择器，跨店铺数据聚合
+  - [ ] 出厂数据：关键词词典 / 品类映射 / 合规术语
+  - [ ] 恢复 `license_feature: cross_border_ecom`（给客户签 license）
+  - [ ] 真实卖家账号端到端实测
+
+  #### P3 — UI 美化与交互打磨
+
+  - [x] DataTable 列排序（点击表头排序 asc/desc/无）— 已完成
+  - [ ] DataTable 列筛选（顶部筛选栏 / 搜索框）
+  - [ ] KPI 卡片下钻交互（点击 KPI → 展开 ASIN 明细表）
+  - [ ] 自定义看板布局（拖拉拽组合图表，数跨境标配）
+  - [ ] 移动端适配 / 微信小程序（必盈标配）
+  - [ ] 广告表格加 Campaign → Ad Group → Keyword → Search Term 四级下钻
+  - [ ] 库存表格加多仓库视图（FBA vs 自发货 vs 海外仓）
+  - [ ] 评价视图加星级分布饼图 + 趋势折线
+  - [ ] 利润视图加 FIFO COGS 计算模式切换
+  - [ ] 异常检测智能提示：CPC 飙升/转化骤降 → 自动推原因 + 修复建议（Perpetua 标配）
+  - [ ] AI CFO 报告：AI 自动分析利润数据并给优化建议（Jungle Scout 已上线）
+  - [ ] 多渠道归因视图：Amazon + Walmart + Shopify 跨平台利润对比
+  - [ ] 发票管理：供应商发票上传 + FBA 索赔按实际成本赔（2025 新规）
 - **差异化打法**：
   1. **本地部署**：客户数据不出公司
   2. **不绑 ERP**：客户用任意 ERP / Excel，通过 MCP 接入
@@ -203,7 +275,7 @@
 | P-7 客服 | 真实客户合同 |
 | P-8 报价 | 真实客户合同 |
 
-> ⚠️ **不主动开发**。等到有真实付费客户签合同时再启动对应 Pack。每个 Pack 的设计沿用跨境电商 Pack 模板（manifest + 视图 + Skill + Workflow + MCP）。
+> ⚠️ **不主动开发**。等到有真实付费客户签合同时再启动对应 Pack。每个 Pack 的设计沿用跨境电商助手 模板（manifest + 视图 + Skill + Workflow + MCP）。
 
 ---
 
@@ -222,8 +294,8 @@ v0.2.0（约 4-5 周）— 基座定制能力（"卖货前的最后一公里"）
 └── B-7  卸载 / 重置
 [同步] 申请 Amazon SP-API 开发者账号
 
-v0.3.0（约 3-4 周）— 跨境电商 Pack 完整版
-├── P-1  跨境电商 Pack（9 能力一次性全做）
+v0.3.0（约 3-4 周）— 跨境电商助手 完整版
+├── P-1  跨境电商助手（9 能力一次性全做）
 └── 第一个真实客户上线
 
 v0.4.0+ — 按客户需求拉新 Pack
@@ -236,7 +308,7 @@ v0.4.0+ — 按客户需求拉新 Pack
 
 ```
 B-1 (RAG ✅) ───────────────────┐
-                                ├─► P-1 (跨境电商 Pack)
+                                ├─► P-1 (跨境电商助手)
 B-2 (白标 customer.yaml) ──────┤      │
 B-3 (Pack 加载器+12 视图模板) ─┤      │
 B-4 (License Features 联动) ───┤      └─► 第一个真实客户
@@ -263,7 +335,7 @@ B-7 (卸载/重置)  独立
 | v0.1.14 | ✅ | Windows CMD 弹窗修复 + 图标灰边二次修复 |
 | v0.1.15 | ✅ | Windows 实测通过 + suppress_window 全覆盖 + 图标边缘纯黑 |
 | v0.2.0 | ✅ | 白标 + Pack 加载器 + 12 视图模板 + license features + preinstall + pin_to_primary + BGE-M3 离线导入 |
-| v0.3.0 | 📋 | 跨境电商 Pack 完整版 + 第一个真实客户 |
+| v0.3.0 | � | 跨境电商助手 骨架完成 + 数据层待接 + 第一个真实客户 |
 
 ---
 
@@ -324,7 +396,7 @@ pnpm vitest run         # 全绿
 | 2026-04-30 | License 用现有 ed25519 离线方案 | 内网客户必备 |
 | 2026-04-30 | Pack MCP 自带预编译二进制（方案 B） | 客户机器零依赖 |
 | 2026-04-30 | `pack-data/<id>/` 永不被覆盖 | 用户资产神圣 |
-| 2026-04-30 | 跨境电商 Pack 一次性全做 9 能力 | 第一版上线即完整 |
+| 2026-04-30 | 跨境电商助手 一次性全做 9 能力 | 第一版上线即完整 |
 | 2026-04-30 | Persona 系统并入 Pack `soul_inject` | 不做单独系统 |
 | 2026-04-30 | 不做商店 / 后台 / 远程心跳 | 与定制模式冲突 |
 

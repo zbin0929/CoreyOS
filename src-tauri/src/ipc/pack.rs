@@ -223,6 +223,7 @@ pub struct PackActionDto {
 pub async fn pack_view_data(
     pack_id: String,
     view_id: String,
+    params: Option<serde_json::Value>,
     state: State<'_, AppState>,
 ) -> IpcResult<serde_json::Value> {
     let data_source = {
@@ -237,12 +238,53 @@ pub async fn pack_view_data(
             message: format!("view not found: {pack_id}/{view_id}"),
         });
     };
-    resolve_data_source_async(&ds, &state.authority).await
+    let ds = resolve_config_templates(&ds, &pack_id, &state.packs.read().hermes_dir);
+    let runtime_params = params.unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    resolve_data_source_async(&ds, &state.authority, &runtime_params).await
+}
+
+fn resolve_config_templates(
+    ds: &serde_yaml::Value,
+    pack_id: &str,
+    hermes_dir: &std::path::Path,
+) -> serde_yaml::Value {
+    let mut yaml_str = match serde_yaml::to_string(ds) {
+        Ok(s) => s,
+        Err(_) => return ds.clone(),
+    };
+    if !yaml_str.contains("${config.") {
+        return ds.clone();
+    }
+    let config_path = hermes_dir
+        .join("pack-data")
+        .join(pack_id)
+        .join("config.json");
+    let config: serde_json::Value = config_path
+        .exists()
+        .then(|| {
+            std::fs::read_to_string(&config_path)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+        })
+        .flatten()
+        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    if let Some(obj) = config.as_object() {
+        for (k, v) in obj {
+            let placeholder = format!("${{config.{k}}}");
+            let replacement = v
+                .as_str()
+                .map(String::from)
+                .unwrap_or_else(|| v.to_string());
+            yaml_str = yaml_str.replace(&placeholder, &replacement);
+        }
+    }
+    serde_yaml::from_str(&yaml_str).unwrap_or_else(|_| ds.clone())
 }
 
 async fn resolve_data_source_async(
     ds: &serde_yaml::Value,
     authority: &Arc<crate::sandbox::PathAuthority>,
+    runtime_params: &serde_json::Value,
 ) -> IpcResult<serde_json::Value> {
     let json = yaml_to_json(ds);
     let Some(obj) = json.as_object() else {
@@ -255,7 +297,7 @@ async fn resolve_data_source_async(
         return resolve_http_source(http_cfg).await;
     }
     if let Some(mcp_cfg) = obj.get("mcp") {
-        return resolve_mcp_source(mcp_cfg, authority).await;
+        return resolve_mcp_source(mcp_cfg, authority, runtime_params).await;
     }
     Ok(serde_json::Value::Object(serde_json::Map::new()))
 }
@@ -313,9 +355,21 @@ async fn resolve_http_source(cfg: &serde_json::Value) -> IpcResult<serde_json::V
         })
 }
 
+enum McpTransport {
+    Http {
+        url: String,
+    },
+    Stdio {
+        command: String,
+        args: Vec<String>,
+        env: std::collections::HashMap<String, String>,
+    },
+}
+
 async fn resolve_mcp_source(
     cfg: &serde_json::Value,
     authority: &Arc<crate::sandbox::PathAuthority>,
+    runtime_params: &serde_json::Value,
 ) -> IpcResult<serde_json::Value> {
     let server_name = cfg
         .get("server")
@@ -329,10 +383,15 @@ async fn resolve_mcp_source(
         .ok_or(IpcError::Internal {
             message: "mcp data_source missing 'tool'".into(),
         })?;
-    let params = cfg
+    let mut params = cfg
         .get("params")
         .cloned()
         .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    if let (Some(base), Some(extra)) = (params.as_object_mut(), runtime_params.as_object()) {
+        for (k, v) in extra {
+            base.insert(k.clone(), v.clone());
+        }
+    }
     let timeout_secs = cfg
         .get("timeout_secs")
         .and_then(|v| v.as_u64())
@@ -340,23 +399,74 @@ async fn resolve_mcp_source(
 
     let authority_clone = authority.clone();
     let server_name_owned = server_name.to_string();
-    let tool_owned = tool.to_string();
-    let server_url = tokio::task::spawn_blocking(move || -> IpcResult<String> {
-        let doc = super::mcp::read_config_yaml(&authority_clone).map_err(|e| IpcError::Internal {
-            message: format!("read config.yaml: {e}"),
-        })?;
+    let transport = tokio::task::spawn_blocking(move || -> IpcResult<McpTransport> {
+        let doc =
+            super::mcp::read_config_yaml(&authority_clone).map_err(|e| IpcError::Internal {
+                message: format!("read config.yaml: {e}"),
+            })?;
         let servers = super::mcp::extract_servers(&doc);
-        let srv = servers.into_iter().find(|s| s.id == server_name_owned).ok_or_else(|| IpcError::Internal {
-            message: format!("mcp server '{server_name_owned}' not found in config.yaml"),
-        })?;
-        srv.config.get("url").and_then(|v| v.as_str()).map(String::from).ok_or_else(|| IpcError::Internal {
-            message: format!("mcp server '{server_name_owned}' has no url field (stdio servers not supported for data_source)"),
+        let srv = servers
+            .into_iter()
+            .find(|s| s.id == server_name_owned)
+            .ok_or_else(|| IpcError::Internal {
+                message: format!("mcp server '{server_name_owned}' not found in config.yaml"),
+            })?;
+        if let Some(url) = srv.config.get("url").and_then(|v| v.as_str()) {
+            return Ok(McpTransport::Http {
+                url: url.to_string(),
+            });
+        }
+        if let Some(cmd) = srv.config.get("command").and_then(|v| v.as_str()) {
+            let args: Vec<String> = srv
+                .config
+                .get("args")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let mut env = std::collections::HashMap::new();
+            if let Some(e) = srv.config.get("env").and_then(|v| v.as_object()) {
+                for (k, v) in e {
+                    if let Some(val) = v.as_str() {
+                        env.insert(k.clone(), val.to_string());
+                    }
+                }
+            }
+            return Ok(McpTransport::Stdio {
+                command: cmd.to_string(),
+                args,
+                env,
+            });
+        }
+        Err(IpcError::Internal {
+            message: format!("mcp server '{server_name_owned}' has neither 'url' nor 'command'"),
         })
     })
     .await
-    .map_err(|e| IpcError::Internal { message: format!("mcp join: {e}") })?
-    .map_err(|e: IpcError| e)?;
+    .map_err(|e| IpcError::Internal {
+        message: format!("mcp join: {e}"),
+    })??;
 
+    let tool_owned = tool.to_string();
+    match transport {
+        McpTransport::Http { url } => {
+            resolve_mcp_http(&url, &tool_owned, &params, timeout_secs).await
+        }
+        McpTransport::Stdio { command, args, env } => {
+            resolve_mcp_stdio(&command, &args, &env, &tool_owned, &params, timeout_secs).await
+        }
+    }
+}
+
+async fn resolve_mcp_http(
+    server_url: &str,
+    tool: &str,
+    params: &serde_json::Value,
+    timeout_secs: u64,
+) -> IpcResult<serde_json::Value> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .build()
@@ -364,15 +474,12 @@ async fn resolve_mcp_source(
             message: format!("mcp client build: {e}"),
         })?;
 
-    let rpc_id = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("time")
-        .as_millis();
+    let rpc_id = rpc_id_now();
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "id": rpc_id,
         "method": "tools/call",
-        "params": { "name": tool_owned, "arguments": params }
+        "params": { "name": tool, "arguments": params }
     });
 
     let resp = client
@@ -394,6 +501,136 @@ async fn resolve_mcp_source(
     let result: serde_json::Value = resp.json().await.map_err(|e| IpcError::Internal {
         message: format!("mcp json parse: {e}"),
     })?;
+    extract_mcp_text_content(&result)
+}
+
+async fn resolve_mcp_stdio(
+    command: &str,
+    args: &[String],
+    env: &std::collections::HashMap<String, String>,
+    tool: &str,
+    params: &serde_json::Value,
+    timeout_secs: u64,
+) -> IpcResult<serde_json::Value> {
+    let mut cmd = tokio::process::Command::new(command);
+    cmd.args(args)
+        .envs(env)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+
+    let mut child = cmd.spawn().map_err(|e| IpcError::Internal {
+        message: format!("mcp stdio spawn '{command}': {e}"),
+    })?;
+
+    let stdin = child.stdin.take().ok_or_else(|| IpcError::Internal {
+        message: "mcp stdio: failed to capture stdin".into(),
+    })?;
+    let stdout = child.stdout.take().ok_or_else(|| IpcError::Internal {
+        message: "mcp stdio: failed to capture stdout".into(),
+    })?;
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_secs),
+        mcp_stdio_session(stdin, stdout, tool, params),
+    )
+    .await
+    .map_err(|_| IpcError::Internal {
+        message: format!("mcp stdio timeout after {timeout_secs}s"),
+    })?;
+
+    let _ = child.kill().await;
+    result
+}
+
+async fn mcp_stdio_session(
+    mut stdin: tokio::process::ChildStdin,
+    stdout: tokio::process::ChildStdout,
+    tool: &str,
+    params: &serde_json::Value,
+) -> IpcResult<serde_json::Value> {
+    let mut reader = tokio::io::BufReader::new(stdout);
+
+    let init_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "corey-data-source", "version": "1.0" }
+        }
+    });
+    write_jsonrpc(&mut stdin, &init_req).await?;
+    let _init_resp = read_jsonrpc(&mut reader).await?;
+
+    let init_notif = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized"
+    });
+    write_jsonrpc(&mut stdin, &init_notif).await?;
+
+    let call_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": { "name": tool, "arguments": params }
+    });
+    write_jsonrpc(&mut stdin, &call_req).await?;
+    let call_resp = read_jsonrpc(&mut reader).await?;
+
+    extract_mcp_text_content(&call_resp)
+}
+
+async fn write_jsonrpc(
+    stdin: &mut tokio::process::ChildStdin,
+    msg: &serde_json::Value,
+) -> IpcResult<()> {
+    use tokio::io::AsyncWriteExt;
+    let mut line = serde_json::to_string(msg).map_err(|e| IpcError::Internal {
+        message: format!("mcp jsonrpc serialize: {e}"),
+    })?;
+    line.push('\n');
+    stdin
+        .write_all(line.as_bytes())
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("mcp stdio write: {e}"),
+        })?;
+    stdin.flush().await.map_err(|e| IpcError::Internal {
+        message: format!("mcp stdio flush: {e}"),
+    })?;
+    Ok(())
+}
+
+async fn read_jsonrpc(
+    reader: &mut tokio::io::BufReader<tokio::process::ChildStdout>,
+) -> IpcResult<serde_json::Value> {
+    use tokio::io::AsyncBufReadExt;
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("mcp stdio read: {e}"),
+        })?;
+    if line.is_empty() {
+        return Err(IpcError::Internal {
+            message: "mcp stdio: server closed stdout before responding".into(),
+        });
+    }
+    serde_json::from_str(line.trim()).map_err(|e| IpcError::Internal {
+        message: format!("mcp stdio json parse: {e}"),
+    })
+}
+
+fn extract_mcp_text_content(result: &serde_json::Value) -> IpcResult<serde_json::Value> {
     let content = result
         .get("result")
         .and_then(|r| r.get("content"))
@@ -404,8 +641,15 @@ async fn resolve_mcp_source(
         Ok(serde_json::from_str(text)
             .unwrap_or_else(|_| serde_json::Value::String(text.to_string())))
     } else {
-        Ok(result)
+        Ok(result.clone())
     }
+}
+
+fn rpc_id_now() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
 }
 
 /// Return every view declared by every CURRENTLY-ENABLED Pack.
@@ -776,6 +1020,7 @@ fn sync_config_yaml(
         return Ok(false);
     }
 
+    let pack_dir = hermes_dir.join("skill-packs").join(pack_id);
     let pack_data_dir = hermes_dir.join("pack-data").join(pack_id);
     if enabled {
         let _ = crate::pack::backup::backup_pack(hermes_dir, pack_id);
@@ -792,10 +1037,9 @@ fn sync_config_yaml(
         );
     }
 
-    // Stage 3c uses an empty pack_config; stage 4 adds the config
-    // form UI that populates `pack-data/<id>/config.json`.
     let ctx = TemplateContext {
         platform: crate::pack::current_platform().to_string(),
+        pack_dir,
         pack_data_dir,
         pack_config: BTreeMap::new(),
     };
@@ -1023,9 +1267,10 @@ mod tests {
         let ds: serde_yaml::Value =
             serde_yaml::from_str("static: { metrics: { revenue: 123 } }").expect("yaml");
         let authority = Arc::new(crate::sandbox::PathAuthority::new());
+        let empty = serde_json::Value::Object(serde_json::Map::new());
         let rt = tokio::runtime::Runtime::new().expect("rt");
         let result = rt
-            .block_on(resolve_data_source_async(&ds, &authority))
+            .block_on(resolve_data_source_async(&ds, &authority, &empty))
             .expect("resolve");
         assert_eq!(result["metrics"]["revenue"], 123);
     }
@@ -1035,9 +1280,10 @@ mod tests {
         let ds: serde_yaml::Value =
             serde_yaml::from_str("sql: { query: \"SELECT 1\" }").expect("yaml");
         let authority = Arc::new(crate::sandbox::PathAuthority::new());
+        let empty = serde_json::Value::Object(serde_json::Map::new());
         let rt = tokio::runtime::Runtime::new().expect("rt");
         let result = rt
-            .block_on(resolve_data_source_async(&ds, &authority))
+            .block_on(resolve_data_source_async(&ds, &authority, &empty))
             .expect("resolve");
         assert!(result.as_object().map(|o| o.is_empty()).unwrap_or(true));
     }
@@ -1048,5 +1294,72 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().expect("rt");
         let result = rt.block_on(resolve_http_source(&cfg));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_mcp_text_content_parses_json_string() {
+        let resp = serde_json::json!({
+            "result": {
+                "content": [{"type": "text", "text": "{\"revenue\": 999}"}]
+            }
+        });
+        let out = extract_mcp_text_content(&resp).expect("extract");
+        assert_eq!(out["revenue"], 999);
+    }
+
+    #[test]
+    fn extract_mcp_text_content_returns_raw_when_not_json() {
+        let resp = serde_json::json!({
+            "result": {
+                "content": [{"type": "text", "text": "plain string"}]
+            }
+        });
+        let out = extract_mcp_text_content(&resp).expect("extract");
+        assert_eq!(out.as_str().expect("str"), "plain string");
+    }
+
+    #[test]
+    fn extract_mcp_text_content_fallback_for_missing_content() {
+        let resp = serde_json::json!({"id": 1});
+        let out = extract_mcp_text_content(&resp).expect("extract");
+        assert_eq!(out["id"], 1);
+    }
+
+    #[test]
+    fn rpc_id_now_returns_nonzero() {
+        assert!(rpc_id_now() > 0);
+    }
+
+    #[test]
+    fn resolve_config_templates_substitutes_placeholders() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let pack_data = tmp.path().join("pack-data").join("test_pack");
+        std::fs::create_dir_all(&pack_data).expect("mkdir");
+        std::fs::write(
+            pack_data.join("config.json"),
+            r#"{"marketplace":"JP","threshold":"25"}"#,
+        )
+        .expect("write");
+        let ds: serde_yaml::Value = serde_yaml::from_str(
+            "mcp: { server: srv, tool: t, params: { marketplace: \"${config.marketplace}\" } }",
+        )
+        .expect("yaml");
+        let result = resolve_config_templates(&ds, "test_pack", tmp.path());
+        let json = yaml_to_json(&result);
+        let mp = json
+            .get("mcp")
+            .and_then(|m| m.get("params"))
+            .and_then(|p| p.get("marketplace"))
+            .and_then(|v| v.as_str());
+        assert_eq!(mp, Some("JP"));
+    }
+
+    #[test]
+    fn resolve_config_templates_noop_without_placeholders() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let ds: serde_yaml::Value = serde_yaml::from_str("static: { revenue: 100 }").expect("yaml");
+        let result = resolve_config_templates(&ds, "any", tmp.path());
+        let json = yaml_to_json(&result);
+        assert_eq!(json["static"]["revenue"], 100);
     }
 }

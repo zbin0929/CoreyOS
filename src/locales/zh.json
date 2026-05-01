@@ -30,7 +30,7 @@
     "section_tools": "工具",
     "section_manage": "管理",
     "section_more": "更多",
-    "section_packs": "技能包"
+    "section_packs": "助手"
   },
   "agents_page": {
     "title": "Agents",
@@ -643,7 +643,7 @@
       "hint": "修改 Hermes 数据目录下的 customer.yaml 后，重启 Corey 生效。"
     },
     "packs": {
-      "title": "技能包",
+      "title": "助手",
       "desc": "已安装的 Pack，位于 ~/.hermes/skill-packs/。",
       "loading": "加载中…",
       "empty": "未安装任何 Pack。",

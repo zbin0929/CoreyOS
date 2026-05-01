@@ -65,51 +65,134 @@ export function RadarChartTemplate({ view }: { view: PackView }) {
   const scores = extractScores(data);
   const points = loading ? '100,40 150,75 140,140 60,140 50,75' : polygonPoints(axes, scores);
 
+  const n = axes.length;
+  const cx = 100;
+  const cy = 100;
+
+  function axisLabelPos(i: number): { x: number; y: number; anchor: 'start' | 'middle' | 'end' } {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    const r = PLOT_RADIUS + 16;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    const anchor = Math.abs(x - cx) < 2 ? 'middle' : x > cx ? 'start' : 'end';
+    return { x, y: y + 3, anchor };
+  }
+
+  function barColorClass(score: number): string {
+    if (score >= 0.75) return 'bg-success';
+    if (score >= 0.5) return 'bg-gold-500';
+    if (score >= 0.3) return 'bg-warning';
+    return 'bg-danger';
+  }
+
+  function scoreColorClass(score: number): string {
+    if (score >= 0.75) return 'text-success';
+    if (score >= 0.5) return 'text-gold-500';
+    if (score >= 0.3) return 'text-warning';
+    return 'text-danger';
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-4 rounded-md border border-border bg-bg-elev-1 p-4 lg:grid-cols-[1fr_220px]">
-      <div className="flex aspect-square items-center justify-center rounded-md bg-bg-elev-2">
-        <svg viewBox="0 0 200 200" className="h-3/4 w-3/4 text-gold-500" aria-hidden>
+    <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-bg-elev-1 p-4 shadow-sm lg:grid-cols-[1fr_260px]">
+      <div className="flex aspect-square items-center justify-center rounded-lg bg-bg-elev-2/40">
+        <svg viewBox="0 0 200 200" className="h-full w-full max-h-[280px] max-w-[280px] text-gold-500" aria-hidden>
           {[0.33, 0.66, 1].map((scale) => (
             <circle
               key={scale}
-              cx="100"
-              cy="100"
+              cx={cx}
+              cy={cy}
               r={PLOT_RADIUS * scale}
               fill="none"
               stroke="currentColor"
-              strokeOpacity="0.2"
-              strokeWidth="1"
+              strokeOpacity="0.15"
+              strokeWidth="0.5"
             />
           ))}
+          {axes.map((_, i) => {
+            const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+            return (
+              <line
+                key={`axis-${i}`}
+                x1={cx}
+                y1={cy}
+                x2={cx + PLOT_RADIUS * Math.cos(angle)}
+                y2={cy + PLOT_RADIUS * Math.sin(angle)}
+                stroke="currentColor"
+                strokeOpacity="0.1"
+                strokeWidth="0.5"
+              />
+            );
+          })}
           <polygon
             points={points}
             fill="currentColor"
-            fillOpacity={loading ? '0.05' : '0.2'}
+            fillOpacity={loading ? '0.05' : '0.15'}
             stroke="currentColor"
             strokeOpacity={loading ? '0.4' : '0.8'}
             strokeWidth="1.5"
+            strokeLinejoin="round"
           />
+          {!loading && axes.map((a, i) => {
+            const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+            const r = (scores[a] ?? 0) * PLOT_RADIUS;
+            const dotX = cx + r * Math.cos(angle);
+            const dotY = cy + r * Math.sin(angle);
+            return (
+              <circle
+                key={`dot-${i}`}
+                cx={dotX}
+                cy={dotY}
+                r="2.5"
+                fill="currentColor"
+                fillOpacity="0.9"
+              />
+            );
+          })}
+          {axes.map((a, i) => {
+            const pos = axisLabelPos(i);
+            return (
+              <text
+                key={`label-${i}`}
+                x={pos.x}
+                y={pos.y}
+                textAnchor={pos.anchor}
+                className="fill-fg-subtle"
+                fontSize="7"
+                fontWeight="500"
+              >
+                {a}
+              </text>
+            );
+          })}
         </svg>
       </div>
-      <ul className="flex flex-col gap-1 text-sm">
+      <ul className="flex flex-col gap-1.5 text-sm">
         {error && (
-          <li className="text-xs text-danger">{error}</li>
+          <li className="rounded-md border border-danger/30 bg-danger/5 px-2 py-1 text-xs text-danger">{error}</li>
         )}
-        {axes.map((a, idx) => (
-          <li
-            key={a}
-            className="flex items-center justify-between border-b border-border py-1 text-fg-muted last:border-b-0"
-          >
-            <span>{`${idx + 1}. ${a}`}</span>
-            <span className="text-xs text-fg-subtle">
-              {loading
-                ? '…'
-                : a in scores
-                  ? `${Math.round(scores[a]! * 100)}%`
-                  : '—'}
-            </span>
-          </li>
-        ))}
+        {axes.map((a) => {
+          const score = scores[a] ?? 0;
+          const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+          return (
+            <li
+              key={a}
+              className="group flex items-center justify-between rounded-lg border border-border/50 px-3 py-2 transition-colors hover:border-border hover:bg-bg-elev-2/30"
+            >
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5 pr-3">
+                <span className="truncate text-xs font-medium text-fg-muted group-hover:text-fg">{a}</span>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elev-2">
+                  <div
+                    className={`h-full rounded-full transition-all ${barColorClass(score)}`}
+                    style={{ width: `${pct}%`, opacity: 0.8 }}
+                  />
+                </div>
+              </div>
+              <span className={`text-sm font-semibold tabular-nums ${loading ? 'text-fg-muted' : scoreColorClass(score)}`}>
+                {loading ? '…' : a in scores ? `${pct}%` : '—'}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

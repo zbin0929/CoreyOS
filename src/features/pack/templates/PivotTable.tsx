@@ -17,6 +17,9 @@
  * Stage 5c is the layout shell. Stage 5d wires data + collapse /
  * expand interactions.
  */
+import { useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Icon } from '@/components/ui/icon';
 import type { PackView } from '@/lib/ipc/pack';
 import { usePackViewData } from '@/features/pack/usePackViewData';
 import { cn } from '@/lib/cn';
@@ -55,11 +58,36 @@ function extractRows(data: unknown): PivotRow[] {
     .filter((r) => r.label.length > 0);
 }
 
-function formatCell(value: unknown): string {
+function formatCell(value: unknown, col?: string): string {
   if (value === null || value === undefined) return '—';
-  if (typeof value === 'number') return value.toLocaleString();
+  if (typeof value === 'number') {
+    if (col && (col.includes('pct') || col.includes('rate') || col.includes('margin'))) {
+      return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+    }
+    return value.toLocaleString();
+  }
   if (typeof value === 'string') return value;
   return JSON.stringify(value);
+}
+
+function deltaClass(value: unknown): string {
+  if (typeof value !== 'number') return '';
+  if (value > 0) return 'text-success';
+  if (value < 0) return 'text-danger';
+  return '';
+}
+
+const PIVOT_COL_LABELS: Record<string, string> = {
+  current: '本期',
+  prior: '上期',
+  delta_pct: '同比%',
+  amount: '金额',
+  pct_of_sales: '占比',
+  value: '值',
+};
+
+function isGroupHeader(row: PivotRow): boolean {
+  return row.indent === 0 && row.bold;
 }
 
 export function PivotTableTemplate({ view }: { view: PackView }) {
@@ -73,14 +101,41 @@ export function PivotTableTemplate({ view }: { view: PackView }) {
 
   const { data, loading, error } = usePackViewData(view.packId, view.viewId);
   const rows = extractRows(data);
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
+
+  function toggleGroup(idx: number) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }
+
+  function visibleRows(): { row: PivotRow; originalIdx: number }[] {
+    const result: { row: PivotRow; originalIdx: number }[] = [];
+    let skipUntilIndent0 = false;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] as PivotRow | undefined;
+      if (!row) continue;
+      if (isGroupHeader(row)) {
+        skipUntilIndent0 = collapsed.has(i);
+        result.push({ row, originalIdx: i });
+        continue;
+      }
+      if (skipUntilIndent0 && row.indent > 0) continue;
+      if (row.indent === 0) skipUntilIndent0 = false;
+      result.push({ row, originalIdx: i });
+    }
+    return result;
+  }
 
   return (
     <div className="overflow-hidden rounded-md border border-border bg-bg-elev-1">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <span className="text-sm font-medium text-fg">
-          {rowGroups.length > 0 ? `Pivot · ${rowGroups.join(' › ')}` : 'Pivot'}
+          {rowGroups.length > 0 ? rowGroups.join(' › ') : '数据透视'}
         </span>
-        <span className="text-xs text-fg-subtle">{columns.length} columns</span>
+        <span className="text-xs text-fg-subtle">{rows.length} 行</span>
       </div>
       {error && (
         <p className="border-b border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
@@ -90,10 +145,10 @@ export function PivotTableTemplate({ view }: { view: PackView }) {
       <table className="w-full text-sm">
         <thead className="bg-bg-elev-2 text-xs uppercase tracking-wide text-fg-subtle">
           <tr>
-            <th className="px-3 py-2 text-left font-medium">row</th>
+            <th className="px-3 py-2 text-left font-medium">项目</th>
             {columns.map((c) => (
               <th key={c} className="px-3 py-2 text-right font-medium">
-                {c}
+                {PIVOT_COL_LABELS[c] ?? c}
               </th>
             ))}
           </tr>
@@ -122,27 +177,45 @@ export function PivotTableTemplate({ view }: { view: PackView }) {
               </td>
             </tr>
           ) : (
-            rows.map((row, idx) => (
-              <tr key={idx} className="border-t border-border text-fg">
-                <td
-                  className={cn('px-3 py-2', row.bold && 'font-semibold')}
-                  style={{ paddingLeft: `${0.75 + row.indent * 1.25}rem` }}
+            visibleRows().map(({ row, originalIdx }) => {
+              const isGroup = isGroupHeader(row);
+              const isCollapsed = collapsed.has(originalIdx);
+              return (
+                <tr
+                  key={originalIdx}
+                  className={cn(
+                    'border-t border-border text-fg',
+                    isGroup && 'cursor-pointer bg-bg-elev-2/40 hover:bg-bg-elev-2/70',
+                    row.indent > 0 && 'text-sm',
+                  )}
+                  onClick={isGroup ? () => toggleGroup(originalIdx) : undefined}
                 >
-                  {row.label}
-                </td>
-                {columns.map((c) => (
                   <td
-                    key={c}
-                    className={cn(
-                      'px-3 py-2 text-right tabular-nums',
-                      row.bold && 'font-semibold',
-                    )}
+                    className={cn('px-3 py-2', row.bold && 'font-semibold')}
+                    style={{ paddingLeft: `${0.75 + row.indent * 1.25}rem` }}
                   >
-                    {formatCell(row.values[c])}
+                    <span className="inline-flex items-center gap-1">
+                      {isGroup && (
+                        <Icon icon={isCollapsed ? ChevronRight : ChevronDown} size="xs" className="text-fg-muted" />
+                      )}
+                      {row.label}
+                    </span>
                   </td>
-                ))}
-              </tr>
-            ))
+                  {columns.map((c) => (
+                    <td
+                      key={c}
+                      className={cn(
+                        'px-3 py-2 text-right tabular-nums',
+                        row.bold && 'font-semibold',
+                        deltaClass(row.values[c]),
+                      )}
+                    >
+                      {formatCell(row.values[c], c)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

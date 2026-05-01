@@ -41,6 +41,8 @@ pub struct TemplateContext {
     /// Platform slug — see module docs. Use [`current_platform`]
     /// to derive at runtime.
     pub platform: String,
+    /// Absolute path to the Pack's install directory (e.g. `~/.hermes/skill-packs/<id>/`).
+    pub pack_dir: PathBuf,
     /// Absolute path to `~/.hermes/pack-data/<id>/`.
     pub pack_data_dir: PathBuf,
     /// Snapshot of the Pack's `config.json` at enable time.
@@ -52,9 +54,14 @@ impl TemplateContext {
     /// can call `TemplateContext { platform: "...", ... }` directly
     /// if they need to pin a non-host platform.
     #[allow(dead_code)] // wired in stage 3b
-    pub fn new(pack_data_dir: PathBuf, pack_config: BTreeMap<String, String>) -> Self {
+    pub fn new(
+        pack_dir: PathBuf,
+        pack_data_dir: PathBuf,
+        pack_config: BTreeMap<String, String>,
+    ) -> Self {
         Self {
             platform: current_platform().to_string(),
+            pack_dir,
             pack_data_dir,
             pack_config,
         }
@@ -158,14 +165,10 @@ pub fn resolve(input: &str, ctx: &TemplateContext) -> String {
 fn lookup(var: &str, ctx: &TemplateContext) -> Option<String> {
     match var {
         "platform" => Some(ctx.platform.clone()),
+        "pack_dir" => Some(ctx.pack_dir.to_string_lossy().into_owned()),
         "pack_data_dir" => Some(ctx.pack_data_dir.to_string_lossy().into_owned()),
         v if v.starts_with("pack_config.") => {
             let key = &v["pack_config.".len()..];
-            // Missing key resolves to empty string. Manifest
-            // authors should mark required keys via
-            // `config_schema[].required` so the Pack loader
-            // refuses to enable until they're populated, rather
-            // than relying on this fallback.
             Some(ctx.pack_config.get(key).cloned().unwrap_or_default())
         }
         _ => None,
@@ -200,6 +203,7 @@ mod tests {
         config.insert("marketplace".to_string(), "US".to_string());
         TemplateContext {
             platform: "darwin-arm64".to_string(),
+            pack_dir: PathBuf::from("/abs/.hermes/skill-packs/foo"),
             pack_data_dir: PathBuf::from("/abs/.hermes/pack-data/foo"),
             pack_config: config,
         }

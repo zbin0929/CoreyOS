@@ -102,26 +102,35 @@ export function PackRoute() {
 
   const Template = TEMPLATES[view.template];
 
+  const isFullWidth = view.template === 'CompositeDashboard';
+
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <PageHeader
-        title={view.title || view.viewId}
-        subtitle={view.packTitle}
-      />
-      {Template ? (
-        <Template view={view} />
-      ) : (
-        <div className="rounded-md border border-dashed border-border bg-bg-elev-1 p-6 text-sm text-fg-subtle">
-          <p>
-            Template <code>{view.template}</code> is not yet
-            implemented. Stage 5b through 5d add the remaining 11
-            templates.
-          </p>
-        </div>
-      )}
-      {view.actions.length > 0 && (
-        <ActionPanel actions={view.actions} packId={view.packId} viewId={view.viewId} />
-      )}
+    <div className="h-full overflow-y-auto p-6">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5">
+        <PageHeader
+          title={view.title || view.viewId}
+          subtitle={view.packTitle}
+        />
+        {Template ? (
+          isFullWidth ? (
+            <Template view={view} />
+          ) : (
+            <div className="rounded-xl border border-border/60 bg-bg-elev-1/40 p-4 shadow-sm">
+              <Template view={view} />
+            </div>
+          )
+        ) : (
+          <div className="rounded-md border border-dashed border-border bg-bg-elev-1 p-6 text-sm text-fg-subtle">
+            <p>
+              Template <code>{view.template}</code> is not yet
+              implemented.
+            </p>
+          </div>
+        )}
+        {view.actions.length > 0 && (
+          <ActionPanel actions={view.actions} packId={view.packId} viewId={view.viewId} />
+        )}
+      </div>
     </div>
   );
 }

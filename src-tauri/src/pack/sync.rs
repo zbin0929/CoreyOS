@@ -177,6 +177,7 @@ mod tests {
         config.insert("token".to_string(), "tok-1".to_string());
         TemplateContext {
             platform: "darwin-arm64".to_string(),
+            pack_dir: PathBuf::from("/abs/skill-packs/foo"),
             pack_data_dir: PathBuf::from("/abs/pack-data/foo"),
             pack_config: config,
         }

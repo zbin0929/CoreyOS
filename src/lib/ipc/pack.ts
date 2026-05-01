@@ -66,8 +66,12 @@ export function packViewsList(): Promise<PackView[]> {
  * view has no data source declared (templates render their own
  * "no data" state).
  */
-export function packViewData(packId: string, viewId: string): Promise<unknown> {
-  return invoke<unknown>('pack_view_data', { packId, viewId });
+export function packViewData(
+  packId: string,
+  viewId: string,
+  params?: Record<string, unknown>,
+): Promise<unknown> {
+  return invoke<unknown>('pack_view_data', { packId, viewId, params: params ?? {} });
 }
 
 export function packConfigGet(packId: string): Promise<Record<string, unknown>> {
