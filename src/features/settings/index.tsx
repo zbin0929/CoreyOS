@@ -137,7 +137,7 @@ export function SettingsRoute() {
               still ran ls ~/Desktop" confusion the v9 audit logged. */}
           <HermesToolPermissionsSection />
 
-          <CustomerSection />
+          <CustomerSection hermesDataDir={paths?.hermes_data_dir} />
 
           <HermesUpdateSection />
 

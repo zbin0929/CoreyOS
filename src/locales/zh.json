@@ -607,6 +607,8 @@
       "hidden_routes": "隐藏路由",
       "none_hidden": "无",
       "unset": "（未设置）",
+      "recovery_path_label": "请修复文件",
+      "recovery_example_label": "最小可用示例",
       "hint": "修改 Hermes 数据目录下的 customer.yaml 后，重启 Corey 生效。"
     },
     "appearance": {

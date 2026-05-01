@@ -607,6 +607,8 @@
       "hidden_routes": "Hidden routes",
       "none_hidden": "None",
       "unset": "(unset)",
+      "recovery_path_label": "Fix file at",
+      "recovery_example_label": "Minimal valid example",
       "hint": "To apply changes, edit customer.yaml in your Hermes data directory and restart Corey."
     },
     "appearance": {

@@ -4,13 +4,14 @@ import { useCustomerConfig } from '@/stores/customer';
 
 import { Section } from '../shared';
 
-export function CustomerSection() {
+export function CustomerSection({ hermesDataDir }: { hermesDataDir?: string }) {
   const { t } = useTranslation();
   const cfg = useCustomerConfig();
   const loading = cfg === null;
   const present = !loading && cfg.present;
   const hasError = !loading && Boolean(cfg.error);
   const hiddenRoutes = !loading ? cfg.navigation.hiddenRoutes : [];
+  const customerYamlPath = hermesDataDir ? `${hermesDataDir}/customer.yaml` : 'customer.yaml';
 
   return (
     <Section
@@ -48,6 +49,22 @@ export function CustomerSection() {
         {!loading && cfg.error && (
           <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-2 text-red-500">
             {cfg.error}
+          </div>
+        )}
+
+        {!loading && cfg.error && (
+          <div className="mt-2 rounded-md border border-border bg-bg-elev-2 px-2.5 py-2 text-fg">
+            <div className="text-fg-subtle">{t('settings.customer.recovery_path_label')}</div>
+            <code className="mt-1 block break-all text-fg">{customerYamlPath}</code>
+            <div className="mt-2 text-fg-subtle">{t('settings.customer.recovery_example_label')}</div>
+            <pre className="mt-1 overflow-x-auto rounded border border-border/70 bg-bg-elev-1 px-2 py-1.5 text-[11px] leading-5 text-fg">
+{`schema_version: 1
+brand:
+  app_name: My Company AI
+navigation:
+  hidden_routes:
+    - analytics`}
+            </pre>
           </div>
         )}
 
