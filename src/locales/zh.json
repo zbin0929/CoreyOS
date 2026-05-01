@@ -614,6 +614,16 @@
       "recovery_example_label": "最小可用示例",
       "hint": "修改 Hermes 数据目录下的 customer.yaml 后，重启 Corey 生效。"
     },
+    "packs": {
+      "title": "技能包",
+      "desc": "已安装的 Pack，位于 ~/.hermes/skill-packs/。",
+      "loading": "加载中…",
+      "empty": "未安装任何 Pack。",
+      "enable": "启用",
+      "disable": "停用",
+      "on": "开",
+      "off": "关"
+    },
     "appearance": {
       "title": "外观",
       "desc": "仅保存在本机的视觉偏好。",

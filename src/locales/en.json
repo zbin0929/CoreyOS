@@ -614,6 +614,16 @@
       "recovery_example_label": "Minimal valid example",
       "hint": "To apply changes, edit customer.yaml in your Hermes data directory and restart Corey."
     },
+    "packs": {
+      "title": "Skill Packs",
+      "desc": "Installed packs from ~/.hermes/skill-packs/.",
+      "loading": "Loading packs…",
+      "empty": "No packs installed.",
+      "enable": "Enable",
+      "disable": "Disable",
+      "on": "On",
+      "off": "Off"
+    },
     "appearance": {
       "title": "Appearance",
       "desc": "Visual preferences stored locally on this machine.",

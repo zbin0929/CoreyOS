@@ -13,6 +13,7 @@ import { HermesInstancesSection } from './HermesInstancesSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
 import { ContextSection } from './sections/ContextSection';
 import { CustomerSection } from './sections/CustomerSection';
+import { PacksSection } from './sections/PacksSection';
 import { LicenseSection } from './sections/LicenseSection';
 import { MemorySection } from './sections/MemorySection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
@@ -35,6 +36,7 @@ const SETTINGS_ANCHORS = [
   { id: 'settings-scopes', labelKey: 'settings.sandbox_scopes.title' },
   { id: 'settings-hermes-tools', labelKey: 'settings.hermes_security.title' },
   { id: 'settings-customer', labelKey: 'settings.customer.title' },
+  { id: 'settings-packs', labelKey: 'settings.packs.title' },
   { id: 'settings-storage', labelKey: 'settings.storage.title' },
 ] as const;
 
@@ -138,6 +140,8 @@ export function SettingsRoute() {
           <HermesToolPermissionsSection />
 
           <CustomerSection hermesDataDir={paths?.hermes_data_dir} />
+
+          <PacksSection />
 
           <HermesUpdateSection />
 
