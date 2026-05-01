@@ -51,6 +51,7 @@ export interface ChatStreamDone {
   finish_reason: string | null;
   model: string;
   latency_ms: number;
+  first_token_latency_ms: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
 }
@@ -336,6 +337,18 @@ export function dbMessageSetUsage(args: {
     messageId: args.messageId,
     promptTokens: args.promptTokens,
     completionTokens: args.completionTokens,
+  });
+}
+
+export function dbMessageSetLatency(args: {
+  messageId: string;
+  firstTokenLatencyMs: number | null;
+  totalLatencyMs: number | null;
+}): Promise<void> {
+  return invoke<void>('db_message_set_latency', {
+    messageId: args.messageId,
+    firstTokenLatencyMs: args.firstTokenLatencyMs,
+    totalLatencyMs: args.totalLatencyMs,
   });
 }
 

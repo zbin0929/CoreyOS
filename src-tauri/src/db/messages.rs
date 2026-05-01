@@ -146,6 +146,23 @@ impl Db {
         Ok(())
     }
 
+    pub fn set_message_latency(
+        &self,
+        message_id: &str,
+        first_token_latency_ms: Option<i64>,
+        total_latency_ms: Option<i64>,
+    ) -> rusqlite::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE messages
+                SET first_token_latency_ms = ?1,
+                    total_latency_ms = ?2
+              WHERE id = ?3",
+            params![first_token_latency_ms, total_latency_ms, message_id],
+        )?;
+        Ok(())
+    }
+
     // ─── tool calls ──────────────────────────────────────────────────
 
     pub fn append_tool_call(&self, t: &ToolCallRow) -> rusqlite::Result<()> {

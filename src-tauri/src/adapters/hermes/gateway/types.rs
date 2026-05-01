@@ -181,6 +181,7 @@ pub struct ChatStreamDone {
     pub finish_reason: Option<String>,
     pub model: String,
     pub latency_ms: u32,
+    pub first_token_latency_ms: Option<u32>,
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
 }

@@ -1,5 +1,6 @@
 import {
   dbMessageSetUsage,
+  dbMessageSetLatency,
   ipcErrorMessage,
   type ChatMessageDto,
   type ChatStreamDone,
@@ -93,6 +94,13 @@ export function buildStreamCallbacks(
           messageId: targetId,
           promptTokens: summary.prompt_tokens,
           completionTokens: summary.completion_tokens,
+        }).catch(() => {});
+      }
+      if (summary.latency_ms > 0) {
+        void dbMessageSetLatency({
+          messageId: targetId,
+          firstTokenLatencyMs: summary.first_token_latency_ms,
+          totalLatencyMs: summary.latency_ms,
         }).catch(() => {});
       }
     },

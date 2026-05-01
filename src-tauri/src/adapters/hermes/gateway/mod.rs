@@ -432,6 +432,7 @@ impl HermesGateway {
                             finish_reason: Some("cancelled".into()),
                             model: resolved_model,
                             latency_ms: started.elapsed().as_millis() as u32,
+                            first_token_latency_ms: first_delta_at.map(|v| v as u32),
                             prompt_tokens,
                             completion_tokens,
                         });
@@ -467,6 +468,7 @@ impl HermesGateway {
                             finish_reason: Some("cancelled".into()),
                             model: resolved_model,
                             latency_ms: started.elapsed().as_millis() as u32,
+                            first_token_latency_ms: first_delta_at.map(|v| v as u32),
                             prompt_tokens,
                             completion_tokens,
                         });
@@ -517,6 +519,7 @@ impl HermesGateway {
                                         finish_reason: Some("cancelled".into()),
                                         model: resolved_model,
                                         latency_ms: started.elapsed().as_millis() as u32,
+                                        first_token_latency_ms: first_delta_at.map(|v| v as u32),
                                         prompt_tokens,
                                         completion_tokens,
                                     });
@@ -544,6 +547,7 @@ impl HermesGateway {
                                         finish_reason: Some("cancelled".into()),
                                         model: resolved_model,
                                         latency_ms: started.elapsed().as_millis() as u32,
+                                        first_token_latency_ms: first_delta_at.map(|v| v as u32),
                                         prompt_tokens,
                                         completion_tokens,
                                     });
@@ -580,6 +584,7 @@ impl HermesGateway {
             finish_reason,
             model: resolved_model,
             latency_ms: total_ms as u32,
+            first_token_latency_ms: first_delta_at.map(|v| v as u32),
             prompt_tokens,
             completion_tokens,
         })

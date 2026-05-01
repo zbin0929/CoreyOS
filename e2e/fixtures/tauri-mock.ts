@@ -945,6 +945,7 @@ export const tauriMockInitScript = /* js */ `
       case 'db_session_delete':
       case 'db_message_upsert':
       case 'db_message_set_usage':
+      case 'db_message_set_latency':
       case 'db_tool_call_append':
         return;
 

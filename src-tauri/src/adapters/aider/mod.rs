@@ -233,6 +233,7 @@ impl AgentAdapter for AiderAdapter {
                     finish_reason: Some("stop".into()),
                     model: turn.model.unwrap_or_else(|| DEFAULT_MODEL.to_string()),
                     latency_ms: started.elapsed().as_millis() as u32,
+                    first_token_latency_ms: None,
                     prompt_tokens: Some(prompt_tokens),
                     completion_tokens: Some(completion_tokens),
                 })

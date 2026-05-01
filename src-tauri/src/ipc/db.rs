@@ -96,6 +96,26 @@ pub async fn db_message_set_usage(
     })
 }
 
+#[tauri::command]
+pub async fn db_message_set_latency(
+    state: State<'_, AppState>,
+    message_id: String,
+    first_token_latency_ms: Option<i64>,
+    total_latency_ms: Option<i64>,
+) -> IpcResult<()> {
+    let db = db_of(&state)?;
+    tokio::task::spawn_blocking(move || {
+        db.set_message_latency(&message_id, first_token_latency_ms, total_latency_ms)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("db task join: {e}"),
+    })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("db set_message_latency: {e}"),
+    })
+}
+
 /// T6.1 — stamp or clear a 👍/👎 rating on an assistant message.
 /// Pass `feedback = None` to clear. Invalid values (anything other than
 /// "up"/"down"/null) surface as an IPC error so the UI can show a toast.

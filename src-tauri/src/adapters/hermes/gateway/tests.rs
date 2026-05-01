@@ -111,6 +111,7 @@ fn contract_chat_stream_done_serializes_expected_fields() {
         finish_reason: Some("stop".into()),
         model: "gpt-4o".into(),
         latency_ms: 1234,
+        first_token_latency_ms: Some(500),
         prompt_tokens: Some(100),
         completion_tokens: Some(50),
     };
