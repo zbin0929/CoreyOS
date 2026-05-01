@@ -43,9 +43,9 @@
   - [x] 测试：10 cargo + 13 vitest 单元测试
   - 提交：`229ab57` + `17595af`（CI 修复）
 - **延后项（随 B-3 一起做）**：
-  - [ ] `pin_to_primary` 实现（需 Pack 路由先就绪）
-  - [ ] `packs.preinstall` 实现（需 Pack 加载器先就绪）
-  - [ ] `packs.config` 预填（需 Pack 配置系统先就绪）
+  - [x] `pin_to_primary` 实现（需 Pack 路由先就绪）
+  - [x] `packs.preinstall` 实现（需 Pack 加载器先就绪）
+  - [x] `packs.config` 预填（需 Pack 配置系统先就绪）
   - [x] 隐藏路由的 URL 级守卫（rootRoute beforeLoad redirect）
   - [x] Settings → Help 面板显示 customer.yaml 的 parse error（已有 CustomerSection）
 - **价值**：定制交付的核心载体——同一个二进制，靠 yaml 让客户看到不同产品
@@ -95,13 +95,13 @@
 - **架构**：详见 `docs/01-architecture.md` § Pack Architecture
 
 #### B-4. License Features 联动 Pack 加载
-- **状态**：🔴 未开始
+- **状态**：✅ 已完成（v0.2.0-dev）
 - **目标版本**：v0.2.0
 - **内容**：
-  - [ ] `mint-license.sh` 已有的 `--features` 字段在 license 验证时启用
-  - [ ] Pack 加载器读 `manifest.license_feature`，校验客户 license 包含此 feature
-  - [ ] 缺 feature 时 UI 显示"需要授权"占位（不加载 MCP / 不挂路由）
-  - [ ] 续费 / 加 Pack 流程文档化（重新签 token → 客户粘贴）
+  - [x] `mint-license.sh` 已有的 `--features` 字段在 license 验证时启用
+  - [x] Pack 加载器读 `manifest.license_feature`，校验客户 license 包含此 feature
+  - [x] 缺 feature 时 UI 显示"需要授权"占位（不加载 MCP / 不挂路由）
+  - [x] 续费 / 加 Pack 流程文档化（`docs/licensing.zh.md` § Pack 授权限联动）
 - **价值**：Pack 防盗版（客户 A 拷给 B 用不了）+ 按 Pack 收费
 - **依赖**：B-3
 - **不做**：在线激活 / JWT / 心跳 / 客户后台（已有 ed25519 离线方案够用）

@@ -202,6 +202,47 @@ open src-tauri/target/release/bundle/macos/Corey.app
 **不会**。只要源码里的公钥不变（`src-tauri/src/license/public_key.pem`），所有用同一私钥签的 license 跨版本都有效。
 
 ### 我想做 14 天免费试用
+
+---
+
+## 🏷️ Pack 授权限联动（B-4）
+
+### 机制
+
+Pack manifest 可声明 `license_feature: "cross_border"`。Corey 启动时：
+
+1. 读取 license token → 解析 `payload.features` 数组
+2. 扫描 Pack → 若 manifest 的 `license_feature` 不在 features 中 → 标记 `license_gated = true`
+3. **gated Pack 无法启用**：`pack_set_enabled` 返回 `Unauthorized` 错误
+4. **gated Pack 的视图不出现**：`pack_views_list` 跳过 gated Pack
+5. 前端 Settings → Packs 显示 🔒 + "需要授权许可"，开关禁用
+
+### 卖家操作流程
+
+**新客户买 Pack**：
+1. 客户发来机器 UUID（Settings → 许可证 页面可见）
+2. 你用 `mint-license.sh` 签新 license，`--features` 加上 Pack 对应的 feature tag
+3. 客户在 Settings → 许可证 粘贴新 token → 旧 token 被替换
+4. 重启后 Pack 自动解锁
+
+**续费 / 加 Pack**：
+1. 同上，但 `--features` 合并新旧 features（逗号分隔）
+2. 例：原 license 有 `basic`，客户加购 `cross_border` → `--features basic,cross_border`
+
+**示例**：
+```bash
+bash scripts/mint-license.sh wang@acme.com \
+    --machine-id 1f4d1e2c-9b8a-4d2c-bc01-7e8a09f1b6c4 \
+    --expires 1y \
+    --features basic,cross_border
+```
+
+### 不做的事
+
+- ❌ 在线激活 / JWT / 心跳
+- ❌ 客户管理后台
+- ❌ 自动续费
+- 离线 ed25519 签名够用，复杂度不值得
 两种思路：
 1. **直接给试用者签 14 天的 license**：`--expires 14d`
 2. **应用内置试用机制**：要改代码，加一个「首次启动日期」存盘 + 14 天后才显示激活窗。当前没实现。
@@ -239,6 +280,7 @@ src-tauri/src/license/
   public_key.pem   ← 嵌入的公钥（你的）
 
 src-tauri/src/ipc/license.rs         ← 三个 IPC 命令
+src-tauri/src/ipc/pack.rs            ← pack_is_gated / resolve_license_features
 src-tauri/src/bin/
   license_keygen.rs                  ← 生成 keypair 的 CLI
   mint_license.rs                    ← 签 license 的 CLI
@@ -249,6 +291,7 @@ src/features/license/
 
 src/features/settings/sections/
   LicenseSection.tsx                  ← 设置里的 license 信息面板
+  PacksSection.tsx                    ← Pack 列表 + 授权限锁
 
 src/lib/ipc/license.ts                ← TS 类型 + IPC 包装
 
