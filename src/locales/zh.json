@@ -443,6 +443,20 @@
       "errors": {
         "title": "高频错误",
         "subtitle": "出现最多的错误消息。"
+      },
+      "budgets": {
+        "title": "预算进度",
+        "subtitle": "已花费金额与预算上限对比。"
+      },
+      "radar": {
+        "title": "健康雷达",
+        "subtitle": "六维系统健康一览。",
+        "latency": "延迟",
+        "cost_efficiency": "成本效率",
+        "reliability": "可靠性",
+        "tool_usage": "工具使用",
+        "feedback": "反馈",
+        "activity": "活跃度"
       }
     }
   },

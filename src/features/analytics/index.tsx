@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, AlertTriangle, BarChart3, Boxes, Coins, Download, RefreshCcw, ThumbsUp, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Boxes, Coins, Download, PiggyBank, RefreshCcw, ThumbsUp, Wrench } from 'lucide-react';
 
 import { PageHeader } from '@/app/shell/PageHeader';
 import { InfoHint } from '@/components/ui/info-hint';
@@ -11,8 +11,10 @@ import {
   analyticsLatencyStats,
   analyticsErrorStats,
   analyticsCostBreakdown,
+  budgetList,
   ipcErrorMessage,
   type AnalyticsSummaryDto,
+  type BudgetRow,
   type CostBreakdown,
   type ErrorStats,
   type LatencyStats,
@@ -25,12 +27,14 @@ import { exportAnalyticsCsv } from './useExport';
 
 import {
   ActivityChart,
+  BudgetProgress,
   Card,
   EmptyRow,
   ErrorBox,
   FeedbackStrip,
   HBarList,
   KpiStrip,
+  RadarChart,
   SkeletonGrid,
 } from './charts';
 import { padLast30Days } from './utils';
@@ -63,20 +67,23 @@ export function AnalyticsRoute() {
   const [latency, setLatency] = useState<LatencyStats | null>(null);
   const [errors, setErrors] = useState<ErrorStats | null>(null);
   const [cost, setCost] = useState<CostBreakdown | null>(null);
+  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const [data, lat, err, cst] = await Promise.all([
+      const [data, lat, err, cst, bgs] = await Promise.all([
         analyticsSummary(range || undefined),
         analyticsLatencyStats(range || undefined),
         analyticsErrorStats(range || undefined),
         analyticsCostBreakdown(range || undefined),
+        budgetList(),
       ]);
       setState({ kind: 'loaded', data });
       setLatency(lat);
       setErrors(err);
       setCost(cst);
+      setBudgets(bgs);
     } catch (e) {
       setState({ kind: 'err', message: ipcErrorMessage(e) });
     }
@@ -127,14 +134,14 @@ export function AnalyticsRoute() {
         <div className="mx-auto max-w-5xl px-6 py-6">
           {state.kind === 'loading' && <SkeletonGrid />}
           {state.kind === 'err' && <ErrorBox message={state.message} onRetry={load} />}
-          {state.kind === 'loaded' && <Dashboard data={state.data} latency={latency} errors={errors} onExport={() => exportAnalyticsCsv(state.data, cost, latency, errors)} />}
+          {state.kind === 'loaded' && <Dashboard data={state.data} latency={latency} errors={errors} cost={cost} budgets={budgets} onExport={() => exportAnalyticsCsv(state.data, cost, latency, errors)} />}
         </div>
       </div>
     </div>
   );
 }
 
-function Dashboard({ data, latency, errors, onExport }: { data: AnalyticsSummaryDto; latency: LatencyStats | null; errors: ErrorStats | null; onExport: () => void }) {
+function Dashboard({ data, latency, errors, cost, budgets, onExport }: { data: AnalyticsSummaryDto; latency: LatencyStats | null; errors: ErrorStats | null; cost: CostBreakdown | null; budgets: BudgetRow[]; onExport: () => void }) {
   const { totals, messages_per_day, tokens_per_day, model_usage, tool_usage, adapter_usage } =
     data;
   const { t } = useTranslation();
@@ -162,6 +169,26 @@ function Dashboard({ data, latency, errors, onExport }: { data: AnalyticsSummary
   const hasAnyActivity = totals.messages > 0;
   const hasAnyTokens = totals.total_tokens > 0;
 
+  const radarAxes = useMemo(() => {
+    const clamp = (v: number) => Math.min(1, Math.max(0, v));
+    const latencyScore = latency && latency.avg_ms > 0 ? clamp(1 - latency.avg_ms / 10000) : 0;
+    const costEfficiency = cost && cost.total_usd > 0 ? clamp(1 - cost.total_usd / 50) : 1;
+    const reliability = errors && errors.total_messages > 0 ? 1 - errors.error_rate : 1;
+    const toolUsage = totals.tool_calls > 0 ? clamp(totals.tool_calls / totals.messages) : 0;
+    const feedbackScore = totals.feedback_up + totals.feedback_down > 0
+      ? totals.feedback_up / (totals.feedback_up + totals.feedback_down)
+      : 0;
+    const activity = clamp(totals.active_days / 30);
+    return [
+      { key: 'latency', value: latencyScore },
+      { key: 'cost_efficiency', value: costEfficiency },
+      { key: 'reliability', value: reliability },
+      { key: 'tool_usage', value: toolUsage },
+      { key: 'feedback', value: feedbackScore },
+      { key: 'activity', value: activity },
+    ];
+  }, [totals, latency, errors, cost]);
+
   return (
     <div className="flex flex-col gap-6">
       <KpiStrip totals={totals} latency={latency} errors={errors} />
@@ -177,6 +204,16 @@ function Dashboard({ data, latency, errors, onExport }: { data: AnalyticsSummary
         <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-4 py-10 text-center text-sm text-fg-muted">
           {t('analytics.empty')}
         </div>
+      )}
+
+      {hasAnyActivity && (
+        <Card
+          title={t('analytics.chart.radar.title')}
+          subtitle={t('analytics.chart.radar.subtitle')}
+          icon={Activity}
+        >
+          <RadarChart axes={radarAxes} />
+        </Card>
       )}
 
       <Card
@@ -264,6 +301,16 @@ function Dashboard({ data, latency, errors, onExport }: { data: AnalyticsSummary
           totalMessages={totals.messages}
         />
       </Card>
+
+      {budgets.length > 0 && (
+        <Card
+          title={t('analytics.chart.budgets.title')}
+          subtitle={t('analytics.chart.budgets.subtitle')}
+          icon={PiggyBank}
+        >
+          <BudgetProgress budgets={budgets} spentCents={Math.round((cost?.total_usd ?? 0) * 100)} />
+        </Card>
+      )}
 
       {errors && errors.top_error_types.length > 0 && (
         <Card

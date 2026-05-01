@@ -597,6 +597,20 @@
       "errors": {
         "title": "Top errors",
         "subtitle": "Most frequent error messages."
+      },
+      "budgets": {
+        "title": "Budget progress",
+        "subtitle": "Spend against your configured caps."
+      },
+      "radar": {
+        "title": "Health radar",
+        "subtitle": "Six-dimension system health at a glance.",
+        "latency": "Latency",
+        "cost_efficiency": "Cost efficiency",
+        "reliability": "Reliability",
+        "tool_usage": "Tool usage",
+        "feedback": "Feedback",
+        "activity": "Activity"
       }
     }
   },

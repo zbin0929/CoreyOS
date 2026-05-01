@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import type { AnalyticsSummaryDto, ErrorStats, LatencyStats } from '@/lib/ipc';
 import { cn } from '@/lib/cn';
+import type { BudgetRow } from '@/lib/ipc';
 
 import { formatNumber } from './utils';
 
@@ -353,6 +354,91 @@ export function ErrorBox({ message, onRetry }: { message: string; onRetry: () =>
       <Button variant="ghost" size="sm" onClick={onRetry}>
         {t('analytics.retry')}
       </Button>
+    </div>
+  );
+}
+
+export function BudgetProgress({ budgets, spentCents }: { budgets: BudgetRow[]; spentCents: number }) {
+  const { t } = useTranslation();
+  if (budgets.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-2">
+      {budgets.map((b) => {
+        const cap = b.amount_cents || 0;
+        const rawPct = cap > 0 ? (spentCents / cap) * 100 : 0;
+        const pct = Math.min(100, Math.max(0, Math.round(Number.isFinite(rawPct) ? rawPct : 0)));
+        const breached = cap > 0 && spentCents >= cap;
+        const warn = !breached && pct >= 80;
+        const colorClass = breached ? 'bg-danger' : warn ? 'bg-amber-500' : 'bg-emerald-500';
+        const scopeLabel = b.scope_kind === 'global' ? t('budgets.scope.global') : `${b.scope_value ?? '—'}`;
+        return (
+          <li key={b.id} className="flex flex-col gap-1">
+            <div className="flex items-baseline justify-between text-xs">
+              <span className="text-fg">{scopeLabel}</span>
+              <span className={cn('text-fg-muted', breached && 'text-danger', warn && 'text-amber-500')}>
+                ${(spentCents / 100).toFixed(2)} / ${(cap / 100).toFixed(2)} ({pct}%)
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elev-3">
+              <div className={cn('h-full transition-all', colorClass)} style={{ width: `${pct}%` }} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function RadarChart({ axes }: { axes: { key: string; value: number }[] }) {
+  const { t } = useTranslation();
+  const n = axes.length;
+  if (n < 3) return null;
+  const cx = 120;
+  const cy = 120;
+  const r = 90;
+  const angleStep = (2 * Math.PI) / n;
+  const point = (i: number, v: number) => {
+    const a = -Math.PI / 2 + i * angleStep;
+    return { x: cx + r * v * Math.cos(a), y: cy + r * v * Math.sin(a) };
+  };
+  const gridRings = [0.25, 0.5, 0.75, 1];
+  const polygon = axes.map((a, i) => { const p = point(i, a.value); return `${p.x},${p.y}`; }).join(' ');
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg viewBox="0 0 240 240" className="w-full max-w-[280px]">
+        {gridRings.map((gr) => (
+          <polygon
+            key={gr}
+            points={Array.from({ length: n }, (_, i) => { const p = point(i, gr); return `${p.x},${p.y}`; }).join(' ')}
+            fill="none"
+            stroke="currentColor"
+            className="text-fg-subtle/20"
+            strokeWidth={1}
+          />
+        ))}
+        {axes.map((_, i) => {
+          const p = point(i, 1);
+          return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} className="stroke-fg-subtle/20" strokeWidth={1} />;
+        })}
+        <polygon points={polygon} className="fill-gold-500/20 stroke-gold-500" strokeWidth={2} />
+        {axes.map((a, i) => {
+          const p = point(i, a.value);
+          return <circle key={a.key} cx={p.x} cy={p.y} r={3} className="fill-gold-500" />;
+        })}
+        {axes.map((a, i) => {
+          const lp = point(i, 1.18);
+          return (
+            <text key={a.key} x={lp.x} y={lp.y} textAnchor="middle" dominantBaseline="middle" className="fill-fg-muted text-[9px]">
+              {t(`analytics.radar.${a.key}`)}
+            </text>
+          );
+        })}
+      </svg>
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-[10px] text-fg-muted">
+        {axes.map((a) => (
+          <span key={a.key}>{t(`analytics.radar.${a.key}`)}: {Math.round(a.value * 100)}%</span>
+        ))}
+      </div>
     </div>
   );
 }
