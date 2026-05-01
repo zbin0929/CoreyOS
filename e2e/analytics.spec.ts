@@ -46,6 +46,8 @@ test.describe('analytics', () => {
             prompt_tokens: 0,
             completion_tokens: 0,
             total_tokens: 0,
+            estimated_cost_usd: 0,
+            estimated_cost_cny: 0,
           },
           messages_per_day: [],
           tokens_per_day: [],

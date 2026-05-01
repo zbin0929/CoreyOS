@@ -312,6 +312,8 @@ export const tauriMockInitScript = /* js */ `
         total_tokens: 143_555,
         feedback_up: 7,
         feedback_down: 2,
+        estimated_cost_usd: 1.23,
+        estimated_cost_cny: 8.86,
       },
       messages_per_day: [
         { date: isoDaysAgo(5), count: 9 },
@@ -1034,6 +1036,14 @@ export const tauriMockInitScript = /* js */ `
 
       case 'analytics_summary':
         return state.analytics;
+
+      case 'analytics_cost_breakdown':
+        return {
+          total_usd: state.analytics.totals.estimated_cost_usd,
+          total_cny: state.analytics.totals.estimated_cost_cny,
+          by_model: [],
+          daily_cost: [],
+        };
 
       case 'chat_send':
         return { content: state.chatReply };
