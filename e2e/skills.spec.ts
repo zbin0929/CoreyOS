@@ -12,7 +12,7 @@ test.describe('skills', () => {
 
     // New → fill path → create.
     await page.getByTestId('skills-new').click();
-    await page.getByTestId('skills-new-name').fill('daily.md');
+    await page.getByTestId('skills-new-name').fill('daily');
     await page.getByTestId('skills-new-create').click();
 
     // Editor opens with the seeded body.
@@ -21,7 +21,7 @@ test.describe('skills', () => {
     await expect(ta).toHaveValue(/daily\n\nWrite your prompt here/);
 
     // Tree row appears.
-    await expect(page.getByTestId('skill-row-daily.md')).toBeVisible();
+    await expect(page.getByTestId('skill-row-daily/SKILL.md')).toBeVisible();
 
     // Edit → dirty badge + save enabled.
     await ta.fill('# new body\n');
@@ -48,30 +48,30 @@ test.describe('skills', () => {
       ).__CADUCEUS_MOCK__;
       if (!mock) return;
       mock.state.skills = {
-        'standup.md': { body: '# standup\n', updated_at_ms: 2 },
-        'work/prreview.md': { body: '# pr review\n', updated_at_ms: 1 },
+        'standup/SKILL.md': { body: '# standup\n', updated_at_ms: 2 },
+        'work/prreview/SKILL.md': { body: '# pr review\n', updated_at_ms: 1 },
       };
     });
     await page.goto('/skills');
 
-    await expect(page.getByTestId('skill-row-standup.md')).toBeVisible();
-    await expect(page.getByTestId('skill-row-work/prreview.md')).toBeVisible();
+    await expect(page.getByTestId('skill-row-standup/SKILL.md')).toBeVisible();
+    await expect(page.getByTestId('skill-row-work/prreview/SKILL.md')).toBeVisible();
 
     // Open the root one first.
-    await page.getByTestId('skill-row-standup.md').click();
+    await page.getByTestId('skill-row-standup/SKILL.md').click();
     await expect(page.getByTestId('skills-editor-textarea')).toHaveValue(
       '# standup\n',
     );
 
     // Switch to the nested one.
-    await page.getByTestId('skill-row-work/prreview.md').click();
+    await page.getByTestId('skill-row-work/prreview/SKILL.md').click();
     await expect(page.getByTestId('skills-editor-textarea')).toHaveValue(
       '# pr review\n',
     );
 
     // Delete → row vanishes, editor returns to empty state.
     await page.getByTestId('skills-delete').click();
-    await expect(page.getByTestId('skill-row-work/prreview.md')).toHaveCount(0);
+    await expect(page.getByTestId('skill-row-work/prreview/SKILL.md')).toHaveCount(0);
     await expect(page.getByTestId('skills-editor')).toHaveCount(0);
   });
 });

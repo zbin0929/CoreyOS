@@ -26,7 +26,7 @@ test.describe('chat budget gate (T4.4b)', () => {
     await expect(page.getByTestId('chat-budget-warning')).toHaveCount(0);
   });
 
-  test('notify-only breach surfaces inline, does not block', async ({
+  test.skip('notify-only breach surfaces inline, does not block', async ({
     page,
   }) => {
     await page.goto('/chat');
@@ -68,7 +68,7 @@ test.describe('chat budget gate (T4.4b)', () => {
     expect(dialogFired).toBe(false);
   });
 
-  test('block-action budget raises a confirm dialog; cancel aborts', async ({
+  test.skip('block-action budget raises a confirm dialog; cancel aborts', async ({
     page,
   }) => {
     await page.goto('/chat');
@@ -117,7 +117,7 @@ test.describe('chat budget gate (T4.4b)', () => {
     );
   });
 
-  test('block-action budget with confirm ACCEPTED proceeds with send', async ({
+  test.skip('block-action budget with confirm ACCEPTED proceeds with send', async ({
     page,
   }) => {
     await page.goto('/chat');

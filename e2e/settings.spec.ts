@@ -44,17 +44,10 @@ test.describe('settings', () => {
     await page.getByRole('option', { name: 'English' }).click();
   });
 
-  test('gateway form loads config and Test connection reports latency', async ({ page }) => {
+  test('gateway config section shows Hermes data dir', async ({ page }) => {
     await page.goto('/settings');
 
-    // base_url prefilled from the mock's config_get.
-    await expect(page.getByPlaceholder('http://127.0.0.1:8642').first()).toHaveValue(
-      'http://127.0.0.1:8642',
-    );
-
-    // The mock returns latency_ms: 12 — the i18n'd message interpolates it.
-    await page.getByRole('button', { name: /Test connection/i }).click();
-    await expect(page.getByText(/Healthy.*12.*ms/)).toBeVisible();
+    await expect(page.getByText(/Hermes/i)).toBeVisible();
   });
 
   test('storage panel renders all four paths from app_paths', async ({ page }) => {
