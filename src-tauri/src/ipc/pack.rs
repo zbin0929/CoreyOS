@@ -636,6 +636,12 @@ fn sync_config_yaml(
                 message: format!("create pack-data dir: {e}"),
             });
         }
+        let _ = crate::pack::run_migrations(
+            &pack_data_dir,
+            "0",
+            &manifest.version,
+            &manifest.migrations,
+        );
     }
 
     // Stage 3c uses an empty pack_config; stage 4 adds the config

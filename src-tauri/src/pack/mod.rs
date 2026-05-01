@@ -27,6 +27,7 @@
 
 pub(crate) mod backup;
 mod manifest;
+mod migrations;
 mod scanner;
 mod schedules;
 mod skills;
@@ -47,6 +48,7 @@ mod workflows;
 pub use backup::backup_pack;
 #[allow(unused_imports)]
 pub use manifest::{load_from_dir, parse, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME};
+pub use migrations::run_migrations;
 pub use scanner::scan_skill_packs_dir;
 pub use schedules::{install_schedules, uninstall_schedules};
 pub use skills::{install_skills, uninstall_skills};
