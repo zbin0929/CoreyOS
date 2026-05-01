@@ -135,12 +135,13 @@
 - **依赖**：B-3（用 MetricsCard + TimeSeriesChart 模板渲染）
 
 #### B-7. 卸载 / 重置功能（FEAT-001）
-- **状态**：🔴 未开始
+- **状态**：� 已完成
 - **目标版本**：v0.2.0
 - **内容**：
-  - [ ] 设置页"清除 Hermes 数据"按钮
-  - [ ] 设置页"重置 Corey 配置"按钮（保留 license 与 Pack）
-  - [ ] 完整卸载手册（Windows + macOS）
+  - [x] 设置页"清除 Hermes 数据"按钮
+  - [x] 设置页"重置 Corey 配置"按钮（保留 license 与 Pack）
+  - [x] Rust IPC: hermes_data_reset + corey_config_reset
+  - [x] 完整卸载手册（Windows + macOS）
 - **价值**：出问题时的逃生通道，客户支持成本下降
 
 ### 第 3 层 — 已砍（与"只做定制"冲突，永久不做）
