@@ -90,7 +90,6 @@ fn yaml_to_json_value(v: &serde_yaml::Value) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn run_migrations_renames_and_defaults() {
@@ -124,7 +123,7 @@ mod tests {
 
         let result: BTreeMap<String, serde_json::Value> =
             serde_json::from_str(&fs::read_to_string(&config_path).expect("read")).expect("parse");
-        assert!(result.get("old_key").is_none(), "old_key should be renamed");
+        assert!(!result.contains_key("old_key"), "old_key should be renamed");
         assert_eq!(result["new_key"], "val");
         assert_eq!(result["added"], "default");
 

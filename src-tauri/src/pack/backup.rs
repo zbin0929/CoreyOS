@@ -77,7 +77,6 @@ fn prune_old_backups(backups_dir: &Path, pack_id: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn backup_pack_creates_zip() {
