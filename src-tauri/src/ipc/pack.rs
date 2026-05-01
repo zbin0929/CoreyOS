@@ -600,7 +600,10 @@ pub async fn pack_config_get(
 ) -> IpcResult<serde_json::Value> {
     let hermes_dir = state.packs.read().hermes_dir.clone();
     tokio::task::spawn_blocking(move || {
-        let path = hermes_dir.join("pack-data").join(&pack_id).join("config.json");
+        let path = hermes_dir
+            .join("pack-data")
+            .join(&pack_id)
+            .join("config.json");
         if !path.exists() {
             return Ok(serde_json::Value::Object(serde_json::Map::new()));
         }
@@ -612,7 +615,9 @@ pub async fn pack_config_get(
         })
     })
     .await
-    .map_err(|e| IpcError::Internal { message: format!("config_get join: {e}") })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("config_get join: {e}"),
+    })?
 }
 
 #[tauri::command]
@@ -640,14 +645,13 @@ pub async fn pack_config_set(
         })
     })
     .await
-    .map_err(|e| IpcError::Internal { message: format!("config_set join: {e}") })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("config_set join: {e}"),
+    })?
 }
 
 #[tauri::command]
-pub async fn pack_import_zip(
-    zip_path: String,
-    state: State<'_, AppState>,
-) -> IpcResult<String> {
+pub async fn pack_import_zip(zip_path: String, state: State<'_, AppState>) -> IpcResult<String> {
     let hermes_dir = state.packs.read().hermes_dir.clone();
     tokio::task::spawn_blocking(move || {
         let src = std::path::Path::new(&zip_path);
@@ -693,8 +697,10 @@ pub async fn pack_import_zip(
                     })?;
                 }
                 let mut buf = Vec::new();
-                std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| IpcError::Internal {
-                    message: format!("read zip entry: {e}"),
+                std::io::Read::read_to_end(&mut entry, &mut buf).map_err(|e| {
+                    IpcError::Internal {
+                        message: format!("read zip entry: {e}"),
+                    }
                 })?;
                 fs::write(&out_path, &buf).map_err(|e| IpcError::Internal {
                     message: format!("write {}: {e}", entry.name()),
@@ -704,14 +710,13 @@ pub async fn pack_import_zip(
         Ok(top_dir)
     })
     .await
-    .map_err(|e| IpcError::Internal { message: format!("import join: {e}") })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("import join: {e}"),
+    })?
 }
 
 #[tauri::command]
-pub async fn pack_uninstall(
-    pack_id: String,
-    state: State<'_, AppState>,
-) -> IpcResult<()> {
+pub async fn pack_uninstall(pack_id: String, state: State<'_, AppState>) -> IpcResult<()> {
     let (hermes_dir, pack_dir) = {
         let registry = state.packs.read();
         let entry = registry.packs.iter().find(|p| matches_pack_id(p, &pack_id));
@@ -731,7 +736,9 @@ pub async fn pack_uninstall(
         Ok(())
     })
     .await
-    .map_err(|e| IpcError::Internal { message: format!("uninstall join: {e}") })?
+    .map_err(|e| IpcError::Internal {
+        message: format!("uninstall join: {e}"),
+    })?
 }
 
 /// True when `entry`'s canonical Pack id matches `pack_id`. The
