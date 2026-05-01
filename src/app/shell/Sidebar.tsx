@@ -209,12 +209,7 @@ export function Sidebar() {
         )}
 
         {packDefault.length > 0 && (
-          <>
-            <SectionLabel className="mt-4">{t('nav.section_packs')}</SectionLabel>
-            {packDefault.map((v) => (
-              <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
-            ))}
-          </>
+          <PackGroupSection views={packDefault} pathname={location.pathname} />
         )}
       </nav>
 
@@ -296,6 +291,64 @@ function PackNavItem({ view, pathname }: { view: PackView; pathname: string }) {
       <span className="flex-1 truncate">{view.title || view.viewId}</span>
       {active ? <span className="h-4 w-0.5 rounded-sm bg-gold-500" /> : null}
     </Link>
+  );
+}
+
+function PackGroupSection({ views, pathname }: { views: PackView[]; pathname: string }) {
+  const { t } = useTranslation();
+  const groups = new Map<string, { title: string; views: PackView[] }>();
+  for (const v of views) {
+    const existing = groups.get(v.packId);
+    if (existing) {
+      existing.views.push(v);
+    } else {
+      groups.set(v.packId, { title: v.packTitle || v.packId, views: [v] });
+    }
+  }
+
+  const hasActive = views.some((v) => isActive(pathname, `/pack/${v.packId}/${v.viewId}`));
+  const [expanded, setExpanded] = useState(hasActive);
+
+  useEffect(() => {
+    if (hasActive) setExpanded(true);
+  }, [hasActive]);
+
+  if (groups.size === 0) return null;
+
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={cn(
+          'flex w-full items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle',
+          'hover:text-fg-muted transition-colors duration-fast',
+        )}
+      >
+        <Icon
+          icon={ChevronRight}
+          size="xs"
+          className={cn('transition-transform duration-fast', expanded && 'rotate-90')}
+        />
+        {t('nav.section_packs')}
+      </button>
+      {expanded &&
+        [...groups.entries()].map(([packId, group]) => (
+          <div key={packId} className="ml-1">
+            <div className="px-2.5 pt-2 pb-0.5 text-[11px] font-medium text-fg-muted truncate">
+              {group.title}
+            </div>
+            {group.views.map((v) => (
+              <PackNavItem
+                key={`pack-${v.packId}-${v.viewId}`}
+                view={v}
+                pathname={pathname}
+              />
+            ))}
+          </div>
+        ))}
+    </div>
   );
 }
 
