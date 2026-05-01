@@ -118,7 +118,9 @@ pub async fn pack_list(state: State<'_, AppState>) -> IpcResult<Vec<PackListEntr
 
 #[tauri::command]
 pub async fn pack_rescan(state: State<'_, AppState>) -> IpcResult<Vec<PackListEntry>> {
-    let hermes_dir = crate::paths::hermes_data_dir().map_err(|e| IpcError::Internal { message: e.to_string() })?;
+    let hermes_dir = crate::paths::hermes_data_dir().map_err(|e| IpcError::Internal {
+        message: e.to_string(),
+    })?;
     let new_registry = crate::pack::Registry::scan(&hermes_dir);
     let entries: Vec<PackListEntry> = new_registry.packs.iter().map(PackListEntry::from).collect();
     {
