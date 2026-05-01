@@ -152,6 +152,7 @@ pub fn run() {
             ipc::db::db_tool_call_append,
             ipc::db::analytics_summary,
             ipc::db::analytics_cost_breakdown,
+            ipc::db::analytics_latency_stats,
             ipc::paths::app_paths,
             ipc::paths::app_data_dir_set,
             ipc::paths::app_data_dir_clear,

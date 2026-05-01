@@ -344,6 +344,16 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    if version < 14 {
+        conn.execute_batch(
+            r#"
+            ALTER TABLE messages ADD COLUMN first_token_latency_ms INTEGER;
+            ALTER TABLE messages ADD COLUMN total_latency_ms INTEGER;
+            PRAGMA user_version = 14;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 

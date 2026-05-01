@@ -555,7 +555,8 @@
       "tool_calls": "Tool calls",
       "active_days": "Active days",
       "total_tokens": "Tokens",
-      "estimated_cost": "Est. cost"
+      "estimated_cost": "Est. cost",
+      "avg_latency": "Avg latency"
     },
     "chart": {
       "activity": {

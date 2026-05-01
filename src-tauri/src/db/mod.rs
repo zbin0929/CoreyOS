@@ -36,7 +36,8 @@ mod workflows;
 // wrapping types (AnalyticsSummary, SessionWithMessages).
 #[allow(unused_imports)]
 pub use analytics::{
-    AnalyticsSummary, AnalyticsTotals, CostBreakdown, DayCost, DayCount, ModelCost, NamedCount,
+    AnalyticsSummary, AnalyticsTotals, CostBreakdown, DayCost, DayCount, LatencyStats, ModelCost,
+    ModelLatency, NamedCount,
 };
 pub use budgets::BudgetRow;
 pub use messages::{AttachmentRow, MessageRow, ToolCallRow};

@@ -265,6 +265,8 @@ export interface DbMessageRow {
    *  Only assistant messages get rated in the UI but the column lives
    *  on every row. */
   feedback?: 'up' | 'down' | null;
+  first_token_latency_ms?: number | null;
+  total_latency_ms?: number | null;
 }
 
 export interface DbToolCallRow {
@@ -524,5 +526,24 @@ export interface CostBreakdown {
 
 export function analyticsCostBreakdown(days?: number): Promise<CostBreakdown> {
   return invoke<CostBreakdown>('analytics_cost_breakdown', { days: days ?? null });
+}
+
+export interface ModelLatency {
+  model: string;
+  p50_ms: number;
+  avg_ms: number;
+  count: number;
+}
+
+export interface LatencyStats {
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  avg_ms: number;
+  by_model: ModelLatency[];
+}
+
+export function analyticsLatencyStats(days?: number): Promise<LatencyStats> {
+  return invoke<LatencyStats>('analytics_latency_stats', { days: days ?? null });
 }
 

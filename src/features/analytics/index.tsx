@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import {
   analyticsSummary,
+  analyticsLatencyStats,
   ipcErrorMessage,
   type AnalyticsSummaryDto,
+  type LatencyStats,
   type NamedCount,
 } from '@/lib/ipc';
 import { useAgentsStore } from '@/stores/agents';
@@ -52,12 +54,17 @@ export function AnalyticsRoute() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
 
   const [range, setRange] = useState<DateRange>(30);
+  const [latency, setLatency] = useState<LatencyStats | null>(null);
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const data = await analyticsSummary(range || undefined);
+      const [data, lat] = await Promise.all([
+        analyticsSummary(range || undefined),
+        analyticsLatencyStats(range || undefined),
+      ]);
       setState({ kind: 'loaded', data });
+      setLatency(lat);
     } catch (e) {
       setState({ kind: 'err', message: ipcErrorMessage(e) });
     }
@@ -108,14 +115,14 @@ export function AnalyticsRoute() {
         <div className="mx-auto max-w-5xl px-6 py-6">
           {state.kind === 'loading' && <SkeletonGrid />}
           {state.kind === 'err' && <ErrorBox message={state.message} onRetry={load} />}
-          {state.kind === 'loaded' && <Dashboard data={state.data} />}
+          {state.kind === 'loaded' && <Dashboard data={state.data} latency={latency} />}
         </div>
       </div>
     </div>
   );
 }
 
-function Dashboard({ data }: { data: AnalyticsSummaryDto }) {
+function Dashboard({ data, latency }: { data: AnalyticsSummaryDto; latency: LatencyStats | null }) {
   const { totals, messages_per_day, tokens_per_day, model_usage, tool_usage, adapter_usage } =
     data;
   const { t } = useTranslation();
@@ -145,7 +152,7 @@ function Dashboard({ data }: { data: AnalyticsSummaryDto }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <KpiStrip totals={totals} />
+      <KpiStrip totals={totals} latency={latency} />
 
       {!hasAnyActivity && (
         <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-4 py-10 text-center text-sm text-fg-muted">

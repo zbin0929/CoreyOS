@@ -127,7 +127,8 @@ impl Db {
         // 2) All messages, sorted by (session_id, position).
         let mut mstmt = conn.prepare(
             "SELECT id, session_id, role, content, error, position, created_at,
-                    prompt_tokens, completion_tokens, feedback
+                    prompt_tokens, completion_tokens, feedback,
+                    first_token_latency_ms, total_latency_ms
              FROM messages ORDER BY session_id, position",
         )?;
         let messages: Vec<MessageRow> = mstmt
@@ -143,6 +144,8 @@ impl Db {
                     prompt_tokens: row.get(7)?,
                     completion_tokens: row.get(8)?,
                     feedback: row.get(9)?,
+                    first_token_latency_ms: row.get(10)?,
+                    total_latency_ms: row.get(11)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -253,6 +256,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         })
         .unwrap();
         db.append_tool_call(&ToolCallRow {
@@ -433,6 +438,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         })
         .unwrap();
         db.append_tool_call(&ToolCallRow {

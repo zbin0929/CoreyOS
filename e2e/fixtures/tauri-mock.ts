@@ -1045,6 +1045,15 @@ export const tauriMockInitScript = /* js */ `
           daily_cost: [],
         };
 
+      case 'analytics_latency_stats':
+        return {
+          p50_ms: 0,
+          p95_ms: 0,
+          p99_ms: 0,
+          avg_ms: 0,
+          by_model: [],
+        };
+
       case 'chat_send':
         return { content: state.chatReply };
 

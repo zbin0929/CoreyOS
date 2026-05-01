@@ -79,6 +79,23 @@ pub struct CostBreakdown {
     pub daily_cost: Vec<DayCost>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct LatencyStats {
+    pub p50_ms: i64,
+    pub p95_ms: i64,
+    pub p99_ms: i64,
+    pub avg_ms: i64,
+    pub by_model: Vec<ModelLatency>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelLatency {
+    pub model: String,
+    pub p50_ms: i64,
+    pub avg_ms: i64,
+    pub count: i64,
+}
+
 struct ModelPrice {
     prefix: &'static str,
     input_per_m: f64,
@@ -426,6 +443,73 @@ impl Db {
             daily_cost,
         })
     }
+
+    pub fn latency_stats(&self, now_ms: i64, days: Option<i64>) -> rusqlite::Result<LatencyStats> {
+        let conn = self.conn.lock();
+        let since_m2 = match days {
+            Some(d) => format!("AND m2.created_at >= {}", now_ms - d * 86_400_000),
+            None => String::new(),
+        };
+
+        let mut stmt = conn.prepare(&format!(
+            "SELECT m2.total_latency_ms
+             FROM messages m2
+             WHERE m2.role = 'assistant'
+               AND m2.total_latency_ms IS NOT NULL {since_m2}
+             ORDER BY m2.total_latency_ms"
+        ))?;
+        let latencies: Vec<i64> = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<_, _>>()?;
+        drop(stmt);
+
+        let p50_ms = percentile(&latencies, 50);
+        let p95_ms = percentile(&latencies, 95);
+        let p99_ms = percentile(&latencies, 99);
+        let avg_ms = if latencies.is_empty() {
+            0
+        } else {
+            latencies.iter().sum::<i64>() / latencies.len() as i64
+        };
+
+        let mut mstmt = conn.prepare(&format!(
+            "SELECT COALESCE(NULLIF(s.model, ''), 'unknown') AS m,
+                    COUNT(*),
+                    AVG(m2.total_latency_ms)
+             FROM messages m2
+             JOIN sessions s ON m2.session_id = s.id
+             WHERE m2.role = 'assistant'
+               AND m2.total_latency_ms IS NOT NULL {since_m2}
+             GROUP BY s.model
+             ORDER BY AVG(m2.total_latency_ms) DESC"
+        ))?;
+        let by_model: Vec<ModelLatency> = mstmt
+            .query_map([], |row| {
+                Ok(ModelLatency {
+                    model: row.get(0)?,
+                    count: row.get(1)?,
+                    avg_ms: row.get::<_, f64>(2)? as i64,
+                    p50_ms: 0,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        Ok(LatencyStats {
+            p50_ms,
+            p95_ms,
+            p99_ms,
+            avg_ms,
+            by_model,
+        })
+    }
+}
+
+fn percentile(sorted: &[i64], pct: u8) -> i64 {
+    if sorted.is_empty() {
+        return 0;
+    }
+    let idx = ((pct as usize) * (sorted.len() - 1)) / 100;
+    sorted[idx]
 }
 
 #[cfg(test)]
@@ -459,6 +543,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         }
     }
 
@@ -530,6 +616,8 @@ mod tests {
             prompt_tokens: Some(11),
             completion_tokens: None,
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         })
         .unwrap();
         db.upsert_message(&MessageRow {
@@ -543,6 +631,8 @@ mod tests {
             prompt_tokens: Some(20),
             completion_tokens: Some(33),
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         })
         .unwrap();
         db.upsert_message(&MessageRow {
@@ -556,6 +646,8 @@ mod tests {
             prompt_tokens: Some(999),
             completion_tokens: Some(999),
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         })
         .unwrap();
 
@@ -673,6 +765,8 @@ mod tests {
             prompt_tokens: Some(1_000_000),
             completion_tokens: Some(1_000_000),
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         })
         .unwrap();
         let s = db.analytics_summary(now, None).unwrap();

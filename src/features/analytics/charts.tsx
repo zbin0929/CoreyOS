@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Activity,
   Calendar,
+  Clock,
   Coins,
   DollarSign,
   MessageSquare,
@@ -12,13 +13,14 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import type { AnalyticsSummaryDto } from '@/lib/ipc';
+import type { AnalyticsSummaryDto, LatencyStats } from '@/lib/ipc';
+import { cn } from '@/lib/cn';
 
 import { formatNumber } from './utils';
 
 // ───────────────────────── KPI strip ─────────────────────────
 
-export function KpiStrip({ totals }: { totals: AnalyticsSummaryDto['totals'] }) {
+export function KpiStrip({ totals, latency }: { totals: AnalyticsSummaryDto['totals']; latency: LatencyStats | null }) {
   const { t } = useTranslation();
   const cards = [
     { key: 'sessions', label: t('analytics.kpi.sessions'), value: totals.sessions, icon: MessageSquare },
@@ -32,9 +34,17 @@ export function KpiStrip({ totals }: { totals: AnalyticsSummaryDto['totals'] }) 
       display: `$${totals.estimated_cost_usd.toFixed(2)} / ¥${totals.estimated_cost_cny.toFixed(2)}`,
       icon: DollarSign,
     },
+    ...(latency && latency.avg_ms > 0
+      ? [{
+          key: 'latency',
+          label: t('analytics.kpi.avg_latency'),
+          display: latency.avg_ms >= 1000 ? `${(latency.avg_ms / 1000).toFixed(1)}s` : `${latency.avg_ms}ms`,
+          icon: Clock,
+        }]
+      : []),
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+    <div className={cn('grid grid-cols-2 gap-3', latency && latency.avg_ms > 0 ? 'md:grid-cols-7' : 'md:grid-cols-6')}>
       {cards.map(({ key, label, value, display, icon: IconCmp }) => (
         <div
           key={key}

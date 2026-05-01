@@ -33,6 +33,10 @@ pub struct MessageRow {
     /// rating.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feedback: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_token_latency_ms: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_latency_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,24 +68,19 @@ impl Db {
         conn.execute(
             "INSERT INTO messages
                (id, session_id, role, content, error, position, created_at,
-                prompt_tokens, completion_tokens, feedback)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                prompt_tokens, completion_tokens, feedback,
+                first_token_latency_ms, total_latency_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
              ON CONFLICT(id) DO UPDATE SET
                  role = excluded.role,
                  content = excluded.content,
                  error = excluded.error,
                  position = excluded.position,
-                 -- Preserve existing token counts if the upserter didn't
-                 -- supply them (common path: streaming writes content with
-                 -- tokens=None; set_message_usage stamps them later, and
-                 -- subsequent content upserts should not wipe that).
                  prompt_tokens = COALESCE(excluded.prompt_tokens, prompt_tokens),
                  completion_tokens = COALESCE(excluded.completion_tokens, completion_tokens),
-                 -- T6.1 — feedback is set via `set_message_feedback` after
-                 -- the stream completes (or cleared to NULL on toggle-off).
-                 -- Subsequent content upserts (legacy code paths) pass
-                 -- feedback=None and MUST NOT wipe a real rating.
-                 feedback = COALESCE(excluded.feedback, feedback)",
+                 feedback = COALESCE(excluded.feedback, feedback),
+                 first_token_latency_ms = COALESCE(excluded.first_token_latency_ms, first_token_latency_ms),
+                 total_latency_ms = COALESCE(excluded.total_latency_ms, total_latency_ms)",
             params![
                 m.id,
                 m.session_id,
@@ -93,6 +92,8 @@ impl Db {
                 m.prompt_tokens,
                 m.completion_tokens,
                 m.feedback,
+                m.first_token_latency_ms,
+                m.total_latency_ms,
             ],
         )?;
         Ok(())
@@ -285,6 +286,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         }
     }
 
@@ -303,6 +306,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         };
         db.upsert_message(&base).unwrap();
         db.upsert_message(&MessageRow {
@@ -330,6 +335,8 @@ mod tests {
             prompt_tokens: None,
             completion_tokens: None,
             feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
         })
         .unwrap();
 

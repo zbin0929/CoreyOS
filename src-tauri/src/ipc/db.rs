@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::db::{
-    AnalyticsSummary, AttachmentRow, CostBreakdown, Db, MessageRow, SessionRow,
+    AnalyticsSummary, AttachmentRow, CostBreakdown, Db, LatencyStats, MessageRow, SessionRow,
     SessionWithMessages, ToolCallRow,
 };
 use crate::error::{IpcError, IpcResult};
@@ -198,5 +198,22 @@ pub async fn analytics_cost_breakdown(
         })?
         .map_err(|e| IpcError::Internal {
             message: format!("analytics cost query: {e}"),
+        })
+}
+
+#[tauri::command]
+pub async fn analytics_latency_stats(
+    days: Option<i64>,
+    state: State<'_, AppState>,
+) -> IpcResult<LatencyStats> {
+    let db = db_of(&state)?;
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    tokio::task::spawn_blocking(move || db.latency_stats(now_ms, days))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("analytics latency join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("analytics latency query: {e}"),
         })
 }

@@ -402,7 +402,8 @@
       "tool_calls": "工具调用",
       "active_days": "活跃天数",
       "total_tokens": "Tokens",
-      "estimated_cost": "估算费用"
+      "estimated_cost": "估算费用",
+      "avg_latency": "平均延迟"
     },
     "chart": {
       "activity": {
