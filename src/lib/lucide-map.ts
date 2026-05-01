@@ -1,15 +1,58 @@
-import * as lucide from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  Bell,
+  BookMarked,
+  BookOpen,
+  Bot,
+  Boxes,
+  Brain,
+  ChevronRight,
+  Clock,
+  Columns3,
+  FolderTree,
+  GitBranch,
+  Home,
+  MessageSquare,
+  Mic,
+  Package,
+  PiggyBank,
+  Plug,
+  Radio,
+  ScrollText,
+  Settings,
+  Terminal,
+  Wand2,
+  Workflow,
+  type LucideIcon,
+} from 'lucide-react';
 
-const cache = new Map<string, LucideIcon>();
+const MAP: Record<string, LucideIcon> = {
+  BarChart3,
+  Bell,
+  BookMarked,
+  BookOpen,
+  Bot,
+  Boxes,
+  Brain,
+  ChevronRight,
+  Clock,
+  Columns3,
+  FolderTree,
+  GitBranch,
+  Home,
+  MessageSquare,
+  Mic,
+  Package,
+  PiggyBank,
+  Plug,
+  Radio,
+  ScrollText,
+  Settings,
+  Terminal,
+  Wand2,
+  Workflow,
+};
 
 export function lucideByName(name: string): LucideIcon {
-  const hit = cache.get(name);
-  if (hit) return hit;
-  const cmp = (lucide as unknown as Record<string, LucideIcon>)[name];
-  if (cmp) {
-    cache.set(name, cmp);
-    return cmp;
-  }
-  return lucide.Package;
+  return MAP[name] ?? Package;
 }
