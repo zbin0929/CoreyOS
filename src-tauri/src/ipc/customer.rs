@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use tauri::State;
 
-use crate::customer::{BrandConfig, CustomerConfig, NavigationConfig, PacksConfig};
+use crate::customer::{BrandConfig, CustomerConfig, NavigationConfig};
 use crate::error::IpcResult;
 use crate::paths;
 use crate::state::AppState;
