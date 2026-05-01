@@ -29,7 +29,8 @@
     "section_primary": "核心",
     "section_tools": "工具",
     "section_manage": "管理",
-    "section_more": "更多"
+    "section_more": "更多",
+    "section_packs": "技能包"
   },
   "agents_page": {
     "title": "Agents",

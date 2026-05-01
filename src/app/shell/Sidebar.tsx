@@ -9,7 +9,10 @@ import { CoreyMark } from '@/components/ui/corey-mark';
 import { Icon } from '@/components/ui/icon';
 import { useAgentsStore } from '@/stores/agents';
 import { useBrandAppName, useBrandLogoUrl, useHiddenRoutes } from '@/stores/customer';
+import { usePackStore } from '@/lib/usePackStore';
+import { lucideByName } from '@/lib/lucide-map';
 import type { AdapterCapabilities, AdapterListEntry } from '@/lib/ipc';
+import type { PackView } from '@/lib/ipc/pack';
 
 function entryVisible(entry: NavEntry, caps: AdapterCapabilities | null): boolean {
   if (!entry.requires || !caps) return true;
@@ -60,6 +63,13 @@ export function Sidebar() {
   const brandLogoPath = useBrandLogoUrl();
   const brandLogoSrc = brandLogoPath ? safeConvertFileSrc(brandLogoPath) : '';
 
+  const packViews = usePackStore((s) => s.views);
+  const packRefresh = usePackStore((s) => s.refresh);
+
+  useEffect(() => {
+    void packRefresh();
+  }, [packRefresh]);
+
   const visible = NAV.filter(
     (n) => entryVisible(n, caps) && !hiddenRoutes.has(n.id),
   );
@@ -67,6 +77,13 @@ export function Sidebar() {
   const tools = visible.filter((n) => n.group === 'tools');
   const more = visible.filter((n) => n.group === 'more');
   const settingsEntries = visible.filter((n) => n.group === 'settings');
+
+  const packPrimary = packViews.filter((v) => v.navSection === 'primary');
+  const packTools = packViews.filter((v) => v.navSection === 'tools');
+  const packMore = packViews.filter((v) => v.navSection === 'more');
+  const packDefault = packViews.filter(
+    (v) => !['primary', 'tools', 'more'].includes(v.navSection),
+  );
 
   const moreHasActive = more.some(
     (entry) => isActive(location.pathname, entry.path),
@@ -123,6 +140,9 @@ export function Sidebar() {
             {t(entry.labelKey)}
           </NavItem>
         ))}
+        {packPrimary.map((v) => (
+          <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
+        ))}
 
         <SectionLabel className="mt-4">{t('nav.section_tools')}</SectionLabel>
         {tools.map((entry) => (
@@ -134,6 +154,9 @@ export function Sidebar() {
           >
             {t(entry.labelKey)}
           </NavItem>
+        ))}
+        {packTools.map((v) => (
+          <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
         ))}
 
         {more.length > 0 && (
@@ -167,6 +190,18 @@ export function Sidebar() {
               >
                 {t(entry.labelKey)}
               </NavItem>
+            ))}
+            {effectiveMoreExpanded && packMore.map((v) => (
+              <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
+            ))}
+          </>
+        )}
+
+        {packDefault.length > 0 && (
+          <>
+            <SectionLabel className="mt-4">{t('nav.section_packs')}</SectionLabel>
+            {packDefault.map((v) => (
+              <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
             ))}
           </>
         )}
@@ -226,6 +261,28 @@ function NavItem({ to, icon: IconCmp, active, children }: NavItemProps) {
     >
       <Icon icon={IconCmp} size="md" />
       <span className="flex-1 truncate">{children}</span>
+      {active ? <span className="h-4 w-0.5 rounded-sm bg-gold-500" /> : null}
+    </Link>
+  );
+}
+
+function PackNavItem({ view, pathname }: { view: PackView; pathname: string }) {
+  const to = `/pack/${view.packId}/${view.viewId}`;
+  const active = isActive(pathname, to);
+  const icon = lucideByName(view.icon);
+  return (
+    <Link
+      to={to}
+      className={cn(
+        'group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm',
+        'transition-colors duration-fast ease-enter',
+        active
+          ? 'bg-bg-elev-2 text-fg'
+          : 'text-fg-muted hover:bg-bg-elev-2/60 hover:text-fg',
+      )}
+    >
+      <Icon icon={icon} size="md" />
+      <span className="flex-1 truncate">{view.title || view.viewId}</span>
       {active ? <span className="h-4 w-0.5 rounded-sm bg-gold-500" /> : null}
     </Link>
   );

@@ -29,7 +29,8 @@
     "section_primary": "Core",
     "section_tools": "Tools",
     "section_manage": "Manage",
-    "section_more": "More"
+    "section_more": "More",
+    "section_packs": "Packs"
   },
   "agents_page": {
     "title": "Agents",
