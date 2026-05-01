@@ -633,6 +633,8 @@
       "primary_color": "Primary color",
       "hidden_routes": "Hidden routes",
       "none_hidden": "None",
+      "preinstall": "Auto-enable packs",
+      "pin_to_primary": "Pin to primary nav",
       "unset": "(unset)",
       "open_dir": "Open directory",
       "copy_example": "Copy example",

@@ -23,11 +23,22 @@ export interface CustomerNavigation {
   hiddenRoutes: string[];
 }
 
+/** Pack lifecycle overrides. */
+export interface CustomerPacks {
+  /** Pack ids to auto-enable on first launch. */
+  preinstall: string[];
+  /** Per-pack default config values. */
+  config: Record<string, unknown>;
+  /** Pack view ids to force into the primary sidebar section. */
+  pinToPrimary: string[];
+}
+
 /** Snapshot returned by `customer_config_get`. */
 export interface CustomerConfig {
   schemaVersion: number;
   brand: CustomerBrand;
   navigation: CustomerNavigation;
+  packs: CustomerPacks;
   /** True when a `customer.yaml` was actually loaded from disk.
    *  False = use defaults; `brand` and `navigation` will be empty. */
   present: boolean;

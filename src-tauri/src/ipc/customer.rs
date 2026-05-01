@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use tauri::State;
 
-use crate::customer::{BrandConfig, CustomerConfig, NavigationConfig};
+use crate::customer::{BrandConfig, CustomerConfig, NavigationConfig, PacksConfig};
 use crate::error::IpcResult;
 use crate::paths;
 use crate::state::AppState;
@@ -25,6 +25,7 @@ pub struct CustomerConfigDto {
     pub schema_version: u32,
     pub brand: BrandDto,
     pub navigation: NavigationDto,
+    pub packs: PacksDto,
     /// True when a `customer.yaml` was actually loaded from disk.
     /// Lets the frontend skip the apply step entirely on default
     /// installs.
@@ -46,6 +47,14 @@ pub struct BrandDto {
 #[serde(rename_all = "camelCase")]
 pub struct NavigationDto {
     pub hidden_routes: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PacksDto {
+    pub preinstall: Vec<String>,
+    pub config: serde_json::Map<String, serde_json::Value>,
+    pub pin_to_primary: Vec<String>,
 }
 
 impl CustomerConfigDto {
@@ -75,6 +84,16 @@ impl CustomerConfigDto {
         let nav = NavigationConfig {
             hidden_routes: cfg.navigation.hidden_routes.clone(),
         };
+        let packs = PacksDto {
+            preinstall: cfg.packs.preinstall.clone(),
+            config: cfg
+                .packs
+                .config
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            pin_to_primary: cfg.packs.pin_to_primary.clone(),
+        };
         Self {
             schema_version: cfg.schema_version,
             brand: BrandDto {
@@ -85,6 +104,7 @@ impl CustomerConfigDto {
             navigation: NavigationDto {
                 hidden_routes: nav.hidden_routes,
             },
+            packs,
             present,
             error,
         }

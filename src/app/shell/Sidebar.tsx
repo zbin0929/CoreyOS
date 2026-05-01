@@ -8,7 +8,7 @@ import { NAV, type NavEntry } from '@/app/nav-config';
 import { CoreyMark } from '@/components/ui/corey-mark';
 import { Icon } from '@/components/ui/icon';
 import { useAgentsStore } from '@/stores/agents';
-import { useBrandAppName, useBrandLogoUrl, useHiddenRoutes } from '@/stores/customer';
+import { useBrandAppName, useBrandLogoUrl, useCustomerConfig, useHiddenRoutes } from '@/stores/customer';
 import { usePackStore } from '@/lib/usePackStore';
 import { lucideByName } from '@/lib/lucide-map';
 import type { AdapterCapabilities, AdapterListEntry } from '@/lib/ipc';
@@ -65,10 +65,21 @@ export function Sidebar() {
 
   const packViews = usePackStore((s) => s.views);
   const packRefresh = usePackStore((s) => s.refresh);
+  const customerCfg = useCustomerConfig();
 
   useEffect(() => {
     void packRefresh();
   }, [packRefresh]);
+
+  const pinToPrimary = new Set(customerCfg?.packs?.pinToPrimary ?? []);
+
+  const effectivePackViews = packViews.map((v) => {
+    const viewKey = `${v.packId}/${v.viewId}`;
+    if (pinToPrimary.has(viewKey) || pinToPrimary.has(v.viewId)) {
+      return { ...v, navSection: 'primary' };
+    }
+    return v;
+  });
 
   const visible = NAV.filter(
     (n) => entryVisible(n, caps) && !hiddenRoutes.has(n.id),
@@ -78,10 +89,10 @@ export function Sidebar() {
   const more = visible.filter((n) => n.group === 'more');
   const settingsEntries = visible.filter((n) => n.group === 'settings');
 
-  const packPrimary = packViews.filter((v) => v.navSection === 'primary');
-  const packTools = packViews.filter((v) => v.navSection === 'tools');
-  const packMore = packViews.filter((v) => v.navSection === 'more');
-  const packDefault = packViews.filter(
+  const packPrimary = effectivePackViews.filter((v) => v.navSection === 'primary');
+  const packTools = effectivePackViews.filter((v) => v.navSection === 'tools');
+  const packMore = effectivePackViews.filter((v) => v.navSection === 'more');
+  const packDefault = effectivePackViews.filter(
     (v) => !['primary', 'tools', 'more'].includes(v.navSection),
   );
 

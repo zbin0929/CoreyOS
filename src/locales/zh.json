@@ -632,6 +632,8 @@
       "primary_color": "主色",
       "hidden_routes": "隐藏路由",
       "none_hidden": "无",
+      "preinstall": "自动启用 Pack",
+      "pin_to_primary": "钉到主导航",
       "unset": "（未设置）",
       "open_dir": "打开目录",
       "copy_example": "复制示例",

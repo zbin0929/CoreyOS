@@ -500,13 +500,58 @@ pub fn run() {
             // discovery + persistence only — flipping the enable bit
             // doesn't yet spawn MCPs / mount routes (that's stage 3+).
             if let Ok(hermes_dir) = paths::hermes_data_dir() {
-                let registry = pack::Registry::scan(&hermes_dir);
+                let mut registry = pack::Registry::scan(&hermes_dir);
                 info!(
                     packs = registry.packs.len(),
                     enabled = registry.packs.iter().filter(|p| p.enabled).count(),
                     healthy = registry.packs.iter().filter(|p| p.manifest.is_some()).count(),
                     "pack registry scanned"
                 );
+
+                // Auto-enable packs listed in customer.yaml packs.preinstall
+                if let Some(ref cfg) = app_state.customer {
+                    let preinstall = &cfg.packs.preinstall;
+                    if !preinstall.is_empty() {
+                        let mut state = pack::state::load(&hermes_dir);
+                        let mut changed = false;
+                        for pack_id in preinstall {
+                            let found = registry.packs.iter().any(|p| {
+                                p.manifest.as_ref().map(|m| m.id.as_str()) == Some(pack_id.as_str())
+                                    || p.dir_name == *pack_id
+                            });
+                            if found && !state.is_enabled(pack_id) {
+                                state.set_enabled(pack_id, true);
+                                changed = true;
+                                info!(pack_id, "preinstall: enabled pack");
+                            }
+                        }
+                        if changed {
+                            if let Err(e) = pack::state::save(&hermes_dir, &state) {
+                                tracing::warn!(error = %e, "preinstall state save failed");
+                            }
+                            registry = pack::Registry::scan(&hermes_dir);
+                        }
+                    }
+
+                    // Write packs.config defaults for packs that don't have config yet
+                    let config_defaults = &cfg.packs.config;
+                    if !config_defaults.is_empty() {
+                        for (pack_id, defaults) in config_defaults {
+                            let config_path = hermes_dir.join("pack-data").join(pack_id).join("config.json");
+                            if !config_path.exists() {
+                                if let Some(parent) = config_path.parent() {
+                                    let _ = std::fs::create_dir_all(parent);
+                                }
+                                if let Ok(body) = serde_json::to_string_pretty(defaults) {
+                                    if let Err(e) = std::fs::write(&config_path, body) {
+                                        tracing::warn!(pack_id, error = %e, "preinstall config write failed");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 app_state.set_packs(registry);
             }
 

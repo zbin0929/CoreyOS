@@ -22,7 +22,12 @@ brand:
   app_name: My Company AI
 navigation:
   hidden_routes:
-    - analytics`;
+    - analytics
+packs:
+  preinstall:
+    - test_pack
+  pin_to_primary:
+    - test_pack/demo`;
 
   async function openCustomerDir() {
     if (!hermesDataDir) return;
@@ -132,6 +137,22 @@ navigation:
                 hiddenRoutes.length > 0
                   ? hiddenRoutes.join(', ')
                   : t('settings.customer.none_hidden')
+              }
+            />
+            <Row
+              label={t('settings.customer.preinstall')}
+              value={
+                cfg.packs.preinstall.length > 0
+                  ? cfg.packs.preinstall.join(', ')
+                  : t('settings.customer.unset')
+              }
+            />
+            <Row
+              label={t('settings.customer.pin_to_primary')}
+              value={
+                cfg.packs.pinToPrimary.length > 0
+                  ? cfg.packs.pinToPrimary.join(', ')
+                  : t('settings.customer.unset')
               }
             />
           </div>

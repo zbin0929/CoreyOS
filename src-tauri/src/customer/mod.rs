@@ -42,6 +42,10 @@ pub struct CustomerConfig {
     /// Navigation-tree overrides.
     #[serde(default)]
     pub navigation: NavigationConfig,
+
+    /// Pack lifecycle overrides.
+    #[serde(default)]
+    pub packs: PacksConfig,
 }
 
 impl Default for CustomerConfig {
@@ -54,6 +58,7 @@ impl Default for CustomerConfig {
             schema_version: default_schema_version(),
             brand: BrandConfig::default(),
             navigation: NavigationConfig::default(),
+            packs: PacksConfig::default(),
         }
     }
 }
@@ -61,6 +66,25 @@ impl Default for CustomerConfig {
 fn default_schema_version() -> u32 {
     1
 }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PacksConfig {
+    /// Pack ids to auto-enable on first launch.
+    #[serde(default)]
+    pub preinstall: Vec<String>,
+
+    /// Per-pack default config values written to
+    /// `pack-data/<id>/config.json` on first enable.
+    #[serde(default)]
+    pub config: BTreeMap<String, serde_json::Value>,
+
+    /// Pack view ids to force into the primary sidebar section,
+    /// regardless of their manifest `nav_section`.
+    #[serde(default)]
+    pub pin_to_primary: Vec<String>,
+}
+
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BrandConfig {
