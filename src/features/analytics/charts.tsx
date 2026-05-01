@@ -429,14 +429,14 @@ export function RadarChart({ axes }: { axes: { key: string; value: number }[] })
           const lp = point(i, 1.18);
           return (
             <text key={a.key} x={lp.x} y={lp.y} textAnchor="middle" dominantBaseline="middle" className="fill-fg-muted text-[9px]">
-              {t(`analytics.radar.${a.key}`)}
+              {t(`analytics.chart.radar.${a.key}`)}
             </text>
           );
         })}
       </svg>
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-[10px] text-fg-muted">
         {axes.map((a) => (
-          <span key={a.key}>{t(`analytics.radar.${a.key}`)}: {Math.round(a.value * 100)}%</span>
+          <span key={a.key}>{t(`analytics.chart.radar.${a.key}`)}: {Math.round(a.value * 100)}%</span>
         ))}
       </div>
     </div>

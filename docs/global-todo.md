@@ -52,7 +52,7 @@
 - **依赖**：无
 
 #### B-3. Pack 加载器 + 12 视图模板
-- **状态**：🟡 进行中（v0.2.0-dev，stage 3a 已合）
+- **状态**：✅ 已完成（v0.2.0-dev）
 - **目标版本**：v0.2.0
 - **分阶段交付**：
   - [x] **Stage 1**：manifest.yaml schema_version=1 解析器（`7963f93`）
@@ -89,7 +89,7 @@
   - [x] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖（架构文档已锁定，代码已执行）
   - [x] Pack 升级前自动备份（zip 到 `~/.hermes/backups/`，保留 7 天）
   - [x] manifest migrations 机制（跨版本字段迁移）
-  - [ ] Pack 配置 UI（动态表单）+ 导入 zip 按钮 + 卸载 UI
+  - [x] Pack 配置 UI（动态表单）+ 导入 zip 按钮 + 卸载 UI
 - **价值**：所有行业 Pack 的运行时基础
 - **依赖**：无（可与 B-2 并行）
 - **架构**：详见 `docs/01-architecture.md` § Pack Architecture

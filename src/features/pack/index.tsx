@@ -15,10 +15,11 @@
  * "template not yet implemented" panel rather than 404, so a
  * Pack author can tell at a glance what's missing.
  */
-import { useEffect, useState, type ComponentType } from 'react';
+import { type ComponentType, useEffect } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { PageHeader } from '@/app/shell/PageHeader';
-import { packViewsList, type PackView } from '@/lib/ipc/pack';
+import { type PackView } from '@/lib/ipc/pack';
+import { usePackStore } from '@/lib/usePackStore';
 import { AlertListTemplate } from '@/features/pack/templates/AlertList';
 import { CompositeDashboardTemplate } from '@/features/pack/templates/CompositeDashboard';
 import { DataTableTemplate } from '@/features/pack/templates/DataTable';
@@ -59,23 +60,14 @@ export function PackRoute() {
     viewId: string;
   };
 
-  const [views, setViews] = useState<PackView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const views = usePackStore((s) => s.views);
+  const loading = usePackStore((s) => s.loading);
+  const error = usePackStore((s) => s.error);
+  const refresh = usePackStore((s) => s.refresh);
 
   useEffect(() => {
-    let cancelled = false;
-    packViewsList().then(
-      (vs) => {
-        if (!cancelled) setViews(vs);
-      },
-      (err) => {
-        if (!cancelled) setError(String(err));
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (views.length === 0) void refresh();
+  }, [views.length, refresh]);
 
   if (error) {
     return (
@@ -86,7 +78,7 @@ export function PackRoute() {
     );
   }
 
-  if (views === null) {
+  if (loading && views.length === 0) {
     return (
       <div className="p-6">
         <PageHeader title="Pack View" />
