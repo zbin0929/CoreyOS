@@ -84,7 +84,7 @@
     - **5e2**：AlertList + Timeline + RadarChart（`24e5651`）
     - **5e3**：TimeSeriesChart + TrendsMatrix + PivotTable（本提交）— TrendsMatrix 含 Sparkline + 同比着色
     - 当前仅支持 `data_source: { static: ... }`；`mcp:` / `http:` / `sql:` kinds 推到 stage 5f
-  - [ ] **Stage 5f**：MCP / HTTP / SQL 数据源 kinds（让 Pack 真的能拉远端数据）
+  - [x] **Stage 5f**：MCP / HTTP 数据源 kinds（`resolve_http_source` + `resolve_mcp_source`）
   - [ ] ActionPanel 嵌入（视图旁的"决策归还"按钮，绑 actions[].workflow / actions[].skill）
   - [ ] 数据目录设计：`skill-packs/<id>/` 只读 + `pack-data/<id>/` 永不被覆盖（架构文档已锁定）
   - [ ] Pack 升级前自动备份（zip 到 `~/.hermes/backups/`，保留 7 天）

@@ -31,6 +31,7 @@ import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesCha
 import { TimelineTemplate } from '@/features/pack/templates/Timeline';
 import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
 import { WorkflowLauncherTemplate } from '@/features/pack/templates/WorkflowLauncher';
+import { ActionPanel } from '@/features/pack/ActionPanel';
 
 interface TemplateProps {
   view: PackView;
@@ -125,6 +126,9 @@ export function PackRoute() {
             templates.
           </p>
         </div>
+      )}
+      {view.actions.length > 0 && (
+        <ActionPanel actions={view.actions} packId={view.packId} viewId={view.viewId} />
       )}
     </div>
   );
