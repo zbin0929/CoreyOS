@@ -21,15 +21,66 @@
  * dashboard composes from the existing 11 templates.
  */
 import type { PackView } from '@/lib/ipc/pack';
+import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
+import { DataTableTemplate } from '@/features/pack/templates/DataTable';
+import { AlertListTemplate } from '@/features/pack/templates/AlertList';
+import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
+import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
+import { TimelineTemplate } from '@/features/pack/templates/Timeline';
+import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
+
+import { type ComponentType } from 'react';
+
+interface TemplateProps {
+  view: PackView;
+}
+
+const CHILD_TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
+  MetricsCard: MetricsCardTemplate,
+  DataTable: DataTableTemplate,
+  AlertList: AlertListTemplate,
+  RadarChart: RadarChartTemplate,
+  TrendsMatrix: TrendsMatrixTemplate,
+  Timeline: TimelineTemplate,
+  TimeSeriesChart: TimeSeriesChartTemplate,
+};
 
 interface LayoutCell {
   x?: number;
   y?: number;
   w?: number;
   h?: number;
+  span?: number;
   view?: {
+    id?: string;
     title?: string;
     template?: string;
+    icon?: string;
+    metrics?: string[];
+    columns?: string[];
+    axes?: string[];
+    data_source?: unknown;
+  };
+}
+
+function buildChildView(cell: LayoutCell, parentPackId: string, parentPackTitle: string): PackView | null {
+  const v = cell.view;
+  if (!v || !v.template) return null;
+  return {
+    packId: parentPackId,
+    packTitle: parentPackTitle,
+    viewId: v.id ?? `child-${v.template}`,
+    title: v.title ?? v.template,
+    icon: v.icon ?? 'LayoutGrid',
+    navSection: 'hidden',
+    template: v.template,
+    dataSource: v.data_source ?? { static: {} },
+    options: {
+      metrics: v.metrics,
+      columns: v.columns,
+      axes: v.axes,
+    },
+    actions: [],
   };
 }
 
@@ -46,33 +97,29 @@ export function CompositeDashboardTemplate({ view }: { view: PackView }) {
   }
 
   return (
-    <div
-      className="grid auto-rows-[60px] gap-3"
-      style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}
-    >
+    <div className="flex flex-col gap-4">
       {layout.map((cell, idx) => {
-        const cs = (cell.x ?? 0) + 1;
-        const ce = cs + (cell.w ?? 12);
-        const rs = (cell.y ?? 0) + 1;
-        const re = rs + (cell.h ?? 4);
+        const childView = buildChildView(cell, view.packId, view.packTitle);
+        if (!childView) return null;
+
+        const Template = CHILD_TEMPLATES[childView.template];
+        const span = cell.span ?? cell.w ?? 12;
+
         return (
           <div
             key={idx}
-            className="flex flex-col rounded-md border border-border bg-bg-elev-1 p-3"
-            style={{
-              gridColumn: `${cs} / ${ce}`,
-              gridRow: `${rs} / ${re}`,
-            }}
+            className={span < 12 ? `lg:col-span-${span}` : ''}
           >
-            <span className="text-xs uppercase tracking-wide text-fg-subtle">
-              {cell.view?.template ?? 'placeholder'}
-            </span>
-            <span className="text-sm font-medium text-fg">
-              {cell.view?.title ?? `cell ${idx + 1}`}
-            </span>
-            <span className="mt-auto text-xs text-fg-subtle">
-              stage 5d: child rendering lands in stage 5e
-            </span>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-fg-subtle">
+              {childView.title}
+            </div>
+            {Template ? (
+              <Template view={childView} />
+            ) : (
+              <div className="rounded-md border border-dashed border-border bg-bg-elev-1 p-4 text-xs text-fg-subtle">
+                Template <code>{childView.template}</code> not available in dashboard
+              </div>
+            )}
           </div>
         );
       })}
