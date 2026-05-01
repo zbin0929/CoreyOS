@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import { FolderOpen } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { useCustomerConfig } from '@/stores/customer';
 
 import { Section } from '../shared';
@@ -12,6 +15,16 @@ export function CustomerSection({ hermesDataDir }: { hermesDataDir?: string }) {
   const hasError = !loading && Boolean(cfg.error);
   const hiddenRoutes = !loading ? cfg.navigation.hiddenRoutes : [];
   const customerYamlPath = hermesDataDir ? `${hermesDataDir}/customer.yaml` : 'customer.yaml';
+
+  async function openCustomerDir() {
+    if (!hermesDataDir) return;
+    try {
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(hermesDataDir);
+    } catch (err) {
+      void err;
+    }
+  }
 
   return (
     <Section
@@ -56,6 +69,18 @@ export function CustomerSection({ hermesDataDir }: { hermesDataDir?: string }) {
           <div className="mt-2 rounded-md border border-border bg-bg-elev-2 px-2.5 py-2 text-fg">
             <div className="text-fg-subtle">{t('settings.customer.recovery_path_label')}</div>
             <code className="mt-1 block break-all text-fg">{customerYamlPath}</code>
+            <div className="mt-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={!hermesDataDir}
+                onClick={() => void openCustomerDir()}
+              >
+                <Icon icon={FolderOpen} size="sm" />
+                {t('settings.customer.open_dir')}
+              </Button>
+            </div>
             <div className="mt-2 text-fg-subtle">{t('settings.customer.recovery_example_label')}</div>
             <pre className="mt-1 overflow-x-auto rounded border border-border/70 bg-bg-elev-1 px-2 py-1.5 text-[11px] leading-5 text-fg">
 {`schema_version: 1
