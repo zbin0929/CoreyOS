@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
+  AlertTriangle,
   Calendar,
   Clock,
   Coins,
@@ -13,15 +14,17 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import type { AnalyticsSummaryDto, LatencyStats } from '@/lib/ipc';
+import type { AnalyticsSummaryDto, ErrorStats, LatencyStats } from '@/lib/ipc';
 import { cn } from '@/lib/cn';
 
 import { formatNumber } from './utils';
 
 // ───────────────────────── KPI strip ─────────────────────────
 
-export function KpiStrip({ totals, latency }: { totals: AnalyticsSummaryDto['totals']; latency: LatencyStats | null }) {
+export function KpiStrip({ totals, latency, errors }: { totals: AnalyticsSummaryDto['totals']; latency: LatencyStats | null; errors: ErrorStats | null }) {
   const { t } = useTranslation();
+  const hasLatency = latency && latency.avg_ms > 0;
+  const hasErrors = errors && errors.error_rate > 0;
   const cards = [
     { key: 'sessions', label: t('analytics.kpi.sessions'), value: totals.sessions, icon: MessageSquare },
     { key: 'messages', label: t('analytics.kpi.messages'), value: totals.messages, icon: MessageSquare },
@@ -34,7 +37,7 @@ export function KpiStrip({ totals, latency }: { totals: AnalyticsSummaryDto['tot
       display: `$${totals.estimated_cost_usd.toFixed(2)} / ¥${totals.estimated_cost_cny.toFixed(2)}`,
       icon: DollarSign,
     },
-    ...(latency && latency.avg_ms > 0
+    ...(hasLatency
       ? [{
           key: 'latency',
           label: t('analytics.kpi.avg_latency'),
@@ -42,10 +45,20 @@ export function KpiStrip({ totals, latency }: { totals: AnalyticsSummaryDto['tot
           icon: Clock,
         }]
       : []),
+    ...(hasErrors
+      ? [{
+          key: 'error_rate',
+          label: t('analytics.kpi.error_rate'),
+          display: `${(errors.error_rate * 100).toFixed(1)}%`,
+          icon: AlertTriangle,
+          highlight: errors.error_rate > 0.05 ? 'text-red-500' : undefined,
+        }]
+      : []),
   ];
+  const cols = 6 + (hasLatency ? 1 : 0) + (hasErrors ? 1 : 0);
   return (
-    <div className={cn('grid grid-cols-2 gap-3', latency && latency.avg_ms > 0 ? 'md:grid-cols-7' : 'md:grid-cols-6')}>
-      {cards.map(({ key, label, value, display, icon: IconCmp }) => (
+    <div className={cn('grid grid-cols-2 gap-3', `md:grid-cols-${cols}`)}>
+      {cards.map(({ key, label, value, display, icon: IconCmp, highlight }) => (
         <div
           key={key}
           data-testid={`analytics-kpi-${key}`}
@@ -53,9 +66,9 @@ export function KpiStrip({ totals, latency }: { totals: AnalyticsSummaryDto['tot
         >
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-wider text-fg-subtle">{label}</span>
-            <Icon icon={IconCmp} size="sm" className="text-fg-subtle" />
+            <Icon icon={IconCmp} size="sm" className={highlight ?? 'text-fg-subtle'} />
           </div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">
+          <div className={cn('mt-1 text-2xl font-semibold tabular-nums', highlight ?? 'text-fg')}>
             {display ?? formatNumber(value)}
           </div>
         </div>

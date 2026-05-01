@@ -541,6 +541,7 @@
     "subtitle": "Usage rolled up from your local session history.",
     "help_page": "Single-shot rollup of your local SQLite session history. Shows sessions / messages / tool calls / active days / tokens, per-day activity, and the model + tool + adapter breakdowns. Everything is local — no cloud sync, no telemetry. Numbers only move when you actually chat; refresh re-queries the DB.",
     "refresh": "Refresh",
+    "export": "Export CSV",
     "retry": "Retry",
     "error_title": "Couldn't load analytics",
     "empty": "No activity yet — start a conversation on the Chat page and come back here.",
@@ -556,7 +557,8 @@
       "active_days": "Active days",
       "total_tokens": "Tokens",
       "estimated_cost": "Est. cost",
-      "avg_latency": "Avg latency"
+      "avg_latency": "Avg latency",
+      "error_rate": "Error rate"
     },
     "chart": {
       "activity": {
@@ -591,6 +593,10 @@
         "down": "Not helpful",
         "ratio": "Helpful rate",
         "coverage": "{{rated}} rated / {{total}} messages ({{pct}}%)"
+      },
+      "errors": {
+        "title": "Top errors",
+        "subtitle": "Most frequent error messages."
       }
     }
   },

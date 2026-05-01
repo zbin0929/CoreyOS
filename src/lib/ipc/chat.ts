@@ -547,3 +547,15 @@ export function analyticsLatencyStats(days?: number): Promise<LatencyStats> {
   return invoke<LatencyStats>('analytics_latency_stats', { days: days ?? null });
 }
 
+export interface ErrorStats {
+  total_errors: number;
+  total_messages: number;
+  error_rate: number;
+  daily_errors: DayCount[];
+  top_error_types: NamedCount[];
+}
+
+export function analyticsErrorStats(days?: number): Promise<ErrorStats> {
+  return invoke<ErrorStats>('analytics_error_stats', { days: days ?? null });
+}
+

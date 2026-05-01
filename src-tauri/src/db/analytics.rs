@@ -96,6 +96,15 @@ pub struct ModelLatency {
     pub count: i64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ErrorStats {
+    pub total_errors: i64,
+    pub total_messages: i64,
+    pub error_rate: f64,
+    pub daily_errors: Vec<DayCount>,
+    pub top_error_types: Vec<NamedCount>,
+}
+
 struct ModelPrice {
     prefix: &'static str,
     input_per_m: f64,
@@ -502,6 +511,76 @@ impl Db {
             by_model,
         })
     }
+
+    pub fn error_stats(&self, now_ms: i64, days: Option<i64>) -> rusqlite::Result<ErrorStats> {
+        let conn = self.conn.lock();
+        let since_clause = match days {
+            Some(d) => format!("AND created_at >= {}", now_ms - d * 86_400_000),
+            None => String::new(),
+        };
+
+        let total_messages: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM messages WHERE 1=1 {since_clause}"),
+            [],
+            |r| r.get(0),
+        )?;
+
+        let total_errors: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM messages WHERE error IS NOT NULL {since_clause}"),
+            [],
+            |r| r.get(0),
+        )?;
+
+        let error_rate = if total_messages > 0 {
+            total_errors as f64 / total_messages as f64
+        } else {
+            0.0
+        };
+
+        let since_30 = now_ms - 30 * 86_400_000;
+        let mut dstmt = conn.prepare(
+            "SELECT date(created_at/1000, 'unixepoch') AS d, COUNT(*) AS cnt
+             FROM messages
+             WHERE error IS NOT NULL
+               AND created_at >= ?1
+             GROUP BY d
+             ORDER BY d",
+        )?;
+        let daily_errors: Vec<DayCount> = dstmt
+            .query_map(params![since_30], |row| {
+                Ok(DayCount {
+                    date: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        drop(dstmt);
+
+        let mut tstmt = conn.prepare(&format!(
+            "SELECT SUBSTR(error, 1, 80) AS e, COUNT(*) AS cnt
+             FROM messages
+             WHERE error IS NOT NULL {since_clause}
+             GROUP BY e
+             ORDER BY cnt DESC
+             LIMIT 10"
+        ))?;
+        let top_error_types: Vec<NamedCount> = tstmt
+            .query_map([], |row| {
+                Ok(NamedCount {
+                    name: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        Ok(ErrorStats {
+            total_errors,
+            total_messages,
+            error_rate,
+            daily_errors,
+            top_error_types,
+        })
+    }
 }
 
 fn percentile(sorted: &[i64], pct: u8) -> i64 {
@@ -806,5 +885,49 @@ mod tests {
         assert_eq!(all.totals.sessions, 2);
         let last7 = db.analytics_summary(now, Some(7)).unwrap();
         assert_eq!(last7.totals.sessions, 1);
+    }
+
+    #[test]
+    fn error_stats_counts_errors_and_rate() {
+        let db = Db::open_in_memory().unwrap();
+        let now = 100_000_000;
+        db.upsert_session(&sample_session("s1", now)).unwrap();
+        db.upsert_message(&MessageRow {
+            id: "m1".into(),
+            session_id: "s1".into(),
+            role: "assistant".into(),
+            content: "ok".into(),
+            error: None,
+            position: 0,
+            created_at: now,
+            prompt_tokens: None,
+            completion_tokens: None,
+            feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
+        })
+        .unwrap();
+        db.upsert_message(&MessageRow {
+            id: "m2".into(),
+            session_id: "s1".into(),
+            role: "assistant".into(),
+            content: "".into(),
+            error: Some("rate_limit_exceeded".into()),
+            position: 1,
+            created_at: now + 1_000,
+            prompt_tokens: None,
+            completion_tokens: None,
+            feedback: None,
+            first_token_latency_ms: None,
+            total_latency_ms: None,
+        })
+        .unwrap();
+        let stats = db.error_stats(now + 2_000, None).unwrap();
+        assert_eq!(stats.total_messages, 2);
+        assert_eq!(stats.total_errors, 1);
+        assert!((stats.error_rate - 0.5).abs() < 1e-9);
+        assert_eq!(stats.top_error_types.len(), 1);
+        assert_eq!(stats.top_error_types[0].name, "rate_limit_exceeded");
+        assert_eq!(stats.top_error_types[0].count, 1);
     }
 }

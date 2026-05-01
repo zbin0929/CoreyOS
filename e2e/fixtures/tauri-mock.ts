@@ -1054,6 +1054,15 @@ export const tauriMockInitScript = /* js */ `
           by_model: [],
         };
 
+      case 'analytics_error_stats':
+        return {
+          total_errors: 0,
+          total_messages: 0,
+          error_rate: 0,
+          daily_errors: [],
+          top_error_types: [],
+        };
+
       case 'chat_send':
         return { content: state.chatReply };
 

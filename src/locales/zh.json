@@ -388,6 +388,7 @@
     "subtitle": "用量分析——从本地会话历史汇总。",
     "help_page": "从本地 SQLite 会话历史一次性聚合统计。展示会话数 / 消息数 / 工具调用数 / 活跃天数 / token，以及每日活跃和模型 + 工具 + adapter 分布。所有数据本地——无云同步、无埋点。只有进行对话时数字才会动；refresh 重新查 DB。",
     "refresh": "刷新",
+    "export": "导出 CSV",
     "retry": "重试",
     "error_title": "无法加载分析数据",
     "empty": "暂无数据 —— 去 Chat 页聊几句再回来看看。",
@@ -438,6 +439,10 @@
         "down": "没帮助",
         "ratio": "好评率",
         "coverage": "已评 {{rated}} / 共 {{total}} 条（{{pct}}%）"
+      },
+      "errors": {
+        "title": "高频错误",
+        "subtitle": "出现最多的错误消息。"
       }
     }
   },

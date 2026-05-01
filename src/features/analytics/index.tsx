@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, BarChart3, Boxes, Coins, RefreshCcw, ThumbsUp, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Boxes, Coins, Download, RefreshCcw, ThumbsUp, Wrench } from 'lucide-react';
 
 import { PageHeader } from '@/app/shell/PageHeader';
 import { InfoHint } from '@/components/ui/info-hint';
@@ -9,13 +9,19 @@ import { Icon } from '@/components/ui/icon';
 import {
   analyticsSummary,
   analyticsLatencyStats,
+  analyticsErrorStats,
+  analyticsCostBreakdown,
   ipcErrorMessage,
   type AnalyticsSummaryDto,
+  type CostBreakdown,
+  type ErrorStats,
   type LatencyStats,
   type NamedCount,
 } from '@/lib/ipc';
 import { useAgentsStore } from '@/stores/agents';
 import { cn } from '@/lib/cn';
+
+import { exportAnalyticsCsv } from './useExport';
 
 import {
   ActivityChart,
@@ -55,16 +61,22 @@ export function AnalyticsRoute() {
 
   const [range, setRange] = useState<DateRange>(30);
   const [latency, setLatency] = useState<LatencyStats | null>(null);
+  const [errors, setErrors] = useState<ErrorStats | null>(null);
+  const [cost, setCost] = useState<CostBreakdown | null>(null);
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const [data, lat] = await Promise.all([
+      const [data, lat, err, cst] = await Promise.all([
         analyticsSummary(range || undefined),
         analyticsLatencyStats(range || undefined),
+        analyticsErrorStats(range || undefined),
+        analyticsCostBreakdown(range || undefined),
       ]);
       setState({ kind: 'loaded', data });
       setLatency(lat);
+      setErrors(err);
+      setCost(cst);
     } catch (e) {
       setState({ kind: 'err', message: ipcErrorMessage(e) });
     }
@@ -115,14 +127,14 @@ export function AnalyticsRoute() {
         <div className="mx-auto max-w-5xl px-6 py-6">
           {state.kind === 'loading' && <SkeletonGrid />}
           {state.kind === 'err' && <ErrorBox message={state.message} onRetry={load} />}
-          {state.kind === 'loaded' && <Dashboard data={state.data} latency={latency} />}
+          {state.kind === 'loaded' && <Dashboard data={state.data} latency={latency} errors={errors} onExport={() => exportAnalyticsCsv(state.data, cost, latency, errors)} />}
         </div>
       </div>
     </div>
   );
 }
 
-function Dashboard({ data, latency }: { data: AnalyticsSummaryDto; latency: LatencyStats | null }) {
+function Dashboard({ data, latency, errors, onExport }: { data: AnalyticsSummaryDto; latency: LatencyStats | null; errors: ErrorStats | null; onExport: () => void }) {
   const { totals, messages_per_day, tokens_per_day, model_usage, tool_usage, adapter_usage } =
     data;
   const { t } = useTranslation();
@@ -152,7 +164,14 @@ function Dashboard({ data, latency }: { data: AnalyticsSummaryDto; latency: Late
 
   return (
     <div className="flex flex-col gap-6">
-      <KpiStrip totals={totals} latency={latency} />
+      <KpiStrip totals={totals} latency={latency} errors={errors} />
+
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" onClick={onExport}>
+          <Icon icon={Download} size="sm" />
+          <span className="ml-1.5">{t('analytics.export')}</span>
+        </Button>
+      </div>
 
       {!hasAnyActivity && (
         <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-4 py-10 text-center text-sm text-fg-muted">
@@ -245,6 +264,16 @@ function Dashboard({ data, latency }: { data: AnalyticsSummaryDto; latency: Late
           totalMessages={totals.messages}
         />
       </Card>
+
+      {errors && errors.top_error_types.length > 0 && (
+        <Card
+          title={t('analytics.chart.errors.title')}
+          subtitle={t('analytics.chart.errors.subtitle')}
+          icon={AlertTriangle}
+        >
+          <HBarList items={errors.top_error_types} />
+        </Card>
+      )}
 
       <footer className="pt-2 text-center text-[11px] text-fg-subtle">
         {t('analytics.generated_at', {

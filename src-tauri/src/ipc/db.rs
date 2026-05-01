@@ -9,8 +9,8 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::db::{
-    AnalyticsSummary, AttachmentRow, CostBreakdown, Db, LatencyStats, MessageRow, SessionRow,
-    SessionWithMessages, ToolCallRow,
+    AnalyticsSummary, AttachmentRow, CostBreakdown, Db, ErrorStats, LatencyStats, MessageRow,
+    SessionRow, SessionWithMessages, ToolCallRow,
 };
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
@@ -215,5 +215,22 @@ pub async fn analytics_latency_stats(
         })?
         .map_err(|e| IpcError::Internal {
             message: format!("analytics latency query: {e}"),
+        })
+}
+
+#[tauri::command]
+pub async fn analytics_error_stats(
+    days: Option<i64>,
+    state: State<'_, AppState>,
+) -> IpcResult<ErrorStats> {
+    let db = db_of(&state)?;
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    tokio::task::spawn_blocking(move || db.error_stats(now_ms, days))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("analytics error join: {e}"),
+        })?
+        .map_err(|e| IpcError::Internal {
+            message: format!("analytics error query: {e}"),
         })
 }
