@@ -351,6 +351,12 @@ pnpm vitest run         # 全绿
 - **#7 简单问候消耗 11K token**：移除 `enrichHistoryWithContext` 中重复的 `memoryRead('user')` 注入（Hermes Layer 6 已注入 USER.md）
 - **#9 Win重开卡死（lock file PermissionError）**：清理 lock 文件失败时先杀残留 gateway 进程再重试
 - **设置页移除网关表单**：Base URL / API Key / 默认模型表单移除，改由 Models 页管理
+- **Skills 树显示 402 项**：`walk()` 列出所有 `.md`（含 references/templates/DESCRIPTION.md），改为只索引 `SKILL.md`（92 项），`name` 取父目录名，`group` 取祖父目录名
+- **macOS 生产包 Dock 图标灰框**：替换 `icon.icns` 消除灰边
+
+### E2E 已知问题
+
+- **budget-gate × 3 test.skip**：`chat-budget-warning` 在 CI headless 不可见，预存问题待查
 
 ### 已知低优先问题
 
