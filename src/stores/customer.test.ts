@@ -12,6 +12,7 @@ function makeConfig(overrides: Partial<CustomerConfig> = {}): CustomerConfig {
     schemaVersion: 1,
     brand: { appName: '', logo: '', primaryColor: '' },
     navigation: { hiddenRoutes: [] },
+    packs: { preinstall: [], config: {}, pinToPrimary: [] },
     present: true,
     error: null,
     ...overrides,
