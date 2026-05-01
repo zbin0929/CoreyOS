@@ -346,7 +346,7 @@ mod tests {
         assert_eq!(m.completion_tokens, Some(7));
 
         // Lifetime totals reflect the stamp.
-        let s = db.analytics_summary(200).unwrap();
+        let s = db.analytics_summary(200, None).unwrap();
         assert_eq!(s.totals.prompt_tokens, 42);
         assert_eq!(s.totals.completion_tokens, 7);
         assert_eq!(s.totals.total_tokens, 49);

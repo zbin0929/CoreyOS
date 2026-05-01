@@ -39,6 +39,8 @@ function mkSummary(over: Partial<AnalyticsSummaryDto> = {}): AnalyticsSummaryDto
       total_tokens: 0,
       feedback_up: 0,
       feedback_down: 0,
+      estimated_cost_usd: 0,
+      estimated_cost_cny: 0,
       ...(over.totals ?? {}),
     },
     messages_per_day: over.messages_per_day ?? [],

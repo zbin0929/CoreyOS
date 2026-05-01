@@ -26,17 +26,14 @@ pub struct AnalyticsTotals {
     pub sessions: i64,
     pub messages: i64,
     pub tool_calls: i64,
-    /// Distinct UTC dates on which any message was written.
     pub active_days: i64,
-    /// Sum of prompt + completion across all assistant messages that have
-    /// usage recorded. Pre-T2.4 rows contribute 0.
     pub prompt_tokens: i64,
     pub completion_tokens: i64,
     pub total_tokens: i64,
-    /// T6.1 — lifetime 👍 / 👎 counts across all messages. Pre-T6.1
-    /// rows (feedback=NULL) contribute 0 to both.
     pub feedback_up: i64,
     pub feedback_down: i64,
+    pub estimated_cost_usd: f64,
+    pub estimated_cost_cny: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -60,15 +57,145 @@ pub struct AnalyticsSummary {
     pub generated_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelCost {
+    pub model: String,
+    pub prompt_tokens: i64,
+    pub completion_tokens: i64,
+    pub cost_usd: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DayCost {
+    pub date: String,
+    pub cost_usd: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CostBreakdown {
+    pub total_usd: f64,
+    pub total_cny: f64,
+    pub by_model: Vec<ModelCost>,
+    pub daily_cost: Vec<DayCost>,
+}
+
+struct ModelPrice {
+    prefix: &'static str,
+    input_per_m: f64,
+    output_per_m: f64,
+}
+
+const MODEL_PRICES: &[ModelPrice] = &[
+    ModelPrice {
+        prefix: "gpt-4o",
+        input_per_m: 2.5,
+        output_per_m: 10.0,
+    },
+    ModelPrice {
+        prefix: "gpt-4-turbo",
+        input_per_m: 10.0,
+        output_per_m: 30.0,
+    },
+    ModelPrice {
+        prefix: "gpt-4-",
+        input_per_m: 30.0,
+        output_per_m: 60.0,
+    },
+    ModelPrice {
+        prefix: "gpt-3.5-turbo",
+        input_per_m: 0.5,
+        output_per_m: 1.5,
+    },
+    ModelPrice {
+        prefix: "claude-3.5-sonnet",
+        input_per_m: 3.0,
+        output_per_m: 15.0,
+    },
+    ModelPrice {
+        prefix: "claude-3-opus",
+        input_per_m: 15.0,
+        output_per_m: 75.0,
+    },
+    ModelPrice {
+        prefix: "claude-3-haiku",
+        input_per_m: 0.25,
+        output_per_m: 1.25,
+    },
+    ModelPrice {
+        prefix: "deepseek-chat",
+        input_per_m: 0.14,
+        output_per_m: 0.28,
+    },
+    ModelPrice {
+        prefix: "deepseek-reasoner",
+        input_per_m: 0.55,
+        output_per_m: 2.19,
+    },
+    ModelPrice {
+        prefix: "gemini-1.5-pro",
+        input_per_m: 1.25,
+        output_per_m: 5.0,
+    },
+    ModelPrice {
+        prefix: "gemini-1.5-flash",
+        input_per_m: 0.075,
+        output_per_m: 0.3,
+    },
+    ModelPrice {
+        prefix: "qwen",
+        input_per_m: 0.5,
+        output_per_m: 2.0,
+    },
+];
+
+const FALLBACK_INPUT_PER_M: f64 = 3.0;
+const FALLBACK_OUTPUT_PER_M: f64 = 15.0;
+const CNY_RATE: f64 = 7.2;
+
+fn model_price(model: &str) -> (f64, f64) {
+    for p in MODEL_PRICES {
+        if model.starts_with(p.prefix) {
+            return (p.input_per_m, p.output_per_m);
+        }
+    }
+    (FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M)
+}
+
+fn compute_cost(prompt_tokens: i64, completion_tokens: i64, model: &str) -> f64 {
+    let (inp, out) = model_price(model);
+    (prompt_tokens as f64 / 1_000_000.0 * inp) + (completion_tokens as f64 / 1_000_000.0 * out)
+}
+
 impl Db {
     /// Produce everything the Analytics page needs in a single `lock()`.
     /// All timestamps in the DB are Unix ms; `now_ms` is used both for the
     /// 30-day window and for `generated_at` so tests can pin the clock.
-    pub fn analytics_summary(&self, now_ms: i64) -> rusqlite::Result<AnalyticsSummary> {
+    pub fn analytics_summary(
+        &self,
+        now_ms: i64,
+        days: Option<i64>,
+    ) -> rusqlite::Result<AnalyticsSummary> {
         let conn = self.conn.lock();
 
-        let sessions: i64 = conn.query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))?;
-        let messages: i64 = conn.query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))?;
+        let since_clause = match days {
+            Some(d) => format!("AND created_at >= {}", now_ms - d * 86_400_000),
+            None => String::new(),
+        };
+        let since_m2 = match days {
+            Some(d) => format!("AND m2.created_at >= {}", now_ms - d * 86_400_000),
+            None => String::new(),
+        };
+
+        let sessions: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM sessions WHERE 1=1 {since_clause}"),
+            [],
+            |r| r.get(0),
+        )?;
+        let messages: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM messages WHERE 1=1 {since_clause}"),
+            [],
+            |r| r.get(0),
+        )?;
         let tool_calls: i64 =
             conn.query_row("SELECT COUNT(*) FROM tool_calls", [], |r| r.get(0))?;
         let active_days: i64 = conn.query_row(
@@ -80,27 +207,27 @@ impl Db {
         // Lifetime token totals. COALESCE + SUM lets pre-T2.4 rows (NULL
         // tokens) contribute 0 without blowing up the SUM on an all-NULL set.
         let (prompt_tokens, completion_tokens): (i64, i64) = conn.query_row(
-            "SELECT COALESCE(SUM(prompt_tokens), 0),
-                    COALESCE(SUM(completion_tokens), 0)
-             FROM messages",
+            &format!(
+                "SELECT COALESCE(SUM(prompt_tokens), 0),
+                        COALESCE(SUM(completion_tokens), 0)
+                 FROM messages WHERE 1=1 {since_clause}"
+            ),
             [],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
         let total_tokens = prompt_tokens + completion_tokens;
 
         // T6.1 — lifetime feedback counts.
-        let feedback_up: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM messages WHERE feedback = 'up'",
+        let (feedback_up, feedback_down): (i64, i64) = conn.query_row(
+            &format!(
+                "SELECT COUNT(*) FILTER (WHERE feedback = 'up'),
+                            COUNT(*) FILTER (WHERE feedback = 'down')
+                     FROM messages WHERE 1=1 {since_clause}"
+            ),
             [],
-            |r| r.get(0),
-        )?;
-        let feedback_down: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM messages WHERE feedback = 'down'",
-            [],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
 
-        // 30-day window. created_at is ms since epoch.
         let since = now_ms - 30 * 86_400_000;
         let mut stmt = conn.prepare(
             "SELECT date(created_at/1000, 'unixepoch') AS d, COUNT(*)
@@ -184,6 +311,32 @@ impl Db {
             })?
             .collect::<Result<_, _>>()?;
 
+        let mut cost_stmt = conn.prepare(&format!(
+            "SELECT COALESCE(NULLIF(s.model, ''), 'unknown') AS m,
+                        COALESCE(SUM(m2.prompt_tokens), 0),
+                        COALESCE(SUM(m2.completion_tokens), 0)
+                 FROM messages m2
+                 JOIN sessions s ON m2.session_id = s.id
+                 WHERE m2.role = 'assistant' {since_m2}
+                 GROUP BY s.model"
+        ))?;
+        let model_costs: Vec<(String, i64, i64)> = cost_stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })?
+            .collect::<Result<_, _>>()?;
+        drop(cost_stmt);
+
+        let estimated_cost_usd: f64 = model_costs
+            .iter()
+            .map(|(m, pt, ct)| compute_cost(*pt, *ct, m))
+            .sum();
+        let estimated_cost_cny = estimated_cost_usd * CNY_RATE;
+
         Ok(AnalyticsSummary {
             totals: AnalyticsTotals {
                 sessions,
@@ -195,6 +348,8 @@ impl Db {
                 total_tokens,
                 feedback_up,
                 feedback_down,
+                estimated_cost_usd,
+                estimated_cost_cny,
             },
             messages_per_day,
             tokens_per_day,
@@ -202,6 +357,73 @@ impl Db {
             tool_usage,
             adapter_usage,
             generated_at: now_ms,
+        })
+    }
+
+    pub fn cost_breakdown(
+        &self,
+        now_ms: i64,
+        days: Option<i64>,
+    ) -> rusqlite::Result<CostBreakdown> {
+        let conn = self.conn.lock();
+        let since_m2 = match days {
+            Some(d) => format!("AND m2.created_at >= {}", now_ms - d * 86_400_000),
+            None => String::new(),
+        };
+
+        let mut stmt = conn.prepare(&format!(
+            "SELECT COALESCE(NULLIF(s.model, ''), 'unknown') AS m,
+                        COALESCE(SUM(m2.prompt_tokens), 0),
+                        COALESCE(SUM(m2.completion_tokens), 0)
+                 FROM messages m2
+                 JOIN sessions s ON m2.session_id = s.id
+                 WHERE m2.role = 'assistant' {since_m2}
+                 GROUP BY s.model"
+        ))?;
+        let by_model: Vec<ModelCost> = stmt
+            .query_map([], |row| {
+                let model: String = row.get(0)?;
+                let pt: i64 = row.get(1)?;
+                let ct: i64 = row.get(2)?;
+                Ok(ModelCost {
+                    cost_usd: compute_cost(pt, ct, &model),
+                    model,
+                    prompt_tokens: pt,
+                    completion_tokens: ct,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        drop(stmt);
+
+        let total_usd: f64 = by_model.iter().map(|m| m.cost_usd).sum();
+
+        let since_30 = now_ms - 30 * 86_400_000;
+        let mut dstmt = conn.prepare(&format!(
+            "SELECT date(m2.created_at/1000, 'unixepoch') AS d,
+                        SUM(COALESCE(m2.prompt_tokens, 0) + COALESCE(m2.completion_tokens, 0))
+                 FROM messages m2
+                 JOIN sessions s ON m2.session_id = s.id
+                 WHERE m2.role = 'assistant'
+                   AND m2.created_at >= ?1 {since_m2}
+                 GROUP BY d
+                 ORDER BY d"
+        ))?;
+        let daily_cost: Vec<DayCost> = dstmt
+            .query_map(params![since_30], |row| {
+                let date: String = row.get(0)?;
+                let tokens: i64 = row.get::<_, i64>(1)?;
+                Ok(DayCost {
+                    cost_usd: tokens as f64 / 1_000_000.0 * FALLBACK_INPUT_PER_M,
+                    date,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        Ok(CostBreakdown {
+            total_usd,
+            total_cny: total_usd * CNY_RATE,
+            by_model,
+            daily_cost,
         })
     }
 }
@@ -259,7 +481,7 @@ mod tests {
             })
             .unwrap();
         }
-        let summary = db.analytics_summary(10_000).unwrap();
+        let summary = db.analytics_summary(10_000, None).unwrap();
         let by_name: Vec<(&str, i64)> = summary
             .adapter_usage
             .iter()
@@ -358,7 +580,7 @@ mod tests {
         })
         .unwrap();
 
-        let s = db.analytics_summary(now).unwrap();
+        let s = db.analytics_summary(now, None).unwrap();
         assert_eq!(s.totals.sessions, 2);
         assert_eq!(s.totals.messages, 3);
         assert_eq!(s.totals.tool_calls, 3);
@@ -399,8 +621,96 @@ mod tests {
                 db.set_message_feedback(&m.id, Some(fb)).unwrap();
             }
         }
-        let s = db.analytics_summary(1_000).unwrap();
+        let s = db.analytics_summary(1_000, None).unwrap();
         assert_eq!(s.totals.feedback_up, 2);
         assert_eq!(s.totals.feedback_down, 1);
+    }
+
+    #[test]
+    fn model_price_matches_known_prefix() {
+        let (inp, out) = model_price("deepseek-chat-v3");
+        assert!((inp - 0.14).abs() < f64::EPSILON);
+        assert!((out - 0.28).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn model_price_falls_back_for_unknown() {
+        let (inp, out) = model_price("some-new-model");
+        assert!((inp - FALLBACK_INPUT_PER_M).abs() < f64::EPSILON);
+        assert!((out - FALLBACK_OUTPUT_PER_M).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn compute_cost_matches_formula() {
+        let cost = compute_cost(1_000_000, 1_000_000, "deepseek-chat");
+        assert!((cost - (0.14 + 0.28)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn analytics_summary_includes_cost() {
+        let db = Db::open_in_memory().unwrap();
+        let day_ms = 86_400_000i64;
+        let now = 50 * day_ms;
+        db.upsert_session(&SessionRow {
+            id: "s1".into(),
+            title: "t".into(),
+            model: Some("deepseek-chat".into()),
+            created_at: now - 5 * day_ms,
+            updated_at: now - 5 * day_ms,
+            adapter_id: "hermes".into(),
+            llm_profile_id: None,
+            gateway_source: None,
+        })
+        .unwrap();
+        db.upsert_message(&MessageRow {
+            id: "m1".into(),
+            session_id: "s1".into(),
+            role: "assistant".into(),
+            content: "y".into(),
+            error: None,
+            position: 0,
+            created_at: now - 5 * day_ms,
+            prompt_tokens: Some(1_000_000),
+            completion_tokens: Some(1_000_000),
+            feedback: None,
+        })
+        .unwrap();
+        let s = db.analytics_summary(now, None).unwrap();
+        let expected = 0.14 + 0.28;
+        assert!((s.totals.estimated_cost_usd - expected).abs() < 1e-9);
+        assert!((s.totals.estimated_cost_cny - expected * CNY_RATE).abs() < 1e-9);
+    }
+
+    #[test]
+    fn analytics_summary_days_filter_excludes_old() {
+        let db = Db::open_in_memory().unwrap();
+        let day_ms = 86_400_000i64;
+        let now = 100 * day_ms;
+        db.upsert_session(&SessionRow {
+            id: "s1".into(),
+            title: "t".into(),
+            model: None,
+            created_at: now - 5 * day_ms,
+            updated_at: now - 5 * day_ms,
+            adapter_id: "hermes".into(),
+            llm_profile_id: None,
+            gateway_source: None,
+        })
+        .unwrap();
+        db.upsert_session(&SessionRow {
+            id: "s2".into(),
+            title: "t".into(),
+            model: None,
+            created_at: now - 50 * day_ms,
+            updated_at: now - 50 * day_ms,
+            adapter_id: "hermes".into(),
+            llm_profile_id: None,
+            gateway_source: None,
+        })
+        .unwrap();
+        let all = db.analytics_summary(now, None).unwrap();
+        assert_eq!(all.totals.sessions, 2);
+        let last7 = db.analytics_summary(now, Some(7)).unwrap();
+        assert_eq!(last7.totals.sessions, 1);
     }
 }

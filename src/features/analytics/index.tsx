@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, BarChart3, Boxes, Coins, RefreshCcw, ThumbsUp, Wrench } from 'lucide-react';
 
@@ -40,6 +40,8 @@ import { padLast30Days } from './utils';
  * EmptyRow). Pure helpers in `utils.ts`.
  */
 
+type DateRange = 7 | 30 | 90 | 0;
+
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'loaded'; data: AnalyticsSummaryDto }
@@ -49,21 +51,23 @@ export function AnalyticsRoute() {
   const { t } = useTranslation();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
 
-  async function load() {
+  const [range, setRange] = useState<DateRange>(30);
+
+  const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const data = await analyticsSummary();
+      const data = await analyticsSummary(range || undefined);
       setState({ kind: 'loaded', data });
     } catch (e) {
       setState({ kind: 'err', message: ipcErrorMessage(e) });
     }
-  }
+  }, [range]);
 
   useEffect(() => {
     void load();
     const id = setInterval(() => void load(), 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [load]);
 
   return (
     <div className="flex h-full flex-col">
@@ -77,6 +81,21 @@ export function AnalyticsRoute() {
               content={t('analytics.help_page')}
               testId="analytics-help"
             />
+            <div className="flex items-center gap-1 rounded-md border border-border bg-bg-elev-1 px-1 py-0.5 text-xs">
+              {([7, 30, 90, 0] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setRange(d)}
+                  className={cn(
+                    'rounded px-2 py-0.5 transition-colors',
+                    range === d ? 'bg-bg-elev-2 font-medium text-fg' : 'text-fg-subtle hover:text-fg',
+                  )}
+                >
+                  {d === 0 ? t('analytics.range.all') : t('analytics.range.days', { d })}
+                </button>
+              ))}
+            </div>
             <Button variant="ghost" size="sm" onClick={load} disabled={state.kind === 'loading'}>
               <Icon icon={RefreshCcw} size="sm" className={cn(state.kind === 'loading' && 'animate-spin')} />
               <span className="ml-1.5">{t('analytics.refresh')}</span>

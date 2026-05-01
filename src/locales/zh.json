@@ -392,12 +392,17 @@
     "error_title": "无法加载分析数据",
     "empty": "暂无数据 —— 去 Chat 页聊几句再回来看看。",
     "generated_at": "快照时间：{{when}}",
+    "range": {
+      "days": "{{d}}天",
+      "all": "全部"
+    },
     "kpi": {
       "sessions": "会话数",
       "messages": "消息数",
       "tool_calls": "工具调用",
       "active_days": "活跃天数",
-      "total_tokens": "Tokens"
+      "total_tokens": "Tokens",
+      "estimated_cost": "估算费用"
     },
     "chart": {
       "activity": {

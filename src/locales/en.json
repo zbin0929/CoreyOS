@@ -545,12 +545,17 @@
     "error_title": "Couldn't load analytics",
     "empty": "No activity yet — start a conversation on the Chat page and come back here.",
     "generated_at": "Snapshot at {{when}}",
+    "range": {
+      "days": "{{d}}d",
+      "all": "All"
+    },
     "kpi": {
       "sessions": "Sessions",
       "messages": "Messages",
       "tool_calls": "Tool calls",
       "active_days": "Active days",
-      "total_tokens": "Tokens"
+      "total_tokens": "Tokens",
+      "estimated_cost": "Est. cost"
     },
     "chart": {
       "activity": {

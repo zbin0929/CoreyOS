@@ -3,6 +3,7 @@ import {
   Activity,
   Calendar,
   Coins,
+  DollarSign,
   MessageSquare,
   ThumbsDown,
   ThumbsUp,
@@ -25,10 +26,16 @@ export function KpiStrip({ totals }: { totals: AnalyticsSummaryDto['totals'] }) 
     { key: 'tool_calls', label: t('analytics.kpi.tool_calls'), value: totals.tool_calls, icon: Wrench },
     { key: 'active_days', label: t('analytics.kpi.active_days'), value: totals.active_days, icon: Calendar },
     { key: 'total_tokens', label: t('analytics.kpi.total_tokens'), value: totals.total_tokens, icon: Coins },
+    {
+      key: 'cost',
+      label: t('analytics.kpi.estimated_cost'),
+      display: `$${totals.estimated_cost_usd.toFixed(2)} / ¥${totals.estimated_cost_cny.toFixed(2)}`,
+      icon: DollarSign,
+    },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-      {cards.map(({ key, label, value, icon: IconCmp }) => (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+      {cards.map(({ key, label, value, display, icon: IconCmp }) => (
         <div
           key={key}
           data-testid={`analytics-kpi-${key}`}
@@ -39,7 +46,7 @@ export function KpiStrip({ totals }: { totals: AnalyticsSummaryDto['totals'] }) 
             <Icon icon={IconCmp} size="sm" className="text-fg-subtle" />
           </div>
           <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">
-            {formatNumber(value)}
+            {display ?? formatNumber(value)}
           </div>
         </div>
       ))}

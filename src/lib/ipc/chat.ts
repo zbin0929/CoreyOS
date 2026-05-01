@@ -475,6 +475,8 @@ export interface AnalyticsTotals {
    *  rows (feedback=NULL) contribute 0 to both. */
   feedback_up: number;
   feedback_down: number;
+  estimated_cost_usd: number;
+  estimated_cost_cny: number;
 }
 
 export interface AnalyticsSummaryDto {
@@ -497,7 +499,30 @@ export interface AnalyticsSummaryDto {
 }
 
 /** One-shot rollup for the Analytics page. Cheap (<5 ms on ~10k rows). */
-export function analyticsSummary(): Promise<AnalyticsSummaryDto> {
-  return invoke<AnalyticsSummaryDto>('analytics_summary');
+export function analyticsSummary(days?: number): Promise<AnalyticsSummaryDto> {
+  return invoke<AnalyticsSummaryDto>('analytics_summary', { days: days ?? null });
+}
+
+export interface ModelCost {
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+}
+
+export interface DayCost {
+  date: string;
+  cost_usd: number;
+}
+
+export interface CostBreakdown {
+  total_usd: number;
+  total_cny: number;
+  by_model: ModelCost[];
+  daily_cost: DayCost[];
+}
+
+export function analyticsCostBreakdown(days?: number): Promise<CostBreakdown> {
+  return invoke<CostBreakdown>('analytics_cost_breakdown', { days: days ?? null });
 }
 

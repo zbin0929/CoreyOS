@@ -35,7 +35,9 @@ mod workflows;
 // public surface even though current callers only reference the
 // wrapping types (AnalyticsSummary, SessionWithMessages).
 #[allow(unused_imports)]
-pub use analytics::{AnalyticsSummary, AnalyticsTotals, DayCount, NamedCount};
+pub use analytics::{
+    AnalyticsSummary, AnalyticsTotals, CostBreakdown, DayCost, DayCount, ModelCost, NamedCount,
+};
 pub use budgets::BudgetRow;
 pub use messages::{AttachmentRow, MessageRow, ToolCallRow};
 pub use runbooks::RunbookRow;
