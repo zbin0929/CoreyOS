@@ -292,10 +292,12 @@ impl StepExecutor for HermesExecutor {
         let mut cmd = if is_binary {
             let mut c = Command::new(&script_path);
             c.arg(task.to_string());
+            crate::hermes_config::suppress_window(&mut c);
             c
         } else {
             let mut c = Command::new("node");
             c.arg(&script_path).arg(task.to_string());
+            crate::hermes_config::suppress_window(&mut c);
             c
         };
 
@@ -896,10 +898,10 @@ pub struct HermesOneshotResult {
 #[tauri::command]
 pub async fn hermes_oneshot(prompt: String) -> IpcResult<HermesOneshotResult> {
     tokio::task::spawn_blocking(move || -> IpcResult<HermesOneshotResult> {
-        let output = std::process::Command::new("hermes")
-            .arg("-z")
-            .arg(&prompt)
-            .output();
+        let mut cmd = std::process::Command::new("hermes");
+        cmd.arg("-z").arg(&prompt);
+        crate::hermes_config::suppress_window(&mut cmd);
+        let output = cmd.output();
         match output {
             Ok(o) => Ok(HermesOneshotResult {
                 stdout: String::from_utf8_lossy(&o.stdout).into_owned(),

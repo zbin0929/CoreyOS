@@ -126,10 +126,10 @@ fn detect_node() -> (bool, Option<String>) {
 
     for candidate in &node_candidates {
         if candidate.exists() {
-            if let Ok(output) = std::process::Command::new(candidate)
-                .arg("--version")
-                .output()
-            {
+            let mut c = std::process::Command::new(candidate);
+            c.arg("--version");
+            crate::hermes_config::suppress_window(&mut c);
+            if let Ok(output) = c.output() {
                 if output.status.success() {
                     let v = String::from_utf8_lossy(&output.stdout).trim().to_string();
                     return (true, Some(v));
@@ -138,7 +138,10 @@ fn detect_node() -> (bool, Option<String>) {
         }
     }
 
-    match std::process::Command::new("node").arg("--version").output() {
+    let mut c = std::process::Command::new("node");
+    c.arg("--version");
+    crate::hermes_config::suppress_window(&mut c);
+    match c.output() {
         Ok(o) if o.status.success() => {
             let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
             (true, Some(v))

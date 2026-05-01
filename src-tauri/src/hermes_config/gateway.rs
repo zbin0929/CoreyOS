@@ -833,6 +833,7 @@ fn windows_gateway_stop() -> io::Result<String> {
         })?;
         let mut kill_cmd = std::process::Command::new("taskkill");
         kill_cmd.args(["/F", "/PID", &pid.to_string()]);
+        suppress_window(&mut kill_cmd);
         let output = kill_cmd.output()?;
         if output.status.success() {
             let _ = std::fs::remove_file(&pid_file);
@@ -847,6 +848,7 @@ fn windows_gateway_stop() -> io::Result<String> {
         "-Command",
         "Get-NetTCPConnection -LocalPort 8642 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force }",
     ]);
+    suppress_window(&mut fallback);
     let output = fallback.output()?;
     if output.status.success() {
         let _ = std::fs::remove_file(&pid_file);
@@ -936,6 +938,7 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
             "-EncodedCommand",
             &encoded,
         ]);
+        suppress_window(&mut cmd);
         cmd.env("PYTHONIOENCODING", "utf-8");
         cmd.stdout(std::process::Stdio::inherit());
         cmd.stderr(std::process::Stdio::inherit());

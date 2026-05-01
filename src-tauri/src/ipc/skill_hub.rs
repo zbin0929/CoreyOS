@@ -88,7 +88,10 @@ pub async fn skill_hub_exec(args: Vec<String>) -> IpcResult<HubCommandResult> {
     }
 
     tokio::task::spawn_blocking(move || -> IpcResult<HubCommandResult> {
-        let output = Command::new("hermes").arg("skills").args(&args).output();
+        let mut cmd = Command::new("hermes");
+        cmd.arg("skills").args(&args);
+        crate::hermes_config::suppress_window(&mut cmd);
+        let output = cmd.output();
         match output {
             Ok(o) => Ok(HubCommandResult {
                 stdout: String::from_utf8_lossy(&o.stdout).into_owned(),
