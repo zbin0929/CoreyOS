@@ -126,30 +126,33 @@ export function VoiceRoute() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-border px-4 py-3">
+      <div className="border-b border-border/60 px-4 py-3">
         <h2 className="text-lg font-semibold text-fg">{t('voice.title')}</h2>
         <p className="text-xs text-fg-subtle">{t('voice.subtitle')}</p>
       </div>
 
-      <div className="flex gap-1 border-b border-border px-4 py-1">
-        {(['settings', 'test', 'audit'] as const).map((t2) => (
-          <button
-            key={t2}
-            type="button"
-            onClick={() => setTab(t2)}
-            className={cn(
-              'rounded-md px-3 py-1.5 text-xs font-medium transition',
-              tab === t2 ? 'bg-bg-elev-2 text-fg' : 'text-fg-muted hover:text-fg',
-            )}
-          >
-            {t(`voice.tab_${t2}`)}
-          </button>
-        ))}
+      <div className="flex items-center gap-1 border-b border-border/60 bg-bg-elev-1/80 px-4 py-2 backdrop-blur-sm">
+        <div className="inline-flex rounded-lg border border-border bg-bg-elev-2/60 p-0.5">
+          {(['settings', 'test', 'audit'] as const).map((t2) => (
+            <button
+              key={t2}
+              type="button"
+              onClick={() => setTab(t2)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                tab === t2 ? 'bg-bg-elev-1 text-fg shadow-sm' : 'text-fg-muted hover:text-fg',
+              )}
+            >
+              {t(`voice.tab_${t2}`)}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-4xl px-6 py-6">
         {error && (
-          <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
             <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
             <span>{error}</span>
           </div>
@@ -319,6 +322,7 @@ export function VoiceRoute() {
 
         {tab === 'test' && <VoiceTestPanel />}
         {tab === 'audit' && <VoiceAuditPanel />}
+        </div>
       </div>
     </div>
   );

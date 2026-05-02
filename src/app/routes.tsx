@@ -92,7 +92,9 @@ const rootRoute = createRootRoute({
     <AppShell>
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
-          <Outlet />
+          <div className="animate-fade-in flex min-h-0 flex-1 flex-col">
+            <Outlet />
+          </div>
         </Suspense>
       </ErrorBoundary>
     </AppShell>

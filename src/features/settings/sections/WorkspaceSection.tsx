@@ -113,7 +113,7 @@ export function WorkspaceSection() {
       ) : (
         <>
           {/* Mode pill + enforce toggle */}
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg-elev-1/70 px-3 py-2.5 text-xs shadow-sm">
             <Icon
               icon={mode === 'enforced' ? ShieldCheck : Lock}
               size="sm"
@@ -140,7 +140,7 @@ export function WorkspaceSection() {
 
           {/* Status indicator + test guide */}
           {mode === 'enforced' && (
-            <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <div className="flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-xs text-emerald-600 dark:text-emerald-400">
               <Icon icon={ShieldCheck} size="sm" className="mt-0.5 flex-none" />
               <div>
                 <span className="font-medium">{t('settings.sandbox.active_title')}</span>
@@ -149,7 +149,7 @@ export function WorkspaceSection() {
             </div>
           )}
           {mode === 'dev_allow' && (
-            <div className="flex items-start gap-2 rounded-md border border-gold-500/30 bg-gold-500/5 px-3 py-2 text-xs text-gold-600 dark:text-gold-400">
+            <div className="flex items-start gap-2 rounded-lg border border-gold-500/30 bg-gold-500/5 px-3 py-2.5 text-xs text-gold-600 dark:text-gold-400">
               <Icon icon={Lock} size="sm" className="mt-0.5 flex-none" />
               <span>{t('settings.sandbox.dev_hint')}</span>
             </div>
@@ -161,7 +161,7 @@ export function WorkspaceSection() {
               {t('settings.sandbox.roots_title')}
             </div>
             {roots.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-fg-subtle">
+              <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-fg-subtle">
                 {t('settings.sandbox.no_roots')}
               </div>
             ) : (
@@ -169,7 +169,7 @@ export function WorkspaceSection() {
                 {roots.map((r) => (
                   <li
                     key={r.path}
-                    className="flex items-center gap-3 rounded-md border border-border bg-bg-elev-1 px-3 py-2"
+                    className="flex items-center gap-3 rounded-lg border border-border bg-bg-elev-1/70 px-3 py-2 shadow-sm"
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <div className="flex items-center gap-2 text-xs">
@@ -248,7 +248,7 @@ export function WorkspaceSection() {
               <div
                 role="radiogroup"
                 aria-label={t('settings.sandbox.mode_label')}
-                className="inline-flex rounded-md border border-border bg-bg-elev-1 p-0.5"
+                className="inline-flex rounded-lg border border-border bg-bg-elev-1 p-0.5"
               >
                 {(['read', 'read_write'] as SandboxAccessMode[]).map((m) => {
                   const active = newMode === m;

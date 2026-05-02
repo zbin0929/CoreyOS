@@ -73,7 +73,7 @@ function ToolCallTreeNode({ node }: { node: SubagentNode }) {
         aria-controls={`subagent-${node.call.id}`}
       >
         <Icon icon={open ? ChevronDown : ChevronRight} size="xs" />
-        <Icon icon={Network} size="xs" className="text-gold-600" />
+        <Icon icon={Network} size="xs" className="text-gold-600 dark:text-gold-400" />
         <code className="font-mono text-fg">{node.call.tool}</code>
         {node.call.label && (
           <span className="truncate text-fg-muted">{node.call.label}</span>

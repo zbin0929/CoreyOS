@@ -168,7 +168,7 @@ export function RadarChartTemplate({ view }: { view: PackView }) {
       </div>
       <ul className="flex flex-col gap-1.5 text-sm">
         {error && (
-          <li className="rounded-md border border-danger/30 bg-danger/5 px-2 py-1 text-xs text-danger">{error}</li>
+          <li className="rounded-lg border border-danger/30 bg-danger/5 px-2 py-1 text-xs text-danger">{error}</li>
         )}
         {axes.map((a) => {
           const score = scores[a] ?? 0;

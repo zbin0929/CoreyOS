@@ -77,7 +77,7 @@ export function SessionsPanel() {
   const totalCount = orderedIds.length;
 
   return (
-    <aside className="flex h-full w-60 flex-none flex-col border-r border-border bg-bg-elev-1">
+    <aside className="flex h-full w-60 flex-none flex-col border-r border-border/60 bg-bg-elev-1/50 backdrop-blur-xl">
       <div className="flex items-center justify-between px-3 py-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
           {t('chat_page.sessions')}
@@ -159,9 +159,9 @@ export function SessionsPanel() {
             aria-label={t('chat_page.search_placeholder')}
             data-testid="sessions-search"
             className={cn(
-              'w-full rounded-md border border-border bg-bg-elev-2 py-1 pl-7 pr-6 text-xs text-fg',
+              'w-full rounded-lg border border-border/80 bg-bg-elev-2/60 py-1.5 pl-7 pr-6 text-xs text-fg',
               'placeholder:text-fg-subtle',
-              'focus:border-gold-500/40 focus:outline-none focus:ring-2 focus:ring-gold-500/40',
+              'focus:border-gold-500/40 focus:outline-none focus:ring-2 focus:ring-gold-500/30',
             )}
           />
           {query && (
@@ -206,10 +206,10 @@ export function SessionsPanel() {
                 <li key={id}>
                   <div
                     className={cn(
-                      'group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition',
+                      'group relative flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-all',
                       active
-                        ? 'bg-gold-500/10 text-fg'
-                        : 'text-fg-muted hover:bg-bg-elev-2 hover:text-fg',
+                        ? 'bg-bg-elev-2/80 text-fg shadow-sm'
+                        : 'text-fg-muted hover:bg-bg-elev-2/40 hover:text-fg',
                     )}
                     data-testid={`session-row-${id}`}
                     data-adapter={s.adapterId}
@@ -294,7 +294,7 @@ const GATEWAY_BADGE: Record<string, { label: string; cls: string }> = {
   qqbot: { label: 'QQ', cls: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-500' },
   feishu: { label: '飞书', cls: 'border-violet-500/40 bg-violet-500/10 text-violet-500' },
   wecom: { label: '企微', cls: 'border-orange-500/40 bg-orange-500/10 text-orange-500' },
-  signal: { label: 'SG', cls: 'border-blue-400/40 bg-blue-400/10 text-blue-400' },
+  signal: { label: 'SG', cls: 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400' },
   email: { label: '邮件', cls: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-500' },
   sms: { label: 'SMS', cls: 'border-pink-500/40 bg-pink-500/10 text-pink-500' },
 };

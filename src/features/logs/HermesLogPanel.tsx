@@ -180,7 +180,7 @@ export function HermesLogPanel({ kind }: { kind: HermesLogKind }) {
         )}
 
         {state.kind === 'error' && (
-          <div className="mx-6 my-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+          <div className="mx-6 my-4 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
             <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
             <div className="flex-1">
               <div className="font-medium">{t('hermes_logs.error_title')}</div>

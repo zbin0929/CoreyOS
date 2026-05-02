@@ -149,9 +149,9 @@ export function TerminalRoute() {
     const term = new Terminal({
       cursorBlink: true,
       fontFamily:
-        "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
-      fontSize: 13,
-      theme: { background: '#0b0d12', foreground: '#e6e6e6' },
+        "'SF Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+      fontSize: 12.5,
+      theme: { background: '#0a0c14', foreground: '#e2e4e8', cursor: '#d4a054', selectionBackground: '#d4a05440' },
       convertEol: true,
     });
     const fit = new FitAddon();
@@ -460,7 +460,7 @@ export function TerminalRoute() {
           />
         )}
         {headerError && (
-          <div className="mb-3 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
             <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
             <span data-testid="terminal-error">{headerError}</span>
           </div>
@@ -471,7 +471,7 @@ export function TerminalRoute() {
          *  keeps passing unchanged. */}
         <div
           className={cn(
-            'relative min-h-0 flex-1 rounded-md border border-border bg-[#0b0d12] p-2',
+            'relative min-h-0 flex-1 rounded-xl border border-border/60 bg-[#0a0c14] p-2 shadow-[var(--shadow-1)]',
             !activeTab && 'flex items-center justify-center opacity-70',
           )}
         >

@@ -89,12 +89,7 @@ export function Sidebar() {
   const more = visible.filter((n) => n.group === 'more');
   const settingsEntries = visible.filter((n) => n.group === 'settings');
 
-  const packPrimary = effectivePackViews.filter((v) => v.navSection === 'primary');
-  const packTools = effectivePackViews.filter((v) => v.navSection === 'tools');
-  const packMore = effectivePackViews.filter((v) => v.navSection === 'more');
-  const packDefault = effectivePackViews.filter(
-    (v) => !['primary', 'tools', 'more'].includes(v.navSection),
-  );
+  const packViewsForSidebar = effectivePackViews;
 
   const moreHasActive = more.some(
     (entry) => isActive(location.pathname, entry.path),
@@ -115,11 +110,11 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-border bg-bg-elev-1">
+    <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-border/40" style={{ background: 'var(--gradient-sidebar)' }}>
       <div
         data-tauri-drag-region
         className={cn(
-          'flex h-12 shrink-0 items-center gap-2 border-b border-border pr-4 select-none',
+          'flex h-12 shrink-0 items-center gap-2 border-b border-border/80 pr-4 select-none',
           'pl-20 [@media(display-mode:fullscreen)]:pl-4',
         )}
       >
@@ -134,7 +129,7 @@ export function Sidebar() {
         ) : (
           <CoreyMark className="h-5 w-5 shrink-0" />
         )}
-        <span className="truncate text-md font-semibold text-fg tracking-tight">
+        <span className="truncate text-sm font-semibold text-fg tracking-tight">
           {brandAppName}
         </span>
       </div>
@@ -151,9 +146,6 @@ export function Sidebar() {
             {t(entry.labelKey)}
           </NavItem>
         ))}
-        {packPrimary.map((v) => (
-          <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
-        ))}
 
         <SectionLabel className="mt-4">{t('nav.section_tools')}</SectionLabel>
         {tools.map((entry) => (
@@ -165,9 +157,6 @@ export function Sidebar() {
           >
             {t(entry.labelKey)}
           </NavItem>
-        ))}
-        {packTools.map((v) => (
-          <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
         ))}
 
         {more.length > 0 && (
@@ -202,33 +191,34 @@ export function Sidebar() {
                 {t(entry.labelKey)}
               </NavItem>
             ))}
-            {effectiveMoreExpanded && packMore.map((v) => (
-              <PackNavItem key={`pack-${v.packId}-${v.viewId}`} view={v} pathname={location.pathname} />
-            ))}
           </>
         )}
 
-        {packDefault.length > 0 && (
-          <PackGroupSection views={packDefault} pathname={location.pathname} />
+        {packViewsForSidebar.length > 0 && (
+          <PackGroupSection views={packViewsForSidebar} pathname={location.pathname} />
         )}
       </nav>
 
-      {settingsEntries.map((entry) => (
-        <Link
-          key={entry.id}
-          to={entry.path}
-          className={cn(
-            'group flex h-10 items-center gap-2.5 border-t border-border px-4 text-sm',
-            'transition-colors duration-fast ease-enter',
-            isActive(location.pathname, entry.path)
-              ? 'text-fg'
-              : 'text-fg-muted hover:text-fg',
-          )}
-        >
-          <Icon icon={entry.icon} size="md" />
-          <span className="flex-1 truncate">{t(entry.labelKey)}</span>
-        </Link>
-      ))}
+      {settingsEntries.map((entry) => {
+        const settingsActive = isActive(location.pathname, entry.path);
+        return (
+          <Link
+            key={entry.id}
+            to={entry.path}
+            className={cn(
+              'group relative flex h-10 items-center gap-2.5 border-t border-border/60 px-4 text-sm',
+              'transition-all duration-fast ease-enter',
+              settingsActive
+                ? 'bg-bg-elev-2/60 text-fg font-medium'
+                : 'text-fg-muted hover:bg-bg-elev-2/30 hover:text-fg',
+            )}
+          >
+            {settingsActive && <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-gold-500" />}
+            <Icon icon={entry.icon} size="md" className={settingsActive ? 'text-gold-500' : ''} />
+            <span className="flex-1 truncate">{t(entry.labelKey)}</span>
+          </Link>
+        );
+      })}
     </aside>
   );
 }
@@ -258,16 +248,21 @@ function NavItem({ to, icon: IconCmp, active, children }: NavItemProps) {
     <Link
       to={to}
       className={cn(
-        'group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm',
-        'transition-colors duration-fast ease-enter',
+        'group relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm',
+        'transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]',
         active
-          ? 'bg-bg-elev-2 text-fg'
-          : 'text-fg-muted hover:bg-bg-elev-2/60 hover:text-fg',
+          ? 'bg-gold-500/10 text-fg font-medium'
+          : 'text-fg-muted hover:bg-[var(--glass-bg-hover)] hover:text-fg',
       )}
     >
-      <Icon icon={IconCmp} size="md" />
-      <span className="flex-1 truncate">{children}</span>
-      {active ? <span className="h-4 w-0.5 rounded-sm bg-gold-500" /> : null}
+      {active && (
+        <>
+          <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-gold-500 shadow-[0_0_8px_hsl(38_90%_56%/0.6)]" />
+          <span className="absolute inset-0 rounded-lg bg-gold-500/5" />
+        </>
+      )}
+      <Icon icon={IconCmp} size="md" className={cn('relative transition-colors', active ? 'text-gold-500 drop-shadow-[0_0_6px_hsl(38_90%_56%/0.5)]' : 'group-hover:text-fg-muted')} />
+      <span className="relative flex-1 truncate">{children}</span>
     </Link>
   );
 }
@@ -280,16 +275,21 @@ function PackNavItem({ view, pathname }: { view: PackView; pathname: string }) {
     <Link
       to={to}
       className={cn(
-        'group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm',
-        'transition-colors duration-fast ease-enter',
+        'group relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm',
+        'transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]',
         active
-          ? 'bg-bg-elev-2 text-fg'
-          : 'text-fg-muted hover:bg-bg-elev-2/60 hover:text-fg',
+          ? 'bg-gold-500/10 text-fg font-medium'
+          : 'text-fg-muted hover:bg-[var(--glass-bg-hover)] hover:text-fg',
       )}
     >
-      <Icon icon={icon} size="md" />
-      <span className="flex-1 truncate">{view.title || view.viewId}</span>
-      {active ? <span className="h-4 w-0.5 rounded-sm bg-gold-500" /> : null}
+      {active && (
+        <>
+          <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-gold-500 shadow-[0_0_8px_hsl(38_90%_56%/0.6)]" />
+          <span className="absolute inset-0 rounded-lg bg-gold-500/5" />
+        </>
+      )}
+      <Icon icon={icon} size="md" className={cn('relative transition-colors', active ? 'text-gold-500 drop-shadow-[0_0_6px_hsl(38_90%_56%/0.5)]' : '')} />
+      <span className="relative flex-1 truncate">{view.title || view.viewId}</span>
     </Link>
   );
 }
@@ -316,13 +316,13 @@ function PackGroupSection({ views, pathname }: { views: PackView[]; pathname: st
   if (groups.size === 0) return null;
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 rounded-xl border border-border/80 bg-bg-elev-1/50 p-1.5">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
         className={cn(
-          'flex w-full items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle',
+          'flex w-full items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle',
           'hover:text-fg-muted transition-colors duration-fast',
         )}
       >
@@ -335,8 +335,8 @@ function PackGroupSection({ views, pathname }: { views: PackView[]; pathname: st
       </button>
       {expanded &&
         [...groups.entries()].map(([packId, group]) => (
-          <div key={packId} className="ml-1">
-            <div className="px-2.5 pt-2 pb-0.5 text-[11px] font-medium text-fg-muted truncate">
+          <div key={packId} className="mt-1.5">
+            <div className="px-2.5 pb-0.5 text-[11px] font-medium text-fg-muted truncate">
               {group.title}
             </div>
             {group.views.map((v) => (

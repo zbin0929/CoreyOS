@@ -44,6 +44,7 @@ After that, dip into the topical docs as the work demands.
 | [`hermes-dependency-map.md`](./hermes-dependency-map.md) | Hermes upstream dependency surface map |
 | [`hermes-v0.12-impact-analysis.md`](./hermes-v0.12-impact-analysis.md) | Hermes v0.12 upgrade impact |
 | [`licensing.zh.md`](./licensing.zh.md) | License system usage manual |
+| [`ui-revamp-v1.md`](./ui-revamp-v1.md) | UI 全盘改造执行文档（Home → Analytics → Channels → Settings） |
 
 ## Historical (archived, kept for reference)
 

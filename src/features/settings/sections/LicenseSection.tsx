@@ -55,7 +55,7 @@ export function LicenseSection() {
   }
 
   const machineRow = machineId ? (
-    <div className="flex items-center gap-2 rounded-md border border-border bg-bg-elev-2 px-3 py-2 text-[11px]">
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-bg-elev-2 px-3 py-2 text-[11px]">
       <span className="flex-none text-fg-subtle">
         {t('settings.license.machine_id', 'Machine ID')}
       </span>
@@ -85,7 +85,7 @@ export function LicenseSection() {
       )}
     >
       {verdict.kind === 'valid' ? (
-        <div className="flex flex-col gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
+        <div className="flex flex-col gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
           <div className="flex items-center gap-2 text-emerald-500">
             <Icon icon={Check} size="sm" />
             <span className="font-medium">

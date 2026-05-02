@@ -171,7 +171,7 @@ export function MemoryRoute() {
         }
       />
 
-      <div className="flex flex-col gap-3 border-b border-border bg-bg-elev-1 px-4 py-3">
+      <div className="flex flex-col gap-3 border-b border-border/60 bg-bg-elev-1/80 px-4 py-3 backdrop-blur-sm">
         <TabBar active={active} tabs={tabs} onSelect={setActive} />
         {isFileTab && current && current.file && (
           <CapacityMeter
@@ -186,7 +186,7 @@ export function MemoryRoute() {
         {isFileTab && current && current.error && (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger"
+            className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-2 text-xs text-danger"
             data-testid="memory-error"
           >
             <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />

@@ -85,7 +85,7 @@ export function SourcePickerStep({
                 type="button"
                 onClick={() => onPickTemplate(p)}
                 className={cn(
-                  'group flex w-full flex-col items-start gap-1 rounded-md border border-border bg-bg-elev-1 p-3 text-left',
+                  'group flex w-full flex-col items-start gap-1 rounded-lg border border-border bg-bg-elev-1 p-3 text-left',
                   'transition-colors hover:border-gold-500/40 hover:bg-bg-elev-2',
                 )}
                 data-testid={`agent-wizard-provider-${p.id}`}

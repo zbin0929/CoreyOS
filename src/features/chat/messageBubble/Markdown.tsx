@@ -46,7 +46,7 @@ export function Markdown({ children }: { children: string }) {
               href={href}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-gold-600 underline decoration-gold-500/40 underline-offset-2 hover:decoration-gold-500"
+              className="text-gold-600 dark:text-gold-400 underline decoration-gold-500/40 underline-offset-2 hover:decoration-gold-500"
             >
               {children}
             </a>

@@ -168,16 +168,16 @@ export function KnowledgeRoute() {
         data-testid="knowledge-file-input"
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        <div className="mx-auto w-full max-w-5xl px-6 py-6">
         {error && (
-          <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger shadow-sm">
             <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* RAG Status Card */}
-        <div className="mb-4 rounded-lg border border-border bg-bg-elev-1 px-4 py-3" data-testid="rag-status-card">
+        <div className="mb-5 rounded-xl border border-border/80 bg-bg-elev-1/70 px-4 py-3 shadow-[var(--shadow-1)]" data-testid="rag-status-card">
           <div className="flex items-center gap-2">
             <Icon icon={Brain} size="md" className="text-gold-500" />
             <span className="text-sm font-medium text-fg">{t('knowledge.rag_title')}</span>
@@ -358,6 +358,7 @@ export function KnowledgeRoute() {
             ))}
           </ul>
         )}
+        </div>
       </div>
     </div>
   );

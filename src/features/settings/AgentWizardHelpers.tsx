@@ -20,7 +20,7 @@ export function FieldCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-2 rounded-md border border-border bg-bg-elev-1 p-3">
+    <section className="flex flex-col gap-2 rounded-lg border border-border bg-bg-elev-1 p-3">
       <header className="flex items-center justify-between gap-2">
         <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">
           {title}

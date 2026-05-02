@@ -164,81 +164,118 @@ export function McpRoute() {
       )}
 
       {error && (
-        <div className="m-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+        <div className="m-4 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
           <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
           <span>{error}</span>
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {servers === null ? (
           <div className="flex flex-1 items-center justify-center text-fg-subtle">
             <Icon icon={Loader2} size="md" className="animate-spin" />
           </div>
         ) : servers.length === 0 && editing?.mode !== 'new' ? (
-          <EmptyState
-            icon={Plug}
-            title={t('mcp.empty_title')}
-            description={t('mcp.empty_desc')}
-          />
+          <div className="p-6">
+            <EmptyState
+              icon={Plug}
+              title={t('mcp.empty_title')}
+              description={t('mcp.empty_desc')}
+            />
+          </div>
         ) : (
-          <ul className="flex flex-col gap-2" data-testid="mcp-server-list">
-            {servers.map((s) =>
-              editing?.mode === 'edit' && editing.id === s.id ? (
-                <li key={s.id}>
-                  <ServerForm
-                    initial={s}
-                    onSave={(next) => onSave(next, false)}
-                    onCancel={() => setEditing(null)}
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-6">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Icon icon={Plug} size="md" />
+                </span>
+                <div>
+                  <div className="text-2xl font-bold tabular-nums text-emerald-500">{servers.length}</div>
+                  <div className="text-[11px] text-fg-muted">{t('mcp.stat_total')}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-blue-500/25 bg-blue-500/[0.06] p-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+                  <Icon icon={Plug} size="md" />
+                </span>
+                <div>
+                  <div className="text-2xl font-bold tabular-nums text-blue-500">{servers.filter((s) => s.config?.transport === 'stdio' || s.config?.command).length}</div>
+                  <div className="text-[11px] text-fg-muted">Stdio</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-500">
+                  <Icon icon={Plug} size="md" />
+                </span>
+                <div>
+                  <div className="text-2xl font-bold tabular-nums text-violet-500">{servers.filter((s) => s.config?.transport === 'sse' || s.config?.url).length}</div>
+                  <div className="text-[11px] text-fg-muted">SSE / HTTP</div>
+                </div>
+              </div>
+            </div>
+
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="mcp-server-list">
+              {servers.map((s) =>
+                editing?.mode === 'edit' && editing.id === s.id ? (
+                  <li key={s.id} className="sm:col-span-2 lg:col-span-3">
+                    <ServerForm
+                      initial={s}
+                      onSave={(next) => onSave(next, false)}
+                      onCancel={() => setEditing(null)}
+                    />
+                  </li>
+                ) : (
+                  <ServerRow
+                    key={s.id}
+                    server={s}
+                    onEdit={() => setEditing({ mode: 'edit', id: s.id })}
+                    onDelete={() => void onDelete(s.id)}
                   />
-                </li>
-              ) : (
-                <ServerRow
-                  key={s.id}
-                  server={s}
-                  onEdit={() => setEditing({ mode: 'edit', id: s.id })}
-                  onDelete={() => void onDelete(s.id)}
-                />
-              ),
-            )}
-          </ul>
+                ),
+              )}
+            </ul>
+          </div>
         )}
 
         {editing?.mode === 'new' && (
-          <ServerForm
-            initial={null}
-            onSave={(next) => onSave(next, true)}
-            onCancel={() => setEditing(null)}
-          />
+          <div className="mx-auto w-full max-w-5xl px-6">
+            <ServerForm
+              initial={null}
+              onSave={(next) => onSave(next, true)}
+              onCancel={() => setEditing(null)}
+            />
+          </div>
         )}
 
-        {/* Recommended MCP quick-add */}
-        {servers !== null && !editing && (
-          <div className="rounded-md border border-dashed border-border bg-bg-elev-1 px-3 py-3">
-            <p className="mb-2 text-xs font-medium text-fg">{t('mcp.recommended_title')}</p>
-            <div className="flex flex-wrap gap-2">
-              {RECOMMENDED_MCPS.map((rec) => {
-                const exists = servers.some((s) => s.id === rec.id);
-                return (
-                  <Button
-                    key={rec.id}
-                    type="button"
-                    size="xs"
-                    variant={exists ? 'ghost' : 'secondary'}
-                    disabled={exists}
-                    onClick={() => {
-                      void mcpServerUpsert(rec.config).then(() => {
-                        setRestartHint(true);
-                        void reload();
-                      });
-                    }}
-                  >
-                    <Icon icon={Plug} size="xs" />
-                    {rec.label}
-                    {exists && ` ✓`}
-                  </Button>
-                );
-              })}
+        {servers !== null && !editing && servers.length > 0 && (
+          <div className="mx-auto w-full max-w-5xl px-6 pb-6">
+            <div className="rounded-xl border border-dashed border-border/80 bg-bg-elev-1/40 p-4">
+              <p className="mb-3 text-xs font-semibold tracking-wide text-fg">{t('mcp.recommended_title')}</p>
+              <div className="flex flex-wrap gap-2">
+                {RECOMMENDED_MCPS.map((rec) => {
+                  const exists = servers.some((s) => s.id === rec.id);
+                  return (
+                    <Button
+                      key={rec.id}
+                      type="button"
+                      size="xs"
+                      variant={exists ? 'ghost' : 'secondary'}
+                      disabled={exists}
+                      onClick={() => {
+                        void mcpServerUpsert(rec.config).then(() => {
+                          setRestartHint(true);
+                          void reload();
+                        });
+                      }}
+                    >
+                      <Icon icon={Plug} size="xs" />
+                      {rec.label}
+                      {exists && ` ✓`}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

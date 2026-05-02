@@ -197,7 +197,7 @@ export function ChannelCard({
     <article
       data-testid={`channel-card-${channel.id}`}
       className={cn(
-        'relative flex flex-col gap-3 rounded-md border bg-bg-elev-1 p-3 transition-colors',
+        'relative flex flex-col gap-3 rounded-xl border bg-bg-elev-1/70 p-3 shadow-[var(--shadow-1)] transition-colors',
         liveStatus?.state === 'online' && 'border-emerald-500',
         liveStatus?.state !== 'online' && status === 'configured' && 'border-emerald-500/40',
         liveStatus?.state !== 'online' && status === 'partial' && 'border-amber-500/50',
@@ -217,7 +217,9 @@ export function ChannelCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Icon icon={MessageSquareMore} size="md" className="flex-none text-fg-muted" />
+            <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md border border-border bg-bg-elev-2/70 text-fg-muted">
+              <Icon icon={MessageSquareMore} size="sm" className="flex-none" />
+            </span>
             <h3 className="truncate text-sm font-medium text-fg">
               {t(`channels.name_${channel.id}`, channel.display_name)}
             </h3>
@@ -285,11 +287,11 @@ export function ChannelCard({
       {(mode.kind === 'view' || mode.kind === 'restart-prompt' || mode.kind === 'error') && (
         <>
           {channel.env_keys.length > 0 && (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-1 rounded-lg border border-border/70 bg-bg-elev-2/35 p-2">
               {channel.env_keys.map((k) => (
                 <li
                   key={k.name}
-                  className="flex items-center gap-2 text-[11px] text-fg-muted"
+                  className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[11px] text-fg-muted"
                 >
                   {channel.env_present[k.name] ? (
                     <Icon icon={Check} size="xs" className="flex-none text-emerald-500" />
@@ -315,7 +317,7 @@ export function ChannelCard({
           )}
 
           {channel.yaml_fields.length > 0 && (
-            <details className="group">
+            <details className="group rounded-lg border border-border/70 bg-bg-elev-2/35 p-2">
               <summary className="cursor-pointer text-[11px] text-fg-subtle group-open:text-fg-muted">
                 {t('channels.behavior_fields', {
                   count: channel.yaml_fields.length,

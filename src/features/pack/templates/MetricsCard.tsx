@@ -165,7 +165,7 @@ export function MetricsCardTemplate({ view }: { view: PackView }) {
   return (
     <div className="flex flex-col gap-3">
       {error && (
-        <p className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{error}</p>
+        <p className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{error}</p>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((key, idx) => {

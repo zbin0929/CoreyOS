@@ -39,79 +39,70 @@ export function ServerRow({
       : String(server.config.url ?? '');
   return (
     <li
-      className="flex items-center gap-3 rounded-lg border border-border bg-bg-elev-1 p-3"
+      className="group flex flex-col gap-3 rounded-xl border border-border bg-bg-elev-1/70 p-4 shadow-[var(--shadow-1)] transition-all hover:border-gold-500/30 hover:shadow-md"
       data-testid={`mcp-server-row-${server.id}`}
     >
-      <Icon
-        icon={transport === 'stdio' ? Terminal : Globe}
-        size="sm"
-        className="flex-none text-fg-muted"
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <code className="rounded bg-bg-elev-2 px-1.5 py-0.5 font-mono text-xs text-fg">
-            {server.id}
-          </code>
-          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
-            {transport}
-          </span>
-        </div>
-        <div
-          className="mt-1 truncate font-mono text-[11px] text-fg-muted"
-          title={summary}
-        >
-          {summary || t('mcp.no_command')}
+      <div className="flex items-start gap-3">
+        <span className={cn(
+          'flex h-9 w-9 flex-none items-center justify-center rounded-lg',
+          transport === 'stdio' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-500',
+        )}>
+          <Icon icon={transport === 'stdio' ? Terminal : Globe} size="sm" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <code className="font-mono text-sm font-semibold text-fg">{server.id}</code>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="rounded-full bg-bg-elev-2 px-2 py-0.5 text-[10px] uppercase tracking-wider text-fg-subtle">
+              {transport}
+            </span>
+            {probeResult && (
+              <span className={cn('text-[10px] font-medium', probeResult.reachable ? 'text-emerald-500' : 'text-red-500')}>
+                {probeResult.reachable
+                  ? probeResult.latency_ms != null ? `${probeResult.latency_ms}ms` : '✓'
+                  : probeResult.error ?? 'unreachable'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
-      <Button
-        size="xs"
-        variant="ghost"
-        onClick={onEdit}
-        data-testid={`mcp-server-edit-${server.id}`}
+      <div
+        className="truncate rounded-lg bg-bg-elev-2/60 px-2.5 py-1.5 font-mono text-[11px] text-fg-muted"
+        title={summary}
       >
-        {t('mcp.edit')}
-      </Button>
-      <Button
-        size="xs"
-        variant="ghost"
-        disabled={probing}
-        onClick={() => {
-          setProbing(true);
-          setProbeResult(null);
-          void mcpServerProbe(server.id)
-            .then((r) => setProbeResult(r))
-            .catch(() => setProbeResult(null))
-            .finally(() => setProbing(false));
-        }}
-        aria-label={t('mcp.probe')}
-        data-testid={`mcp-server-probe-${server.id}`}
-      >
-        {probing ? (
-          <Icon icon={Loader2} size="xs" className="animate-spin" />
-        ) : (
-          <Icon icon={Plug} size="xs" />
-        )}
-      </Button>
-      {probeResult && (
-        <span
-          className={cn('text-[10px]', probeResult.reachable ? 'text-green-500' : 'text-red-500')}
+        {summary || t('mcp.no_command')}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Button size="xs" variant="secondary" onClick={onEdit} data-testid={`mcp-server-edit-${server.id}`}>
+          {t('mcp.edit')}
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={probing}
+          onClick={() => {
+            setProbing(true);
+            setProbeResult(null);
+            void mcpServerProbe(server.id)
+              .then((r) => setProbeResult(r))
+              .catch(() => setProbeResult(null))
+              .finally(() => setProbing(false));
+          }}
+          aria-label={t('mcp.probe')}
+          data-testid={`mcp-server-probe-${server.id}`}
         >
-          {probeResult.reachable
-            ? probeResult.latency_ms != null
-              ? `${probeResult.latency_ms}ms`
-              : '✓'
-            : probeResult.error ?? 'unreachable'}
-        </span>
-      )}
-      <Button
-        size="xs"
-        variant="ghost"
-        onClick={onDelete}
-        aria-label={t('mcp.delete')}
-        data-testid={`mcp-server-delete-${server.id}`}
-      >
-        <Icon icon={Trash2} size="xs" />
-      </Button>
+          {probing ? <Icon icon={Loader2} size="xs" className="animate-spin" /> : <Icon icon={Plug} size="xs" />}
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={onDelete}
+          aria-label={t('mcp.delete')}
+          data-testid={`mcp-server-delete-${server.id}`}
+          className="ml-auto text-fg-subtle hover:text-danger"
+        >
+          <Icon icon={Trash2} size="xs" />
+        </Button>
+      </div>
     </li>
   );
 }

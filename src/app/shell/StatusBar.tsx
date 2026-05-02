@@ -23,7 +23,7 @@ export function StatusBar() {
   const isChat = location.pathname === '/chat';
 
   return (
-    <footer className="flex h-10 shrink-0 items-center border-t border-border bg-bg-elev-1 px-4 text-[11px] select-none">
+    <footer className="flex h-7 shrink-0 items-center border-t border-border/40 bg-bg/90 px-4 text-[10px] tabular-nums select-none backdrop-blur-xl">
       {isChat && session ? (
         <>
           <Icon icon={MessageSquare} size="xs" className="text-fg-subtle" />

@@ -7,31 +7,31 @@
 :root,
 [data-theme='dark'] {
   /* ── Surface ─────────────────────────────────────── */
-  --bg: 225 18% 6%;
-  --bg-elev-1: 225 16% 9%;
-  --bg-elev-2: 225 14% 12%;
-  --bg-elev-3: 225 12% 16%;
-  --border: 225 10% 18%;
-  --border-strong: 225 10% 26%;
+  --bg: 230 20% 5%;
+  --bg-elev-1: 230 18% 8%;
+  --bg-elev-2: 228 16% 11%;
+  --bg-elev-3: 228 14% 15%;
+  --border: 228 12% 16%;
+  --border-strong: 228 10% 24%;
 
   /* ── Ink ─────────────────────────────────────────── */
-  --fg: 40 12% 96%;
-  --fg-muted: 225 8% 68%;
-  --fg-subtle: 225 6% 48%;
-  --fg-disabled: 225 6% 34%;
+  --fg: 40 10% 95%;
+  --fg-muted: 225 8% 64%;
+  --fg-subtle: 225 6% 44%;
+  --fg-disabled: 225 6% 30%;
 
   /* ── Gold accent ─────────────────────────────────── */
-  --gold-50: 45 100% 92%;
-  --gold-200: 45 90% 78%;
-  --gold-500: 43 86% 58%;
-  --gold-600: 40 82% 48%;
-  --gold-700: 37 78% 38%;
+  --gold-50: 42 100% 92%;
+  --gold-200: 40 92% 76%;
+  --gold-500: 38 90% 56%;
+  --gold-600: 35 86% 46%;
+  --gold-700: 32 80% 36%;
 
   /* ── Semantic ────────────────────────────────────── */
-  --success: 150 60% 50%;
+  --success: 152 62% 48%;
   --warning: 32 90% 56%;
-  --danger: 356 78% 58%;
-  --info: 210 90% 62%;
+  --danger: 356 78% 56%;
+  --info: 212 92% 60%;
 
   /* ── Radii ───────────────────────────────────────── */
   --radius-sm: 4px;
@@ -40,35 +40,72 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
+  /* ── Gradients ────────────────────────────────────── */
+  --gradient-sidebar: linear-gradient(180deg, hsl(230 24% 7%) 0%, hsl(230 20% 4%) 100%);
+  --gradient-page: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(230 40% 12%) 0%, hsl(230 20% 5%) 70%);
+  --gradient-card: linear-gradient(135deg, hsl(230 20% 10% / 0.8) 0%, hsl(230 18% 7% / 0.6) 100%);
+  --gradient-gold: linear-gradient(135deg, hsl(42 100% 70%) 0%, hsl(32 90% 50%) 100%);
+
+  /* ── Glass overlays (theme-aware) ────────────────── */
+  --glass-bg: hsl(0 0% 100% / 0.04);
+  --glass-bg-hover: hsl(0 0% 100% / 0.07);
+  --glass-border: hsl(0 0% 100% / 0.06);
+  --glass-border-hover: hsl(0 0% 100% / 0.12);
+  --online-dot-ring: hsl(230 20% 5%);
+
+  /* ── Glow ───────────────────────────────────────── */
+  --glow-gold: 0 0 20px hsl(38 90% 56% / 0.3), 0 0 40px hsl(38 90% 56% / 0.1);
+  --glow-gold-sm: 0 0 8px hsl(38 90% 56% / 0.4);
+  --glow-blue: 0 0 20px hsl(212 92% 60% / 0.2);
+
   /* ── Shadows (only for floating surfaces) ────────── */
   --shadow-1:
-    0 1px 0 hsl(0 0% 100% / 0.03) inset,
-    0 4px 12px -4px hsl(0 0% 0% / 0.5);
-  --shadow-2:
     0 1px 0 hsl(0 0% 100% / 0.04) inset,
-    0 12px 32px -8px hsl(0 0% 0% / 0.6);
+    0 2px 8px -2px hsl(230 50% 4% / 0.6),
+    0 4px 16px -4px hsl(230 50% 4% / 0.4);
+  --shadow-2:
+    0 1px 0 hsl(0 0% 100% / 0.05) inset,
+    0 8px 24px -6px hsl(230 50% 4% / 0.7),
+    0 16px 48px -12px hsl(230 50% 4% / 0.5);
 }
 
 [data-theme='light'] {
-  --bg: 40 20% 98%;
-  --bg-elev-1: 40 18% 96%;
-  --bg-elev-2: 40 16% 94%;
-  --bg-elev-3: 40 14% 92%;
-  --border: 225 8% 86%;
-  --border-strong: 225 8% 78%;
+  --bg: 220 14% 97%;
+  --bg-elev-1: 220 12% 95%;
+  --bg-elev-2: 220 10% 92%;
+  --bg-elev-3: 220 8% 89%;
+  --border: 220 10% 86%;
+  --border-strong: 220 10% 76%;
 
-  --fg: 225 20% 12%;
-  --fg-muted: 225 10% 40%;
-  --fg-subtle: 225 8% 54%;
-  --fg-disabled: 225 6% 70%;
+  --fg: 230 22% 10%;
+  --fg-muted: 225 12% 38%;
+  --fg-subtle: 225 8% 52%;
+  --fg-disabled: 225 6% 68%;
 
-  --gold-500: 38 82% 46%;
-  --gold-600: 35 80% 40%;
+  --gold-500: 36 84% 44%;
+  --gold-600: 33 82% 38%;
+
+  --gradient-sidebar: linear-gradient(180deg, hsl(220 14% 96%) 0%, hsl(220 12% 93%) 100%);
+  --gradient-page: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(220 20% 92%) 0%, hsl(220 14% 97%) 70%);
+  --gradient-card: linear-gradient(135deg, hsl(0 0% 100% / 0.9) 0%, hsl(220 12% 97% / 0.7) 100%);
+  --gradient-gold: linear-gradient(135deg, hsl(36 90% 52%) 0%, hsl(28 85% 45%) 100%);
+
+  --glass-bg: hsl(230 22% 10% / 0.03);
+  --glass-bg-hover: hsl(230 22% 10% / 0.06);
+  --glass-border: hsl(230 22% 10% / 0.08);
+  --glass-border-hover: hsl(230 22% 10% / 0.14);
+  --online-dot-ring: hsl(220 14% 97%);
+
+  --glow-gold: 0 0 20px hsl(36 84% 44% / 0.15), 0 0 40px hsl(36 84% 44% / 0.06);
+  --glow-gold-sm: 0 0 8px hsl(36 84% 44% / 0.2);
+  --glow-blue: 0 0 20px hsl(212 80% 50% / 0.1);
 
   --shadow-1:
-    0 1px 0 hsl(0 0% 100% / 0.5) inset,
-    0 4px 12px -4px hsl(225 20% 12% / 0.1);
-  --shadow-2:
     0 1px 0 hsl(0 0% 100% / 0.6) inset,
-    0 12px 32px -8px hsl(225 20% 12% / 0.15);
+    0 2px 8px -2px hsl(225 20% 12% / 0.08),
+    0 4px 12px -4px hsl(225 20% 12% / 0.06);
+  --shadow-2:
+    0 1px 0 hsl(0 0% 100% / 0.7) inset,
+    0 8px 24px -6px hsl(225 20% 12% / 0.12),
+    0 16px 48px -12px hsl(225 20% 12% / 0.08);
 }

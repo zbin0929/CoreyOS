@@ -53,7 +53,7 @@ export function ProviderCard({
         </a>
       )}
       {template.isLocal && template.id === 'edge' && (
-        <div className="flex items-start gap-2 rounded border border-blue-500/30 bg-blue-500/5 p-2 text-xs text-blue-400">
+        <div className="flex items-start gap-2 rounded border border-blue-500/30 bg-blue-500/5 p-2 text-xs text-blue-600 dark:text-blue-400">
           <Icon icon={Info} size="xs" className="mt-0.5 flex-none" />
           <span>
             启动命令：<code className="rounded bg-blue-500/10 px-1 py-0.5 text-[11px]">docker run -d -p 5050:5050 travisvn/openai-edge-tts:latest</code>

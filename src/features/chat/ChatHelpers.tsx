@@ -66,15 +66,18 @@ export function EmptyHero(_props: { onPick: (prompt: string) => void }) {
   void _props;
   const { t } = useTranslation();
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-500/10 text-gold-500">
-        <Icon icon={Sparkles} size={24} />
+    <div className="animate-fade-in flex min-h-[60vh] flex-col items-center justify-center gap-8 text-center">
+      <div className="relative">
+        <div className="absolute -inset-4 rounded-3xl bg-gold-500/[0.08] blur-xl animate-glow-pulse" />
+        <div className="relative inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-500/10 text-gold-500 shadow-[0_0_30px_hsl(38_90%_56%/0.25)]">
+          <Icon icon={Sparkles} size={32} className="drop-shadow-[0_0_8px_hsl(38_90%_56%/0.6)]" />
+        </div>
       </div>
-      <div className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight">{t('chat_page.hero_title')}</h2>
+      <div className="space-y-3">
+        <h2 className="text-2xl font-bold tracking-tight text-fg">{t('chat_page.hero_title')}</h2>
         <p className="text-sm text-fg-muted">
           {t('chat_page.hero_subtitle_prefix')}
-          <code className="font-mono text-xs">:8642</code>
+          <code className="rounded-md border border-[var(--glass-border)] bg-[var(--glass-bg)] px-1.5 py-0.5 font-mono text-xs text-gold-500">:8642</code>
           {t('chat_page.hero_subtitle_suffix')}
         </p>
       </div>
@@ -102,7 +105,7 @@ export function RoutingHint({ draft }: { draft: string }) {
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
         isRegistered
-          ? 'border border-gold-500/30 bg-gold-500/10 text-gold-600'
+          ? 'border border-gold-500/30 bg-gold-500/10 text-gold-600 dark:text-gold-400'
           : 'border border-danger/30 bg-danger/5 text-danger',
       )}
       data-testid="chat-routing-hint"

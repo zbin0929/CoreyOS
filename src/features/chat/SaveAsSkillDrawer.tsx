@@ -190,7 +190,7 @@ export function SaveAsSkillDrawer({
 
         {savedPath ? (
           <div
-            className="flex flex-col gap-3 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-xs text-emerald-500"
+            className="flex flex-col gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3 text-xs text-emerald-500"
             data-testid="save-as-skill-success"
           >
             <div className="inline-flex items-center gap-2">
@@ -269,7 +269,7 @@ export function SaveAsSkillDrawer({
             </label>
 
             {error && (
-              <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+              <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
                 <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />
                 <span>{error}</span>
               </div>

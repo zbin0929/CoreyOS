@@ -319,7 +319,7 @@ export function CompareRoute() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex-none border-b border-border bg-bg-elev-1/60 px-6 py-4">
+        <div className="flex-none border-b border-border/60 bg-bg-elev-1/40 px-6 py-4 backdrop-blur-sm">
           <div className="mx-auto flex max-w-6xl flex-col gap-3">
             <PromptBar
               value={prompt}
@@ -337,13 +337,13 @@ export function CompareRoute() {
               disabled={anyStreaming}
             />
             {modelsError && (
-              <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger">
+              <div className="flex items-center gap-2 rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger">
                 <Icon icon={AlertCircle} size="sm" className="flex-none" />
                 {modelsError}
               </div>
             )}
             {!modelsError && models.length === 0 && (
-              <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-fg-muted">
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-fg-muted">
                 <Icon icon={AlertCircle} size="sm" className="flex-none text-amber-500" />
                 <span>
                   {t('compare.no_profiles_hint', {

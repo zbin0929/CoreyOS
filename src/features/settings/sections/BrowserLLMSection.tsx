@@ -110,7 +110,7 @@ export function BrowserLLMSection() {
         <label className="flex flex-col gap-1">
           <span className="text-xs text-fg-subtle">{t('settings.browser_llm_profile')}</span>
           {!profilesLoaded ? (
-            <div className="flex items-center gap-2 rounded-md border border-border bg-bg-elev-1 px-2.5 py-2 text-xs text-fg-subtle">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-bg-elev-1 px-2.5 py-2 text-xs text-fg-subtle">
               <Icon icon={Loader2} size="xs" className="animate-spin" />
               {t('common.loading')}
             </div>
@@ -180,7 +180,7 @@ export function BrowserLLMSection() {
         </div>
 
         {diag && (
-          <div className="flex flex-col gap-1 rounded-md border border-border bg-bg-elev-2 p-3 text-xs">
+          <div className="flex flex-col gap-1 rounded-lg border border-border bg-bg-elev-2 p-3 text-xs">
             <div className={diag.node_available ? 'text-green-500' : 'text-red-500'}>
               Node.js: {diag.node_available ? `✓ ${diag.node_version}` : '✗ 未找到'}
             </div>

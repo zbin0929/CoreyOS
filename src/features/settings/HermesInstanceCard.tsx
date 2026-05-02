@@ -27,14 +27,14 @@ export function HermesInstanceCard({
         type="button"
         onClick={onOpen}
         className={cn(
-          'group flex w-full flex-col items-start gap-2 rounded-md border border-border bg-bg-elev-1 p-3 pr-10 text-left',
+          'group flex w-full flex-col items-start gap-2 rounded-lg border border-border bg-bg-elev-1 p-3 pr-10 text-left',
           'transition-colors hover:border-gold-500/40 hover:bg-bg-elev-2',
           'focus:outline-none focus-visible:border-gold-500/60 focus-visible:ring-2 focus-visible:ring-gold-500/30',
         )}
         data-testid={`hermes-instance-card-${instance.id}`}
       >
         <div className="flex w-full items-center gap-2">
-          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-bg-elev-2 text-xs font-semibold uppercase text-fg-muted">
+          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-border bg-bg-elev-2 text-xs font-semibold uppercase text-fg-muted">
             {instance.id.slice(0, 2)}
           </span>
           <div className="min-w-0 flex-1">

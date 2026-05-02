@@ -72,8 +72,9 @@ export function SettingsRoute() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto" id="settings-scroll-container">
-        <nav className="sticky top-0 z-10 border-b border-border bg-bg-elev-1/95 backdrop-blur-sm">
-          <div className="mx-auto flex w-full max-w-2xl gap-1 overflow-x-auto px-6 py-2">
+        <nav className="sticky top-0 z-10 border-b border-border bg-bg/95 backdrop-blur-sm">
+          <div className="mx-auto w-full max-w-5xl px-6 py-2.5">
+            <div className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-bg-elev-1/80 p-1 shadow-[var(--shadow-1)]">
             {SETTINGS_ANCHORS.map((a) => (
               <a
                 key={a.id}
@@ -92,14 +93,15 @@ export function SettingsRoute() {
                     container.scrollTo({ top: offset - 48, behavior: 'smooth' });
                   }
                 }}
-                className="shrink-0 rounded-md px-2.5 py-1 text-xs text-fg-muted transition-colors hover:bg-bg-elev-2 hover:text-fg"
+                className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:bg-bg-elev-2 hover:text-fg"
               >
                 {t(a.labelKey)}
               </a>
             ))}
+            </div>
           </div>
         </nav>
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
           {/* Appearance is independent of gateway config — render first and
               always, even while the gateway config is still loading. */}
           <AppearanceSection />

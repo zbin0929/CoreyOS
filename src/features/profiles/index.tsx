@@ -384,7 +384,7 @@ export function ProfilesRoute() {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-6">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-6 py-6">
           {state.kind === 'loading' && (
             <div className="flex items-center gap-2 text-fg-muted">
               <Icon icon={Loader2} size="md" className="animate-spin" />
@@ -393,7 +393,7 @@ export function ProfilesRoute() {
           )}
 
           {state.kind === 'error' && (
-            <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+            <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
               <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
               <div className="flex-1">
                 <div className="font-medium">{t('profiles.error_title')}</div>

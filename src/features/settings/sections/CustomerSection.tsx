@@ -55,7 +55,7 @@ packs:
       title={t('settings.customer.title')}
       description={t('settings.customer.desc')}
     >
-      <div className="rounded-md border border-border bg-bg-elev-1 p-3 text-xs">
+      <div className="rounded-lg border border-border bg-bg-elev-1 p-3 text-xs">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-fg-subtle">{t('settings.customer.status_label')}</span>
           {loading ? (
@@ -89,7 +89,7 @@ packs:
         )}
 
         {!loading && cfg.error && (
-          <div className="mt-2 rounded-md border border-border bg-bg-elev-2 px-2.5 py-2 text-fg">
+          <div className="mt-2 rounded-lg border border-border bg-bg-elev-2 px-2.5 py-2 text-fg">
             <div className="text-fg-subtle">{t('settings.customer.recovery_path_label')}</div>
             <code className="mt-1 block break-all text-fg">{customerYamlPath}</code>
             <div className="mt-2">

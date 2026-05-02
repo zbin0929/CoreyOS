@@ -177,15 +177,11 @@ export function MessageBubble({
       <div className={cn('flex min-w-0 flex-1 flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
         <div
           className={cn(
-            'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
-            // Fixed dark ink for the gold bubble — independent of theme.
+            'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm',
             isUser
               ? 'bg-gold-500 text-[hsl(225_30%_10%)]'
-              : 'border border-border bg-bg-elev-1 text-fg',
-            msg.error && 'border-danger/40 bg-danger/5 text-danger',
-            // Active in-chat-search match — ring is theme-independent
-            // and doesn't change the border/background chrome the
-            // user has learned to associate with user vs assistant.
+              : 'border border-border/80 bg-bg-elev-1/90 text-fg backdrop-blur-sm',
+            msg.error && 'border-danger/40 bg-danger/5 text-danger shadow-none',
             highlight &&
               'ring-2 ring-gold-500 ring-offset-2 ring-offset-bg',
           )}
@@ -194,7 +190,7 @@ export function MessageBubble({
           {highlight && (
             <div className="mb-2 flex justify-end">
               <span
-                className="inline-flex items-center rounded-full border border-gold-500/40 bg-gold-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-gold-600"
+                className="inline-flex items-center rounded-full border border-gold-500/40 bg-gold-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-gold-600 dark:text-gold-400"
                 data-testid="chat-search-match-badge"
               >
                 {t('chat_page.search_match_badge')}
@@ -240,7 +236,7 @@ export function MessageBubble({
                 <button
                   type="button"
                   onClick={onRetry}
-                  className="ml-2 flex-none rounded-md border border-danger/30 px-2 py-0.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
+                  className="ml-2 flex-none rounded-lg border border-danger/30 px-2 py-0.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors"
                 >
                   <Icon icon={RefreshCw} size="xs" className="mr-1" />
                   {t('chat_page.retry')}

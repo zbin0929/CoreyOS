@@ -76,7 +76,7 @@ export function ModelsRoute() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-6">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-6">
           {state.kind === 'loading' && (
             <div className="flex items-center gap-2 text-fg-muted">
               <Icon icon={Loader2} size="md" className="animate-spin" />
@@ -87,7 +87,7 @@ export function ModelsRoute() {
           {state.kind === 'error' && <ErrorBanner message={state.message} onRetry={load} />}
 
           {loaded && !loaded.present && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm shadow-sm">
               <Icon icon={Info} size="md" className="mt-0.5 flex-none text-amber-500" />
               <div className="flex-1">
                 <div className="font-medium text-amber-600">

@@ -59,7 +59,7 @@ export function AttachmentsStrip({ attachments }: { attachments: UiAttachment[] 
         ) : a.mime.startsWith('video/') ? (
           <li
             key={a.id}
-            className="inline-flex items-center gap-1 rounded-full bg-purple-500/15 px-2 py-0.5 text-[11px] text-purple-300"
+            className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/[0.08] px-2 py-0.5 text-[11px] text-purple-500 dark:text-purple-300"
             title={a.mime}
             data-testid={`bubble-attachment-${a.id}`}
           >
@@ -69,7 +69,7 @@ export function AttachmentsStrip({ attachments }: { attachments: UiAttachment[] 
         ) : (
           <li
             key={a.id}
-            className="inline-flex items-center gap-1 rounded-full bg-black/15 px-2 py-0.5 text-[11px]"
+            className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-bg-elev-2/70 px-2 py-0.5 text-[11px] text-fg-muted"
             title={a.mime}
             data-testid={`bubble-attachment-${a.id}`}
           >
@@ -129,7 +129,7 @@ function AttachmentImageTile({ attachment }: { attachment: UiAttachment }) {
   if (failed || (!url && attachment.size > 5 * 1024 * 1024)) {
     return (
       <li
-        className="inline-flex items-center gap-1 rounded-full bg-black/15 px-2 py-0.5 text-[11px]"
+        className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-bg-elev-2/70 px-2 py-0.5 text-[11px] text-fg-muted"
         title={`${attachment.mime} · preview unavailable`}
         data-testid={`bubble-attachment-${attachment.id}`}
       >
@@ -141,7 +141,7 @@ function AttachmentImageTile({ attachment }: { attachment: UiAttachment }) {
 
   return (
     <li
-      className="overflow-hidden rounded-md bg-black/15"
+      className="overflow-hidden rounded-md bg-bg-elev-2/70"
       title={`${attachment.name} · ${attachment.mime}`}
       data-testid={`bubble-attachment-${attachment.id}`}
     >

@@ -75,7 +75,7 @@ export function SearchPanel() {
       {error && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger"
+          className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-2 text-xs text-danger"
           data-testid="memory-search-error"
         >
           <Icon icon={AlertCircle} size="sm" className="mt-0.5 flex-none" />

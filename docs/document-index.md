@@ -42,6 +42,7 @@ All documentation classified by type and last-verified date.
 | `optimization-backlog.md` | archive | 2026-04-26 | UX improvements (actions completed in post-Phase-12 refactoring) |
 | `glossary.md` | current | 2026-04-26 | Terminology definitions |
 | `uninstall-guide.md` | current | 2026-05-01 | Uninstall instructions (Windows + macOS) |
+| `ui-revamp-v1.md` | plan | 2026-05-02 | UI 全盘改造执行文档（v1） |
 
 ## Plans (`plans/`)
 

@@ -99,7 +99,7 @@ export function VoiceTestPanel() {
         )}
 
         {recording && (
-          <div className="flex flex-col gap-3 rounded-md border border-danger/30 bg-danger/5 p-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-danger/30 bg-danger/5 p-3">
             <div className="flex items-center gap-3">
               <div className="voice-wave flex items-center gap-[3px]">
                 {[3, 5, 3, 7, 4, 6, 3, 5, 4, 7, 3, 5].map((h, i) => (

@@ -154,7 +154,7 @@ export function HermesToolPermissionsSection() {
           system is broken (it's not — it just doesn't apply
           here). To gate file ops, lock the `read_write` Corey
           sandbox scope above instead. */}
-      <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-fg-muted">
+      <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-fg-muted">
         ⚠️ {t('settings.hermes_security.scope_note', {
           defaultValue:
             '审批仅对 agent 跑的 shell 命令生效（`rm -rf /tmp` 这类）。Hermes 内置的结构化文件工具（delete_file / write_file / edit_file 等）走另一套 API，不经过这里——要限制文件读写请到上方 Corey 沙箱配置路径白名单。',
@@ -162,7 +162,7 @@ export function HermesToolPermissionsSection() {
       </div>
 
       {error && (
-        <div className="rounded-md border border-danger/40 bg-danger/5 p-2.5 text-xs text-danger flex items-start gap-2">
+        <div className="rounded-lg border border-danger/40 bg-danger/5 p-2.5 text-xs text-danger flex items-start gap-2">
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span className="break-all">{error}</span>
         </div>
@@ -240,7 +240,7 @@ export function HermesToolPermissionsSection() {
       </div>
 
       {/* Command allowlist */}
-      <div className="rounded-md border border-border bg-bg-elev-1 p-3 flex flex-col gap-3">
+      <div className="rounded-lg border border-border bg-bg-elev-1 p-3 flex flex-col gap-3">
         <div className="text-sm font-medium text-fg">
           {t('settings.hermes_security.allowlist_title', {
             defaultValue: '永久允许的命令模式',

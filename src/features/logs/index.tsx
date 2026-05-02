@@ -59,30 +59,32 @@ export function LogsRoute() {
       <div
         role="tablist"
         aria-label={t('logs.title')}
-        className="flex items-center gap-1 border-b border-border bg-bg-elev-1 px-6"
+        className="flex items-center gap-1 border-b border-border/60 bg-bg-elev-1/80 px-6 py-2 backdrop-blur-sm"
       >
-        {tabs.map(({ key, label, icon: IconCmp }) => {
-          const isActive = active === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              data-testid={`logs-tab-${key}`}
-              onClick={() => setActive(key)}
-              className={cn(
-                'relative -mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs transition',
-                isActive
-                  ? 'border-gold-500 text-fg'
-                  : 'border-transparent text-fg-subtle hover:text-fg',
-              )}
-            >
-              <Icon icon={IconCmp} size="sm" />
-              {label}
-            </button>
-          );
-        })}
+        <div className="inline-flex rounded-lg border border-border bg-bg-elev-2/60 p-0.5">
+          {tabs.map(({ key, label, icon: IconCmp }) => {
+            const isActive = active === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                data-testid={`logs-tab-${key}`}
+                onClick={() => setActive(key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                  isActive
+                    ? 'bg-bg-elev-1 text-fg shadow-sm'
+                    : 'text-fg-muted hover:text-fg',
+                )}
+              >
+                <Icon icon={IconCmp} size="sm" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col" role="tabpanel">

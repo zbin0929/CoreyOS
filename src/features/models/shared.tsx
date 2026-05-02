@@ -25,11 +25,11 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-sm font-semibold text-fg">{title}</h2>
+    <section className="flex flex-col gap-4 rounded-2xl border border-border bg-bg-elev-1/70 p-4 shadow-[var(--shadow-1)]">
+      <div className="border-b border-border pb-3">
+        <h2 className="text-sm font-semibold tracking-tight text-fg">{title}</h2>
         {description && (
-          <p className="mt-0.5 text-xs text-fg-muted">{description}</p>
+          <p className="mt-1 text-xs leading-relaxed text-fg-muted">{description}</p>
         )}
       </div>
       <div className="flex flex-col gap-4">{children}</div>
@@ -72,7 +72,7 @@ export function Value({ value, mono }: { value?: string | null; mono?: boolean }
 export function CurrentCard({ view }: { view: HermesConfigView }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-bg-elev-2/60 p-4 shadow-sm">
       <div className="flex items-center gap-2 text-xs text-fg-muted">
         <Icon icon={FileText} size="sm" />
         <code className="font-mono">{view.config_path}</code>
@@ -120,7 +120,7 @@ export function ProbeStatus({ state }: { state: ProbeState }) {
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
   const { t } = useTranslation();
   return (
-    <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+    <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger shadow-sm">
       <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
       <div className="flex-1">
         <div className="font-medium">{t('models_page.unable_to_read_config')}</div>

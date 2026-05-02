@@ -127,7 +127,7 @@ function HermesDataDirRow({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-xs">
+    <li className="flex flex-col gap-2 rounded-lg border border-border bg-bg-elev-1 px-3 py-2 text-xs">
       <div className="flex items-center gap-3">
         <span className="min-w-[110px] flex-none text-fg-subtle">
           {t('settings.storage.hermes_data_dir')}
@@ -173,7 +173,7 @@ function PathRow({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <li className="flex items-center gap-3 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-xs">
+    <li className="flex items-center gap-3 rounded-lg border border-border bg-bg-elev-1 px-3 py-2 text-xs">
       <span className="min-w-[110px] flex-none text-fg-subtle">{label}</span>
       <code className="min-w-0 flex-1 truncate font-mono text-fg" title={value}>
         {value}
@@ -236,7 +236,7 @@ function DangerZone() {
   }
 
   return (
-    <div className="rounded-md border border-danger/30 bg-danger/5 p-4">
+    <div className="rounded-lg border border-danger/30 bg-danger/5 p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-danger">
         <Icon icon={AlertTriangle} size="md" />
         {t('settings.storage.danger_zone')}

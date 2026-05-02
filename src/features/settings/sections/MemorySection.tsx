@@ -120,7 +120,7 @@ export function MemorySection() {
       description={t('settings.memory.description')}
     >
       {error && (
-        <div className="rounded-md border border-danger/40 bg-danger/5 p-2.5 text-xs text-danger flex items-start gap-2">
+        <div className="rounded-lg border border-danger/40 bg-danger/5 p-2.5 text-xs text-danger flex items-start gap-2">
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span className="break-all">{error}</span>
         </div>
@@ -128,7 +128,7 @@ export function MemorySection() {
 
       {/* Status block — provider + stats. Renders skeleton dots
           while the first IPC is in flight. */}
-      <div className="rounded-md border border-border bg-bg-elev-1 p-3 flex flex-col gap-3">
+      <div className="rounded-lg border border-border bg-bg-elev-1/70 p-3 flex flex-col gap-3 shadow-sm">
         <div className="flex items-center gap-2">
           <Icon icon={Brain} size="sm" className="text-gold-500" />
           <div className="text-sm font-medium text-fg">
@@ -209,7 +209,7 @@ export function MemorySection() {
           when count=0 — it's the "compression is on, just hasn't
           fired yet" tutorial moment. */}
       {compression && compression.log_present && (
-        <div className="rounded-md border border-border bg-bg-elev-1 p-3 flex flex-col gap-3">
+        <div className="rounded-lg border border-border bg-bg-elev-1/70 p-3 flex flex-col gap-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Icon icon={Sparkles} size="sm" className="text-gold-500" />
             <div className="text-sm font-medium text-fg">
@@ -264,7 +264,7 @@ export function MemorySection() {
           conservative enough that anyone running an active
           workflow keeps everything they care about. */}
       {sessionUsage && sessionUsage.present && sessionUsage.file_count > 0 && (
-        <div className="rounded-md border border-border bg-bg-elev-1 p-3 flex flex-col gap-3">
+        <div className="rounded-lg border border-border bg-bg-elev-1/70 p-3 flex flex-col gap-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Icon icon={Sparkles} size="sm" className="text-gold-500" />
             <div className="text-sm font-medium text-fg">
@@ -349,7 +349,7 @@ export function MemorySection() {
         <textarea
           rows={8}
           className={cn(
-            'min-h-[160px] resize-y rounded-md border border-border bg-bg-elev-1',
+            'min-h-[160px] resize-y rounded-lg border border-border bg-bg-elev-1',
             'px-3 py-2 text-sm text-fg placeholder:text-fg-subtle font-mono',
             'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
           )}
@@ -408,10 +408,10 @@ function formatCount(n: number): string {
 /** Compact stat tile. Two lines: value (large) + label (muted). */
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-md border border-border bg-bg-elev-2 px-3 py-2 flex flex-col gap-0.5">
-      <div className="text-base font-semibold text-fg">{value}</div>
+    <div className="rounded-lg border border-border bg-bg-elev-2/70 px-3 py-2.5 flex flex-col gap-0.5 shadow-sm">
+      <div className="text-base font-semibold tabular-nums text-fg">{value}</div>
       <div className="text-[11px] text-fg-muted">{label}</div>
-      {hint && <div className="text-[10px] text-fg-subtle mt-0.5">{hint}</div>}
+      {hint && <div className="text-[10px] text-fg-subtle mt-0.5 leading-relaxed">{hint}</div>}
     </div>
   );
 }

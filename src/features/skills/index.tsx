@@ -179,28 +179,35 @@ export function SkillsRoute() {
           so the existing local editor logic stays untouched; swapping
           tabs is a pure render switch. */}
       <div
-        className="flex border-b border-border bg-bg-elev-1 px-4"
+        className="flex items-center gap-1 border-b border-border bg-bg-elev-1/80 px-4 py-2 backdrop-blur-sm"
         role="tablist"
         aria-label={t('skills.tabs_label')}
       >
-        {(['local', 'hub'] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => setTab(k)}
-            className={cn(
-              'px-3 py-2 text-xs font-medium transition',
-              tab === k
-                ? 'border-b-2 border-accent text-fg'
-                : 'border-b-2 border-transparent text-fg-muted hover:text-fg',
-            )}
-            data-testid={`skills-tab-${k}`}
-          >
-            {k === 'local' ? t('skills.tab_local') : t('skills.tab_hub')}
-          </button>
-        ))}
+        <div className="inline-flex rounded-lg border border-border bg-bg-elev-2/60 p-0.5">
+          {(['local', 'hub'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => setTab(k)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                tab === k
+                  ? 'bg-bg-elev-1 text-fg shadow-sm'
+                  : 'text-fg-muted hover:text-fg',
+              )}
+              data-testid={`skills-tab-${k}`}
+            >
+              {k === 'local' ? t('skills.tab_local') : t('skills.tab_hub')}
+            </button>
+          ))}
+        </div>
+        {list && (
+          <span className="ml-2 rounded-full bg-gold-500/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-gold-500">
+            {list.length}
+          </span>
+        )}
       </div>
 
       {tab === 'hub' ? (
@@ -239,7 +246,7 @@ export function SkillsRoute() {
               </div>
             )}
             {sel.kind === 'error' && (
-              <div className="m-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+              <div className="m-4 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
                 <Icon icon={AlertCircle} size="md" className="mt-0.5 flex-none" />
                 <span className="break-all">{sel.message}</span>
               </div>

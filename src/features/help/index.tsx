@@ -92,8 +92,8 @@ export function HelpRoute() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* TOC sidebar */}
-        <aside className="hidden w-64 flex-none flex-col overflow-hidden border-r border-border bg-bg-elev-1 lg:flex">
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <aside className="hidden w-64 flex-none flex-col overflow-hidden border-r border-border/60 bg-bg-elev-1/50 backdrop-blur-xl lg:flex">
+          <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
             <Icon icon={Search} size="xs" className="opacity-60" />
             <input
               type="search"

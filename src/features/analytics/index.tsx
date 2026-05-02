@@ -107,15 +107,15 @@ export function AnalyticsRoute() {
               content={t('analytics.help_page')}
               testId="analytics-help"
             />
-            <div className="flex items-center gap-1 rounded-md border border-border bg-bg-elev-1 px-1 py-0.5 text-xs">
+            <div className="inline-flex rounded-lg border border-border bg-bg-elev-2/60 p-0.5 text-xs">
               {([7, 30, 90, 0] as const).map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => setRange(d)}
                   className={cn(
-                    'rounded px-2 py-0.5 transition-colors',
-                    range === d ? 'bg-bg-elev-2 font-medium text-fg' : 'text-fg-subtle hover:text-fg',
+                    'rounded-md px-2.5 py-1 font-medium transition-all',
+                    range === d ? 'bg-bg-elev-1 text-fg shadow-sm' : 'text-fg-subtle hover:text-fg',
                   )}
                 >
                   {d === 0 ? t('analytics.range.all') : t('analytics.range.days', { d })}

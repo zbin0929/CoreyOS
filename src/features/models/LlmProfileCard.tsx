@@ -43,7 +43,7 @@ export function LlmProfileCard({
           className={cn(
             'flex h-8 w-8 flex-none items-center justify-center rounded-md text-xs font-semibold uppercase',
             isDefault
-              ? 'bg-gold-500/15 text-gold-700'
+              ? 'bg-gold-500/15 text-gold-700 dark:text-gold-400'
               : 'bg-bg-elev-2 text-fg-muted',
           )}
         >
@@ -67,7 +67,7 @@ export function LlmProfileCard({
 
       <div className="flex items-center justify-center gap-2 border-t border-border/60 px-3 py-2">
         {isDefault ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gold-700">
+          <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gold-700 dark:text-gold-400">
             <Icon icon={Star} size="xs" className="fill-gold-500" />
             {t('models_page.default_badge')}
           </span>

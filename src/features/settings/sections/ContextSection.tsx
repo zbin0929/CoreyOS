@@ -209,14 +209,14 @@ export function ContextSection() {
       description={t('settings.context.description')}
     >
       {error && (
-        <div className="rounded-md border border-danger/40 bg-danger/5 p-2.5 text-xs text-danger flex items-start gap-2">
+        <div className="rounded-lg border border-danger/40 bg-danger/5 p-2.5 text-xs text-danger flex items-start gap-2">
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span className="break-all">{error}</span>
         </div>
       )}
 
       {/* Master enable toggle */}
-      <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-bg-elev-1 px-3 py-2.5">
+      <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elev-1/70 px-3 py-2.5 shadow-sm">
         <div className="flex items-center gap-2">
           <Icon icon={Sparkles} size="sm" className="text-gold-500" />
           <div>
@@ -274,7 +274,7 @@ export function ContextSection() {
             </label>
           ))}
           {presetId === null && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-600 dark:text-amber-400">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-600 dark:text-amber-400">
               {t('settings.context.custom_active')}
             </div>
           )}
@@ -287,7 +287,7 @@ export function ContextSection() {
           <Icon icon={ChevronDown} size="xs" className="transition-transform group-open:rotate-180" />
           {t('settings.context.advanced_label')}
         </summary>
-        <div className="mt-3 grid gap-3 rounded-md border border-border bg-bg-elev-1 p-3">
+        <div className="mt-3 grid gap-3 rounded-lg border border-border bg-bg-elev-1/70 p-3 shadow-sm">
           <Field
             label={t('settings.context.threshold_label')}
             hint={t('settings.context.threshold_hint')}

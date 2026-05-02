@@ -56,11 +56,11 @@ function UpdateBanner() {
   if (state.kind === 'error') {
     return (
       <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-red-500/30 bg-bg-elev-1 px-4 py-3 shadow-lg max-w-sm">
-        <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+        <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
         <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-sm text-red-400">{t('updater.error')}</span>
+          <span className="text-sm text-red-600 dark:text-red-400">{t('updater.error')}</span>
           {state.message && (
-            <span className="text-[10px] text-red-400/60 truncate">{state.message}</span>
+            <span className="text-[10px] text-red-600/60 dark:text-red-400/60 truncate">{state.message}</span>
           )}
         </div>
         <button onClick={() => setDismissed(true)} className="ml-2 shrink-0 text-fg-subtle hover:text-fg">

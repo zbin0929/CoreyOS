@@ -419,7 +419,7 @@ export function DetailsStep({
           when the user has attached to an existing profile). */}
       {selectedProfile && (
         <div
-          className="flex flex-col gap-1 rounded-md border border-border bg-bg-elev-1 p-3 text-xs text-fg-muted"
+          className="flex flex-col gap-1 rounded-lg border border-border bg-bg-elev-1 p-3 text-xs text-fg-muted"
           data-testid="agent-wizard-profile-summary"
         >
           <div className="text-fg">
@@ -487,7 +487,7 @@ export function DetailsStep({
 
       {saveError && (
         <div
-          className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/10 p-2.5 text-xs text-danger"
+          className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 p-2.5 text-xs text-danger"
           data-testid="agent-wizard-save-error"
         >
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />

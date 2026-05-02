@@ -113,7 +113,7 @@ export function HermesInstanceRow({
 
   return (
     <li
-      className="flex flex-col gap-3 rounded-md border border-border bg-bg-elev-1 p-3"
+      className="flex flex-col gap-3 rounded-lg border border-border bg-bg-elev-1 p-3"
       data-testid={`hermes-instance-row-${initial.id || 'new'}`}
     >
       <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ export function HermesInstanceRow({
       )}
 
       {err && (
-        <div className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
           {err}
         </div>
       )}

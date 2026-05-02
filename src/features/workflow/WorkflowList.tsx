@@ -91,7 +91,8 @@ export function WorkflowList({
           </div>
         }
       />
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-6xl p-6">
         {error && (
           <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-500">{error}</div>
         )}
@@ -103,9 +104,24 @@ export function WorkflowList({
         ) : rows.length === 0 ? (
           <EmptyState icon={Workflow} title={t('workflow_page.empty_title')} description={t('workflow_page.empty_desc')} />
         ) : (
+          <div className="flex flex-col gap-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="flex items-center gap-3 rounded-xl border border-blue-500/25 bg-blue-500/[0.06] p-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500"><Icon icon={Workflow} size="md" /></span>
+              <div><div className="text-2xl font-bold tabular-nums text-blue-500">{rows.length}</div><div className="text-[11px] text-fg-muted">{t('workflow_page.stat_total', { defaultValue: 'Total' })}</div></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500"><Icon icon={Workflow} size="md" /></span>
+              <div><div className="text-2xl font-bold tabular-nums text-amber-500">{rows.filter((w) => w.trigger_type === 'cron').length}</div><div className="text-[11px] text-fg-muted">Cron</div></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500"><Icon icon={Workflow} size="md" /></span>
+              <div><div className="text-2xl font-bold tabular-nums text-emerald-500">{rows.filter((w) => w.trigger_type === 'manual').length}</div><div className="text-[11px] text-fg-muted">Manual</div></div>
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {rows.map((wf) => (
-              <div key={wf.id} className="group rounded-xl border border-border bg-bg-elev-1 p-5 transition-colors hover:border-gold-500/30">
+              <div key={wf.id} className="group rounded-xl border border-border bg-bg-elev-1/70 p-5 shadow-[var(--shadow-1)] transition-all hover:border-gold-500/30 hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-2 min-w-0 flex-1">
                     <input type="checkbox" checked={selected.has(wf.id)} onChange={(e) => { setSelected(new Set(e.target.checked ? [...selected, wf.id] : [...selected].filter((id) => id !== wf.id))); }} className="mt-1 shrink-0 accent-gold-500" />
@@ -137,7 +153,9 @@ export function WorkflowList({
               </div>
             ))}
           </div>
+          </div>
         )}
+        </div>
       </div>
       <WorkflowGenerateDialog open={generateOpen} onClose={() => setGenerateOpen(false)} onGenerated={onGenerated} />
       {inputsPrompt && (

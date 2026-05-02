@@ -110,7 +110,7 @@ export function HermesInstancesSection() {
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+        <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span>{error}</span>
         </div>

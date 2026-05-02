@@ -33,7 +33,7 @@ export function AppearanceSection() {
         <div
           role="radiogroup"
           aria-label={t('settings.appearance.theme')}
-          className="inline-flex rounded-md border border-border bg-bg-elev-1 p-0.5"
+          className="inline-flex rounded-lg border border-border bg-bg-elev-1 p-0.5"
         >
           {themes.map(({ value, label, icon: IconCmp }) => {
             const active = theme === value;

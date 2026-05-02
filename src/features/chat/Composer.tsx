@@ -121,7 +121,7 @@ export function Composer({
 }: ComposerProps) {
   const { t } = useTranslation();
   return (
-    <div className="border-t border-border bg-bg/80 backdrop-blur">
+    <div className="border-t border-border/80 bg-bg/80 shadow-[0_-1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm">
       <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 pt-3">
         <ActiveLLMBadge />
         <RoutingHint draft={draft} />
@@ -155,7 +155,7 @@ export function Composer({
 
         {attachError && (
           <div
-            className="rounded-md border border-danger/40 bg-danger/5 px-3 py-1.5 text-xs text-danger"
+            className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-1.5 text-xs text-danger"
             data-testid="chat-attach-error"
           >
             {attachError}
@@ -167,7 +167,7 @@ export function Composer({
             send() itself, not here. */}
         {budgetWarnings.length > 0 && (
           <div
-            className="flex flex-col gap-0.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
+            className="flex flex-col gap-0.5 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
             data-testid="chat-budget-warning"
           >
             <div className="inline-flex items-center gap-1.5">
@@ -190,7 +190,7 @@ export function Composer({
             because their [attached: name] text marker still works. */}
         {imageBlockedByModel && (
           <div
-            className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
             data-testid="chat-vision-warning"
           >
             <Icon icon={AlertTriangle} size="sm" />
@@ -214,7 +214,7 @@ export function Composer({
             {pendingAttachments.map((a) => (
               <li
                 key={a.id}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elev-1 px-2 py-0.5 text-xs text-fg"
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elev-2/60 px-2.5 py-0.5 text-xs text-fg shadow-sm"
                 data-testid={`chat-attachment-chip-${a.id}`}
                 title={`${a.mime} · ${formatBytes(a.size)}`}
               >
@@ -289,10 +289,10 @@ export function Composer({
               // at ~132 px so users typing more than ~5 lines
               // hit `overflow-y-auto` instead and the scrollbar
               // reappears on demand.
-              'min-h-[44px] max-h-[132px] flex-1 resize-none rounded-xl border border-border overflow-y-hidden',
-              'bg-bg-elev-1 px-4 py-3 text-sm text-fg placeholder:text-fg-subtle',
-              'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
-              'disabled:opacity-60',
+              'min-h-[44px] max-h-[132px] flex-1 resize-none rounded-xl border border-[var(--glass-border)] overflow-y-hidden',
+              'bg-[var(--glass-bg)] px-4 py-3 text-sm text-fg placeholder:text-fg-subtle',
+              'focus:outline-none focus:ring-2 focus:ring-gold-500/30 focus:border-gold-500/40 focus:bg-[var(--glass-bg-hover)] focus:shadow-[0_0_16px_hsl(38_90%_56%/0.08)]',
+              'disabled:opacity-60 transition-all duration-200',
             )}
             data-testid="chat-textarea"
           />
@@ -336,7 +336,7 @@ export function Composer({
               type="submit"
               variant="primary"
               disabled={!draft.trim() && pendingAttachments.length === 0}
-              className="h-11 px-4"
+              className="h-11 px-4 shadow-[0_0_12px_hsl(38_90%_56%/0.2)] transition-shadow hover:shadow-[0_0_20px_hsl(38_90%_56%/0.35)]"
               aria-label={t('chat_page.send_message')}
               title={t('chat_page.send')}
               data-testid="chat-send"

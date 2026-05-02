@@ -89,7 +89,7 @@ export function SandboxScopesSection() {
       description={t('settings.sandbox_scopes.desc')}
     >
       {error && (
-        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
+        <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-2 text-xs text-danger">
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span>{error}</span>
         </div>
@@ -108,7 +108,7 @@ export function SandboxScopesSection() {
           {scopes.map((s) => (
             <li
               key={s.id}
-              className="flex items-center gap-2 rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-xs"
+              className="flex items-center gap-2 rounded-lg border border-border bg-bg-elev-1 px-3 py-2 text-xs"
               data-testid={`sandbox-scope-row-${s.id}`}
             >
               <code className="rounded bg-bg-elev-3 px-1 py-0.5 font-mono text-[11px] text-fg">

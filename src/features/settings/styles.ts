@@ -11,7 +11,8 @@ import { cn } from '@/lib/cn';
  * components without being tripped up by mixed const/component exports.
  */
 export const inputCls = cn(
-  'w-full rounded-md border border-border bg-bg-elev-1 px-3 py-2 text-sm text-fg',
+  'w-full rounded-lg border border-border bg-bg-elev-2/60 px-3 py-2 text-sm text-fg shadow-sm',
   'placeholder:text-fg-subtle',
-  'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/40',
+  'transition-colors duration-fast',
+  'focus:outline-none focus:ring-2 focus:ring-gold-500/40 focus:border-gold-500/60 focus:bg-bg-elev-1',
 );

@@ -63,7 +63,7 @@ export function KpiStrip({ totals, latency, errors }: { totals: AnalyticsSummary
         <div
           key={key}
           data-testid={`analytics-kpi-${key}`}
-          className="rounded-md border border-border bg-bg-elev-1 px-4 py-3"
+          className="rounded-xl border border-border bg-bg-elev-1/70 px-4 py-3 shadow-[var(--shadow-1)]"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-wider text-fg-subtle">{label}</span>
@@ -89,7 +89,7 @@ interface CardProps {
 
 export function Card({ title, subtitle, icon: IconCmp, children }: CardProps) {
   return (
-    <section className="rounded-md border border-border bg-bg-elev-1">
+    <section className="rounded-2xl border border-border bg-bg-elev-1/70 shadow-[var(--shadow-1)]">
       <header className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5 text-sm font-medium text-fg">
@@ -225,17 +225,17 @@ export function ActivityChart({
 export function HBarList({ items }: { items: Array<{ name: string; count: number }> }) {
   const max = Math.max(1, ...items.map((i) => i.count));
   return (
-    <ul className="flex flex-col gap-1.5">
+    <ul className="flex flex-col gap-2">
       {items.map((item) => {
         const pct = (item.count / max) * 100;
         return (
-          <li key={item.name} className="flex items-center gap-3 text-sm">
+          <li key={item.name} className="flex items-center gap-3 rounded-lg border border-border/70 bg-bg-elev-2/40 px-2.5 py-2 text-sm">
             <span className="min-w-[120px] max-w-[180px] truncate text-fg" title={item.name}>
               {item.name}
             </span>
-            <div className="relative h-5 flex-1 overflow-hidden rounded bg-bg-elev-2">
+            <div className="relative h-4 flex-1 overflow-hidden rounded-md bg-bg-elev-2">
               <div
-                className="h-full bg-gold-500/70 transition-[width] duration-300"
+                className="h-full bg-gold-500/75 transition-[width] duration-300"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -322,7 +322,7 @@ export function FeedbackStrip({
 
 export function EmptyRow({ hint }: { hint: string }) {
   return (
-    <div className="flex items-center justify-center py-6 text-xs text-fg-subtle">{hint}</div>
+    <div className="flex items-center justify-center rounded-lg border border-dashed border-border/80 bg-bg-elev-2/30 py-6 text-xs text-fg-subtle">{hint}</div>
   );
 }
 
@@ -333,13 +333,13 @@ export function SkeletonGrid() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-[72px] animate-pulse rounded-md border border-border bg-bg-elev-1" />
+          <div key={i} className="h-[72px] animate-pulse rounded-xl border border-border bg-bg-elev-1/70" />
         ))}
       </div>
-      <div className="h-[190px] animate-pulse rounded-md border border-border bg-bg-elev-1" />
+      <div className="h-[190px] animate-pulse rounded-2xl border border-border bg-bg-elev-1/70" />
       <div className="grid gap-6 md:grid-cols-2">
-        <div className="h-[240px] animate-pulse rounded-md border border-border bg-bg-elev-1" />
-        <div className="h-[240px] animate-pulse rounded-md border border-border bg-bg-elev-1" />
+        <div className="h-[240px] animate-pulse rounded-2xl border border-border bg-bg-elev-1/70" />
+        <div className="h-[240px] animate-pulse rounded-2xl border border-border bg-bg-elev-1/70" />
       </div>
     </div>
   );
@@ -348,8 +348,8 @@ export function SkeletonGrid() {
 export function ErrorBox({ message, onRetry }: { message: string; onRetry: () => void }) {
   const { t } = useTranslation();
   return (
-    <div className="rounded-md border border-danger/30 bg-danger/5 p-4">
-      <div className="mb-2 text-sm font-medium text-danger">{t('analytics.error_title')}</div>
+    <div className="rounded-2xl border border-danger/30 bg-danger/5 p-4 shadow-[var(--shadow-1)]">
+      <div className="mb-2 text-sm font-medium tracking-tight text-danger">{t('analytics.error_title')}</div>
       <p className="mb-3 text-xs text-fg-muted">{message}</p>
       <Button variant="ghost" size="sm" onClick={onRetry}>
         {t('analytics.retry')}
