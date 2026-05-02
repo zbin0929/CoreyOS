@@ -6,6 +6,22 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-02 — v0.2.3 · Home dashboard glow-up
+
+### Shipped
+
+- **Home dashboard redesign**: glassmorphism cards, animated metrics, and gradient backgrounds bring clearer visual hierarchy for gateway/Hermes/MCP status.
+- **Status focus list**: gateway, Hermes, MCP、Cron 四项集中呈现，离线项高亮提醒并一键跳转对应页面。
+- **Light theme parity**: refreshed design tokens keep gradients/glow consistent in light mode, ending the previous washed-out appearance.
+
+### Fixed
+
+- Improved online indicator badge for CoreyMark icon — green pulse now mirrors real-time gateway status refresh.
+
+### Deferred
+
+- Talk Mode（B-8）与 Pack 深化功能仍在规划阶段，未包含在本次版本。
+
 ## 2026-05-01 — v0.2.0 · White-label + Pack system + License gating
 
 ### Shipped
