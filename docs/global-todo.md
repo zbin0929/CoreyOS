@@ -144,6 +144,32 @@
   - [x] 完整卸载手册（Windows + macOS）
 - **价值**：出问题时的逃生通道，客户支持成本下降
 
+#### B-8. Talk Mode 语音持续对话
+- **状态**：📋 计划中
+- **目标版本**：v0.4.0+
+- **参考**：OpenClaw Talk Mode（https://docs.openclaw.ai/nodes/talk）
+- **核心循环**：Listen（STT）→ Send（LLM）→ Wait → Speak（TTS）→ 循环
+- **技术选型（零费用方案）**：
+  - STT: macOS `SFSpeechRecognizer` / Windows `System.Speech` / 系统原生（免费）
+  - TTS: 系统原生兜底 + MLX 本地（Apple Silicon，免费）+ ElevenLabs 可选（客户自费）
+  - 静音检测窗口: 700ms（停顿超过此时间自动发送）
+  - 音频流格式: macOS `pcm_44100`, Windows `pcm_24000`
+- **关键特性**：
+  - [ ] **interruptOnSpeech**: 用户说话时打断 AI 播放，记录中断时间戳注入下一条 prompt
+  - [ ] **Voice Directives**: LLM 回复首行可带 JSON 指令切换声音/语速
+  - [ ] **三态 UI 覆盖层**: Listening（脉冲）→ Thinking（下沉动画）→ Speaking（辐射环）
+  - [ ] **MLX 本地 TTS**: `mlx-community/Soprano-80M-bf16`，Apple Silicon 离线场景
+- **需要补的组件**：
+  - [ ] STT 静音检测 + 持续监听循环（现有 voice 模块基础上扩展）
+  - [ ] TTS 流式 PCM 播放 + 中断机制（现有 ProviderCard 基础上扩展）
+  - [ ] 停止播放 + 时间戳注入
+  - [ ] 三态 UI 覆盖层
+  - [ ] MLX 本地 TTS helper（可选）
+- **预估工期**：2-3 周
+- **价值**：运营人员语音操作比打字快，"帮我查昨天广告花费"一句话搞定
+- **依赖**：无（voice 模块已有基础）
+- **跨平台**：macOS + Windows 必须同时支持
+
 ### 第 3 层 — 已砍（与"只做定制"冲突，永久不做）
 
 | 已砍项 | 原因 |
@@ -298,8 +324,9 @@ v0.3.0（约 3-4 周）— 跨境电商助手 完整版
 ├── P-1  跨境电商助手（9 能力一次性全做）
 └── 第一个真实客户上线
 
-v0.4.0+ — 按客户需求拉新 Pack
-└── 真实客户合同 → 启动对应 Pack（不主动）
+v0.4.0+ — 按客户需求拉新 Pack + Talk Mode
+├── 真实客户合同 → 启动对应 Pack（不主动）
+└── B-8  Talk Mode 语音持续对话
 ```
 
 ---
@@ -316,6 +343,7 @@ B-5 (BGE-M3 离线包) ───────────┤
                                 │
 B-6 (用量分析) ─────────────────┘ （依赖 B-3 视图模板）
 B-7 (卸载/重置)  独立
+B-8 (Talk Mode)  独立（v0.4.0+，voice 模块已有基础）
 
 [外部前置] Amazon SP-API 开发者账号（v0.2.0 启动同步申请）
 ```
@@ -337,7 +365,9 @@ B-7 (卸载/重置)  独立
 | v0.2.0 | ✅ | 白标 + Pack 加载器 + 12 视图模板 + license features + preinstall + pin_to_primary + BGE-M3 离线导入 |
 | v0.2.1 | ✅ | MCP 数据流 + dashboard 视图 + stdio 修复 |
 | v0.2.2 | ✅ | CI 修复（Windows clippy + embedding stamp test）|
+| v0.2.3 | ✅ | UI overhaul — gradient + glow + animation + light theme parity |
 | v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + 第一个真实客户 |
+| v0.4.0 | 📋 | Talk Mode 语音持续对话 + 按客户需求拉新 Pack |
 
 ---
 
