@@ -6,14 +6,21 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
-## 2026-05-06 — v0.2.6-dev · TBD
+## 2026-05-06 — v0.2.6 · Task experience close-out (B-9)
 
 ### Shipped
 
-_(empty — staging area for the next batch of work; promote to a tagged version when shipping.)_
+- **Desktop notifications on workflow finish** (B-9.2): `spawn_run_executor` now emits `workflow:run-started` / `workflow:run-finished` Tauri events. New `useWorkflowNotifications` hook in `AppShell` subscribes and fires native macOS / Windows / Linux notifications via `tauri-plugin-notification` (Completed / Failed / Cancelled, body shows error if any). Permission pre-warmed on mount so the first notification doesn't race the OS prompt.
+- **Tray active-runs counter** (B-9.2): in-flight workflow count drives the tray. Tooltip becomes `Corey · 运行中 N`; macOS title shows `●N` so the menubar surfaces a real "running" indicator. `AtomicI64 ACTIVE_RUNS` stays correct under concurrent runs and saturates at zero on stray finishes.
+- **Workflow approval inbox** `/approvals` (B-9.3): new sidebar entry under Workspace, polls `workflow_active_runs` every 4 s, surfaces every step in `awaiting_approval` state with Approve / Reject buttons, optional feedback text, and step-context expand. Calls existing `workflow_approve` IPC; e2e covers empty + refresh paths.
+- **Artifact download uses native save dialog** (B-9.4): `ArtifactBlock` switched from `<a download>` (silently no-ops in Tauri WebView) to `saveText()` → `tauri-plugin-dialog` save sheet → `save_text_file` IPC. Outside Tauri (Storybook / Playwright) falls back to the blob path so behaviour is identical.
+- **Process-global `crate::app_handle`**: new `OnceLock<AppHandle>` accessor (`src-tauri/src/app_handle.rs`) so background tasks (workflow executor, future scheduler / watchdogs) can emit Tauri events without threading the handle through every call site. Set once in `setup()`, immutable thereafter; tests get `None` and treat that as a no-op.
 
 ### Deferred
 
+- **B-9.4 workflow artifacts directory**: long-form `~/.hermes/artifacts/<run_id>/` + run association needs a backend artifact model + migration; treated as its own slice for v0.2.7+.
+- **B-9.4 long markdown / table → artifact card**: code blocks already collapse; tables and very long plain text still render inline.
+- **Settings notification level**: only-failed / all / off toggle.
 - **B-10 workflow hardening**: timeout / retry / on_error / Tool & Browser steps. Owner: nobody yet.
 - **B-5 BGE-M3 offline zip packaging**.
 - **B-6 usage analytics 7d/30d dashboard**.
