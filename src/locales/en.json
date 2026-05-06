@@ -510,7 +510,20 @@
     "status_connected": "connected",
     "status_active": "active",
     "statusbar_messages": "messages",
-    "statusbar_search": "Search"
+    "statusbar_search": "Search",
+    "customize": "Customize home",
+    "customize_done": "Done",
+    "customize_reset": "Reset",
+    "widget_metrics_today": "Today's metrics",
+    "widget_system_status": "System status",
+    "widget_recent_chats": "Recent chats",
+    "widget_quick_actions": "Quick actions",
+    "widget_tasks_active": "Active tasks",
+    "widget_tasks_empty": "No active tasks",
+    "widget_recent_workflows": "Recent runs",
+    "widget_recent_workflows_empty": "No workflow runs yet",
+    "widget_pack_views": "Pack home views",
+    "widget_pack_views_empty": "No Pack has registered a home view"
   },
   "statusbar": {
     "skills": "skills",

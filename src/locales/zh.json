@@ -587,7 +587,20 @@
     "status_connected": "已连接",
     "status_active": "活跃",
     "statusbar_messages": "条消息",
-    "statusbar_search": "搜索"
+    "statusbar_search": "搜索",
+    "customize": "自定义首页",
+    "customize_done": "完成",
+    "customize_reset": "重置",
+    "widget_metrics_today": "今日指标",
+    "widget_system_status": "系统状态",
+    "widget_recent_chats": "最近对话",
+    "widget_quick_actions": "快捷操作",
+    "widget_tasks_active": "正在运行的任务",
+    "widget_tasks_empty": "当前没有运行中的任务",
+    "widget_recent_workflows": "最近运行",
+    "widget_recent_workflows_empty": "尚未运行过任何工作流",
+    "widget_pack_views": "Pack 首页视图",
+    "widget_pack_views_empty": "尚无 Pack 注册首页视图"
   },
   "statusbar": {
     "skills": "技能",
