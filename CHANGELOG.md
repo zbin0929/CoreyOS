@@ -6,6 +6,14 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-06 — v0.2.7-dev · TBD
+
+### Shipped
+
+_(empty — staging area for the next batch of work; promote to a tagged version when shipping.)_
+
+---
+
 ## 2026-05-06 — v0.2.6 · Task experience close-out (B-9)
 
 ### Shipped
