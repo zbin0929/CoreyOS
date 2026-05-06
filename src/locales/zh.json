@@ -31,7 +31,13 @@
     "section_tools": "工具",
     "section_manage": "管理",
     "section_more": "更多",
+    "section_workspace": "工作台",
+    "section_library": "资源库",
+    "section_utility": "观测",
     "section_packs": "助手"
+  },
+  "chat_hero": {
+    "view_all": "全部会话"
   },
   "agents_page": {
     "title": "Agents",

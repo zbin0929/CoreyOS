@@ -15,6 +15,7 @@ import { usePackStore } from '@/lib/usePackStore';
 import { lucideByName } from '@/lib/lucide-map';
 import type { AdapterCapabilities, AdapterListEntry } from '@/lib/ipc';
 import type { PackView } from '@/lib/ipc/pack';
+import { ChatHeroBlock } from './ChatHeroBlock';
 
 function entryVisible(entry: NavEntry, caps: AdapterCapabilities | null): boolean {
   if (!entry.requires || !caps) return true;
@@ -39,10 +40,10 @@ function safeConvertFileSrc(path: string): string {
 export function Sidebar() {
   const { t } = useTranslation();
   const { location } = useRouterState();
-  const [moreExpanded, setMoreExpanded] = useState<boolean>(
-    () => localStorage.getItem('corey:sidebar:more-expanded') === 'true',
+  const [libraryExpanded, setLibraryExpanded] = useState<boolean>(
+    () => localStorage.getItem('corey:sidebar:library-expanded') === 'true',
   );
-  const [moreUserCollapsed, setMoreUserCollapsed] = useState(false);
+  const [libraryUserCollapsed, setLibraryUserCollapsed] = useState(false);
 
   const adapters = useAgentsStore((s) => s.adapters);
   const activeId = useAgentsStore((s) => s.activeId);
@@ -87,27 +88,29 @@ export function Sidebar() {
   const visible = NAV.filter(
     (n) => entryVisible(n, caps) && !hiddenRoutes.has(n.id),
   );
-  const primary = visible.filter((n) => n.group === 'primary');
-  const tools = visible.filter((n) => n.group === 'tools');
-  const more = visible.filter((n) => n.group === 'more');
+  const heroEntry = visible.find((n) => n.group === 'hero') ?? null;
+  const workspace = visible.filter((n) => n.group === 'workspace');
+  const library = visible.filter((n) => n.group === 'library');
+  const utility = visible.filter((n) => n.group === 'utility');
   const settingsEntries = visible.filter((n) => n.group === 'settings');
 
   const packViewsForSidebar = effectivePackViews;
 
-  const moreHasActive = more.some(
+  const libraryHasActive = library.some(
     (entry) => isActive(location.pathname, entry.path),
   );
-  const effectiveMoreExpanded = (moreExpanded || moreHasActive) && !moreUserCollapsed;
+  const effectiveLibraryExpanded =
+    (libraryExpanded || libraryHasActive) && !libraryUserCollapsed;
 
   useEffect(() => {
-    if (moreHasActive) setMoreUserCollapsed(false);
-  }, [moreHasActive]);
+    if (libraryHasActive) setLibraryUserCollapsed(false);
+  }, [libraryHasActive]);
 
-  const toggleMore = useCallback(() => {
-    setMoreExpanded((v) => {
+  const toggleLibrary = useCallback(() => {
+    setLibraryExpanded((v) => {
       const next = !v;
-      localStorage.setItem('corey:sidebar:more-expanded', String(next));
-      setMoreUserCollapsed(!next ? true : false);
+      localStorage.setItem('corey:sidebar:library-expanded', String(next));
+      setLibraryUserCollapsed(!next ? true : false);
       return next;
     });
   }, []);
@@ -138,37 +141,52 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2 mt-2">
-        <SectionLabel>{t('nav.section_primary')}</SectionLabel>
-        {primary.map((entry) => (
-          <NavItem
-            key={entry.id}
-            to={entry.path}
-            icon={entry.icon}
-            active={isActive(location.pathname, entry.path)}
-          >
-            {t(entry.labelKey)}
-          </NavItem>
-        ))}
+        {heroEntry && (
+          <ChatHeroBlock
+            active={isActive(location.pathname, heroEntry.path)}
+            shortcut={heroEntry.shortcut}
+          />
+        )}
 
-        <SectionLabel className="mt-4">{t('nav.section_tools')}</SectionLabel>
-        {tools.map((entry) => (
-          <NavItem
-            key={entry.id}
-            to={entry.path}
-            icon={entry.icon}
-            active={isActive(location.pathname, entry.path)}
-            badge={entry.id === 'tasks' ? runningTasksCount : null}
-          >
-            {t(entry.labelKey)}
-          </NavItem>
-        ))}
+        {workspace.length > 0 && (
+          <>
+            <SectionLabel>{t('nav.section_workspace')}</SectionLabel>
+            {workspace.map((entry) => (
+              <NavItem
+                key={entry.id}
+                to={entry.path}
+                icon={entry.icon}
+                active={isActive(location.pathname, entry.path)}
+                badge={entry.id === 'tasks' ? runningTasksCount : null}
+              >
+                {t(entry.labelKey)}
+              </NavItem>
+            ))}
+          </>
+        )}
 
-        {more.length > 0 && (
+        {utility.length > 0 && (
+          <>
+            <SectionLabel className="mt-4">{t('nav.section_utility')}</SectionLabel>
+            {utility.map((entry) => (
+              <NavItem
+                key={entry.id}
+                to={entry.path}
+                icon={entry.icon}
+                active={isActive(location.pathname, entry.path)}
+              >
+                {t(entry.labelKey)}
+              </NavItem>
+            ))}
+          </>
+        )}
+
+        {library.length > 0 && (
           <>
             <button
               type="button"
-              onClick={toggleMore}
-              aria-expanded={effectiveMoreExpanded}
+              onClick={toggleLibrary}
+              aria-expanded={effectiveLibraryExpanded}
               className={cn(
                 'mt-4 flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle',
                 'hover:text-fg-muted transition-colors duration-fast',
@@ -179,13 +197,13 @@ export function Sidebar() {
                 size="xs"
                 className={cn(
                   'transition-transform duration-fast',
-                  effectiveMoreExpanded && 'rotate-90',
+                  effectiveLibraryExpanded && 'rotate-90',
                 )}
               />
-              {t('nav.section_more')}
+              {t('nav.section_library')}
             </button>
 
-            {effectiveMoreExpanded && more.map((entry) => (
+            {effectiveLibraryExpanded && library.map((entry) => (
               <NavItem
                 key={entry.id}
                 to={entry.path}

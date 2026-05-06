@@ -31,7 +31,13 @@
     "section_tools": "Tools",
     "section_manage": "Manage",
     "section_more": "More",
+    "section_workspace": "Workspace",
+    "section_library": "Library",
+    "section_utility": "Observability",
     "section_packs": "Packs"
+  },
+  "chat_hero": {
+    "view_all": "All chats"
   },
   "agents_page": {
     "title": "Agents",
