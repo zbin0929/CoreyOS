@@ -5,6 +5,8 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   ListChecks,
   Loader2,
@@ -22,8 +24,10 @@ import {
   workflowActiveRuns,
   workflowHistoryList,
   workflowRunCancel,
+  workflowRunGet,
   type WorkflowRunResult,
   type WorkflowRunSummary,
+  type WorkflowStepRun,
 } from '@/lib/ipc';
 
 type TabId = 'active' | 'history';
@@ -181,7 +185,7 @@ export function TasksRoute() {
         ) : (
           <ul className="flex flex-col gap-2">
             {visible.map((task) => (
-              <TaskRow key={task.id} task={task} onCancel={handleCancel} />
+              <TaskRow key={task.id} task={task} active={active} onCancel={handleCancel} />
             ))}
           </ul>
         )}
@@ -230,28 +234,68 @@ function TabButton({
 
 function TaskRow({
   task,
+  active,
   onCancel,
 }: {
   task: UnifiedTask;
+  active: WorkflowRunResult[] | null;
   onCancel: (id: string) => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const isRunning = task.status === 'running' || task.status === 'pending';
   const isPaused = task.status === 'paused';
+  const [expanded, setExpanded] = useState(false);
+  const [detail, setDetail] = useState<WorkflowRunResult | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const ensureDetail = useCallback(async () => {
+    const fromActive = (active ?? []).find((r) => r.id === task.id);
+    if (fromActive) {
+      setDetail(fromActive);
+      return;
+    }
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const r = await workflowRunGet(task.id);
+      setDetail(r);
+    } catch (e) {
+      setDetailError(ipcErrorMessage(e));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [active, task.id]);
+
+  const onToggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !detail) {
+      void ensureDetail();
+    }
+  };
 
   return (
-    <li className="rounded-lg border border-border/50 bg-bg-elev-1 p-3 transition hover:border-border">
-      <div className="flex items-start justify-between gap-3">
+    <li className="rounded-lg border border-border/50 bg-bg-elev-1 transition hover:border-border">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-start justify-between gap-3 p-3 text-left"
+        aria-expanded={expanded}
+        data-testid={`task-row-${task.id}`}
+      >
         <div className="flex min-w-0 flex-1 items-start gap-3">
+          <Icon
+            icon={expanded ? ChevronDown : ChevronRight}
+            size={14}
+            className="mt-1 shrink-0 text-fg-subtle"
+          />
           <StatusPill status={task.status} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <Link
-                to="/workflows"
-                className="truncate text-sm font-semibold text-fg hover:text-gold-500"
-              >
+              <span className="truncate text-sm font-semibold text-fg">
                 {task.workflowId}
-              </Link>
+              </span>
               <code className="rounded bg-bg-elev-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-subtle">
                 {task.id.slice(0, 8)}
               </code>
@@ -284,16 +328,148 @@ function TaskRow({
         </div>
 
         {(isRunning || isPaused) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void onCancel(task.id)}
-            className="shrink-0 text-danger hover:bg-danger/10"
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              void onCancel(task.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                void onCancel(task.id);
+              }
+            }}
+            className="shrink-0 rounded-md px-2 py-1 text-xs text-danger transition hover:bg-danger/10"
           >
             {t('tasks.cancel', { defaultValue: '取消' })}
-          </Button>
+          </span>
+        )}
+      </button>
+
+      {expanded && (
+        <TaskDetail
+          loading={detailLoading}
+          error={detailError}
+          detail={detail}
+          fallbackId={task.id}
+          fallbackWorkflowId={task.workflowId}
+        />
+      )}
+    </li>
+  );
+}
+
+function TaskDetail({
+  loading,
+  error,
+  detail,
+  fallbackId,
+  fallbackWorkflowId,
+}: {
+  loading: boolean;
+  error: string | null;
+  detail: WorkflowRunResult | null;
+  fallbackId: string;
+  fallbackWorkflowId: string;
+}) {
+  const { t } = useTranslation();
+  if (loading) {
+    return (
+      <div className="border-t border-border/50 px-3 py-3 text-xs text-fg-subtle">
+        <Icon icon={Loader2} size={12} className="mr-1.5 inline animate-spin" />
+        {t('tasks.loading_detail', { defaultValue: '加载中…' })}
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="border-t border-border/50 px-3 py-3 text-xs text-danger">{error}</div>
+    );
+  }
+  if (!detail) {
+    return (
+      <div className="border-t border-border/50 px-3 py-3 text-xs text-fg-subtle">
+        {t('tasks.no_detail', {
+          defaultValue: '没有更多详情。run id：{{id}}',
+          id: fallbackId,
+        })}
+      </div>
+    );
+  }
+  const steps = Object.values(detail.step_runs ?? {});
+  const hasInputs = Object.keys(detail.inputs ?? {}).length > 0;
+  return (
+    <div className="border-t border-border/50 px-3 py-3" data-testid={`task-detail-${fallbackId}`}>
+      {steps.length === 0 ? (
+        <div className="text-xs text-fg-subtle">
+          {t('tasks.no_steps_yet', {
+            defaultValue: '尚未执行任何步骤。',
+          })}
+        </div>
+      ) : (
+        <ol className="flex flex-col gap-1.5">
+          {steps.map((s) => (
+            <StepRow key={s.step_id} step={s} />
+          ))}
+        </ol>
+      )}
+      {hasInputs && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-[11px] font-medium text-fg-subtle hover:text-fg">
+            {t('tasks.inputs', { defaultValue: '运行参数' })}
+          </summary>
+          <pre className="mt-1 overflow-auto rounded bg-bg-elev-2 p-2 text-[11px] text-fg-subtle">
+            {JSON.stringify(detail.inputs, null, 2)}
+          </pre>
+        </details>
+      )}
+      <div className="mt-2 text-[10px] text-fg-subtle">
+        <Link
+          to="/workflows"
+          className="underline-offset-2 hover:underline hover:text-fg"
+        >
+          {fallbackWorkflowId}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function StepRow({ step }: { step: WorkflowStepRun }) {
+  const colorMap: Record<WorkflowStepRun['status'], string> = {
+    pending: 'bg-fg-muted/15 text-fg-muted',
+    running: 'bg-info/15 text-info',
+    completed: 'bg-success/15 text-success',
+    failed: 'bg-danger/15 text-danger',
+    skipped: 'bg-fg-muted/10 text-fg-subtle',
+    awaiting_approval: 'bg-warning/15 text-warning',
+  };
+  return (
+    <li className="flex flex-col gap-1 rounded border border-border/40 bg-bg-elev-1 px-2.5 py-1.5">
+      <div className="flex items-center gap-2 text-[11px]">
+        <span
+          className={cn(
+            'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
+            colorMap[step.status],
+          )}
+        >
+          {step.status}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-fg">{step.step_id}</span>
+        {step.duration_ms != null && (
+          <span className="shrink-0 tabular-nums text-fg-subtle">
+            {step.duration_ms >= 1000
+              ? `${(step.duration_ms / 1000).toFixed(1)}s`
+              : `${step.duration_ms}ms`}
+          </span>
         )}
       </div>
+      {step.error && (
+        <div className="text-[10px] text-danger">{step.error}</div>
+      )}
     </li>
   );
 }

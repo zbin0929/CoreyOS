@@ -76,11 +76,20 @@ test.describe('tasks page', () => {
 
     await page.goto('/tasks');
 
-    // Active tab — running row shows the workflow id + cancel button.
+    // Active tab — running row shows the workflow id + cancel affordance.
     const runningRow = page.locator('li', { hasText: 'daily-digest' }).first();
     await expect(runningRow).toBeVisible();
+    // The row itself is a <button> that toggles the detail panel; the
+    // cancel control lives inside it as a span with role=button. Locate
+    // it by tabindex so we don't match the outer toggle.
     await expect(
-      runningRow.getByRole('button', { name: /取消|Cancel/ }),
+      runningRow.locator('span[role="button"]', { hasText: /取消|Cancel/ }),
+    ).toBeVisible();
+
+    // Click the row to expand and verify the step list renders.
+    await runningRow.getByTestId('task-row-run-running-1').click();
+    await expect(
+      page.getByTestId('task-detail-run-running-1'),
     ).toBeVisible();
 
     // History tab — both terminal rows visible. Failed row surfaces error.

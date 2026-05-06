@@ -25,7 +25,14 @@ export function AdvancedSection() {
   return (
     <Section
       id="settings-advanced"
-      title={t('settings.advanced.title', { defaultValue: '高级 / 实验功能' })}
+      title={
+        <span className="flex items-center gap-2">
+          <span>{t('settings.advanced.title', { defaultValue: '高级 / 实验功能' })}</span>
+          <span className="rounded-full border border-border bg-bg-elev-2 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-fg-subtle">
+            demoted · 2026-05-06
+          </span>
+        </span>
+      }
       description={t('settings.advanced.description', {
         defaultValue:
           '默认隐藏的功能页。多数已被工作流 / 设置内的对应面板替代；保留入口给习惯了它们的老用户。',
