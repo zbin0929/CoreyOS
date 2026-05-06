@@ -641,6 +641,13 @@ pub async fn workflow_run(
 /// execute_with_hooks → final sync → persist), and inlining it 3×
 /// guaranteed drift, so it lives here. `pub` so the boot path can
 /// call it from `lib.rs` without going through an IPC dispatch.
+///
+/// Eight parameters is one over clippy's default warning threshold,
+/// but each one is a distinct shared-state pointer the executor
+/// genuinely needs (runs map, adapters, authority for MCP routing,
+/// db, def, run id, ctx, cancel flag) — bundling them into a struct
+/// would just shift the line count without adding cohesion.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_run_executor(
     runs: std::sync::Arc<parking_lot::Mutex<std::collections::HashMap<String, WorkflowRun>>>,
     adapters: std::sync::Arc<crate::adapters::AdapterRegistry>,
