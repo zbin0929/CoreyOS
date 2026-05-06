@@ -10,6 +10,7 @@ import {
   Clock,
   ListChecks,
   Loader2,
+  MessageSquare,
   RefreshCw,
   XCircle,
 } from 'lucide-react';
@@ -29,8 +30,18 @@ import {
   type WorkflowRunSummary,
   type WorkflowStepRun,
 } from '@/lib/ipc';
+import { useChatStore } from '@/stores/chat';
 
-type TabId = 'active' | 'history';
+type TabId = 'active' | 'history' | 'long_chats';
+
+/**
+ * Threshold above which a chat session is treated as a "task" worth
+ * surfacing alongside workflow runs. 10 messages = ~5 user turns,
+ * which is the rough boundary between "quick question" and
+ * "ongoing project". Below this we'd flood the page with every
+ * casual chat the user ever had.
+ */
+const LONG_CHAT_MIN_MESSAGES = 10;
 
 interface UnifiedTask {
   id: string;
@@ -42,6 +53,22 @@ interface UnifiedTask {
   completedCount?: number;
   failedCount?: number;
   error?: string;
+}
+
+/**
+ * Compact projection of `ChatSession` for the "Long chats" tab. We
+ * keep this separate from `UnifiedTask` because the row layout is
+ * different (no step count / failure state; just message count +
+ * model + last-touched).
+ */
+interface LongChatTask {
+  id: string;
+  title: string;
+  messageCount: number;
+  userTurns: number;
+  updatedAt: number;
+  adapterId: string;
+  model: string | null;
 }
 
 const REFRESH_MS = 5_000;
@@ -112,6 +139,26 @@ export function TasksRoute() {
     [history],
   );
 
+  // B-9.1 — long chat sessions surface as tasks. We don't fold them
+  // into active/history because the lifecycle is different (no
+  // running/failed; chats just go quiet) — they get their own tab so
+  // the row contract stays clean.
+  const chatSessions = useChatStore((s) => s.sessions);
+  const longChats = useMemo<LongChatTask[]>(() => {
+    return Object.values(chatSessions)
+      .filter((s) => s.messages.length >= LONG_CHAT_MIN_MESSAGES)
+      .map((s) => ({
+        id: s.id,
+        title: s.title || t('tasks.long_chat_default_title', { defaultValue: '未命名会话' }),
+        messageCount: s.messages.length,
+        userTurns: s.messages.filter((m) => m.role === 'user').length,
+        updatedAt: s.updatedAt,
+        adapterId: s.adapterId,
+        model: s.model ?? null,
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [chatSessions, t]);
+
   const handleCancel = async (runId: string) => {
     try {
       await workflowRunCancel(runId);
@@ -121,8 +168,11 @@ export function TasksRoute() {
     }
   };
 
-  const visible = tab === 'active' ? activeTasks : historyTasks;
-  const isEmpty = visible.length === 0;
+  // Long-chats tab has its own dedicated render below; the
+  // workflow-task views share a single list shape.
+  const workflowVisible = tab === 'active' ? activeTasks : historyTasks;
+  const isEmpty =
+    tab === 'long_chats' ? longChats.length === 0 : workflowVisible.length === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -154,6 +204,13 @@ export function TasksRoute() {
           label={t('tasks.tab_history', { defaultValue: '历史' })}
           count={historyTasks.length}
         />
+        <TabButton
+          active={tab === 'long_chats'}
+          onClick={() => setTab('long_chats')}
+          icon={MessageSquare}
+          label={t('tasks.tab_long_chats', { defaultValue: '长会话' })}
+          count={longChats.length}
+        />
       </div>
 
       <div className="flex-1 overflow-auto p-4">
@@ -166,25 +223,45 @@ export function TasksRoute() {
 
         {isEmpty ? (
           <EmptyState
-            icon={tab === 'active' ? Activity : ListChecks}
+            icon={
+              tab === 'active'
+                ? Activity
+                : tab === 'long_chats'
+                  ? MessageSquare
+                  : ListChecks
+            }
             title={
               tab === 'active'
                 ? t('tasks.empty_active_title', { defaultValue: '当前没有运行中的任务' })
-                : t('tasks.empty_history_title', { defaultValue: '暂无任务历史' })
+                : tab === 'long_chats'
+                  ? t('tasks.empty_long_chats_title', {
+                      defaultValue: '还没有长会话',
+                    })
+                  : t('tasks.empty_history_title', { defaultValue: '暂无任务历史' })
             }
             description={
               tab === 'active'
                 ? t('tasks.empty_active_desc', {
                     defaultValue: '从工作流页面或聊天中触发的长任务会出现在这里。',
                   })
-                : t('tasks.empty_history_desc', {
-                    defaultValue: '完成或失败的任务会保留在历史中以便回溯。',
-                  })
+                : tab === 'long_chats'
+                  ? t('tasks.empty_long_chats_desc', {
+                      defaultValue: `超过 ${LONG_CHAT_MIN_MESSAGES} 条消息的会话会自动出现在这里。`,
+                    })
+                  : t('tasks.empty_history_desc', {
+                      defaultValue: '完成或失败的任务会保留在历史中以便回溯。',
+                    })
             }
           />
+        ) : tab === 'long_chats' ? (
+          <ul className="flex flex-col gap-2">
+            {longChats.map((c) => (
+              <LongChatRow key={c.id} chat={c} />
+            ))}
+          </ul>
         ) : (
           <ul className="flex flex-col gap-2">
-            {visible.map((task) => (
+            {workflowVisible.map((task) => (
               <TaskRow key={task.id} task={task} active={active} onCancel={handleCancel} />
             ))}
           </ul>
@@ -503,4 +580,49 @@ function formatTime(ts: number): string {
   if (!ts) return '';
   const d = new Date(ts);
   return d.toLocaleString();
+}
+
+/**
+ * Compact row for the "Long chats" tab. Click → /chat with the
+ * session id query param so the chat page restores that session.
+ * Stays minimal — message count + last-touched + "go to chat" hint.
+ */
+function LongChatRow({ chat }: { chat: LongChatTask }) {
+  const { t } = useTranslation();
+  return (
+    <li>
+      <Link
+        to="/chat"
+        search={{ session: chat.id } as never}
+        className="group flex items-center gap-3 rounded-lg border border-border bg-bg-elev-1 p-3 transition hover:border-gold-500/40 hover:bg-bg-elev-2"
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elev-2 text-fg-muted">
+          <Icon icon={MessageSquare} size={14} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-fg">{chat.title}</span>
+            <span className="rounded-full border border-border bg-bg-elev-2 px-1.5 py-0.5 text-[10px] font-mono text-fg-subtle">
+              {t('tasks.long_chat_messages', {
+                defaultValue: `${chat.messageCount} 条消息`,
+                count: chat.messageCount,
+              })}
+            </span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-fg-subtle">
+            <span>
+              {t('tasks.long_chat_user_turns', {
+                defaultValue: `${chat.userTurns} 轮提问`,
+                count: chat.userTurns,
+              })}
+            </span>
+            {chat.model && <span className="font-mono">· {chat.model}</span>}
+            <span>·</span>
+            <span>{formatTime(chat.updatedAt)}</span>
+          </div>
+        </div>
+        <Icon icon={ChevronRight} size={14} className="text-fg-subtle group-hover:text-fg" />
+      </Link>
+    </li>
+  );
 }
