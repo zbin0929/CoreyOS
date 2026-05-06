@@ -1,16 +1,32 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 cut）
 >
-> **刚做完**：路由瘦身审计（commit `8883785`）— 侧边栏 22 → 17。`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` 5 条路由从 sidebar 移除，但路由保留（N-2），通过 Settings → 「高级 / 实验功能」 入口可达。`/memory` 改名「长期记忆」、`/knowledge` 改名「文档知识库」消歧义。`workflow` 页的"历史"按钮改成"查看任务"链到 `/tasks`，删 `History.tsx`。corey_starter Pack 从 3 个减到 2 个 workflow（去掉电商促销审批，保留 daily-news-digest + pdf-summary），基座 `workflow/templates.rs` 也清空（电商 demo 整体撤）。
+> **今天 19 个 commit 落地（`d2827a5` → `b014a84`）**：
+> 1. **路由瘦身**（22 → 15）：`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` `/compare` `/terminal` 全部从 sidebar 移除，URL 保留，落到 Settings → Advanced（`DEMOTED_ROUTES` 数组 + `<DemotedRouteBanner>` 横幅）。详见 N-2 / N-3 规则。
+> 2. **Sidebar 重构**：分组从 `primary/tools/more` → `hero/workspace/library/utility/settings`。Chat 升级为 `<ChatHeroBlock>` 金边卡 + `+ 新建` 按钮 + 内嵌最近 5 条会话 + 全部入口（`src/app/shell/ChatHeroBlock.tsx`）。Library tier 默认展开（旧用户首次见到完整列表）。
+> 3. **Home 可定制**：每个块抽成 widget，新增 `useHomeLayoutStore`（`hidden[]` / `extra[]` / `editing`，持久化）；齿轮按钮展开 chip 列表（点 toggle 显隐 + 重置 + 完成）；编辑中每张卡有「隐藏」按钮。`HomeRoute` 283 → 130 行。Catalog 7 个 widget（4 默认开 + 2 默认关 + Pack views）。
+> 4. **Pack-as-widget**：Pack manifest 中 view 设 `nav_section: home` 即出现在 Home `pack_home_views` widget。`corey_starter` 加 `starter-overview` MetricsCard 作为 canonical demo。零 Rust schema 改动。
+> 5. **Tauri save dialog**：新 `save_text_file` IPC（`src-tauri/src/ipc/file_export.rs`）+ 共享 `src/lib/saveText.ts`。Tauri 内走原生保存对话框，外部 fallback `<a download>`。chat / compare 导出按钮终于真正能工作。
+> 6. **Palette Advanced 组**：`⌘K` 搜得到所有降级路由。Tools 快捷键重号 ⌘3=Analytics ⌘4=Logs，连续。
+> 7. **E2E 新增**：`/tasks` `e2e/tasks.spec.ts`（含可展开行）、`e2e/settings-advanced.spec.ts`、`e2e/home-customize.spec.ts`。
+> 8. **版本号统一**：package.json / Cargo.toml / tauri.conf.json 全部 → `0.2.5`。CHANGELOG cut v0.2.5 + 开 v0.2.6-dev。
 >
-> **再之前**：B-11 corey_starter 默认 Pack — `src-tauri/assets/skill-packs/corey_starter/` 通过 `pack::ensure_bundled_packs` 启动时拷贝到 `~/.hermes/skill-packs/corey_starter/`（幂等）；v0.2.4 任务面板 / 通知 / Artifact 块 / 审批 IPC（B-9.1~9.4）。
+> **下一次会话从这开始**：先看 CI 是否绿（`gh run list --limit 3`）。绿了就可以打 tag：
+> ```
+> git tag -a v0.2.5 -m "v0.2.5"
+> git push origin v0.2.5
+> ```
 >
-> **下一件事**：v0.2.5 工作流硬化（B-10：timeout / retry / on_error / Tool step / Browser 实测）→ v0.3.0 跨境电商 Pack
+> **下一件大事（v0.2.6）**：B-10 工作流硬化（timeout / retry / on_error / Tool step / Browser 实测）— 1-2 周。当前 `StepExecutor` 是 sync，加 timeout 需 async refactor + cancellation token。
 >
-> **路由审计待办**（如需进一步合并）：scheduler 改只读 + 创建跳 workflow（1h）；runbooks 数据合到 skills 作为 multi-step tag（半天）；profiles 真正合到 settings sandbox 区（半天）。当前只是 sidebar 隐藏，页面本身没动。
+> **v0.2.6 短中等候选**：
+> - **Pack `display_name`** 字段（跨端契约）：bundled Pack workflow 现在 ID 是 `pack__corey_starter__daily-news-digest` 这种，UI 看起来丑。要给 Rust `PackWorkflow` struct 加字段、前端读侧 fallback。半天。
+> - **production unwraps 清理** 141 处（clippy baseline）— 按 module 慢慢扫。
+> - **Library tier UX**：现在按字母+catalog 顺序，可以再调一下默认顺序（Skills / Knowledge / Memory 优先）。
+> - **Home widget 拖拽排序**：v1 故意没做，留作 v0.2.6 可选。
 >
-> **关键铁律提醒**：(1) Pack 不写 React 只写 manifest.yaml；(2) Browser MCP 永不出现在付费交付里，等 SP-API；(3) 每次会话 token 易爆——读文件用 offset/limit，回答短而准；(4) 新增/降级路由后必须同步更新 `DEMOTED_ROUTES`（N-3）。
+> **关键铁律提醒**：(1) Pack 不写 React 只写 manifest.yaml；(2) Browser MCP 永不出现在付费交付里，等 SP-API；(3) 每次会话 token 易爆——读文件用 offset/limit，回答短而准；(4) 新增/降级路由后必须同步更新 `DEMOTED_ROUTES`（N-3）；(5) **不能在 `tauri dev` 跑着的时候执行 `cargo check/test/build`**（会和 dev 抢 target 锁），改文件让 dev 自己 incremental rebuild。
 
 ---
 
