@@ -280,7 +280,7 @@
 - [x] `execute_browser_with_timeout` 用真实 timeout enforcement，超时 → `Err("step timeout after Xs")` 走 retry/on_error
 - [x] `execute_browser`（旧路径）也走同一 helper，传 `None` 表示「永远等」，与之前 `cmd.output()` 行为完全一致
 - [x] 测试覆盖：`run_command_capturing_completes_normally_under_timeout` / `run_command_capturing_kills_child_on_timeout`（5s sleep + 200ms timeout，wall-clock < 2s）/ `run_command_capturing_no_timeout_waits_for_completion`
-- [ ] **真实 demo 测试**：用 `corey_starter` 加一个 browser step 跑 `https://example.com` extract title — 留作冒烟测试，需要 BROWSER_LLM_API_KEY 配置
+- [x] **真实 demo 测试** ✅（2026-05-06 commit `5febc61`）：直接跑 `node scripts/browser-runner.cjs '{"action":"extract","url":"https://example.com","instruction":"..."}'` → DeepSeek API 1.7s 返回完整页面文本。**顺带修了个 latent bug**：runner 之前按 Stagehand v2 写但实际版本是 v3.2.1，`stagehand.page` 在 v3 里 undefined，任何 browser step 都跑不动 — 没人真跑过所以一直没暴露。现在改用 `stagehand.context.pages()[0]`
 
 ##### B-10.6 Sub-workflow ✅
 - [x] `WorkflowStep.type: 'workflow'` + `workflow_id` + `workflow_inputs`（2026-05-06 commit `03320ac`）
