@@ -35,18 +35,20 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_empty_path() {
-        let err = save_text_file(String::new(), "x".into()).await.unwrap_err();
+        let err = save_text_file(String::new(), "x".into())
+            .await
+            .expect_err("empty path should be rejected");
         assert!(matches!(err, IpcError::Internal { .. }));
     }
 
     #[tokio::test]
     async fn writes_text_to_disk() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("out.json");
         save_text_file(path.to_string_lossy().into(), "{\"ok\":true}".into())
             .await
-            .unwrap();
-        let read = std::fs::read_to_string(&path).unwrap();
+            .expect("write should succeed");
+        let read = std::fs::read_to_string(&path).expect("read back");
         assert_eq!(read, "{\"ok\":true}");
     }
 }
