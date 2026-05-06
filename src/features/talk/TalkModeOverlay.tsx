@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mic, MicOff, Square, X, Volume2 } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
+import { Mic, MicOff, Square, X, Volume2, Settings as SettingsIcon } from 'lucide-react';
 
 import { Icon } from '@/components/ui/icon';
 
@@ -23,8 +24,17 @@ import { useTalkMode, type TalkState } from './useTalkMode';
  */
 export function TalkModeOverlay({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const { state, finalTranscript, reply, error, pressPtt, releasePtt, stop } =
-    useTalkMode();
+  const navigate = useNavigate();
+  const {
+    state,
+    finalTranscript,
+    reply,
+    error,
+    readiness,
+    pressPtt,
+    releasePtt,
+    stop,
+  } = useTalkMode();
 
   // Global keyboard shortcuts. Space = push-to-talk; Esc = close.
   // We deliberately ignore Space when the user is typing somewhere
@@ -95,6 +105,30 @@ export function TalkModeOverlay({ onClose }: { onClose: () => void }) {
 
       <div className="mt-8 flex w-full max-w-xl flex-col gap-3 px-6 text-center">
         <StateLabel state={state} />
+        {state === 'unconfigured' && (
+          <div
+            className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-left text-sm text-amber-500"
+            data-testid="talk-unconfigured"
+          >
+            <p>{readiness.reason ?? t('talk.unconfigured', { defaultValue: '语音功能尚未配置' })}</p>
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-bg px-3 py-1.5 text-xs text-amber-500 hover:bg-amber-500/10"
+              onClick={() => {
+                stop();
+                onClose();
+                // Settings has its own section anchors; deep-linking
+                // to /settings#voice would be ideal but the page
+                // doesn't honour fragment IDs yet, so for now just
+                // open the page and the user scrolls.
+                navigate({ to: '/settings' });
+              }}
+            >
+              <Icon icon={SettingsIcon} size={12} />
+              {t('talk.open_settings', { defaultValue: '前往 Settings › Voice' })}
+            </button>
+          </div>
+        )}
         {finalTranscript && (
           <div
             className="rounded-lg border border-border/40 bg-bg-elev-1 px-4 py-3 text-left text-sm text-fg-muted"
@@ -154,6 +188,7 @@ function StateRing({
     thinking: 'border-amber-500/40 bg-amber-500/5 text-amber-500',
     speaking: 'border-gold-500/60 bg-gold-500/10 text-gold-500',
     error: 'border-danger/60 bg-danger/10 text-danger',
+    unconfigured: 'border-border bg-bg-elev-1 text-fg-subtle opacity-60',
   };
   const iconByState: Record<TalkState, typeof Mic> = {
     idle: Mic,
@@ -161,6 +196,7 @@ function StateRing({
     thinking: Square,
     speaking: Volume2,
     error: MicOff,
+    unconfigured: MicOff,
   };
   return (
     <button
@@ -186,6 +222,9 @@ function StateLabel({ state }: { state: TalkState }) {
     thinking: t('talk.state_thinking', { defaultValue: 'Hermes 正在思考...' }),
     speaking: t('talk.state_speaking', { defaultValue: 'Hermes 正在回答' }),
     error: t('talk.state_error', { defaultValue: '出错了' }),
+    unconfigured: t('talk.state_unconfigured', {
+      defaultValue: '语音功能尚未就绪',
+    }),
   };
   return <div className="text-sm text-fg-subtle">{labelByState[state]}</div>;
 }
