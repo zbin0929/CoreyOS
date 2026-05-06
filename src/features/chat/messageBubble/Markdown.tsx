@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { highlightCode } from '../highlight';
 import { ArtifactBlock } from './ArtifactBlock';
 import { shouldRenderAsArtifact } from './artifactHelpers';
+import { TableArtifact } from './TableArtifact';
 
 /**
  * Minimal Markdown renderer scoped for chat bubbles. Styles everything
@@ -105,11 +106,10 @@ export function Markdown({ children }: { children: string }) {
             );
           },
           pre: ({ children }) => <pre className="my-2">{children}</pre>,
-          table: ({ children }) => (
-            <div className="my-2 overflow-x-auto">
-              <table className="min-w-full border-collapse text-xs">{children}</table>
-            </div>
-          ),
+          // B-9.4 long-table artifact card. Short tables render
+          // exactly as before; tables with ≥10 rows gain a header
+          // bar with row count + "Download CSV" affordance.
+          table: ({ children }) => <TableArtifact>{children}</TableArtifact>,
           th: ({ children }) => (
             <th className="border border-border bg-bg-elev-2 px-2 py-1 text-left font-semibold">
               {children}

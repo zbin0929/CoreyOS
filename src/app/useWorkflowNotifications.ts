@@ -6,6 +6,8 @@ import {
   sendNotification,
 } from '@tauri-apps/plugin-notification';
 
+import { getNotificationLevel } from '@/stores/notificationPrefs';
+
 /**
  * Surface a native desktop notification whenever a workflow run hits a
  * terminal state (Completed / Failed / Cancelled).
@@ -71,6 +73,14 @@ export function useWorkflowNotifications(): void {
     void listen<RunFinishedPayload>('workflow:run-finished', (event) => {
       const { status, workflow_name, workflow_id, error } = event.payload;
       if (!TERMINAL_STATUSES.has(status)) return;
+
+      // B-9.2 follow-up: respect the user's notification level. We
+      // read the store synchronously inside the listener so a
+      // toggle in Settings takes effect on the very next event
+      // without re-mounting this hook.
+      const level = getNotificationLevel();
+      if (level === 'off') return;
+      if (level === 'failure' && status !== 'Failed') return;
 
       const name = workflow_name?.trim() || workflow_id;
       const titleMap: Record<string, string> = {

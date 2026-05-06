@@ -9,6 +9,7 @@ import {
 } from '@/lib/ipc';
 
 import { AdvancedSection } from './sections/AdvancedSection';
+import { NotificationsSection } from './sections/NotificationsSection';
 import { WebhookSection } from './sections/WebhookSection';
 import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
@@ -161,6 +162,11 @@ export function SettingsRoute() {
               activated key. Lets users see who the license belongs
               to + remove it (re-shows the gate on next launch). */}
           <LicenseSection />
+
+          {/* Notifications — B-9.2 follow-up. 3-level radio for
+              workflow-finish desktop notifications. Tray counter
+              is independent. */}
+          <NotificationsSection />
 
           {/* Webhook — B-10.7. Local HTTP trigger URL + bearer
               token + curl example. Lives near the bottom because
