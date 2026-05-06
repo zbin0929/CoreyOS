@@ -6,6 +6,8 @@ import {
   Outlet,
   redirect,
 } from '@tanstack/react-router';
+
+import { DemotedRouteBanner } from '@/components/ui/demoted-route-banner';
 import { AppShell } from '@/app/shell/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteFallback } from '@/app/shell/RouteFallback';
@@ -55,6 +57,24 @@ const WorkflowRoute = lazyFeature(() => import('@/features/workflow'), 'Workflow
 const HelpRoute = lazyFeature(() => import('@/features/help'), 'HelpRoute');
 const PackRoute = lazyFeature(() => import('@/features/pack'), 'PackRoute');
 const TasksRoute = lazyFeature(() => import('@/features/tasks'), 'TasksRoute');
+
+/**
+ * Wrap a route component so it renders the
+ * [`DemotedRouteBanner`] at the top. Used for the 5 paths pulled
+ * from the sidebar in the 2026-05-06 audit (`DEMOTED_ROUTES` in
+ * `nav-config.ts`). Keeps each feature page itself untouched — the
+ * banner lives outside the feature's own scroll container.
+ */
+function withDemotedBanner(Inner: ComponentType<unknown>) {
+  return () => (
+    <div className="flex h-full min-h-0 flex-col">
+      <DemotedRouteBanner />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Inner />
+      </div>
+    </div>
+  );
+}
 
 const PATH_TO_NAV_ID: Record<string, string> = {
   '/': 'home',
@@ -156,7 +176,12 @@ const schedulerRoute = createRoute({
   path: '/scheduler',
   component: () => (
     <Suspense fallback={<RouteFallback />}>
-      <SchedulerRoute />
+      <div className="flex h-full min-h-0 flex-col">
+        <DemotedRouteBanner />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <SchedulerRoute />
+        </div>
+      </div>
     </Suspense>
   ),
 });
@@ -176,7 +201,7 @@ const modelsRoute = createRoute({
 const agentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/agents',
-  component: AgentsRoute,
+  component: withDemotedBanner(AgentsRoute),
 });
 
 const settingsRoute = createRoute({
@@ -188,13 +213,13 @@ const settingsRoute = createRoute({
 const profilesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/profiles',
-  component: ProfilesRoute,
+  component: withDemotedBanner(ProfilesRoute),
 });
 
 const runbooksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/runbooks',
-  component: RunbooksRoute,
+  component: withDemotedBanner(RunbooksRoute),
 });
 
 const budgetsRoute = createRoute({
@@ -218,7 +243,7 @@ const knowledgeRoute = createRoute({
 const voiceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/voice',
-  component: VoiceRoute,
+  component: withDemotedBanner(VoiceRoute),
 });
 
 const mcpRoute = createRoute({
