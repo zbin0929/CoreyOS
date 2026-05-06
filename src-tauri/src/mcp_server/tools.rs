@@ -194,6 +194,113 @@ pub fn manifest() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "list_skills",
+            "description": "List every skill the user has installed in Corey \
+                (skill packs + custom). Each skill is a named, versioned, \
+                executable bundle the agent can invoke when its built-in \
+                knowledge isn't enough for a domain task.\n\n\
+                Trigger when the user asks \"what skills do I have\" / \
+                \"can you do X for me\" — check the list before answering \
+                so you can name a real skill instead of guessing. \
+                Phrase examples — EN: \"list my skills\", \"what skills \
+                are installed\". ZH: \"我有哪些技能\", \"列出已安装技能\".",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "list_chat_sessions",
+            "description": "List the user's recent chat sessions (id, \
+                title, last activity, message count). Useful when the \
+                user references a past conversation by topic — you can \
+                find it instead of asking them to retype context.\n\n\
+                Default returns the 20 most recent. Phrase examples — EN: \
+                \"find my chat about X\", \"list recent conversations\". \
+                ZH: \"找一下之前关于 X 的对话\", \"列出最近的对话\".",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "How many sessions to return (1-100, default 20)."
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "read_memory",
+            "description": "Read one of Corey's memory files. There are \
+                two: `agent` (~/.hermes/MEMORY.md, where you write notes \
+                to your future self) and `user` (~/.hermes/USER.md, the \
+                user's profile / preferences they typed into Settings).\n\n\
+                Trigger before answering personal questions (\"what's my \
+                X\" / \"do you remember Y\") so you can ground the answer \
+                in real notes instead of guessing. \
+                Phrase examples — EN: \"do you remember\", \"check your \
+                notes\". ZH: \"还记得吗\", \"查一下你的笔记\".",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["agent", "user"],
+                        "description": "`agent` = your own MEMORY.md notes; `user` = the user's USER.md profile."
+                    }
+                },
+                "required": ["kind"]
+            }
+        }),
+        json!({
+            "name": "append_memory",
+            "description": "Append a fact to Corey's MEMORY.md (your \
+                own notes). Use this AFTER the user explicitly tells \
+                you to remember something, OR when you've discovered \
+                a stable fact about the user / their workspace that \
+                will matter on later turns. Each call appends one \
+                dated `## [auto] YYYY-MM-DD` block.\n\n\
+                Do NOT spam — the file has a 256 KB cap. Skip if the \
+                fact is short-lived or already in MEMORY.md.\n\n\
+                Phrase examples that should trigger — EN: \"remember \
+                that I prefer X\", \"note for next time\". \
+                ZH: \"记住我喜欢 X\", \"下次记得 Y\".",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "fact": {
+                        "type": "string",
+                        "description": "The fact to remember, in one or two short bullet points. Don't dump full conversations."
+                    }
+                },
+                "required": ["fact"]
+            }
+        }),
+        json!({
+            "name": "list_active_runs",
+            "description": "List currently-running workflows (id, \
+                workflow_id, status, started_at). Use after \
+                `run_workflow` to confirm the run kicked off, or when \
+                the user asks \"what's running right now\".\n\n\
+                Phrase examples — EN: \"what's running\", \"show \
+                active jobs\". ZH: \"正在跑什么\", \"看一下任务\".",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "cancel_run",
+            "description": "Cancel a running workflow by its run_id. \
+                The current step finishes (don't kill mid-LLM call — \
+                wastes tokens) then the engine exits cleanly. Use \
+                when the user says \"stop\" / \"cancel\" referencing \
+                a known run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {
+                        "type": "string",
+                        "description": "Run id from `list_active_runs` or the response of `run_workflow`."
+                    }
+                },
+                "required": ["run_id"]
+            }
+        }),
+        json!({
             "name": "open_settings",
             "description": "Deep-link the Corey desktop GUI to a \
                 specific Settings panel. The user's window will \
@@ -242,6 +349,15 @@ pub async fn call(app: AppHandle, params: &Value) -> Result<Value, (i32, String)
         "open_settings" => open_settings(app, args).await?,
         "list_workflows" => list_workflows(app).await?,
         "run_workflow" => run_workflow(app, args).await?,
+        // Expanded surface (user requirement: "all operations via dialog").
+        // Each handler reuses an existing IPC's pure logic; nothing new
+        // ships through Hermes Agent itself.
+        "list_skills" => list_skills().await?,
+        "list_chat_sessions" => list_chat_sessions(app, args).await?,
+        "read_memory" => read_memory(args).await?,
+        "append_memory" => append_memory(args).await?,
+        "list_active_runs" => list_active_runs(app).await?,
+        "cancel_run" => cancel_run(app, args).await?,
         _ => return Err((-32601, format!("unknown tool: {name}"))),
     };
 
@@ -537,4 +653,227 @@ async fn open_settings(app: AppHandle, args: Value) -> Result<String, (i32, Stri
         "Asked Corey GUI to switch to Settings → {}{}.",
         args.panel, warning
     ))
+}
+
+// ── Expanded surface ─────────────────────────────────────────────
+//
+// Each function below is a thin wrapper over an existing IPC's pure
+// logic, exposing it under the MCP `tools/call` surface so Hermes
+// Agent can drive it from chat. Matches the user's "all operations
+// via dialog" requirement; no Hermes Agent code is touched.
+
+async fn list_skills() -> Result<String, (i32, String)> {
+    let summaries = tokio::task::spawn_blocking(|| crate::skills::list().unwrap_or_default())
+        .await
+        .map_err(|e| (-32603, format!("list_skills join: {e}")))?;
+    let items: Vec<Value> = summaries
+        .into_iter()
+        .map(|s| {
+            json!({
+                "path": s.path,
+                "name": s.name,
+                "group": s.group,
+                "description": s.description,
+            })
+        })
+        .collect();
+    Ok(json!({ "skills": items }).to_string())
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct ListSessionsArgs {
+    #[serde(default)]
+    limit: Option<u32>,
+}
+
+async fn list_chat_sessions(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
+    use crate::adapters::SessionQuery;
+    use crate::state::AppState;
+    use tauri::Manager;
+
+    let parsed: ListSessionsArgs = serde_json::from_value(args).unwrap_or_default();
+    let limit = parsed.limit.unwrap_or(20).clamp(1, 100);
+
+    let state = app.state::<AppState>();
+    let adapter = state
+        .adapters
+        .default_adapter()
+        .ok_or((-32603, "no default adapter registered".into()))?;
+
+    // Reuse the same SessionQuery the GUI passes via session_list,
+    // so the agent sees an identical view to what the user sees in
+    // the recent-sessions sidebar.
+    let sessions = adapter
+        .list_sessions(SessionQuery {
+            source: None,
+            limit: Some(limit),
+            search: None,
+        })
+        .await
+        .map_err(|e| (-32603, format!("list_sessions: {e}")))?;
+
+    let items: Vec<Value> = sessions
+        .into_iter()
+        .map(|s| {
+            json!({
+                "id": s.id,
+                "title": s.title,
+                "model": s.model_id,
+                "last_message_at": s.last_message_at.to_rfc3339(),
+                "created_at": s.created_at.to_rfc3339(),
+                "is_live": s.is_live,
+                "adapter_id": s.adapter_id,
+            })
+        })
+        .collect();
+    Ok(json!({ "sessions": items }).to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct ReadMemoryArgs {
+    kind: String,
+}
+
+async fn read_memory(args: Value) -> Result<String, (i32, String)> {
+    let args: ReadMemoryArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid read_memory args: {e}")))?;
+    let file_name = match args.kind.as_str() {
+        "agent" => "MEMORY.md",
+        "user" => "USER.md",
+        other => {
+            return Err((
+                -32602,
+                format!("kind must be 'agent' or 'user', got '{other}'"),
+            ))
+        }
+    };
+
+    let kind_label = args.kind.clone();
+    let content = tokio::task::spawn_blocking(move || -> Result<String, String> {
+        let path = crate::paths::hermes_data_dir()
+            .map_err(|e| format!("resolve dir: {e}"))?
+            .join(file_name);
+        match std::fs::read_to_string(&path) {
+            Ok(s) => Ok(s),
+            Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(format!("read {file_name}: {e}")),
+        }
+    })
+    .await
+    .map_err(|e| (-32603, format!("read_memory join: {e}")))?
+    .map_err(|e| (-32603, e))?;
+
+    Ok(json!({
+        "kind": kind_label,
+        "content": content,
+        "bytes": content.len(),
+    })
+    .to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct AppendMemoryArgs {
+    fact: String,
+}
+
+async fn append_memory(args: Value) -> Result<String, (i32, String)> {
+    let args: AppendMemoryArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid append_memory args: {e}")))?;
+    let trimmed = args.fact.trim();
+    if trimmed.is_empty() {
+        return Err((-32602, "fact must not be empty".into()));
+    }
+
+    let block = format!(
+        "\n\n## [auto] {}\n- {}\n",
+        chrono::Utc::now().format("%Y-%m-%d"),
+        trimmed.replace('\n', "\n- "),
+    );
+    let written_len = block.len();
+
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let path = crate::paths::hermes_data_dir()
+            .map_err(|e| format!("resolve dir: {e}"))?
+            .join("MEMORY.md");
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
+        }
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let next = format!("{existing}{block}");
+        if next.len() as u64 > crate::ipc::memory::MEMORY_MAX_BYTES {
+            return Err(
+                "MEMORY.md would exceed 256 KB cap; run /memory cleanup first".into(),
+            );
+        }
+        std::fs::write(&path, next.as_bytes()).map_err(|e| format!("write: {e}"))
+    })
+    .await
+    .map_err(|e| (-32603, format!("append_memory join: {e}")))?
+    .map_err(|e| (-32603, e))?;
+
+    Ok(json!({
+        "appended_bytes": written_len,
+        "ok": true,
+    })
+    .to_string())
+}
+
+async fn list_active_runs(app: AppHandle) -> Result<String, (i32, String)> {
+    use crate::state::AppState;
+    use crate::workflow::engine::RunStatus;
+    use tauri::Manager;
+
+    let state = app.state::<AppState>();
+    let runs_map = state.workflow_runs.clone();
+    let runs = runs_map.lock();
+    let items: Vec<Value> = runs
+        .values()
+        .filter(|r| {
+            !matches!(
+                r.status,
+                RunStatus::Completed | RunStatus::Failed | RunStatus::Cancelled
+            )
+        })
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "workflow_id": r.workflow_id,
+                "status": format!("{:?}", r.status),
+                "started_at_ms": r.started_at_ms,
+                "updated_at_ms": r.updated_at_ms,
+            })
+        })
+        .collect();
+    Ok(json!({ "runs": items }).to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct CancelRunArgs {
+    run_id: String,
+}
+
+async fn cancel_run(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
+    use crate::state::AppState;
+    use std::sync::atomic::Ordering;
+    use tauri::Manager;
+
+    let args: CancelRunArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid cancel_run args: {e}")))?;
+
+    let state = app.state::<AppState>();
+    let flags = state.workflow_cancel_flags.lock();
+    let Some(flag) = flags.get(&args.run_id) else {
+        return Err((
+            -32602,
+            format!("run not found or already finished: {}", args.run_id),
+        ));
+    };
+    flag.store(true, Ordering::Relaxed);
+
+    Ok(json!({
+        "run_id": args.run_id,
+        "cancel_requested": true,
+        "note": "current step finishes, then the engine exits cleanly",
+    })
+    .to_string())
 }
