@@ -21,10 +21,13 @@
     font-family: theme('fontFamily.sans');
     font-size: theme('fontSize.base[0]');
     line-height: theme('fontSize.base[1].lineHeight');
-    font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+
+  [data-os='mac'] body {
+    font-feature-settings: 'cv11', 'ss01';
   }
 
   :focus-visible {

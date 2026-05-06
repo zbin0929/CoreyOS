@@ -25,7 +25,7 @@
 
 - **T0.9 — Path sandbox plumbing** (see `docs/08-sandbox.md`): `PathAuthority`, `sandbox::fs` middleware, cross-platform hard denylist (macOS / Linux / Windows; home-relative credential paths), `home_stats` IPC demo proving the `React → IPC → sandbox → fs` round-trip. 3 unit tests green.
 - **Placeholder icons generator** (`scripts/generate-placeholder-icon.py`): 1024² PNG via Python stdlib only → `pnpm tauri icon` fan-out.
-- **Window drag regions** (`data-tauri-drag-region` on Topbar + Sidebar brand, 80px traffic-light inset on macOS).
+- **Window drag regions** (`data-tauri-drag-region` on Topbar + Sidebar brand, 80px traffic-light inset on macOS only via `isMac()` check).
 
 ### Lessons captured
 

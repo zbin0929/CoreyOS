@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { isMac } from '@/lib/platform';
 import {
   hermesDetect,
   hermesGatewayStart,
@@ -359,10 +360,7 @@ function BrokenInstallCard({
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
-  const fixCommand =
-    typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('win')
-      ? 'pip install --upgrade hermes-agent'
-      : 'pip install --upgrade hermes-agent';
+  const fixCommand = 'pip install --upgrade hermes-agent';
 
   return (
     <section
@@ -518,13 +516,7 @@ function GatewayOfflineCard({
  * convenience.
  */
 function installCommandForPlatform(): string {
-  if (typeof navigator === 'undefined') {
-    return 'pip install hermes-agent';
-  }
-  const ua = navigator.userAgent.toLowerCase();
-  if (ua.includes('mac')) return 'brew install nousresearch/hermes/hermes-agent';
-  if (ua.includes('win')) return 'pip install hermes-agent';
-  return 'pip install hermes-agent';
+  return isMac() ? 'brew install nousresearch/hermes/hermes-agent' : 'pip install hermes-agent';
 }
 
 /**

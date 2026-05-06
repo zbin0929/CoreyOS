@@ -1,5 +1,6 @@
 import {
   Home,
+  ListChecks,
   MessageSquare,
   Columns3,
   Wand2,
@@ -57,6 +58,7 @@ export const NAV: NavEntry[] = [
   // active backend so the page is informational, not navigational.
   { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot, group: 'more', phase: 2 },
 
+  { id: 'tasks', path: '/tasks', labelKey: 'nav.tasks', icon: ListChecks, group: 'tools', phase: 9, shortcut: ['mod', 't'] },
   { id: 'compare', path: '/compare', labelKey: 'nav.compare', icon: Columns3, group: 'tools', phase: 4, shortcut: ['mod', '3'] },
   { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'tools', phase: 2, shortcut: ['mod', '4'] },
   { id: 'terminal', path: '/terminal', labelKey: 'nav.terminal', icon: Terminal, group: 'tools', phase: 4, shortcut: ['mod', '5'], requires: 'terminal' },

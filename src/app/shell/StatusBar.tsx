@@ -64,6 +64,7 @@ function pageTitle(pathname: string, t: (k: string) => string): string {
     '/': t('nav.home'),
     '/chat': t('nav.chat'),
     '/workflows': t('nav.workflows'),
+    '/tasks': t('nav.tasks'),
     '/agents': t('nav.agents'),
     '/models': t('nav.models'),
     '/compare': t('nav.compare'),

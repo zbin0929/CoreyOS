@@ -160,6 +160,16 @@ Bottom tab bar with 4 primary + "More": Chat · Compare · Analytics · Settings
 - Screen reader: landmarks (`banner`, `navigation`, `main`, `complementary`), `aria-live="polite"` for chat deltas (throttled).
 - Respect `prefers-reduced-motion`, `prefers-color-scheme`, `prefers-contrast`.
 
+## Platform-aware CSS
+
+`data-os` attribute is set on `<html>` at boot (`mac` | `windows` | `linux` | `unknown`) via `src/lib/platform.ts`. Use it for CSS-only platform targeting:
+
+```css
+[data-os='mac'] body { font-feature-settings: 'cv11', 'ss01'; }
+```
+
+JS-side: import `isMac()` / `isWindows()` / `detectPlatform()` from `@/lib/platform` — never use `navigator.platform` (deprecated).
+
 ## Theming & extensibility
 
 - All colors flow from tokens. Themes are JSON files mapping tokens → HSL triplets; users can drop a theme file into `~/.corey/themes/` and pick it at runtime.

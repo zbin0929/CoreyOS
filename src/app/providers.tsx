@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@/lib/i18n';
+import { detectPlatform } from '@/lib/platform';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useUIStore } from '@/stores/ui';
@@ -11,6 +12,7 @@ import { SandboxConsentModal } from '@/components/sandbox/ConsentModal';
 import { ContextMenuProvider } from '@/components/ui/context-menu';
 import { LicenseGate } from '@/features/license/LicenseGate';
 import { useLicenseStore } from '@/features/license/store';
+import { useTasksStore } from '@/stores/tasks';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,7 +76,18 @@ export function Providers({ children }: { children: ReactNode }) {
     void useLicenseStore.getState().hydrate();
   }, []);
 
-  // Apply theme on mount
+  // v0.2.4 B-9.1 — global tasks polling. Tracks active workflow runs
+  // every 5s, fires desktop notifications on completion/failure/paused
+  // transitions. Sidebar / Tray / Tasks page all read from this store.
+  useEffect(() => {
+    useTasksStore.getState().startPolling();
+    return () => useTasksStore.getState().stopPolling();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.os = detectPlatform();
+  }, []);
+
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'system') {

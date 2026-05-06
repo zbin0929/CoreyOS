@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/cn';
 
 import { highlightCode } from '../highlight';
+import { ArtifactBlock, shouldRenderAsArtifact } from './ArtifactBlock';
 
 /**
  * Minimal Markdown renderer scoped for chat bubbles. Styles everything
@@ -68,10 +69,17 @@ export function Markdown({ children }: { children: string }) {
               const raw = Array.isArray(children)
                 ? children.join('')
                 : String(children ?? '');
-              const { html, language } = highlightCode(
-                raw.replace(/\n$/, ''),
-                match?.[1],
-              );
+              const trimmed = raw.replace(/\n$/, '');
+              const { html, language } = highlightCode(trimmed, match?.[1]);
+              if (shouldRenderAsArtifact(trimmed)) {
+                return (
+                  <ArtifactBlock
+                    rawContent={trimmed}
+                    language={language ?? undefined}
+                    highlightedHtml={html}
+                  />
+                );
+              }
               return (
                 <code
                   // Keep the `hljs` class so the github-dark stylesheet

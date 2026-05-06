@@ -1,8 +1,5 @@
 import { cn } from '@/lib/cn';
-
-const isMac =
-  typeof navigator !== 'undefined' &&
-  (navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac'));
+import { isMac } from '@/lib/platform';
 
 const keyMap: Record<string, { mac: string; win: string }> = {
   mod: { mac: '⌘', win: 'Ctrl' },
@@ -21,7 +18,7 @@ const keyMap: Record<string, { mac: string; win: string }> = {
 
 function renderKey(k: string): string {
   const lookup = keyMap[k.toLowerCase()];
-  if (lookup) return isMac ? lookup.mac : lookup.win;
+  if (lookup) return isMac() ? lookup.mac : lookup.win;
   return k.toUpperCase();
 }
 

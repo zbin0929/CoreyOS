@@ -219,6 +219,43 @@ pub struct ApprovalRespondArgs {
     choice: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalPendingArgs {
+    session_id: String,
+}
+
+#[tauri::command]
+pub async fn hermes_approval_pending(
+    state: State<'_, AppState>,
+    args: ApprovalPendingArgs,
+) -> IpcResult<serde_json::Value> {
+    use crate::paths::hermes_data_dir;
+
+    let base_url = {
+        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
+        cfg.base_url.clone()
+    };
+    let client = reqwest::Client::new();
+    let url = format!(
+        "{}/api/approval/pending",
+        base_url.trim_end_matches("/v1").trim_end_matches('/'),
+    );
+    let mut req = client
+        .post(&url)
+        .query(&[("session_id", args.session_id.as_str())]);
+    if let Ok(dir) = hermes_data_dir() {
+        req = req.header("HERMES_HOME", dir.to_string_lossy().as_ref());
+    }
+    let resp = req.send().await.map_err(|e| IpcError::Internal {
+        message: format!("approval pending: {e}"),
+    })?;
+    let body: serde_json::Value = resp.json().await.map_err(|e| IpcError::Internal {
+        message: format!("approval pending parse: {e}"),
+    })?;
+    Ok(body)
+}
+
 #[tauri::command]
 pub async fn hermes_approval_respond(
     _app: AppHandle,

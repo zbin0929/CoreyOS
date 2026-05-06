@@ -17,6 +17,8 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 ### Fixed
 
 - Improved online indicator badge for CoreyMark icon — green pulse now mirrors real-time gateway status refresh.
+- **Windows CSS compatibility**: sidebar `pl-20` traffic-light padding now only applies on macOS; `font-feature-settings: 'cv11', 'ss01'` scoped to macOS only (SF Pro features, invalid on Windows Segoe UI).
+- **Platform detection**: added `src/lib/platform.ts` (`detectPlatform`, `isMac`, `isWindows`) replacing deprecated `navigator.platform` in `kbd.tsx`. `data-os` attribute set on `<html>` at boot for CSS-only platform targeting.
 
 ### Deferred
 

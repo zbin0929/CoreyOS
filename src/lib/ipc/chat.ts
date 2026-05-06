@@ -171,6 +171,25 @@ export async function hermesApprovalRespond(
   });
 }
 
+export interface HermesApprovalPending {
+  pending?: {
+    command?: string;
+    pattern_key?: string;
+    pattern_keys?: string[];
+    approval_id?: string;
+    _session_id?: string;
+  } | null;
+  pending_count?: number;
+}
+
+export async function hermesApprovalPending(
+  sessionId: string,
+): Promise<HermesApprovalPending> {
+  return invoke<HermesApprovalPending>('hermes_approval_pending', {
+    args: { sessionId },
+  });
+}
+
 /**
  * Ask the LLM for a short session title (≤6 words / ≤12 chars for CJK).
  * Returns null if the gateway errors or the response is unusable — the caller

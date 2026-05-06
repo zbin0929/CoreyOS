@@ -4,10 +4,12 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { type LucideIcon, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { isMac } from '@/lib/platform';
 import { NAV, type NavEntry } from '@/app/nav-config';
 import { CoreyMark } from '@/components/ui/corey-mark';
 import { Icon } from '@/components/ui/icon';
 import { useAgentsStore } from '@/stores/agents';
+import { useTasksStore } from '@/stores/tasks';
 import { useBrandAppName, useBrandLogoUrl, useCustomerConfig, useHiddenRoutes } from '@/stores/customer';
 import { usePackStore } from '@/lib/usePackStore';
 import { lucideByName } from '@/lib/lucide-map';
@@ -44,6 +46,7 @@ export function Sidebar() {
 
   const adapters = useAgentsStore((s) => s.adapters);
   const activeId = useAgentsStore((s) => s.activeId);
+  const runningTasksCount = useTasksStore((s) => s.runningCount + s.pausedCount);
   const activeEntry: AdapterListEntry | null = (() => {
     if (!adapters || adapters.length === 0) return null;
     if (activeId) {
@@ -115,7 +118,7 @@ export function Sidebar() {
         data-tauri-drag-region
         className={cn(
           'flex h-12 shrink-0 items-center gap-2 border-b border-border/80 pr-4 select-none',
-          'pl-20 [@media(display-mode:fullscreen)]:pl-4',
+          isMac() ? 'pl-20' : 'pl-4',
         )}
       >
         {brandLogoSrc ? (
@@ -154,6 +157,7 @@ export function Sidebar() {
             to={entry.path}
             icon={entry.icon}
             active={isActive(location.pathname, entry.path)}
+            badge={entry.id === 'tasks' ? runningTasksCount : null}
           >
             {t(entry.labelKey)}
           </NavItem>
@@ -241,15 +245,17 @@ interface NavItemProps {
   icon: LucideIcon;
   active: boolean;
   children: ReactNode;
+  badge?: number | null;
 }
 
-function NavItem({ to, icon: IconCmp, active, children }: NavItemProps) {
+function NavItem({ to, icon: IconCmp, active, children, badge }: NavItemProps) {
+  const showBadge = typeof badge === 'number' && badge > 0;
   return (
     <Link
       to={to}
       className={cn(
         'group relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm',
-        'transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]',
+        'transition-all duration-200 ease-enter',
         active
           ? 'bg-gold-500/10 text-fg font-medium'
           : 'text-fg-muted hover:bg-[var(--glass-bg-hover)] hover:text-fg',
@@ -263,6 +269,11 @@ function NavItem({ to, icon: IconCmp, active, children }: NavItemProps) {
       )}
       <Icon icon={IconCmp} size="md" className={cn('relative transition-colors', active ? 'text-gold-500 drop-shadow-[0_0_6px_hsl(38_90%_56%/0.5)]' : 'group-hover:text-fg-muted')} />
       <span className="relative flex-1 truncate">{children}</span>
+      {showBadge && (
+        <span className="relative ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-info/20 px-1.5 text-[10px] font-semibold text-info">
+          {badge! > 99 ? '99+' : badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -276,7 +287,7 @@ function PackNavItem({ view, pathname }: { view: PackView; pathname: string }) {
       to={to}
       className={cn(
         'group relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm',
-        'transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]',
+        'transition-all duration-200 ease-enter',
         active
           ? 'bg-gold-500/10 text-fg font-medium'
           : 'text-fg-muted hover:bg-[var(--glass-bg-hover)] hover:text-fg',
