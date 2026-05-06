@@ -67,7 +67,7 @@ Any new route added to `routes.tsx` must have a corresponding Playwright spec th
 ### N-1: Three-tier sidebar structure (post 2026-05-06 audit)
 The sidebar uses three tiers:
 - **Primary** (always visible): Home, Chat, Workflows, Models
-- **Tools** (always visible): Tasks, Compare, Analytics, Terminal, Logs
+- **Tools** (always visible): Tasks, Analytics, Terminal, Logs
 - **More** (collapsible): Skills, Trajectory, Channels, Budgets, Long-term Memory, Knowledge Base, MCP
 - **Settings** (bottom-pinned): always accessible
 
@@ -77,7 +77,7 @@ New features should default to the "More" tier unless they are high-frequency.
 Routes are never removed. Low-frequency items move to "More" tier, Settings → Advanced, or Settings sub-sections, but the URL always works.
 
 ### N-3: Demoted routes land in Settings → Advanced
-Routes that survive (per N-2) but are pulled from the sidebar must be added to `DEMOTED_ROUTES` in `src/app/nav-config.ts` so the `AdvancedSection` link list stays the canonical "where do I find …" answer. As of 2026-05-06: Agents, Scheduler, Runbooks, Profiles, Voice.
+Routes that survive (per N-2) but are pulled from the sidebar must be added to `DEMOTED_ROUTES` in `src/app/nav-config.ts` so the `AdvancedSection` link list stays the canonical "where do I find …" answer. As of 2026-05-06: Agents, Scheduler, Runbooks, Profiles, Voice, Compare.
 
 ## Product Direction
 

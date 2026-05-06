@@ -138,7 +138,7 @@ const chatRoute = createRoute({
 const compareRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/compare',
-  component: CompareRoute,
+  component: withDemotedBanner(CompareRoute),
 });
 
 const skillsRoute = createRoute({
