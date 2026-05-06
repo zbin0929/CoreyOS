@@ -260,7 +260,9 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             axum::http::header::AUTHORIZATION,
-            "Bearer abc-123".parse().unwrap(),
+            "Bearer abc-123"
+                .parse()
+                .expect("static header value parses"),
         );
         assert_eq!(extract_bearer(&h).as_deref(), Some("abc-123"));
     }
@@ -270,7 +272,7 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             axum::http::header::AUTHORIZATION,
-            "bearer xyz".parse().unwrap(),
+            "bearer xyz".parse().expect("static header value parses"),
         );
         assert_eq!(extract_bearer(&h).as_deref(), Some("xyz"));
     }
@@ -286,7 +288,9 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             axum::http::header::AUTHORIZATION,
-            "Basic dXNlcjpwYXNz".parse().unwrap(),
+            "Basic dXNlcjpwYXNz"
+                .parse()
+                .expect("static header value parses"),
         );
         assert!(extract_bearer(&h).is_none());
     }

@@ -222,8 +222,14 @@ mod tests {
 
     #[test]
     fn sanitise_strips_path_separators() {
-        assert_eq!(sanitise_segment("a/b").unwrap(), "a_b");
-        assert_eq!(sanitise_segment(r"a\b").unwrap(), "a_b");
+        assert_eq!(
+            sanitise_segment("a/b").expect("sanitise valid input"),
+            "a_b"
+        );
+        assert_eq!(
+            sanitise_segment(r"a\b").expect("sanitise valid input"),
+            "a_b"
+        );
     }
 
     #[test]
@@ -241,7 +247,7 @@ mod tests {
 
     #[test]
     fn sanitise_strips_control_chars() {
-        let s = sanitise_segment("foo\x00bar\x1fbaz.txt").unwrap();
+        let s = sanitise_segment("foo\x00bar\x1fbaz.txt").expect("sanitise valid input");
         assert_eq!(s, "foobarbaz.txt");
     }
 
@@ -249,7 +255,7 @@ mod tests {
     fn sanitise_truncates_long_names_preserving_ext() {
         let long = "a".repeat(300);
         let with_ext = format!("{long}.csv");
-        let out = sanitise_segment(&with_ext).unwrap();
+        let out = sanitise_segment(&with_ext).expect("sanitise valid input");
         assert!(out.ends_with(".csv"));
         assert!(out.chars().count() <= MAX_NAME_CHARS);
     }
@@ -258,6 +264,9 @@ mod tests {
     fn sanitise_keeps_dot_prefix() {
         // `.gitignore` style hidden files are useful artifact names
         // ("." alone is still rejected above).
-        assert_eq!(sanitise_segment(".gitignore").unwrap(), ".gitignore");
+        assert_eq!(
+            sanitise_segment(".gitignore").expect("sanitise valid input"),
+            ".gitignore"
+        );
     }
 }

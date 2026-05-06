@@ -1,11 +1,18 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.8 published**）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.9 published**）
 >
 > **铁律**：所有改动 0 修改 Hermes Agent 代码 / trait 表面 — 未来 Hermes 升级直接替换 binary 即可，CoreyOS 不会因 Hermes 改动而崩。
 >
 > **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号（SP-API 到位后 1-2 周做完）
-> **可继续选项**：B-8 Talk Mode（v0.4.0+）/ B-9.4 workflow artifacts dir（等 producer 出现）/ P-1 P3 UI 美化 12 项
+> **可继续选项**：B-8 Talk Mode（v0.4.0+，独立工作）/ P-1 P3 UI 美化 12 项 / 真实付费客户合同 → P-2..P-8
+
+### v0.2.9 已发布交付（2026-05-06 晚 · 可见性 + 产物）
+- **AgentSwitcher 重启** — Hermes-only 过滤，单 Hermes 显示只读 pill（v0.2.8 改 label 现在真的能在顶栏看到）— `35feb58`
+- **`append_memory` 走 dedup** — Hermes 调时也跑 bigram + 0.45 阈值，重复返回 `skipped` 不写 — `d2d8fce`
+- **B-9.3 全局审批 chip** — 右下角浮动徽章，0 个时自动隐藏 — `ca4f29b`
+- **B-9.1 长会话标签** — `/tasks` 加「长会话」标签，≥10 条消息自动列出 — `712962e`
+- **B-9.4 工作流产物** — `crate::artifacts` 模块 + 3 个 IPC + `save_artifact` MCP 工具 + `/tasks` 详情面板按 run 列产物（复制路径 / 系统应用打开） — `7f3abe7`
 
 ### v0.2.8 已发布交付（2026-05-06 晚 · 用户 4 项需求 + Hermes 不变性约束）
 - **A · 默认 Hermes label 可改** — `gateway.json` 加 `label`，新 `PrimaryHermesCard` 在 Hermes 实例顶部，热保存（`509a5ec`）
@@ -550,6 +557,7 @@ B-8 (Talk Mode)  独立（v0.4.0+，voice 模块已有基础）
 | v0.2.6 | ✅ | B-9 主链路：tray 计数 + 桌面通知 + /approvals + artifact 原生 save |
 | v0.2.7 | ✅ | B-10.6 子工作流 + B-10.7 webhook + 长表格 CSV + 通知分级 + 路由/unwrap 巡检 + B-5 离线包 CI |
 | v0.2.8 | ✅ | Hermes 不变性约束下：默认 label 可改 + 视觉代理（走 LlmProfile）+ 6 个新 MCP 工具 + 记忆 CJK bigram 去重 |
+| v0.2.9 | ✅ | AgentSwitcher 重启 + 全局审批 chip + 长会话标签 + 工作流产物（IPC + MCP + UI） |
 | v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + **阻塞：Amazon SP-API 开发者账号** |
 | v0.4.0 | 📋 | Talk Mode 语音持续对话 + 按客户需求拉新 Pack |
 

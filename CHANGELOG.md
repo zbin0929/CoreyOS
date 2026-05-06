@@ -6,6 +6,20 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-06 — v0.2.9 · Visibility & artifacts (AgentSwitcher / approvals chip / long chats / artifacts dir)
+
+> Premise: same as v0.2.8 — **all changes are Corey-side only**, zero modifications to Hermes Agent.
+
+### Shipped
+
+- **AgentSwitcher restored in topbar** — previously hidden because mock adapters polluted the dropdown. Now filters to Hermes-family only (`hermes` / `hermes:<instance>`); single-Hermes users get a readonly pill showing the editable label they set in Settings; multi-Hermes users get the dropdown back. Fixes the "I changed my Hermes name in Settings but the topbar still says Hermes" gap from v0.2.8.
+- **`append_memory` MCP tool reuses dedup** — Hermes can't trivially re-introduce noise the user just compacted away. Same bigram tokenize + 0.45 jaccard threshold as auto-extract; returns `{skipped: true, reason}` on near-paraphrase instead of writing.
+- **B-9.3 global pending-approvals chip** — bottom-right floating badge surfaces workflow steps in `awaiting_approval` from anywhere in the app. Auto-hides when count is 0; click → `/approvals`; dismiss arrow temporarily mutes until next new approval. Polls every 6 s.
+- **B-9.1 long chat tab** — `/tasks` gains a "Long chats" tab listing sessions with ≥10 messages. Reads `useChatStore` directly so no new IPC; sorted by last activity; click → restores that session in `/chat`.
+- **B-9.4 workflow artifacts** — new `crate::artifacts` module owns `~/.hermes/artifacts/<run_id>/<name>` with filename sanitisation + 8 MB cap. Three IPCs (`artifact_list` / `artifact_path` / `artifact_write`), one MCP tool (`save_artifact`) Hermes can call from chat, plus `/tasks` expanded TaskRow renders artifacts list per run with copy-path and open-with-default-app actions.
+
+---
+
 ## 2026-05-06 — v0.2.8 · Hermes invariant features (label / vision proxy / MCP expansion / memory dedup)
 
 > Premise: **all changes are Corey-side only**. Zero modifications to Hermes Agent code or trait surface — future Hermes upgrades drop in unchanged.
