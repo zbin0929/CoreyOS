@@ -23,7 +23,14 @@ const MEMORY_FILE: &str = "MEMORY.md";
 const LEARNINGS_FILE: &str = "LEARNINGS.md";
 const MAX_FACTS_PER_TURN: usize = 3;
 const MAX_FACT_CHARS: usize = 120;
-const SIMILARITY_THRESHOLD: f64 = 0.65;
+/// Jaccard similarity threshold for considering a candidate fact a
+/// duplicate of something already in MEMORY.md. Lowered from the
+/// original 0.65 (token-set match) to 0.45 because we now tokenise
+/// CJK input as character bigrams (see `tokenize`), which produces
+/// a denser overlap distribution: short Chinese sentences that are
+/// semantically equivalent typically land at 0.4-0.7 instead of
+/// 0.0-0.2 under whitespace tokenisation.
+const SIMILARITY_THRESHOLD: f64 = 0.45;
 
 #[derive(Debug, Deserialize)]
 pub struct LearningExtractArgs {
@@ -233,12 +240,70 @@ fn truncate_str(s: &str, max: usize) -> String {
     }
 }
 
+/// Build a token set for Jaccard similarity. Mixes two strategies
+/// because the existing whitespace-only tokenisation badly under-
+/// counted overlap on Chinese input: "桌面通知已成功发送" and
+/// "桌面通知已发送" are different "words" under `split_whitespace`
+/// (no boundaries) so the Jaccard score was ~0 and dedup never
+/// fired. With bigrams the same pair lands around 0.55 — well over
+/// the 0.45 threshold.
+///
+/// - **CJK characters**: emit every adjacent pair of CJK chars as
+///   a bigram token. Single CJK chars are too noisy to match on
+///   (almost any sentence shares them).
+/// - **ASCII / Latin words**: lowercase + split on whitespace,
+///   keep tokens with ≥3 chars (same heuristic as before — drops
+///   `the` / `a` / `is` etc. that would otherwise inflate overlap).
+///
+/// Both kinds go into the same `Vec<String>` so Jaccard treats
+/// them uniformly. Empty strings are filtered.
 fn tokenize(s: &str) -> Vec<String> {
-    s.to_lowercase()
+    let lower = s.to_lowercase();
+    let mut out: Vec<String> = lower
         .split_whitespace()
-        .filter(|w| w.len() > 2)
+        .filter(|w| w.len() >= 3 && w.chars().all(|c| !is_cjk(c)))
         .map(String::from)
-        .collect()
+        .collect();
+
+    // CJK bigrams: collect contiguous CJK char runs, then emit
+    // every overlapping 2-char window. A pure-ASCII string yields
+    // zero CJK tokens and falls back to the whitespace branch above.
+    let chars: Vec<char> = lower.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if is_cjk(chars[i]) {
+            let start = i;
+            while i < chars.len() && is_cjk(chars[i]) {
+                i += 1;
+            }
+            let run: String = chars[start..i].iter().collect();
+            if run.chars().count() >= 2 {
+                let run_chars: Vec<char> = run.chars().collect();
+                for win in run_chars.windows(2) {
+                    out.push(win.iter().collect());
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// True for CJK Unified Ideographs + Hiragana + Katakana + Hangul.
+/// We keep the range narrow on purpose: punctuation / digits /
+/// emoji are excluded so they don't dilute the bigram set.
+fn is_cjk(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x3040..=0x309F   // Hiragana
+        | 0x30A0..=0x30FF // Katakana
+        | 0x3400..=0x4DBF // CJK Extension A
+        | 0x4E00..=0x9FFF // CJK Unified
+        | 0xAC00..=0xD7AF // Hangul
+        | 0xF900..=0xFAFF // CJK Compatibility
+        | 0x20000..=0x2FFFF // CJK Extension B/C/D/E/F
+    )
 }
 
 fn jaccard(a: &[String], b: &[String]) -> f64 {
@@ -346,23 +411,56 @@ pub async fn learning_compact_memory() -> IpcResult<MemoryCompactResult> {
     })?;
 
     let lines: Vec<&str> = memory_content.lines().collect();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut seen_exact: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // Track bigram token sets of *kept* fact lines so we can also
+    // drop semantically-equivalent restatements (e.g. multiple
+    // "桌面通知已发送 ✅" / "通知已成功发出" / "已发送 ✅ 通知" in
+    // one auto block). Indexed by line content for tracing.
+    let mut kept_token_sets: Vec<Vec<String>> = Vec::new();
     let mut deduped = String::new();
     let mut removed = 0usize;
 
     for line in &lines {
-        let normalized = line.trim().to_lowercase();
-        if normalized.is_empty() || normalized.starts_with('#') {
+        let trimmed = line.trim();
+        let normalized = trimmed.to_lowercase();
+
+        // Headers / blank lines / lines too short to carry semantic
+        // meaning pass through unchanged (we don't want to merge two
+        // dated `## [auto] 2026-04-27` headers into one — they're
+        // structural). Anything that's clearly a fact bullet
+        // (starts with `-` and has at least 8 chars of content)
+        // goes through both exact and semantic dedup.
+        let is_fact_bullet = trimmed.starts_with('-') && trimmed.len() > 4;
+        if normalized.is_empty() || normalized.starts_with('#') || !is_fact_bullet {
             deduped.push_str(line);
             deduped.push('\n');
             continue;
         }
-        if seen.insert(normalized) {
-            deduped.push_str(line);
-            deduped.push('\n');
-        } else {
+
+        // Stage 1: exact-string dedup (cheap; catches verbatim
+        // duplicates like the original implementation).
+        if !seen_exact.insert(normalized.clone()) {
             removed += 1;
+            continue;
         }
+
+        // Stage 2: semantic dedup — Jaccard similarity over CJK
+        // bigrams + ASCII tokens. If this fact's tokens overlap
+        // ≥ SIMILARITY_THRESHOLD with any already-kept fact in the
+        // same compaction pass, drop it.
+        let tokens = tokenize(trimmed);
+        let is_dup = !tokens.is_empty()
+            && kept_token_sets
+                .iter()
+                .any(|kept| jaccard(&tokens, kept) >= SIMILARITY_THRESHOLD);
+        if is_dup {
+            removed += 1;
+            continue;
+        }
+
+        kept_token_sets.push(tokens);
+        deduped.push_str(line);
+        deduped.push('\n');
     }
 
     if removed > 0 {

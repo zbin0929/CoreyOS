@@ -41,12 +41,33 @@ export function usePostSendEffects({
       }
 
       if (firstAssistant && firstAssistant.length > 0 && userText.length > 0) {
-        void learningExtract({
-          userMessage: userText,
-          assistantMessage: firstAssistant,
-        }).then(() => {
-          useChatStore.setState({ lastLearningAt: Date.now() });
-        }).catch(() => {});
+        // D — throttle the extract so MEMORY.md doesn't fill with
+        // restatements of trivial turns. Two gates:
+        //   1. **Length floor** — skip if either side is too short
+        //      to carry a fact ("ok thanks" / "你好" round-trips).
+        //   2. **Time-based cooldown** — skip if we extracted in
+        //      the last 10 minutes; one fact per ~10-min window
+        //      is plenty for a normal session.
+        // The user can still force an extract via the dialog by
+        // asking the agent directly ("remember that ..." → goes
+        // through the new `append_memory` MCP tool, not this
+        // auto-pipeline).
+        const MIN_USER_CHARS = 20;
+        const MIN_ASSISTANT_CHARS = 80;
+        const COOLDOWN_MS = 10 * 60 * 1000;
+        const lastAt = useChatStore.getState().lastLearningAt ?? 0;
+        const tooShort =
+          userText.length < MIN_USER_CHARS ||
+          firstAssistant.length < MIN_ASSISTANT_CHARS;
+        const cooling = Date.now() - lastAt < COOLDOWN_MS;
+        if (!tooShort && !cooling) {
+          void learningExtract({
+            userMessage: userText,
+            assistantMessage: firstAssistant,
+          }).then(() => {
+            useChatStore.setState({ lastLearningAt: Date.now() });
+          }).catch(() => {});
+        }
 
         void learningDetectPattern(userText)
           .then(async (result) => {

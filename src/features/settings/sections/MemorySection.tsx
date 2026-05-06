@@ -16,6 +16,7 @@ import {
   hermesCompressionStats,
   hermesMemoryStatus,
   hermesSessionCleanup,
+  learningCompactMemory,
   hermesSessionUsage,
   hermesUserMdWrite,
   ipcErrorMessage,
@@ -332,6 +333,12 @@ export function MemorySection() {
           {cleanupResult && (
             <div className="text-[11px] text-fg-subtle">{cleanupResult}</div>
           )}
+          {/* D — MEMORY.md semantic compaction.
+              Runs `learning_compact_memory` which now also drops
+              CJK-bigram-similar facts (not just exact-string
+              duplicates). Useful when MEMORY.md has grown noisy
+              from repeated auto-extracts on similar turns. */}
+          <CompactMemoryButton onComplete={() => void refresh()} />
         </div>
       )}
 
@@ -480,4 +487,56 @@ function formatAge(ms: number): string {
   if (days < 14) return `${days}d`;
   if (days < 60) return `${Math.floor(days / 7)}w`;
   return `${Math.floor(days / 30)}mo`;
+}
+
+/**
+ * Triggers `learning_compact_memory`, which now does both
+ * exact-string and CJK-bigram-similar dedup on MEMORY.md fact
+ * bullets. Returns the count of removed lines so the user gets
+ * concrete feedback ("11 entries removed") instead of a silent
+ * write.
+ */
+function CompactMemoryButton({ onComplete }: { onComplete: () => void }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const onClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await learningCompactMemory();
+      setResult(
+        t('settings.memory.compact_done', {
+          defaultValue: '已合并 {{n}} 条重复',
+          n: r.memory_entries_removed,
+        }),
+      );
+      onComplete();
+    } catch (e) {
+      setResult(ipcErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex items-center justify-between gap-2 pt-1">
+      <span className="text-[11px] text-fg-subtle">
+        {t('settings.memory.compact_hint', {
+          defaultValue: '语义去重 MEMORY.md（中文按字符 bigram 比，阈值 0.45）',
+        })}
+      </span>
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={busy}
+        onClick={() => void onClick()}
+        data-testid="memory-compact"
+      >
+        {busy && <Icon icon={Loader2} size="xs" className="animate-spin" />}
+        {result ??
+          t('settings.memory.compact', { defaultValue: '合并重复记忆' })}
+      </Button>
+    </div>
+  );
 }
