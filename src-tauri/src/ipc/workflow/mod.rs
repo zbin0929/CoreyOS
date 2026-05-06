@@ -827,6 +827,22 @@ pub fn spawn_run_executor(
 ) {
     let rid_for_log = run_id.clone();
     let wf_id_for_log = def.id.clone();
+    // Emit `workflow:run-started` so the tray counter (B-9.2) and any
+    // future listener can react before we hop into spawn_blocking.
+    // Paired with the `workflow:run-finished` emit at the bottom of
+    // this function — both must be reachable on every code path or
+    // the tray active-runs counter drifts.
+    if let Some(app) = crate::app_handle::get() {
+        use tauri::Emitter;
+        let payload = serde_json::json!({
+            "run_id": run_id,
+            "workflow_id": def.id,
+            "workflow_name": def.name,
+        });
+        if let Err(e) = app.emit("workflow:run-started", payload) {
+            tracing::warn!(error = %e, "failed to emit workflow:run-started");
+        }
+    }
     tokio::task::spawn_blocking(move || {
         let executor = HermesExecutor {
             adapters,
