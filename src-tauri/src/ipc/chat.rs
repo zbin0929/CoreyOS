@@ -63,8 +63,19 @@ pub struct ChatSendReply {
 pub async fn chat_send(state: State<'_, AppState>, args: ChatSendArgs) -> IpcResult<ChatSendReply> {
     let adapter = pick_adapter(&state, args.adapter_id.as_deref())?;
 
+    // B: same vision proxy preprocessing as `chat_stream_start`.
+    // Non-stream callers (compare lanes, agent eval) get the same
+    // benefit transparently.
+    let vp_cfg = crate::vision_proxy::load();
+    let messages = crate::vision_proxy::expand_images_in_messages(
+        &vp_cfg,
+        args.messages,
+        args.model_supports_vision,
+    )
+    .await;
+
     let turn = ChatTurn {
-        messages: args.messages,
+        messages,
         model: args.model,
         cwd: args.cwd,
         model_supports_vision: args.model_supports_vision,
@@ -138,8 +149,24 @@ pub async fn chat_stream_start(
         }
     });
 
+    // B: vision proxy hook. If the user is on a non-vision model
+    // and has a vision proxy configured, expand image attachments
+    // on the latest user turn into inline text descriptions BEFORE
+    // we hand the messages to the adapter. Adapter sees a
+    // pre-resolved turn and never has to know about the proxy.
+    //
+    // Skipped synchronously when the proxy is disabled or vision
+    // is supported, so non-users pay zero cost.
+    let vp_cfg = crate::vision_proxy::load();
+    let messages_with_vision = crate::vision_proxy::expand_images_in_messages(
+        &vp_cfg,
+        args.messages,
+        args.model_supports_vision,
+    )
+    .await;
+
     let turn = ChatTurn {
-        messages: args.messages,
+        messages: messages_with_vision,
         model: args.model,
         cwd: args.cwd,
         model_supports_vision: args.model_supports_vision,

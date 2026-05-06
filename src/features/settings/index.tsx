@@ -10,6 +10,7 @@ import {
 
 import { AdvancedSection } from './sections/AdvancedSection';
 import { NotificationsSection } from './sections/NotificationsSection';
+import { VisionProxySection } from './sections/VisionProxySection';
 import { WebhookSection } from './sections/WebhookSection';
 import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
@@ -167,6 +168,12 @@ export function SettingsRoute() {
               workflow-finish desktop notifications. Tray counter
               is independent. */}
           <NotificationsSection />
+
+          {/* Vision proxy — when current chat model lacks vision,
+              route image attachments through a configured vision
+              model first and inline its description. Disabled by
+              default; opt-in. */}
+          <VisionProxySection />
 
           {/* Webhook — B-10.7. Local HTTP trigger URL + bearer
               token + curl example. Lives near the bottom because

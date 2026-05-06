@@ -45,6 +45,7 @@ mod skills;
 mod state;
 mod tfidf;
 mod tray;
+mod vision_proxy;
 mod workflow;
 
 use std::sync::Arc;
@@ -119,6 +120,9 @@ pub fn run() {
             ipc::webhook::webhook_token_get,
             ipc::webhook::webhook_token_rotate,
             ipc::webhook::webhook_listener_port,
+            ipc::vision_proxy::vision_proxy_get,
+            ipc::vision_proxy::vision_proxy_set,
+            ipc::vision_proxy::vision_proxy_clear_cache,
             ipc::session::session_list,
             ipc::session::session_get,
             ipc::model::model_list,

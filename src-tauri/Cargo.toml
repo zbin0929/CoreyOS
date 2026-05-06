@@ -75,6 +75,12 @@ axum = "0.7"
 
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+# B: vision proxy — SHA-256 of image bytes for description cache
+# at `~/.hermes/vision_cache/<hash>.txt`. `hex` keeps the cache
+# filenames human-greppable; default-features-off because we don't
+# need the alloc-friendly serde glue.
+sha2 = "0.10"
+hex = { version = "0.4", default-features = false, features = ["std"] }
 
 # Bundled SQLite — no system dependency. Used for session/message persistence
 # (see src/db.rs). Kept behind `parking_lot` for fast mutex and `chrono` for
