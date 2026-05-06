@@ -8,6 +8,7 @@ import {
   type AppPaths,
 } from '@/lib/ipc';
 
+import { AdvancedSection } from './sections/AdvancedSection';
 import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
@@ -38,6 +39,7 @@ const SETTINGS_ANCHORS = [
   { id: 'settings-customer', labelKey: 'settings.customer.title' },
   { id: 'settings-packs', labelKey: 'settings.packs.title' },
   { id: 'settings-storage', labelKey: 'settings.storage.title' },
+  { id: 'settings-advanced', labelKey: 'settings.advanced.title' },
 ] as const;
 
 export function SettingsRoute() {
@@ -158,6 +160,11 @@ export function SettingsRoute() {
               activated key. Lets users see who the license belongs
               to + remove it (re-shows the gate on next launch). */}
           <LicenseSection />
+
+          {/* Advanced — deep links for routes demoted from the
+              sidebar in the 2026-05-06 audit. Lives last because
+              users who need these already know the URL. */}
+          <AdvancedSection />
         </div>
       </div>
     </div>

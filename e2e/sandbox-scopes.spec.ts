@@ -38,21 +38,12 @@ test.describe('T6.5 — sandbox scopes', () => {
     ).toBeVisible();
 
     // 3. Assign the worker scope to a new Hermes instance. T8 moved
-    //    HermesInstancesSection to /agents, so nav there to reach
-    //    the add button + per-row scope <select>. /agents was
-    //    moved to the collapsed "More" group post-Hermes-as-default
-    //    pivot, so we expand it first via the toggle button. Going
-    //    via sidebar (rather than page.goto) preserves the mock's
-    //    in-memory `sandboxScopes` state so the worker scope we
+    //    HermesInstancesSection to /agents. The 2026-05-06 route audit
+    //    pulled /agents out of the sidebar entirely (it's reachable via
+    //    Settings → Advanced or direct URL); page.goto preserves the
+    //    mock's in-memory `sandboxScopes` state so the worker scope we
     //    just created is still visible on the next route.
-    const moreToggle = page
-      .locator('button[aria-expanded][aria-expanded="false"]')
-      .filter({ hasText: /More|更多/ })
-      .first();
-    if ((await moreToggle.count()) > 0) {
-      await moreToggle.click();
-    }
-    await page.getByRole('link', { name: /Agents/ }).first().click();
+    await page.goto('/agents');
     await page.getByTestId('hermes-instances-add').click();
     await page.getByTestId('hermes-instance-scope-new').selectOption('worker');
     // T8 polish — the "Add instance" form now lives in a right-side

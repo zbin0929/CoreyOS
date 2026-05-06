@@ -18,8 +18,8 @@
     "profiles": "Profiles",
     "runbooks": "Runbooks",
     "budgets": "Budgets",
-    "memory": "Memory",
-    "knowledge": "Knowledge",
+    "memory": "Long-term memory",
+    "knowledge": "Knowledge base",
     "voice": "Voice",
     "mcp": "MCP",
     "workflows": "Workflows",
@@ -887,6 +887,10 @@
       "expired": "Your license expired on {{date}}. Restart the app to enter a renewed key.",
       "invalid": "License invalid: {{reason}}",
       "missing": "No license activated. Restart the app to enter one."
+    },
+    "advanced": {
+      "title": "Advanced / Experimental",
+      "description": "Pages hidden from the sidebar. Most have been superseded by panels inside Workflow / Settings; the URLs still resolve for users who relied on them."
     },
     "storage": {
       "title": "Storage",

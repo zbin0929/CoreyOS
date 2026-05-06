@@ -18,8 +18,8 @@
     "profiles": "配置集",
     "runbooks": "运行手册",
     "budgets": "预算",
-    "memory": "记忆",
-    "knowledge": "知识库",
+    "memory": "长期记忆",
+    "knowledge": "文档知识库",
     "voice": "语音",
     "mcp": "MCP",
     "workflows": "工作流",
@@ -886,6 +886,10 @@
       "expired": "许可证已于 {{date}} 过期。重启应用并粘贴新 key。",
       "invalid": "许可证无效：{{reason}}",
       "missing": "尚未激活。重启应用进入激活流程。"
+    },
+    "advanced": {
+      "title": "高级 / 实验功能",
+      "description": "默认隐藏的功能页。多数已被工作流 / 设置内的对应面板替代；保留入口给习惯了它们的老用户，URL 仍可直达。"
     },
     "storage": {
       "title": "存储",
