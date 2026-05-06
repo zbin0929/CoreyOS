@@ -47,6 +47,7 @@
     "createUpdaterArtifacts": true,
     "resources": [
       "assets/presets/**/*",
+      "assets/skill-packs/**/*",
       "scripts/browser-runner.cjs",
       "assets/scripts/bootstrap-windows.ps1",
       "assets/scripts/bootstrap-macos.sh"

@@ -30,6 +30,7 @@ mod manifest;
 mod migrations;
 mod scanner;
 mod schedules;
+mod seed;
 mod skills;
 pub mod state;
 mod sync;
@@ -52,6 +53,7 @@ pub use manifest::{load_from_dir, parse, ManifestLoadOutcome, PackManifest, MANI
 pub use migrations::run_migrations;
 pub use scanner::scan_skill_packs_dir;
 pub use schedules::{install_schedules, uninstall_schedules};
+pub use seed::ensure_bundled_packs;
 pub use skills::{install_skills, uninstall_skills};
 #[allow(unused_imports)]
 pub use state::{load, save, PackStateFile};

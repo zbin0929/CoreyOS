@@ -120,6 +120,7 @@ pub fn run() {
             ipc::chat::chat_send,
             ipc::chat::chat_stream_start,
             ipc::chat::chat_stream_cancel,
+            ipc::chat::hermes_approval_pending,
             ipc::chat::hermes_approval_respond,
             ipc::config::config_get,
             ipc::config::config_set,
@@ -500,6 +501,10 @@ pub fn run() {
             // discovery + persistence only — flipping the enable bit
             // doesn't yet spawn MCPs / mount routes (that's stage 3+).
             if let Ok(hermes_dir) = paths::hermes_data_dir() {
+                let seeded = pack::ensure_bundled_packs(app.handle(), &hermes_dir);
+                if !seeded.is_empty() {
+                    info!(?seeded, "bundled packs seeded into ~/.hermes/skill-packs/");
+                }
                 let mut registry = pack::Registry::scan(&hermes_dir);
                 info!(
                     packs = registry.packs.len(),

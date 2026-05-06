@@ -1,5 +1,17 @@
 # CoreyOS 全局 TODO
 
+> ⚡ **下一次会话从这里开始**（2026-05-06）
+>
+> **刚做完**：B-11 corey_starter 默认 Pack — `src-tauri/assets/skill-packs/corey_starter/` 三个 workflow（daily-news-digest / pdf-summary / ecommerce-promotion-approval），通过 `tauri.conf.json` 打包资源 + `pack::ensure_bundled_packs` 在启动时拷贝到 `~/.hermes/skill-packs/corey_starter/`（幂等，永不覆盖用户已有版本）。默认 disabled，用户在 `customer.yaml` 加 `packs.preinstall: [corey_starter]` 或 Settings → Packs 一键启用。
+>
+> **再之前**：v0.2.4 任务面板 / 通知 / Artifact 块 / 审批 IPC（B-9.1~9.4，全局审批抽屉留待迭代）
+>
+> **下一件事**：v0.2.5 工作流硬化（B-10：timeout / retry / on_error / Tool step / Browser 实测）→ v0.3.0 跨境电商 Pack
+>
+> **关键铁律提醒**：(1) Pack 不写 React 只写 manifest.yaml；(2) Browser MCP 永不出现在付费交付里，等 SP-API；(3) 每次会话 token 易爆——读文件用 offset/limit，回答短而准。
+
+---
+
 > 版本：v2.0 · 2026-05-02
 > 商业模式：**只做定制**（B2B 直签 + 本地部署，不做 SaaS）
 > 架构原则：**唯一基座 + 数据驱动定制**（详见 `docs/01-architecture.md` § Pack Architecture）
@@ -143,6 +155,92 @@
   - [x] Rust IPC: hermes_data_reset + corey_config_reset
   - [x] 完整卸载手册（Windows + macOS）
 - **价值**：出问题时的逃生通道，客户支持成本下降
+
+#### B-9. 任务执行体验补完（v0.2.4）
+
+- **状态**：📋 计划中
+- **目标版本**：v0.2.4（约 2 周）
+- **背景**：v0.2.3 之后，"用户下任务 → CoreyOS 执行 → 出结果"的主链路上仍有 4 个核心缺口。补完后产品从"聊天 + 仪表板"跃升到真正的 control plane。
+
+##### B-9.1 任务面板 `/tasks`（缺口 1，最严重）
+- [ ] 新增侧边栏 Tools 层入口 + 路由 `/tasks`
+- [ ] 后端：Task 数据模型（id / title / kind=chat|workflow|skill|cron / status / started_at / ended_at / error / artifacts[] / token_usage）
+- [ ] 后端 IPC：`task_list` / `task_get` / `task_cancel` / `task_rerun`
+- [ ] 持久化：复用 `state.db`（新增 `tasks` 表 + migration）
+- [ ] UI：任务卡片列表（运行中/已完成/失败 三段）+ 详情面板（timeline 复用现有 trajectory 组件）
+- [ ] Workflow / Cron / 长 chat 自动注册为 Task；普通短问答不进面板（避免噪音）
+
+##### B-9.2 系统通知 + Tray 红点（缺口 2）
+- [ ] 接入 `tauri-plugin-notification`（Cargo 已声明）→ 任务完成/失败时弹通知
+- [ ] Tray menu 显示"运行中 N / 待审批 M"+ 红点 indicator
+- [ ] 通知点击 → 跳到 `/tasks/<id>` 或 `/approvals`
+- [ ] 用户可在 Settings 关闭/分级（仅失败 / 全部 / 关闭）
+
+##### B-9.3 审批 UI（缺口 3，决策归还闭环）
+- [ ] 后端轮询/SSE 订阅 Hermes `/api/approval/pending`（Corey 已 patch 该端点）
+- [ ] 全局审批抽屉（右下角浮窗）+ 路由 `/approvals` 详情页
+- [ ] 卡片显示：工具名 / 参数 / 风险等级 / 批准 / 拒绝 / 编辑参数后批准
+- [ ] 点击批准/拒绝 → POST `/api/approval/respond`
+- [ ] 与 B-9.2 联动：待审批数推 Tray + 通知
+
+##### B-9.4 Artifact 块（缺口 5，文件交付）
+- [ ] chat 消息渲染器识别长 markdown / 代码 / 表格 → 折叠成 artifact 卡片
+- [ ] 卡片自带按钮：复制 / 下载（保存到 `~/.hermes/artifacts/<task_id>/`）/ 在外部应用打开
+- [ ] Workflow 产出文件统一落 artifacts 目录 + 关联到任务（B-9.1）
+- [ ] artifact 列表在任务详情面板可见
+
+- **价值**：把"工具集"升级为"OS"。客户演示第一眼看到"任务在跑、有审批、能下载结果"，差异化立刻显化。
+- **依赖**：无（全部基于现有基础设施扩展）
+- **不做**（已砍）：
+  - ❌ 任务调度器 GUI（Cron 编辑用 schedules.yaml）
+  - ❌ 任务模板市场（与定制模式冲突）
+  - ❌ 多人协作 / 任务分配（不是 CoreyOS 的事）
+
+#### B-10. 工作流硬化（v0.2.5）
+
+- **状态**：📋 计划中
+- **目标版本**：v0.2.5（约 1-2 周）
+- **背景**：现有 workflow engine 打 7/10 分。DAG 调度 / 流式 agent / 审批 / 持久化 / Cron / 历史已就绪，但缺关键的"生产可靠性"特性。**Pack 真实跑前必须补完**，否则跨境 Pack 长跑必崩。
+
+##### B-10.1 Step 超时（结构已定义，未实现）
+- [ ] `WorkflowStep.timeout_minutes` 字段已存在但 executor 不读取
+- [ ] 实现：包一层 `tokio::time::timeout` 或 `select!`，超时 → `StepRunStatus::Failed` + `error: "step timeout"`
+- [ ] 默认值：agent step 30 分钟，tool step 5 分钟，browser step 10 分钟
+
+##### B-10.2 Retry + Backoff
+- [ ] `WorkflowStep.retry: { max: u32, backoff_seconds: u32, exponential: bool }`
+- [ ] Step 失败时按 retry 策略重跑，达到 max 才算最终 Failed
+- [ ] 流式 agent 重试时清空 partial output（不要把上次的 token 串到下次）
+
+##### B-10.3 错误处理分支 `on_error`
+- [ ] `WorkflowStep.on_error: Option<String>`（goto step_id）
+- [ ] Step 失败时若有 `on_error` → 跳到目标 step，run 状态保持 Running
+- [ ] 配合 retry：retry 用尽才触发 on_error
+- [ ] 没有 on_error 且无 retry → 维持现行 fail-fast 行为
+
+##### B-10.4 验证 / 实现 Tool Step（type: tool）
+- [ ] 当前 `tool_name` / `tool_args` 字段定义了，executor 没有 `execute_tool` 实现
+- [ ] 实现：通过 MCP server 调用，需要 Pack 启用的 MCP server id 路由
+- [ ] 如果 `tool_name` 是 `mcp_<server>_<method>` 格式 → resolve_mcp_source 复用
+- [ ] 没接通 = Pack 的"调外部数据"链路全断，**P-1 跨境 Pack 跑前必须验证**
+
+##### B-10.5 Browser Runner 实测
+- [ ] `execute_browser` 调子进程 `browser-runner`，不知道是真 Playwright 还是 stub
+- [ ] 0.5 天调研：跑一次真实 demo（打开 google.com → 截图 → 返回）
+- [ ] 如果是 stub 则纳入跨境 Pack 准备工作
+
+##### B-10.6 Sub-workflow（v0.2.5 之后做也可以）
+- [ ] `WorkflowStep.type: 'workflow'` + `workflow_id: string` + `workflow_inputs`
+- [ ] 复用现有 spawn_run_executor，把子 run 的输出作为父 step 的 output
+- [ ] 工作流间复用，避免 inline 复制大段步骤
+
+##### B-10.7 Webhook Trigger（按需）
+- [ ] `WorkflowTrigger::Webhook { secret: String }` + 监听 IPC `workflow_webhook`
+- [ ] 外部系统通过 HTTP 触发，绕开 Cron 限制
+- [ ] 真实客户合同要求时再做
+
+- **价值**：Pack 在客户机器 24/7 跑不崩。timeout + retry + on_error 是任何 production workflow engine 的标配。
+- **依赖**：无（全部基于现有 engine 扩展）
 
 #### B-8. Talk Mode 语音持续对话
 - **状态**：📋 计划中
@@ -320,6 +418,19 @@ v0.2.0（约 4-5 周）— 基座定制能力（"卖货前的最后一公里"）
 └── B-7  卸载 / 重置
 [同步] 申请 Amazon SP-API 开发者账号
 
+v0.2.4（约 2 周）— 任务执行体验补完（产品基本面）
+├── B-9.1  任务面板 /tasks
+├── B-9.2  系统通知 + Tray 红点
+├── B-9.3  审批 UI（决策归还闭环）
+└── B-9.4  Artifact 块（文件交付）
+
+v0.2.5（约 1-2 周）— 工作流硬化（Pack 落地前置）
+├── B-10.1  Step timeout
+├── B-10.2  Retry + backoff
+├── B-10.3  on_error 错误分支
+├── B-10.4  Tool step（MCP 路由）实现
+└── B-10.5  Browser runner 实测
+
 v0.3.0（约 3-4 周）— 跨境电商助手 完整版
 ├── P-1  跨境电商助手（9 能力一次性全做）
 └── 第一个真实客户上线
@@ -366,6 +477,8 @@ B-8 (Talk Mode)  独立（v0.4.0+，voice 模块已有基础）
 | v0.2.1 | ✅ | MCP 数据流 + dashboard 视图 + stdio 修复 |
 | v0.2.2 | ✅ | CI 修复（Windows clippy + embedding stamp test）|
 | v0.2.3 | ✅ | UI overhaul — gradient + glow + animation + light theme parity |
+| v0.2.4 | � | 任务执行体验补完 — 任务面板 ✅ / 通知 ✅ / Artifact ✅ / 审批 IPC ✅ / 全局抽屉 ⏳ |
+| v0.2.5 | 📋 | 工作流硬化 — timeout + retry + on_error + Tool step + Browser 实测 |
 | v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + 第一个真实客户 |
 | v0.4.0 | 📋 | Talk Mode 语音持续对话 + 按客户需求拉新 Pack |
 

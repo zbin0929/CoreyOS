@@ -1,0 +1,68 @@
+id: pdf-summary
+name: PDF 文档总结
+description: 把 PDF / 长文本压缩成结构化 JSON 总结（含 TL;DR、要点、行动项、风险）。粘贴文档抽取后的纯文本即可运行。
+version: 1
+trigger:
+  type: manual
+inputs:
+  - name: doc_title
+    label: 文档标题
+    type: string
+    default: ""
+    required: true
+  - name: doc_text
+    label: 文档纯文本（已抽取，不包含图片/表格）
+    type: string
+    default: ""
+    required: true
+  - name: audience
+    label: 摘要读者画像（决定语气和详细度）
+    type: string
+    default: 公司高管
+    required: false
+
+steps:
+  - id: outline
+    name: 抽取结构与要点
+    type: agent
+    after: []
+    agent_id: hermes-default
+    prompt: |
+      你是文档摘要专家。下面是用户提供的文档原文（标题：「{{inputs.doc_title}}」），
+      请为「{{inputs.audience}}」生成一份高密度结构化摘要。
+
+      ----- 文档原文开始 -----
+      {{inputs.doc_text}}
+      ----- 文档原文结束 -----
+
+      输出严格 JSON（不要 markdown 包裹）：
+      {
+        "title": "{{inputs.doc_title}}",
+        "tl_dr": <string>,                  // 不超过 100 字
+        "key_points": [<string>, ...],      // 5-8 条，每条 1 句
+        "action_items": [
+          { "owner_hint": <string>, "action": <string>, "deadline_hint": <string> }
+        ],
+        "risks": [<string>, ...],           // 0-5 条
+        "open_questions": [<string>, ...],  // 0-5 条
+        "confidence": "high"|"medium"|"low" // 取决于原文清晰度
+      }
+
+      规则：
+      - 严禁臆造原文没有的事实
+      - 引用具体数字时必须能在原文找到
+      - 无足够依据则把 confidence 调低并在 open_questions 中点明
+    output_format: json
+
+  - id: brief
+    name: 生成执行摘要（Markdown）
+    type: agent
+    after:
+      - outline
+    agent_id: hermes-default
+    prompt: |
+      基于以下结构化要点，为「{{inputs.audience}}」生成一份 Markdown 执行摘要
+      （≤ 500 字，含 TL;DR / 关键要点 / 待办 / 风险 4 个二级标题）。
+
+      数据：{{outline.output}}
+    output_format: markdown
