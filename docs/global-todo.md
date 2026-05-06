@@ -1,12 +1,15 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.6 published + v0.2.7 ready to tag** · B-9 / B-10 全部子项接通 · 路由 + unwrap 巡检干净 · 下一步建议：tag v0.2.7 → 选 P-1 P1 跨境自动化深度 或 B-9.4 artifacts dir 等）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.7 published** · B-9 / B-10 全部子项接通 · B-5 离线 BGE-M3 CI 补齐 · 路由 + unwrap 巡检干净 ·
+> **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号 · SP-API 到位后 1-2 周做完 P1
+> **可继续选项**：B-8 Talk Mode（v0.4.0+，独立工作）/ B-9.4 workflow artifacts dir / 真实 browser demo（需 BROWSER_LLM_API_KEY））
 
-### v0.2.7-dev 本轮交付（2026-05-06 第二批）
+### v0.2.7 已发布交付（2026-05-06 第二批）
 - B-10.6 子工作流（cycle 检测 + 输入模板 + 6 单测）— `03320ac`
 - B-10.7 webhook HTTP 触发（Bearer token + Settings UI + e2e）— `fd3ac64` `dfdf00b`
 - B-9.4 长表格 → CSV artifact 卡片 — `2257aab`
 - B-9.2 通知分级（off / failure / all） — `2257aab`
+- B-5 离线 BGE-M3 CI workflow（`release-bge-m3.yml` 手动触发 → COS）
 - 路由巡检：25 条路由全部健康
 - unwrap 巡检：生产代码 0 个 unwrap，"141 基线"是包含测试的过时数
 >
@@ -145,15 +148,15 @@
 - **不做**：在线激活 / JWT / 心跳 / 客户后台（已有 ed25519 离线方案够用）
 
 #### B-5. BGE-M3 离线 zip 包导入
-- **状态**：🟡 代码完成，CI 打包脚本待做
-- **目标版本**：v0.2.0
+- **状态**：✅ 完成（2026-05-06 v0.2.7）
+- **目标版本**：v0.2.0 → v0.2.7
 - **内容**：
-  - [ ] 交付一份 `bge-m3-offline.zip`（约 2.3GB，CI 自动打包）— 需独立打包脚本
-  - [x] Knowledge / 设置页加"导入离线模型包"按钮
+  - [x] 交付一份 `bge-m3-offline.zip`（约 2.3GB） — `scripts/pack-bge-m3-offline.sh` 已存在
+  - [x] CI workflow `release-bge-m3.yml`：手动触发 → 跑脚本 → 上传 COS `releases/models/bge-m3-offline.zip` + 大小校验防截断
+  - [x] Knowledge / 设置页"导入离线模型包"按钮
   - [x] 解压到 `~/.hermes/models/bge-m3/` + 大小校验 + 校验通过后启用 RAG
 - **价值**：内网无网客户可直接拿到模型，不依赖联网下载
-- **依赖**：无（B-1 基础上的扩展）
-- **工时**：约 1-2 天
+- **再生流程**：BAAI 更新 BGE-M3 时（约一年一次）→ Actions → Release BGE-M3 offline pack → Run workflow
 
 ### 第 2 层 — 应做（影响交付质量）
 
@@ -279,15 +282,17 @@
 - [x] 测试覆盖：`run_command_capturing_completes_normally_under_timeout` / `run_command_capturing_kills_child_on_timeout`（5s sleep + 200ms timeout，wall-clock < 2s）/ `run_command_capturing_no_timeout_waits_for_completion`
 - [ ] **真实 demo 测试**：用 `corey_starter` 加一个 browser step 跑 `https://example.com` extract title — 留作冒烟测试，需要 BROWSER_LLM_API_KEY 配置
 
-##### B-10.6 Sub-workflow（v0.2.5 之后做也可以）
-- [ ] `WorkflowStep.type: 'workflow'` + `workflow_id: string` + `workflow_inputs`
-- [ ] 复用现有 spawn_run_executor，把子 run 的输出作为父 step 的 output
-- [ ] 工作流间复用，避免 inline 复制大段步骤
+##### B-10.6 Sub-workflow ✅
+- [x] `WorkflowStep.type: 'workflow'` + `workflow_id` + `workflow_inputs`（2026-05-06 commit `03320ac`）
+- [x] 复用 `execute_with_executor` 同步驱动子 run，输出落 `outputs.<step_id>`
+- [x] 防环：context.run_stack 深度检测，A→B→A 也能抓到
+- [x] 6 单测（cycle / 缺 id / 输入渲染）
 
-##### B-10.7 Webhook Trigger（按需）
-- [ ] `WorkflowTrigger::Webhook { secret: String }` + 监听 IPC `workflow_webhook`
-- [ ] 外部系统通过 HTTP 触发，绕开 Cron 限制
-- [ ] 真实客户合同要求时再做
+##### B-10.7 Webhook Trigger ✅
+- [x] `POST /webhook/{workflow_id}` 走现有 axum 监听（127.0.0.1 only），而不是给 `WorkflowTrigger` 加新 variant — 任意工作流都可被触发，更灵活
+- [x] Bearer token 认证（UUID auto-gen，落 `~/.hermes/.corey-webhook-token`，0600）+ `webhook_token_get` / `webhook_token_rotate` IPC
+- [x] Settings → Webhook UI：URL + 遮罩 token + curl 示例 + 轮换按钮
+- [x] 7 后端单测 + 2 e2e（commit `fd3ac64` `dfdf00b`）
 
 - **价值**：Pack 在客户机器 24/7 跑不崩。timeout + retry + on_error 是任何 production workflow engine 的标配。
 - **依赖**：无（全部基于现有 engine 扩展）
@@ -391,6 +396,9 @@
   - [x] Browser MCP 打包方案已决策：Phase 1 = Python venv + setup.sh（当前）; Phase 2 = PyInstaller per-platform binary（发布前）— setup.sh 已创建
 
   #### P1 — 不做会显得粗糙（自动化深度 + 关键监控）
+
+  > ⏸️ **状态：阻塞中** — 不是不做，是缺 Amazon SP-API 开发者账号。所有 P1 项依赖 `mcp-amazon-sp` MCP server，没有 SP-API key 就跑不通。当前 mock 数据足够 demo 但无法实测真实店铺。SP-API 申请到位后启动，预估 1-2 周做完 P1。
+
 
   - [ ] 广告规则引擎：Target ACOS 自动调 bid / 预算再分配（低 ACOS campaign 加预算）/ 自动否词（20 次点击无转化自动加否）
   - [ ] 分时投放 Dayparting：按小时级 metrics 展示，高转化时段加 bid / 低转化时段降 bid
@@ -527,9 +535,11 @@ B-8 (Talk Mode)  独立（v0.4.0+，voice 模块已有基础）
 | v0.2.1 | ✅ | MCP 数据流 + dashboard 视图 + stdio 修复 |
 | v0.2.2 | ✅ | CI 修复（Windows clippy + embedding stamp test）|
 | v0.2.3 | ✅ | UI overhaul — gradient + glow + animation + light theme parity |
-| v0.2.4 | � | 任务执行体验补完 — 任务面板 ✅ / 通知 ✅ / Artifact ✅ / 审批 IPC ✅ / 全局抽屉 ⏳ |
-| v0.2.5 | 📋 | 工作流硬化 — timeout + retry + on_error + Tool step + Browser 实测 |
-| v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + 第一个真实客户 |
+| v0.2.4 | ✅ | 任务执行体验补完 — 任务面板 / 通知 / Artifact / 审批 IPC（v0.2.6 完整接通）|
+| v0.2.5 | ✅ | 工作流硬化 — timeout + retry + on_error + Tool step + Browser 实测 |
+| v0.2.6 | ✅ | B-9 主链路：tray 计数 + 桌面通知 + /approvals + artifact 原生 save |
+| v0.2.7 | ✅ | B-10.6 子工作流 + B-10.7 webhook + 长表格 CSV + 通知分级 + 路由/unwrap 巡检 + B-5 离线包 CI |
+| v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + **阻塞：Amazon SP-API 开发者账号** |
 | v0.4.0 | 📋 | Talk Mode 语音持续对话 + 按客户需求拉新 Pack |
 
 ---
