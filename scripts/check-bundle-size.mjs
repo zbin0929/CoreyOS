@@ -24,15 +24,18 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-/** Current main chunk (2026-04-27 post-workflow-lifecycle pass)
- *  sits at ~308 KB gzip. The bump from 289 → 308 KB came from the
- *  P0.5 workflow lifecycle work: streaming hooks, History route,
- *  cancel + reject + LLM-profile UI, audit export. History.tsx is
- *  already lazy-imported; the rest is on the workflow main route
- *  (running visualization, hooks plumbing) and lives on the hot
- *  path. Budget set 12 KB above current to give the next two-three
- *  features headroom before the next code-split round. */
-const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 320);
+/** Current main chunk (2026-05-06 post v0.2.4 + B-11 pass)
+ *  sits at ~321 KB gzip. The 308 → 321 KB bump came from B-9.x
+ *  global tasks polling store, ArtifactBlock in the chat message
+ *  bundle, Pack store + sidebar Pack-views section, and the Pack
+ *  bundled-seed glue. None of it is route-split-friendly: the
+ *  tasks store backs the always-on sidebar badge, ArtifactBlock
+ *  ships inside the chat hot path, and Pack views need to be
+ *  resolvable on cold boot for the sidebar.
+ *  Budget set 9 KB above current to give the next two-three Pack
+ *  features (v0.2.5 workflow hardening, v0.3.0 cross-border Pack
+ *  base wiring) headroom before the next code-split round. */
+const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 330);
 const DIST_ASSETS = resolve(process.cwd(), 'dist', 'assets');
 
 function gzipKb(buf) {
