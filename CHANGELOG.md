@@ -6,6 +6,19 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-06 — v0.2.8 · Hermes invariant features (label / vision proxy / MCP expansion / memory dedup)
+
+> Premise: **all changes are Corey-side only**. Zero modifications to Hermes Agent code or trait surface — future Hermes upgrades drop in unchanged.
+
+### Shipped
+
+- **Editable label for default Hermes adapter** — the primary `id="hermes"` adapter now has a `label` field in `gateway.json`, surfaced as a `PrimaryHermesCard` at the top of Settings → Hermes Instances. Hot-swap on save (no app restart). Previously the AgentSwitcher pill was stuck on the literal "Hermes" with no UI to change it.
+- **Vision proxy** — when the user's chat model can't see images, route image attachments through a separately configured vision LLM and inline the description into the user's message text BEFORE the chat turn reaches the adapter. New `crate::vision_proxy` module with SHA-256 cache at `~/.hermes/vision_cache/<hash>.txt` so a re-asked image is a flat-file read. Hooked into `chat_send` and `chat_stream_start` at the IPC boundary; adapter never has to know. Settings → Vision Proxy section drives config (model + base_url + api_key_env + custom prompt).
+- **MCP tools expansion** — Hermes can now drive 6 more operations from chat: `list_skills` / `list_chat_sessions` / `read_memory` / `append_memory` / `list_active_runs` / `cancel_run`. Each is a thin wrapper over an existing Corey IPC; no new types ship through the Hermes Agent itself.
+- **Memory dedup** — fixes the 307-line MEMORY.md noise (lots of "桌面通知已发送 ✅" restatements). `tokenize` now uses CJK character bigrams + ASCII whitespace; jaccard threshold lowered 0.65 → 0.45 because bigram overlap is denser. `learning_compact_memory` extended with the same Jaccard pass on already-kept fact bullets. `usePostSendEffects` gates auto-extract on length floor (20-char user / 80-char assistant) + 10-min cooldown. Settings → Memory gains a "Compact Memory" button.
+
+---
+
 ## 2026-05-06 — v0.2.7 · B-9 / B-10 close-out + audit
 
 ### Shipped
