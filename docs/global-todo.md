@@ -1,8 +1,18 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.7 published** · B-9 / B-10 全部子项接通 · B-5 离线 BGE-M3 CI 补齐 · 路由 + unwrap 巡检干净 ·
-> **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号 · SP-API 到位后 1-2 周做完 P1
-> **可继续选项**：B-8 Talk Mode（v0.4.0+，独立工作）/ B-9.4 workflow artifacts dir / 真实 browser demo（需 BROWSER_LLM_API_KEY））
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.8 published**）
+>
+> **铁律**：所有改动 0 修改 Hermes Agent 代码 / trait 表面 — 未来 Hermes 升级直接替换 binary 即可，CoreyOS 不会因 Hermes 改动而崩。
+>
+> **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号（SP-API 到位后 1-2 周做完）
+> **可继续选项**：B-8 Talk Mode（v0.4.0+）/ B-9.4 workflow artifacts dir（等 producer 出现）/ P-1 P3 UI 美化 12 项
+
+### v0.2.8 已发布交付（2026-05-06 晚 · 用户 4 项需求 + Hermes 不变性约束）
+- **A · 默认 Hermes label 可改** — `gateway.json` 加 `label`，新 `PrimaryHermesCard` 在 Hermes 实例顶部，热保存（`509a5ec`）
+- **B · 视觉代理** — 不支持 vision 的模型用图片时，先调用支持 vision 的模型识图 → 描述塞进文本。配置走 `LlmProfile` 选择，不再手填（`7e3d08b` `bfac2ef`）
+- **C · MCP 工具扩展** — Hermes 通过对话能调用：`list_skills` / `list_chat_sessions` / `read_memory` / `append_memory` / `list_active_runs` / `cancel_run`（`b756619`）
+- **D · 记忆去重** — CJK bigram 分词 + 阈值 0.65→0.45 + 抽取节流（10 min 冷却 + 长度门槛）+ Settings 一键合并（`48aee25`）
+- **B-10.5 真实 browser demo 验证** — 1.7s 跑通 example.com 抓取，顺带修了 latent bug：runner 写的是 Stagehand v2 API 但实际版本是 v3（`5febc61`）
 
 ### v0.2.7 已发布交付（2026-05-06 第二批）
 - B-10.6 子工作流（cycle 检测 + 输入模板 + 6 单测）— `03320ac`
@@ -539,6 +549,7 @@ B-8 (Talk Mode)  独立（v0.4.0+，voice 模块已有基础）
 | v0.2.5 | ✅ | 工作流硬化 — timeout + retry + on_error + Tool step + Browser 实测 |
 | v0.2.6 | ✅ | B-9 主链路：tray 计数 + 桌面通知 + /approvals + artifact 原生 save |
 | v0.2.7 | ✅ | B-10.6 子工作流 + B-10.7 webhook + 长表格 CSV + 通知分级 + 路由/unwrap 巡检 + B-5 离线包 CI |
+| v0.2.8 | ✅ | Hermes 不变性约束下：默认 label 可改 + 视觉代理（走 LlmProfile）+ 6 个新 MCP 工具 + 记忆 CJK bigram 去重 |
 | v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + **阻塞：Amazon SP-API 开发者账号** |
 | v0.4.0 | 📋 | Talk Mode 语音持续对话 + 按客户需求拉新 Pack |
 
