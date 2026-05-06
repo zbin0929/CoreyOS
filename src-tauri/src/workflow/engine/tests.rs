@@ -760,3 +760,200 @@ fn retry_then_on_error_handler() {
     // max=1 → 2 attempts total before on_error fires.
     assert_eq!(*executor.primary_calls.lock().expect("lock"), 2);
 }
+
+// ───────────────────────── B-10.1 timeout plumbing ─────────────────────────
+
+use std::time::Duration;
+
+/// Test executor that records every timeout it received via the
+/// `_with_timeout` trait methods. Used to pin engine→executor
+/// plumbing without relying on a real tokio timeout firing.
+struct TimeoutRecorder {
+    seen: Mutex<Vec<Option<Duration>>>,
+}
+
+impl StepExecutor for TimeoutRecorder {
+    fn execute_agent(&self, _agent_id: &str, prompt: &str) -> Result<String, String> {
+        Ok(prompt.to_string())
+    }
+
+    fn execute_agent_streaming_with_timeout(
+        &self,
+        _agent_id: &str,
+        prompt: &str,
+        timeout: Option<Duration>,
+        _progress: &dyn Fn(&str),
+    ) -> Result<String, String> {
+        self.seen.lock().expect("seen lock").push(timeout);
+        Ok(prompt.to_string())
+    }
+
+    fn execute_agent_with_timeout(
+        &self,
+        _agent_id: &str,
+        prompt: &str,
+        timeout: Option<Duration>,
+    ) -> Result<String, String> {
+        self.seen.lock().expect("seen lock").push(timeout);
+        Ok(prompt.to_string())
+    }
+}
+
+#[test]
+fn timeout_default_for_agent_step_is_30min() {
+    // No `timeout_minutes` on the step → engine applies the
+    // per-type default (agent = 30 min). Pinning this contract
+    // here so a future tweak to `default_timeout` doesn't drift
+    // silently.
+    let def = WorkflowDef {
+        id: "to-default".into(),
+        name: "to-default".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![agent_step("a", vec![], "hello")],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = TimeoutRecorder {
+        seen: Mutex::new(Vec::new()),
+    };
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Completed);
+    let seen = executor.seen.lock().expect("seen");
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0], Some(Duration::from_secs(30 * 60)));
+}
+
+#[test]
+fn timeout_step_field_overrides_default() {
+    // `timeout_minutes: 2` should land at the executor as 120s,
+    // not the 30-min agent default.
+    let def = WorkflowDef {
+        id: "to-override".into(),
+        name: "to-override".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "a".into(),
+            name: "a".into(),
+            step_type: "agent".into(),
+            agent_id: Some("hermes-default".into()),
+            prompt: Some("hello".into()),
+            timeout_minutes: Some(2),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = TimeoutRecorder {
+        seen: Mutex::new(Vec::new()),
+    };
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    let seen = executor.seen.lock().expect("seen");
+    assert_eq!(seen[0], Some(Duration::from_secs(120)));
+}
+
+#[test]
+fn timeout_error_marks_step_failed_and_composes_with_retry() {
+    // An executor that returns the canonical timeout error string.
+    // With `retry.max = 2`, the step should be attempted 3 times
+    // total before flipping the run to Failed. Verifies that the
+    // retry policy treats timeout failures the same as any other
+    // error (no special-casing required).
+    struct AlwaysTimesOut {
+        calls: Mutex<u32>,
+    }
+    impl StepExecutor for AlwaysTimesOut {
+        fn execute_agent(&self, _agent_id: &str, _prompt: &str) -> Result<String, String> {
+            let mut n = self.calls.lock().expect("calls");
+            *n += 1;
+            Err("step timeout after 60s".into())
+        }
+    }
+
+    let def = WorkflowDef {
+        id: "to-fail".into(),
+        name: "to-fail".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "a".into(),
+            name: "a".into(),
+            step_type: "agent".into(),
+            agent_id: Some("hermes-default".into()),
+            prompt: Some("hello".into()),
+            retry: Some(crate::workflow::model::RetryPolicy {
+                max: 2,
+                backoff_seconds: 0,
+                exponential: false,
+            }),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = AlwaysTimesOut {
+        calls: Mutex::new(0),
+    };
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Failed);
+    assert_eq!(run.step_runs["a"].status, StepRunStatus::Failed);
+    assert_eq!(*executor.calls.lock().expect("calls"), 3);
+    assert!(run.step_runs["a"]
+        .error
+        .as_deref()
+        .unwrap_or_default()
+        .contains("step timeout"));
+}
+
+#[test]
+fn timeout_default_none_for_branch_step() {
+    // Branch is in-process, can't hang on I/O — engine should
+    // pass `None` to keep `default_timeout` honest for non-I/O
+    // step types. (We assert this indirectly: the agent child
+    // gets the agent default; the branch parent is never sent to
+    // an executor at all.)
+    let def = WorkflowDef {
+        id: "to-branch".into(),
+        name: "to-branch".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![
+            agent_step("seed", vec![], "topic is {{inputs.topic}}"),
+            WorkflowStep {
+                id: "route".into(),
+                name: "route".into(),
+                step_type: "branch".into(),
+                after: vec!["seed".into()],
+                conditions: Some(vec![BranchCondition {
+                    expression: "inputs.topic == \"AI\"".into(),
+                    goto: "done".into(),
+                }]),
+                ..Default::default()
+            },
+            agent_step("done", vec!["route"], "ok"),
+        ],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({ "topic": "AI" }));
+    let executor = TimeoutRecorder {
+        seen: Mutex::new(Vec::new()),
+    };
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Completed);
+    let seen = executor.seen.lock().expect("seen");
+    // Two agent calls (seed + done), both at the agent default.
+    // Branch step never hits the executor.
+    assert_eq!(seen.len(), 2);
+    assert!(seen
+        .iter()
+        .all(|t| *t == Some(Duration::from_secs(30 * 60))));
+}

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -165,6 +166,66 @@ pub trait StepExecutor: Send + Sync {
             action, instruction, url, profile
         ))
     }
+
+    // ── B-10.1 Timeout-aware variants ──────────────────────────────
+    //
+    // The engine always calls these `_with_timeout` methods so it
+    // can enforce a per-step deadline. The default impls **drop**
+    // the timeout and forward to the non-timeout method — that's
+    // safe for `SimulatedExecutor` and the test executors which
+    // never hang. `HermesExecutor` overrides them to wrap the
+    // underlying `tokio::block_on(...)` in `tokio::time::timeout`,
+    // which is the only place a stuck network call can actually
+    // be cancelled cleanly.
+
+    fn execute_agent_with_timeout(
+        &self,
+        agent_id: &str,
+        prompt: &str,
+        _timeout: Option<Duration>,
+    ) -> Result<String, String> {
+        self.execute_agent(agent_id, prompt)
+    }
+
+    fn execute_agent_streaming_with_timeout(
+        &self,
+        agent_id: &str,
+        prompt: &str,
+        _timeout: Option<Duration>,
+        progress: &dyn Fn(&str),
+    ) -> Result<String, String> {
+        self.execute_agent_streaming(agent_id, prompt, progress)
+    }
+
+    fn execute_browser_with_timeout(
+        &self,
+        action: &str,
+        url: &str,
+        instruction: &str,
+        profile: &str,
+        _timeout: Option<Duration>,
+    ) -> Result<String, String> {
+        self.execute_browser(action, url, instruction, profile)
+    }
+}
+
+/// Default per-type timeout. `step.timeout_minutes` overrides
+/// this when set. `None` means "no timeout enforced" — used for
+/// branch/loop/parallel scaffolding steps that don't actually
+/// hang on I/O.
+fn default_timeout(step_type: &str) -> Option<Duration> {
+    match step_type {
+        "agent" => Some(Duration::from_secs(30 * 60)),
+        "browser" => Some(Duration::from_secs(10 * 60)),
+        "tool" => Some(Duration::from_secs(5 * 60)),
+        _ => None,
+    }
+}
+
+fn resolve_step_timeout(step: &WorkflowStep) -> Option<Duration> {
+    step.timeout_minutes
+        .map(|m| Duration::from_secs(m as u64 * 60))
+        .or_else(|| default_timeout(&step.step_type))
 }
 
 #[allow(dead_code)]
@@ -350,13 +411,14 @@ pub fn execute_with_hooks(
             let max_retries = step.retry.as_ref().map(|r| r.max).unwrap_or(0);
             let step_start = std::time::Instant::now();
             let mut attempts: u32 = 0;
+            let step_timeout = resolve_step_timeout(step);
             let final_result: Result<serde_json::Value, String> = loop {
                 let exec_result = if step.step_type == "agent" {
-                    execute_agent_step_streaming(step, ctx, executor, &|partial| {
+                    execute_agent_step_streaming(step, ctx, executor, step_timeout, &|partial| {
                         on_step_progress(step_id, partial);
                     })
                 } else {
-                    execute_step_live(step, ctx, executor)
+                    execute_step_live(step, ctx, executor, step_timeout)
                 };
                 match exec_result {
                     Ok(out) => break Ok(out),
@@ -448,11 +510,12 @@ fn execute_step_live(
     step: &WorkflowStep,
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
+    timeout: Option<Duration>,
 ) -> Result<serde_json::Value, String> {
     match step.step_type.as_str() {
-        "agent" => execute_agent_step_live(step, ctx, executor),
+        "agent" => execute_agent_step_live(step, ctx, executor, timeout),
         "tool" => execute_tool_step(step, ctx),
-        "browser" => execute_browser_step(step, ctx, executor),
+        "browser" => execute_browser_step(step, ctx, executor, timeout),
         "parallel" => execute_parallel_step_live(step, ctx, executor),
         "branch" => execute_branch_step(step, ctx),
         "loop" => execute_loop_step_live(step, ctx, executor),
@@ -471,6 +534,7 @@ fn execute_agent_step_live(
     step: &WorkflowStep,
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
+    timeout: Option<Duration>,
 ) -> Result<serde_json::Value, String> {
     // Non-streaming entry point. Used by the legacy
     // `execute_with_executor` path (no progress hook) and by
@@ -479,7 +543,7 @@ fn execute_agent_step_live(
     let prompt = step.prompt.as_deref().ok_or("agent step missing prompt")?;
     let rendered = ctx.render_template(prompt);
     let agent_id = step.agent_id.as_deref().unwrap_or("hermes-default");
-    let text = executor.execute_agent(agent_id, &rendered)?;
+    let text = executor.execute_agent_with_timeout(agent_id, &rendered, timeout)?;
     Ok(json!({
         "text": text,
         "agent_id": agent_id,
@@ -490,6 +554,7 @@ fn execute_agent_step_streaming(
     step: &WorkflowStep,
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
+    timeout: Option<Duration>,
     progress: &dyn Fn(&str),
 ) -> Result<serde_json::Value, String> {
     // Streaming-aware version. The executor MAY call `progress` with
@@ -501,7 +566,8 @@ fn execute_agent_step_streaming(
     let prompt = step.prompt.as_deref().ok_or("agent step missing prompt")?;
     let rendered = ctx.render_template(prompt);
     let agent_id = step.agent_id.as_deref().unwrap_or("hermes-default");
-    let text = executor.execute_agent_streaming(agent_id, &rendered, progress)?;
+    let text =
+        executor.execute_agent_streaming_with_timeout(agent_id, &rendered, timeout, progress)?;
     Ok(json!({
         "text": text,
         "agent_id": agent_id,
@@ -512,6 +578,7 @@ fn execute_browser_step(
     step: &WorkflowStep,
     ctx: &mut RunContext,
     executor: &dyn StepExecutor,
+    timeout: Option<Duration>,
 ) -> Result<serde_json::Value, String> {
     let instruction = step
         .prompt
@@ -521,7 +588,7 @@ fn execute_browser_step(
     let url = step.tool_name.as_deref().unwrap_or("");
     let action = step.agent_id.as_deref().unwrap_or("agent");
     let profile = step.browser_profile.as_deref().unwrap_or("");
-    let result = executor.execute_browser(action, url, &rendered, profile)?;
+    let result = executor.execute_browser_with_timeout(action, url, &rendered, profile, timeout)?;
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&result);
     match parsed {
         Ok(v) => Ok(v),
@@ -540,7 +607,13 @@ fn execute_parallel_step_live(
         .ok_or("parallel step missing branches")?;
     let mut results = serde_json::Map::new();
     for branch in branches {
-        let output = execute_step_live(branch, ctx, executor)?;
+        // Parallel branches inherit the parent step's timeout per
+        // child for a simpler mental model — "each branch must
+        // finish within X" rather than "all branches share X". The
+        // engine drives this loop sequentially today, so the
+        // wall-clock budget is the worst case anyway.
+        let child_timeout = resolve_step_timeout(branch);
+        let output = execute_step_live(branch, ctx, executor, child_timeout)?;
         ctx.set_step_output(&branch.id, output.clone());
         results.insert(branch.id.clone(), output);
     }
@@ -559,7 +632,8 @@ fn execute_loop_step_live(
     for i in 0..max {
         let mut iter_output = serde_json::Map::new();
         for b in body {
-            match execute_step_live(b, ctx, executor) {
+            let body_timeout = resolve_step_timeout(b);
+            match execute_step_live(b, ctx, executor, body_timeout) {
                 Ok(out) => {
                     ctx.set_step_output(&b.id, out.clone());
                     iter_output.insert(b.id.clone(), out);

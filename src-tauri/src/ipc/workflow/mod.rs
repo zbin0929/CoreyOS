@@ -263,6 +263,164 @@ impl StepExecutor for HermesExecutor {
         result
     }
 
+    // ── B-10.1 timeout overrides ───────────────────────────────────
+    //
+    // These three methods are what the engine actually calls. Each
+    // wraps the underlying blocking `rt.block_on(...)` body in
+    // `tokio::time::timeout(d, future)` so a stuck network call —
+    // hermes hung mid-stream, an LLM provider sitting on the socket,
+    // a browser-runner subprocess that won't exit — gets converted
+    // into a clean `Err("step timeout after Xs")` instead of pegging
+    // a worker forever. The error string is plain enough that retry
+    // + on_error can compose with it (B-10.2 / B-10.3) without any
+    // special-casing.
+    //
+    // `None` means "no timeout enforced" (e.g. the caller deliberately
+    // opted out via `step.timeout_minutes = 0` on a future schema
+    // change). Today the engine always passes a Some via
+    // `default_timeout`, so the None branch is a forward-compat
+    // courtesy.
+
+    fn execute_agent_with_timeout(
+        &self,
+        agent_id: &str,
+        prompt: &str,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<String, String> {
+        let Some(d) = timeout else {
+            return self.execute_agent(agent_id, prompt);
+        };
+        let rt = tokio::runtime::Handle::current();
+        let adapter_id = if agent_id.is_empty() {
+            "hermes"
+        } else {
+            agent_id
+        };
+        let adapter = self
+            .adapters
+            .get(adapter_id)
+            .or_else(|| self.adapters.default_adapter())
+            .ok_or_else(|| format!("adapter '{}' not found", adapter_id))?;
+
+        let turn = ChatTurn {
+            messages: vec![ChatMessageDto {
+                role: "user".into(),
+                content: prompt.into(),
+                attachments: vec![],
+            }],
+            model: None,
+            cwd: None,
+            model_supports_vision: None,
+        };
+
+        rt.block_on(async move {
+            match tokio::time::timeout(d, adapter.chat_once(turn)).await {
+                Ok(res) => res.map_err(|e| format!("agent error: {e}")),
+                Err(_) => Err(format!("step timeout after {}s", d.as_secs())),
+            }
+        })
+    }
+
+    fn execute_agent_streaming_with_timeout(
+        &self,
+        agent_id: &str,
+        prompt: &str,
+        timeout: Option<std::time::Duration>,
+        progress: &dyn Fn(&str),
+    ) -> Result<String, String> {
+        let Some(d) = timeout else {
+            return self.execute_agent_streaming(agent_id, prompt, progress);
+        };
+        use crate::adapters::hermes::gateway::ChatStreamEvent;
+
+        let rt = tokio::runtime::Handle::current();
+        let adapter_id = if agent_id.is_empty() {
+            "hermes"
+        } else {
+            agent_id
+        };
+        let adapter = self
+            .adapters
+            .get(adapter_id)
+            .or_else(|| self.adapters.default_adapter())
+            .ok_or_else(|| format!("adapter '{}' not found", adapter_id))?;
+
+        let turn = ChatTurn {
+            messages: vec![ChatMessageDto {
+                role: "user".into(),
+                content: prompt.into(),
+                attachments: vec![],
+            }],
+            model: None,
+            cwd: None,
+            model_supports_vision: None,
+        };
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<ChatStreamEvent>(64);
+
+        rt.block_on(async move {
+            let work = async {
+                let producer = async {
+                    adapter
+                        .chat_stream(turn, tx)
+                        .await
+                        .map_err(|e| format!("agent error: {e}"))
+                };
+                let consumer = async {
+                    let mut acc = String::new();
+                    let mut last_emit = std::time::Instant::now();
+                    while let Some(ev) = rx.recv().await {
+                        if let ChatStreamEvent::Delta(chunk) = ev {
+                            if !chunk.is_empty() {
+                                acc.push_str(&chunk);
+                                if last_emit.elapsed() >= std::time::Duration::from_millis(50) {
+                                    progress(&acc);
+                                    last_emit = std::time::Instant::now();
+                                }
+                            }
+                        }
+                    }
+                    if !acc.is_empty() {
+                        progress(&acc);
+                    }
+                    acc
+                };
+                let (producer_res, accumulated) = tokio::join!(producer, consumer);
+                producer_res?;
+                Ok::<String, String>(accumulated)
+            };
+            match tokio::time::timeout(d, work).await {
+                Ok(res) => res,
+                Err(_) => Err(format!("step timeout after {}s", d.as_secs())),
+            }
+        })
+    }
+
+    fn execute_browser_with_timeout(
+        &self,
+        action: &str,
+        url: &str,
+        instruction: &str,
+        profile: &str,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<String, String> {
+        // Browser timeout enforcement requires reworking the
+        // subprocess wait into a poll-+-kill loop, deferred to
+        // B-10.5 alongside the Playwright smoke test. For now we
+        // log the requested timeout and fall back to the existing
+        // `cmd.output()` blocking call. A hung browser-runner will
+        // still hang the workflow step today; agent timeouts cover
+        // the dominant failure mode (network-hung LLM call).
+        if let Some(d) = timeout {
+            tracing::debug!(
+                action = %action,
+                requested_timeout_seconds = d.as_secs(),
+                "browser step timeout requested but enforcement deferred (B-10.5)",
+            );
+        }
+        self.execute_browser(action, url, instruction, profile)
+    }
+
     fn execute_browser(
         &self,
         action: &str,

@@ -1,6 +1,6 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 tag · B-10 已开工 retry+on_error）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 tag · B-10.1+10.2+10.3 完成）
 >
 > **今天 19 个 commit 落地（`d2827a5` → `b014a84`）**：
 > 1. **路由瘦身**（22 → 15）：`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` `/compare` `/terminal` 全部从 sidebar 移除，URL 保留，落到 Settings → Advanced（`DEMOTED_ROUTES` 数组 + `<DemotedRouteBanner>` 横幅）。详见 N-2 / N-3 规则。
@@ -220,10 +220,15 @@
 - **目标版本**：v0.2.5（约 1-2 周）
 - **背景**：现有 workflow engine 打 7/10 分。DAG 调度 / 流式 agent / 审批 / 持久化 / Cron / 历史已就绪，但缺关键的"生产可靠性"特性。**Pack 真实跑前必须补完**，否则跨境 Pack 长跑必崩。
 
-##### B-10.1 Step 超时（结构已定义，未实现）
-- [ ] `WorkflowStep.timeout_minutes` 字段已存在但 executor 不读取
-- [ ] 实现：包一层 `tokio::time::timeout` 或 `select!`，超时 → `StepRunStatus::Failed` + `error: "step timeout"`
-- [ ] 默认值：agent step 30 分钟，tool step 5 分钟，browser step 10 分钟
+##### B-10.1 Step 超时 ✅（agent 完成 / browser 待 B-10.5）
+- [x] Trait 扩 `_with_timeout` 三件套（agent / agent_streaming / browser），默认 impl 转发到原方法（零测试 churn）
+- [x] Engine `default_timeout()`：agent 30min / browser 10min / tool 5min / 其它 None
+- [x] `step.timeout_minutes` 优先级高于默认（`resolve_step_timeout`）
+- [x] HermesExecutor 用 `tokio::time::timeout` 包 `block_on(async {...})`，超时 → `Err("step timeout after Xs")`
+- [x] Timeout 错误天然走 retry/on_error 通路（同一字符串接口）
+- [x] Parallel/loop 子步独立计算 timeout（`resolve_step_timeout(child)`）
+- [x] 测试覆盖：default_30min / step_field_overrides / error_composes_with_retry / branch_uses_agent_default
+- [ ] **B-10.5 联动**：`execute_browser_with_timeout` 仍 fallback 到 `cmd.output()`，需子进程 poll+kill 改造
 
 ##### B-10.2 Retry + Backoff ✅
 - [x] `WorkflowStep.retry: RetryPolicy { max, backoff_seconds, exponential }` 落到 `model.rs`
