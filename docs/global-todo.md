@@ -317,28 +317,43 @@
 #### B-8. Talk Mode 语音持续对话
 - **状态**：📋 计划中
 - **目标版本**：v0.4.0+
+- **平台**：**macOS + Windows 双平台**（不做 Linux）
 - **参考**：OpenClaw Talk Mode（https://docs.openclaw.ai/nodes/talk）
-- **核心循环**：Listen（STT）→ Send（LLM）→ Wait → Speak（TTS）→ 循环
-- **技术选型（零费用方案）**：
-  - STT: macOS `SFSpeechRecognizer` / Windows `System.Speech` / 系统原生（免费）
-  - TTS: 系统原生兜底 + MLX 本地（Apple Silicon，免费）+ ElevenLabs 可选（客户自费）
-  - 静音检测窗口: 700ms（停顿超过此时间自动发送）
-  - 音频流格式: macOS `pcm_44100`, Windows `pcm_24000`
+- **核心循环**：Listen（STT）→ Send（LLM 走现有 Hermes adapter，0 改动）→ Wait → Speak（TTS）→ 循环
+- **技术选型 — 单档：高质量本地 + 完全免费 + 离线**
+  | 平台 | TTS 引擎 | STT 引擎 | 模型大小 |
+  |---|---|---|---|
+  | macOS Apple Silicon | **MLX** + Soprano-80M-bf16 | `SFSpeechRecognizer` + `whisper.cpp` 兜底 | 80 MB TTS |
+  | macOS Intel | **Piper TTS** + zh_CN-huayan-medium (ONNX) | `whisper.cpp` (ggml-base) | 60 MB TTS + 140 MB STT |
+  | Windows | **Piper TTS** + zh_CN-huayan-medium (ONNX) | `whisper.cpp` (ggml-base) | 60 MB TTS + 140 MB STT |
+- **统一抽象**：
+  - 后端 Rust 加 `crate::talk` 模块，`TtsBackend` / `SttBackend` trait + 三种实现（mlx_tts / piper_tts / system_stt / whisper_stt）
+  - 前端只看到 `talk_session_start` / `talk_session_stop` / 3 个 Tauri event（state changes / partial transcript / final transcript）
+  - **零修改 Hermes Agent** — 走现有 `chat_stream_start` IPC，Talk Mode 只是替换"键盘输入 → 文字"为"麦克风 → STT → 文字"，"屏幕渲染 → 字"为"TTS → 声音"
 - **关键特性**：
-  - [ ] **interruptOnSpeech**: 用户说话时打断 AI 播放，记录中断时间戳注入下一条 prompt
-  - [ ] **Voice Directives**: LLM 回复首行可带 JSON 指令切换声音/语速
-  - [ ] **三态 UI 覆盖层**: Listening（脉冲）→ Thinking（下沉动画）→ Speaking（辐射环）
-  - [ ] **MLX 本地 TTS**: `mlx-community/Soprano-80M-bf16`，Apple Silicon 离线场景
+  - [ ] **静音检测**: 700ms（macOS）/ 900ms（iOS 移植时）窗口判定说完
+  - [ ] **interruptOnSpeech**: 用户开口 → 立刻 `audioPlayer.cancel()` + `<system>用户在你说"……"时打断了你</system>` 注入下一条 prompt
+  - [ ] **Voice Directives**: LLM 回复首行可带 JSON `{"voice":"warm","rate":0.9}` 切换声音 / 语速
+  - [ ] **三态 UI 覆盖层**: Listening（脉冲环）→ Thinking（下沉动画）→ Speaking（辐射环 + 边播边亮字幕）
+  - [ ] **Push-to-talk 快捷键**: Talk Mode 内 `Space` 长按说话；松开自动发送
+  - [ ] **MCP 工具集成**: Hermes 在 Talk Mode 下也能调 `save_artifact` / `run_workflow` / `list_active_runs` / 其它 13 个工具，不只是聊天
 - **需要补的组件**：
-  - [ ] STT 静音检测 + 持续监听循环（现有 voice 模块基础上扩展）
-  - [ ] TTS 流式 PCM 播放 + 中断机制（现有 ProviderCard 基础上扩展）
-  - [ ] 停止播放 + 时间戳注入
-  - [ ] 三态 UI 覆盖层
-  - [ ] MLX 本地 TTS helper（可选）
-- **预估工期**：2-3 周
-- **价值**：运营人员语音操作比打字快，"帮我查昨天广告花费"一句话搞定
-- **依赖**：无（voice 模块已有基础）
-- **跨平台**：macOS + Windows 必须同时支持
+  - [ ] STT 持续监听 + VAD 静音检测（现有 `voice_record` IPC 基础上扩展）
+  - [ ] TTS 流式 PCM 播放 + 中断机制（新建 `audio_player` 模块）
+  - [ ] Piper TTS 二进制打包（每平台 ~10 MB） + zh_CN-huayan 模型按需下载（类似 BGE-M3 离线包）
+  - [ ] MLX TTS helper（仅 macOS arm64 cfg）
+  - [ ] whisper.cpp 二进制 + ggml-base 模型下载
+  - [ ] 三态 UI 覆盖层 React 组件
+  - [ ] Voice Directives 解析层
+- **不做**：
+  - ❌ Linux 支持（基座暂不打 Linux 二进制）
+  - ❌ 系统原生 TTS 兜底（SAPI / AVSpeechSynthesizer）— **质量不及格，统一走 Piper / MLX**
+  - ❌ 云端 TTS / STT（OpenAI / ElevenLabs）— 单档方案，不再分级
+  - ❌ 唤醒词 / Voice Wake — v0.4.1 再说
+- **预估工期**：3-4 周（比之前估的多 1 周，因为要打包 Piper + whisper.cpp 二进制）
+- **价值**：客户演示一句"全离线、零成本、本地高质量中文 TTS"，对比 OpenClaw / 字节豆包等都需要联网或付费
+- **依赖**：无（voice 模块基础已有）
+- **包大小代价**：安装包 +20 MB（Piper × 2 平台）+ 首次启用拉 200 MB 模型（用户主动触发，不强推）
 
 ### 第 3 层 — 已砍（与"只做定制"冲突，永久不做）
 
