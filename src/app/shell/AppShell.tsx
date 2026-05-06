@@ -5,7 +5,9 @@ import { Download, RefreshCw, X, AlertCircle } from 'lucide-react';
 import { PendingApprovalsBadge } from './PendingApprovalsBadge';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
+import { TalkModeOverlay } from '@/features/talk/TalkModeOverlay';
 import { Topbar } from './Topbar';
+import { useUIStore } from '@/stores/ui';
 import { CommandPalette } from '@/components/command-palette/Palette';
 import { ShortcutsDialog } from '@/components/shortcuts/ShortcutsDialog';
 import { useShortcutsHotkey } from '@/components/shortcuts/useShortcuts';
@@ -20,6 +22,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   useShortcutsHotkey();
   useMenuEvents();
   useWorkflowNotifications();
+  const talkModeOpen = useUIStore((s) => s.talkModeOpen);
+  const setTalkModeOpen = useUIStore((s) => s.setTalkModeOpen);
   return (
     <div className="flex h-full w-full overflow-hidden bg-bg text-fg">
       <Sidebar />
@@ -34,6 +38,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           when no workflow steps await approval. Stays out of the
           way of the UpdateBanner (z-50) by living at z-40. */}
       <PendingApprovalsBadge />
+      {/* B-8 v0 — Talk Mode overlay. Mounts conditionally so the
+          push-to-talk listener doesn't compete with normal Space
+          keypresses elsewhere in the UI. */}
+      {talkModeOpen && (
+        <TalkModeOverlay onClose={() => setTalkModeOpen(false)} />
+      )}
       <UpdateBanner />
     </div>
   );

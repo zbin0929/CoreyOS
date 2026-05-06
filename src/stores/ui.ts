@@ -23,9 +23,13 @@ async function syncNativeWindowTheme(theme: 'dark' | 'light') {
 interface UIState {
   theme: Theme;
   sidebarCollapsed: boolean;
+  /** B-8 Talk Mode overlay open. Transient (not persisted) — closing
+   *  the app and re-opening should never auto-restore voice mode. */
+  talkModeOpen: boolean;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   toggleSidebar: () => void;
+  setTalkModeOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -33,6 +37,7 @@ export const useUIStore = create<UIState>()(
     (set, get) => ({
       theme: 'system',
       sidebarCollapsed: false,
+      talkModeOpen: false,
       setTheme: (theme) => {
         set({ theme });
         applyTheme(theme);
@@ -43,6 +48,7 @@ export const useUIStore = create<UIState>()(
         applyTheme(next);
       },
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setTalkModeOpen: (open) => set({ talkModeOpen: open }),
     }),
     {
       name: 'caduceus.ui',
