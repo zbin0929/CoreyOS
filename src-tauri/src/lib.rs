@@ -117,6 +117,7 @@ pub fn run() {
             ipc::file_export::save_text_file,
             ipc::webhook::webhook_token_get,
             ipc::webhook::webhook_token_rotate,
+            ipc::webhook::webhook_listener_port,
             ipc::session::session_list,
             ipc::session::session_get,
             ipc::model::model_list,

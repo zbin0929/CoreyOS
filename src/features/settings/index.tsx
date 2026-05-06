@@ -9,6 +9,7 @@ import {
 } from '@/lib/ipc';
 
 import { AdvancedSection } from './sections/AdvancedSection';
+import { WebhookSection } from './sections/WebhookSection';
 import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
@@ -160,6 +161,11 @@ export function SettingsRoute() {
               activated key. Lets users see who the license belongs
               to + remove it (re-shows the gate on next launch). */}
           <LicenseSection />
+
+          {/* Webhook — B-10.7. Local HTTP trigger URL + bearer
+              token + curl example. Lives near the bottom because
+              it's a power-user surface; most users never touch it. */}
+          <WebhookSection />
 
           {/* Advanced — deep links for routes demoted from the
               sidebar in the 2026-05-06 audit. Lives last because

@@ -601,6 +601,14 @@ export function webhookTokenRotate(): Promise<string> {
   return invoke<string>('webhook_token_rotate');
 }
 
+/**
+ * Bound port of the local MCP / webhook listener. `null` if the
+ * listener hasn't finished binding yet — UI should re-poll.
+ */
+export function webhookListenerPort(): Promise<number | null> {
+  return invoke<number | null>('webhook_listener_port');
+}
+
 export function workflowApprove(
   runId: string,
   stepId: string,

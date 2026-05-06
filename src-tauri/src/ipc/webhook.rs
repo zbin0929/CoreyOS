@@ -26,6 +26,15 @@ pub async fn webhook_token_get() -> IpcResult<String> {
         })
 }
 
+/// Resolve the bound port of the local MCP / webhook listener. Used
+/// by Settings → Advanced → Webhook to print the full curl example.
+/// Returns `None` if the listener hasn't finished binding yet
+/// (cold-boot race) — the UI re-polls until it's `Some`.
+#[tauri::command]
+pub async fn webhook_listener_port() -> IpcResult<Option<u16>> {
+    Ok(crate::mcp_server::bound_port())
+}
+
 /// Rotate the webhook token. Overwrites the file with a fresh UUID
 /// and returns the new value. Triggered from Settings →
 /// Advanced → Webhook → Rotate token. Anyone holding the old

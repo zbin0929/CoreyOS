@@ -493,6 +493,19 @@ export const tauriMockInitScript = /* js */ `
       case 'workflow_run_delete':
         return null;
 
+      // ── B-10.7 webhook trigger ────────────────────────────────────
+      // Settings → Webhook surface uses these. Specs can override
+      // state.webhookToken / state.webhookPort if they need to
+      // assert on specific values; defaults are stable so the
+      // generic "renders" tests pass.
+      case 'webhook_token_get':
+        return state.webhookToken ?? '550e8400-e29b-41d4-a716-446655440000';
+      case 'webhook_token_rotate':
+        state.webhookToken = '00000000-0000-0000-0000-000000000001';
+        return state.webhookToken;
+      case 'webhook_listener_port':
+        return state.webhookPort ?? 49081;
+
       case 'app_paths':
         return state.appPaths;
 
