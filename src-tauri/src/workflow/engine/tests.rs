@@ -528,3 +528,235 @@ fn execute_with_hooks_cancels_at_step_boundary() {
     assert_eq!(run.step_runs["b"].status, StepRunStatus::Pending);
     assert_eq!(run.error.as_deref(), Some("Cancelled by user"));
 }
+
+// ───────────────────────── B-10.2 / B-10.3 retry + on_error ─────────────────────────
+
+/// Test executor that fails `fail_n` times before returning success.
+/// Counter is shared via Mutex because the trait demands Send+Sync.
+struct FlakyExecutor {
+    fail_n: u32,
+    calls: Mutex<u32>,
+}
+
+impl StepExecutor for FlakyExecutor {
+    fn execute_agent(&self, _agent_id: &str, prompt: &str) -> Result<String, String> {
+        let mut n = self.calls.lock().expect("calls lock poisoned");
+        *n += 1;
+        if *n <= self.fail_n {
+            Err(format!("flaky failure #{}", *n))
+        } else {
+            Ok(format!("ok: {}", prompt))
+        }
+    }
+
+    fn execute_agent_streaming(
+        &self,
+        agent_id: &str,
+        prompt: &str,
+        _progress: &dyn Fn(&str),
+    ) -> Result<String, String> {
+        self.execute_agent(agent_id, prompt)
+    }
+}
+
+#[test]
+fn retry_succeeds_after_transient_failures() {
+    // Step fails twice, succeeds on the third attempt. With
+    // max=3 the run should still complete cleanly and the step
+    // should record the final success — not the earlier errors.
+    let def = WorkflowDef {
+        id: "retry-ok".into(),
+        name: "retry-ok".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "a".into(),
+            name: "a".into(),
+            step_type: "agent".into(),
+            agent_id: Some("hermes-default".into()),
+            prompt: Some("hello".into()),
+            retry: Some(crate::workflow::model::RetryPolicy {
+                max: 3,
+                backoff_seconds: 0,
+                exponential: false,
+            }),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = FlakyExecutor {
+        fail_n: 2,
+        calls: Mutex::new(0),
+    };
+
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Completed);
+    assert_eq!(run.step_runs["a"].status, StepRunStatus::Completed);
+    assert!(run.step_runs["a"].error.is_none());
+    assert_eq!(*executor.calls.lock().expect("calls"), 3);
+}
+
+#[test]
+fn retry_exhausted_fails_run() {
+    // max=2 → 3 total attempts; all 3 fail → run goes to Failed
+    // and the step's error is the *last* one (no on_error set).
+    let def = WorkflowDef {
+        id: "retry-fail".into(),
+        name: "retry-fail".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "a".into(),
+            name: "a".into(),
+            step_type: "agent".into(),
+            agent_id: Some("hermes-default".into()),
+            prompt: Some("hello".into()),
+            retry: Some(crate::workflow::model::RetryPolicy {
+                max: 2,
+                backoff_seconds: 0,
+                exponential: false,
+            }),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = FlakyExecutor {
+        fail_n: 999,
+        calls: Mutex::new(0),
+    };
+
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Failed);
+    assert_eq!(run.step_runs["a"].status, StepRunStatus::Failed);
+    assert_eq!(*executor.calls.lock().expect("calls"), 3);
+    let err = run.step_runs["a"]
+        .error
+        .as_deref()
+        .expect("step must record error");
+    assert!(err.contains("flaky failure #3"), "got: {err}");
+}
+
+#[test]
+fn on_error_routes_to_handler_step() {
+    // Failed step has on_error → handler. The handler runs and
+    // the run completes successfully (Failed step is recorded
+    // but does NOT fail the run). Steps depending on the failed
+    // step's normal output are NOT unblocked — they stay Pending.
+    let def = WorkflowDef {
+        id: "on-err".into(),
+        name: "on-err".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![
+            WorkflowStep {
+                id: "primary".into(),
+                name: "primary".into(),
+                step_type: "agent".into(),
+                agent_id: Some("hermes-default".into()),
+                prompt: Some("doit".into()),
+                on_error: Some("handler".into()),
+                ..Default::default()
+            },
+            // Normal downstream — should stay Pending because we
+            // never reach the success path.
+            agent_step("downstream", vec!["primary"], "next"),
+            // Error handler — depends on `primary` so it doesn't
+            // fire on the first scheduling pass; on_error forces
+            // it through by clearing its remaining deps.
+            agent_step("handler", vec!["primary"], "recover"),
+        ],
+    };
+    // Custom executor: only "primary" prompt fails; handler succeeds.
+    // Using FlakyExecutor here would fail the handler too and mask
+    // the routing under test.
+    struct PrimaryFailsExecutor;
+    impl StepExecutor for PrimaryFailsExecutor {
+        fn execute_agent(&self, _agent_id: &str, prompt: &str) -> Result<String, String> {
+            if prompt.contains("doit") {
+                Err("primary blew up".into())
+            } else {
+                Ok(prompt.to_string())
+            }
+        }
+    }
+
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    execute_with_executor(&def, &mut run, &mut ctx, &PrimaryFailsExecutor);
+
+    assert_eq!(run.status, RunStatus::Completed);
+    assert_eq!(run.step_runs["primary"].status, StepRunStatus::Failed);
+    assert_eq!(
+        run.step_runs["primary"].error.as_deref(),
+        Some("primary blew up")
+    );
+    assert_eq!(run.step_runs["handler"].status, StepRunStatus::Completed);
+    // Normal downstream must NOT have run.
+    assert_eq!(run.step_runs["downstream"].status, StepRunStatus::Pending);
+}
+
+#[test]
+fn retry_then_on_error_handler() {
+    // Retry exhausts → on_error kicks in → handler runs → run
+    // completes. Verifies the two policies compose in the right
+    // order (retry first, on_error after retries are spent).
+    let def = WorkflowDef {
+        id: "retry+on_err".into(),
+        name: "retry+on_err".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![
+            WorkflowStep {
+                id: "primary".into(),
+                name: "primary".into(),
+                step_type: "agent".into(),
+                agent_id: Some("hermes-default".into()),
+                prompt: Some("flaky".into()),
+                retry: Some(crate::workflow::model::RetryPolicy {
+                    max: 1,
+                    backoff_seconds: 0,
+                    exponential: false,
+                }),
+                on_error: Some("handler".into()),
+                ..Default::default()
+            },
+            agent_step("handler", vec![], "recover"),
+        ],
+    };
+
+    struct CountingExecutor {
+        primary_calls: Mutex<u32>,
+    }
+    impl StepExecutor for CountingExecutor {
+        fn execute_agent(&self, _agent_id: &str, prompt: &str) -> Result<String, String> {
+            if prompt.contains("flaky") {
+                let mut n = self.primary_calls.lock().expect("lock");
+                *n += 1;
+                Err(format!("primary fail #{}", *n))
+            } else {
+                Ok(prompt.to_string())
+            }
+        }
+    }
+
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = CountingExecutor {
+        primary_calls: Mutex::new(0),
+    };
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Completed);
+    assert_eq!(run.step_runs["primary"].status, StepRunStatus::Failed);
+    assert_eq!(run.step_runs["handler"].status, StepRunStatus::Completed);
+    // max=1 → 2 attempts total before on_error fires.
+    assert_eq!(*executor.primary_calls.lock().expect("lock"), 2);
+}

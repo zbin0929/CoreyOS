@@ -75,6 +75,20 @@ pub struct WorkflowStep {
     pub output_format: Option<String>,
     #[serde(default)]
     pub browser_profile: Option<String>,
+    #[serde(default)]
+    pub retry: Option<RetryPolicy>,
+    #[serde(default)]
+    pub on_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RetryPolicy {
+    #[serde(default)]
+    pub max: u32,
+    #[serde(default)]
+    pub backoff_seconds: u32,
+    #[serde(default)]
+    pub exponential: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

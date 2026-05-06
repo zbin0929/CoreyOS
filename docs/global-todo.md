@@ -1,6 +1,6 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 cut）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 tag · B-10 已开工 retry+on_error）
 >
 > **今天 19 个 commit 落地（`d2827a5` → `b014a84`）**：
 > 1. **路由瘦身**（22 → 15）：`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` `/compare` `/terminal` 全部从 sidebar 移除，URL 保留，落到 Settings → Advanced（`DEMOTED_ROUTES` 数组 + `<DemotedRouteBanner>` 横幅）。详见 N-2 / N-3 规则。
@@ -225,16 +225,19 @@
 - [ ] 实现：包一层 `tokio::time::timeout` 或 `select!`，超时 → `StepRunStatus::Failed` + `error: "step timeout"`
 - [ ] 默认值：agent step 30 分钟，tool step 5 分钟，browser step 10 分钟
 
-##### B-10.2 Retry + Backoff
-- [ ] `WorkflowStep.retry: { max: u32, backoff_seconds: u32, exponential: bool }`
-- [ ] Step 失败时按 retry 策略重跑，达到 max 才算最终 Failed
-- [ ] 流式 agent 重试时清空 partial output（不要把上次的 token 串到下次）
+##### B-10.2 Retry + Backoff ✅
+- [x] `WorkflowStep.retry: RetryPolicy { max, backoff_seconds, exponential }` 落到 `model.rs`
+- [x] Engine 在失败时按 retry 策略重跑，达到 max 才算最终 Failed（`std::thread::sleep` backoff，linear / exponential）
+- [x] 流式 agent 重试时清空 partial output（`sr.output = None; sr.error = None;`）
+- [x] 测试覆盖：`retry_succeeds_after_transient_failures` / `retry_exhausted_fails_run`
 
-##### B-10.3 错误处理分支 `on_error`
-- [ ] `WorkflowStep.on_error: Option<String>`（goto step_id）
-- [ ] Step 失败时若有 `on_error` → 跳到目标 step，run 状态保持 Running
-- [ ] 配合 retry：retry 用尽才触发 on_error
-- [ ] 没有 on_error 且无 retry → 维持现行 fail-fast 行为
+##### B-10.3 错误处理分支 `on_error` ✅
+- [x] `WorkflowStep.on_error: Option<String>`（goto step_id）
+- [x] Step 失败时若有 `on_error` → 清掉 target 的 `after` 依赖，push 到 next_ready，run 保持 Running
+- [x] 配合 retry：retry 用尽才触发 on_error
+- [x] 没有 on_error 且无 retry → 维持现行 fail-fast 行为
+- [x] 防御：dispatch 循环跳过已 Completed/Failed step（避免 on_error 目标重跑）
+- [x] 测试覆盖：`on_error_routes_to_handler_step` / `retry_then_on_error_handler`
 
 ##### B-10.4 验证 / 实现 Tool Step（type: tool）
 - [ ] 当前 `tool_name` / `tool_args` 字段定义了，executor 没有 `execute_tool` 实现

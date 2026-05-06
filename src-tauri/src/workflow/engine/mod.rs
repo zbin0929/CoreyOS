@@ -5,8 +5,24 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::context::{evaluate_condition, RunContext};
-use super::model::{WorkflowDef, WorkflowStep};
+use super::model::{RetryPolicy, WorkflowDef, WorkflowStep};
 use super::planner;
+
+/// How long to sleep before the Nth retry attempt (1-indexed) given a
+/// retry policy. Linear by default; exponential doubles each step
+/// (`backoff_seconds * 2^(attempt-1)`). Returns 0 if there's no
+/// configured backoff so tests don't sit on `thread::sleep`.
+fn compute_backoff(policy: &RetryPolicy, attempt: u32) -> u64 {
+    if policy.backoff_seconds == 0 || attempt == 0 {
+        return 0;
+    }
+    let base = policy.backoff_seconds as u64;
+    if policy.exponential {
+        base.saturating_mul(1u64 << (attempt - 1).min(16))
+    } else {
+        base
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -263,6 +279,23 @@ pub fn execute_with_hooks(
                 continue;
             };
 
+            // ── Skip already-finished steps ──────────────────────
+            // Defensive guard: an `on_error` target may have been
+            // dispatched naturally on a prior pass. Re-running a
+            // Completed/Failed step would corrupt state and re-bill
+            // tokens. Approvals are excluded — they have their own
+            // re-entry pathway via the resume bootstrap.
+            if step.step_type != "approval" {
+                let cur = run
+                    .step_runs
+                    .get(step_id)
+                    .map(|s| s.status.clone())
+                    .unwrap_or(StepRunStatus::Pending);
+                if matches!(cur, StepRunStatus::Completed | StepRunStatus::Failed) {
+                    continue;
+                }
+            }
+
             // ── Approval gate ────────────────────────────────────
             // Pause the entire run and exit the executor. The
             // human-in-the-loop will eventually call
@@ -307,20 +340,48 @@ pub fn execute_with_hooks(
             }
             on_step_end(run);
 
+            // ── Retry loop (B-10.2) ──────────────────────────────
+            // Wrap the actual dispatch in a retry-with-backoff loop.
+            // `attempts` counts re-tries already burned; the first
+            // call is attempt 0. On non-zero attempts we clear the
+            // step's partial output so a flaky streaming agent
+            // doesn't bleed tokens from a prior aborted run into the
+            // next.
+            let max_retries = step.retry.as_ref().map(|r| r.max).unwrap_or(0);
             let step_start = std::time::Instant::now();
-            // For agent steps we route through the streaming variant
-            // and forward partial content to the progress hook.
-            // Other step types (tool/browser/branch/loop/parallel)
-            // don't have a meaningful "partial" concept — the
-            // engine just runs them through the legacy path.
-            let exec_result = if step.step_type == "agent" {
-                execute_agent_step_streaming(step, ctx, executor, &|partial| {
-                    on_step_progress(step_id, partial);
-                })
-            } else {
-                execute_step_live(step, ctx, executor)
+            let mut attempts: u32 = 0;
+            let final_result: Result<serde_json::Value, String> = loop {
+                let exec_result = if step.step_type == "agent" {
+                    execute_agent_step_streaming(step, ctx, executor, &|partial| {
+                        on_step_progress(step_id, partial);
+                    })
+                } else {
+                    execute_step_live(step, ctx, executor)
+                };
+                match exec_result {
+                    Ok(out) => break Ok(out),
+                    Err(e) => {
+                        if attempts >= max_retries {
+                            break Err(e);
+                        }
+                        attempts += 1;
+                        if let Some(policy) = &step.retry {
+                            let secs = compute_backoff(policy, attempts);
+                            if secs > 0 {
+                                tracing::info!(step_id = %step_id, attempt = attempts, backoff_seconds = secs, error = %e, "workflow step retrying");
+                                std::thread::sleep(std::time::Duration::from_secs(secs));
+                            } else {
+                                tracing::info!(step_id = %step_id, attempt = attempts, error = %e, "workflow step retrying");
+                            }
+                        }
+                        if let Some(sr) = run.step_runs.get_mut(step_id) {
+                            sr.output = None;
+                            sr.error = None;
+                        }
+                    }
+                }
             };
-            match exec_result {
+            match final_result {
                 Ok(output) => {
                     let elapsed = step_start.elapsed().as_millis() as u64;
                     ctx.set_step_output(step_id, output.clone());
@@ -329,7 +390,7 @@ pub fn execute_with_hooks(
                         sr.output = Some(output);
                         sr.duration_ms = Some(elapsed);
                     }
-                    tracing::info!(step_id = %step_id, duration_ms = elapsed, "workflow step completed");
+                    tracing::info!(step_id = %step_id, duration_ms = elapsed, attempts = attempts, "workflow step completed");
                     let newly = planner::mark_completed(&mut plan.remaining, step_id);
                     next_ready.extend(newly);
                     on_step_end(run);
@@ -341,11 +402,27 @@ pub fn execute_with_hooks(
                         sr.error = Some(e.clone());
                         sr.duration_ms = Some(elapsed);
                     }
-                    tracing::warn!(step_id = %step_id, duration_ms = elapsed, error = %e, "workflow step failed");
-                    run.status = RunStatus::Failed;
-                    run.error = Some(e);
-                    on_step_end(run);
-                    return;
+                    tracing::warn!(step_id = %step_id, duration_ms = elapsed, attempts = attempts, error = %e, "workflow step failed");
+                    // ── on_error goto (B-10.3) ──────────────────
+                    // If the step declares an error handler, jump
+                    // there instead of failing the run. We treat it
+                    // as a one-way branch: the failed step's normal
+                    // downstream stays blocked (we never call
+                    // mark_completed), and the named target is
+                    // dispatched in the next scheduling pass with
+                    // its `after` deps cleared so it runs even if
+                    // it was modeled as depending on the failed step.
+                    if let Some(target) = step.on_error.clone() {
+                        plan.remaining.remove(&target);
+                        tracing::info!(step_id = %step_id, on_error = %target, "workflow step routed to error handler");
+                        next_ready.push(target);
+                        on_step_end(run);
+                    } else {
+                        run.status = RunStatus::Failed;
+                        run.error = Some(e);
+                        on_step_end(run);
+                        return;
+                    }
                 }
             }
         }
