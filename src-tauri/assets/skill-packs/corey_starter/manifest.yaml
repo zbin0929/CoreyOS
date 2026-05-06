@@ -3,7 +3,7 @@ id: corey_starter
 version: "0.1.0"
 title: Corey Starter
 description: |
-  默认示例 Pack。提供 3 个可立即运行的 workflow（每日新闻摘要 / PDF 总结 / 电商促销审批），
+  默认示例 Pack。提供 2 个可立即运行的 workflow（每日新闻摘要 / PDF 总结），
   让"用户下任务 → CoreyOS 跑"链路有真实可演示内容。可在 Settings → Packs 中一键禁用。
 author: CoreyOS
 requires:
@@ -12,4 +12,3 @@ requires:
 workflows:
   - workflows/daily-news-digest.yaml
   - workflows/pdf-summary.yaml
-  - workflows/ecommerce-promotion-approval.yaml

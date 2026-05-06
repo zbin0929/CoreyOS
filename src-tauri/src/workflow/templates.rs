@@ -4,30 +4,19 @@ use super::model::WorkflowDef;
 /// first boot via `ensure_templates`. Existing files are NEVER
 /// overwritten — `ensure_templates` only adds files that are missing.
 ///
-/// ## v9 audit (2026-04-27)
+/// ## v10 audit (2026-05-06)
 ///
-/// The previous bundle had six demos
-/// (ups-tracking / daily-news-digest / douyin-hot-videos /
-///  competitor-price-monitor / code-review-pipeline / ai-comic-pipeline)
-/// that were all "chains of agent calls" Hermes can do natively
-/// through chat — they advertised the wrong differentiator. See
-/// `docs/agent/workflow-positioning.md` for the full reasoning.
+/// The single remaining base-image demo (`ecommerce-promotion-approval`)
+/// has moved into the `corey_starter` default Pack so the base binary
+/// ships with **no** workflow templates. New users see workflows only
+/// after they enable the Pack (or import their own), which keeps the
+/// "what is a workflow" surface to one place.
 ///
-/// They've been replaced by a single demo
-/// (`ecommerce-promotion-approval`) that exercises the four real
-/// reasons workflow exists as a separate primitive from chat:
-/// schema-locked outputs, a human-approval gate, full audit log,
-/// and strict step ordering.
-///
-/// Re-add demos here only if they materially demonstrate at least
-/// one of those four capabilities. PRs that re-introduce
-/// "linear-chain-of-prompts" demos should be rejected with a
-/// pointer to the positioning doc.
+/// Re-add demos here only when there's a workflow primitive that
+/// MUST exist before any Pack is loaded (extremely rare). The default
+/// path is to ship demos in a Pack instead.
 pub fn builtin_templates() -> Vec<(&'static str, &'static str)> {
-    vec![(
-        "ecommerce-promotion-approval.yaml",
-        include_str!("templates/ecommerce-promotion-approval.yaml"),
-    )]
+    Vec::new()
 }
 
 pub fn ensure_templates() -> anyhow::Result<usize> {

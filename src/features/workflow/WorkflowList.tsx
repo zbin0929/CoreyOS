@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from '@tanstack/react-router';
 import {
-  History as HistoryIcon,
+  ListChecks,
   Loader2,
   Pencil,
   Play,
@@ -28,7 +29,6 @@ export function WorkflowList({
   onDeleteSelected,
   onRun,
   onEdit,
-  onHistory,
   onCreate,
   generateOpen,
   setGenerateOpen,
@@ -49,7 +49,6 @@ export function WorkflowList({
   onDeleteSelected: () => void;
   onRun: (wf: WorkflowSummary) => void;
   onEdit: (wfId: string) => void;
-  onHistory: () => void;
   onCreate: () => void;
   generateOpen: boolean;
   setGenerateOpen: (v: boolean) => void;
@@ -62,6 +61,7 @@ export function WorkflowList({
   submitApproval: (stepId: string, approved: boolean, feedback?: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -80,9 +80,9 @@ export function WorkflowList({
               <Icon icon={Sparkles} size="xs" className="text-gold-500" />
               {t('workflow_page.generate')}
             </Button>
-            <Button variant="ghost" onClick={onHistory}>
-              <Icon icon={HistoryIcon} size="xs" />
-              {t('workflow_page.history_button', { defaultValue: '历史' })}
+            <Button variant="ghost" onClick={() => navigate({ to: '/tasks' })}>
+              <Icon icon={ListChecks} size="xs" />
+              {t('workflow_page.view_tasks', { defaultValue: '查看任务' })}
             </Button>
             <Button variant="secondary" onClick={onCreate}>
               <Icon icon={Plus} size="xs" />
