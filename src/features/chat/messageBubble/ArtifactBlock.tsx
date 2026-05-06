@@ -3,6 +3,8 @@ import { Check, ChevronDown, ChevronUp, Copy, Download, FileText } from 'lucide-
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/icon';
 
+import { formatArtifactBytes } from './artifactHelpers';
+
 const LANGUAGE_TO_EXT: Record<string, string> = {
   ts: 'ts',
   typescript: 'ts',
@@ -85,7 +87,7 @@ export function ArtifactBlock({ rawContent, language, highlightedHtml }: Props) 
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
-  const sizeLabel = `${lineCount} 行 · ${formatBytes(charCount)}`;
+  const sizeLabel = `${lineCount} 行 · ${formatArtifactBytes(charCount)}`;
   const langLabel = language || 'text';
 
   return (
@@ -153,13 +155,3 @@ function ToolbarButton({
   );
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n}B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
-  return `${(n / 1024 / 1024).toFixed(1)}MB`;
-}
-
-export function shouldRenderAsArtifact(raw: string): boolean {
-  const lines = raw.split('\n').length;
-  return lines >= 30 || raw.length >= 2000;
-}

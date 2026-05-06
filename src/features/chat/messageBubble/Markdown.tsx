@@ -4,7 +4,8 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/cn';
 
 import { highlightCode } from '../highlight';
-import { ArtifactBlock, shouldRenderAsArtifact } from './ArtifactBlock';
+import { ArtifactBlock } from './ArtifactBlock';
+import { shouldRenderAsArtifact } from './artifactHelpers';
 
 /**
  * Minimal Markdown renderer scoped for chat bubbles. Styles everything

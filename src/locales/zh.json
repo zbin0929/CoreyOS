@@ -1064,7 +1064,7 @@
     "help_transport": "stdio：Hermes fork 一个本地命令（npm / uvx / cargo），通过 stdin/stdout 通信。适用于需要访问本地文件系统或操作系统的工具。url：Hermes 通过 HTTP 连接托管的服务，适用于 Stripe、GitHub 这类云端服务。"
   },
   "knowledge": {
-    "title": "知识库",
+    "title": "文档知识库",
     "subtitle": "上传文档构建可搜索的知识库。相关内容会自动注入到聊天上下文中。",
     "help": "上传文本文件（.txt、.md、.json、.csv、.yaml、源代码）。文档按 ~500 字符分段并建立 Jaccard 相似度索引。发送聊天消息时，最相关的内容会作为系统上下文注入。",
     "upload": "上传",
@@ -1137,7 +1137,7 @@
     "audit_empty": "还没有语音事件记录。"
   },
   "memory": {
-    "title": "记忆",
+    "title": "长期记忆",
     "subtitle": "编辑 Hermes 每次对话都会注入的笔记。智能体记忆存放在 ~/.hermes/MEMORY.md；用户偏好存放在 ~/.hermes/USER.md。",
     "tab_agent": "智能体记忆",
     "tab_user": "用户偏好",
@@ -1575,19 +1575,7 @@
     "reject_dialog_submit": "确认驳回",
     "cancel_run": "停止运行",
     "cancel_confirm": "确认停止当前运行？正在执行的步骤会跑完当前调用后退出。",
-    "history_button": "历史",
-    "history_title": "运行历史",
-    "history_subtitle": "审计已结束 / 进行中 / 暂停的所有工作流运行",
-    "history_empty_title": "暂无运行历史",
-    "history_empty_desc": "运行任意工作流后，这里会保留可审计的完整轨迹。",
-    "history_steps_label": "步骤已完成",
-    "history_failed": "失败",
-    "history_inputs": "运行参数",
-    "history_delete_confirm": "确认删除这条运行记录？此操作不可撤销。",
-    "history_export_json": "导出 JSON",
-    "history_export_json_hint": "完整原始数据，便于程序化处理",
-    "history_export_md": "导出 Markdown",
-    "history_export_md_hint": "人类可读，便于贴到工单或邮件",
+    "view_tasks": "查看任务",
     "refresh": "刷新",
     "remove": "删除",
     "inputs_section": "运行参数",
