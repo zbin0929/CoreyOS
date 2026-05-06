@@ -52,14 +52,29 @@ export function AgentSwitcher() {
   // `useAgentsStore.getActiveEntry` but inline so this component
   // re-renders reactively when `activeId` or `adapters` changes.
   //
+  // We restrict the picker to **Hermes-family** adapters now. Earlier
+  // versions also surfaced `claude_code` / `aider` as parallel agent
+  // backends, but neither was wired for real users — they polluted
+  // the dropdown without serving anyone. CoreyOS's pivot to "GUI for
+  // Hermes Agent" makes Hermes-family the only meaningful axis here:
+  // multiple `hermes:<instance>` registrations (T6.2) for users who
+  // run several Hermes gateways (work / home / staging) still benefit
+  // from quick-switching, while single-Hermes users see no useless
+  // entries.
+  //
   // Filter out:
-  //   - LLM Profiles (hermes:profile:*) — belong in the chat model picker, not here
-  //   - Unconfigured mock adapters — show with "not configured" badge
-  const visibleAdapters = (adapters ?? []).filter(
-    (a) => !a.id.startsWith('hermes:profile:'),
-  );
-  const isMockAdapter = (id: string) =>
-    id === 'claude_code' || id === 'aider';
+  //   - LLM Profiles (`hermes:profile:*`) — belong in the chat model
+  //     picker, not at the adapter level.
+  //   - Mock adapters (`claude_code` / `aider`) — historical surface,
+  //     never configured for real users.
+  const visibleAdapters = (adapters ?? []).filter((a) => {
+    if (a.id.startsWith('hermes:profile:')) return false;
+    if (a.id === 'claude_code' || a.id === 'aider') return false;
+    return a.id === 'hermes' || a.id.startsWith('hermes:');
+  });
+  // No mock adapters in the visible set anymore, but keep a stub so
+  // the JSX below stays diff-friendly if the policy changes again.
+  const isMockAdapter = (_id: string) => false;
 
   const active = (() => {
     if (visibleAdapters.length === 0) return null;
@@ -88,18 +103,28 @@ export function AgentSwitcher() {
     );
   }
 
+  // Single-Hermes case: render as a non-interactive readonly pill
+  // so users still see "which Hermes is active + healthy" but
+  // aren't bothered by an empty dropdown. The label still updates
+  // when they edit it in Settings → Hermes Instances → primary card
+  // (Topbar polls every 10 s via useAgentsStore).
+  const interactive = visibleAdapters.length > 1;
+
   return (
     <div ref={rootRef} className="relative shrink-0" data-testid="agent-switcher">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={interactive ? () => setOpen((o) => !o) : undefined}
         className={cn(
           'flex h-7 shrink-0 items-center gap-2 rounded px-2 text-xs',
           'border border-border bg-bg-elev-2/50 text-fg transition-colors',
-          'hover:border-border-strong hover:bg-bg-elev-2',
+          interactive
+            ? 'cursor-pointer hover:border-border-strong hover:bg-bg-elev-2'
+            : 'cursor-default',
         )}
-        aria-expanded={open}
-        aria-haspopup="listbox"
+        aria-expanded={interactive ? open : undefined}
+        aria-haspopup={interactive ? 'listbox' : undefined}
+        aria-disabled={!interactive}
         title={activeDescription(active)}
         data-testid="agent-switcher-trigger"
       >
@@ -107,11 +132,15 @@ export function AgentSwitcher() {
         <span className="max-w-[140px] truncate font-medium">
           {active?.name ?? t('widgets.agents_fallback')}
         </span>
-        <span className="text-fg-subtle">{visibleAdapters.length}</span>
-        <Icon icon={ChevronDown} size="xs" className="text-fg-subtle" />
+        {interactive && (
+          <>
+            <span className="text-fg-subtle">{visibleAdapters.length}</span>
+            <Icon icon={ChevronDown} size="xs" className="text-fg-subtle" />
+          </>
+        )}
       </button>
 
-      {open && (
+      {interactive && open && (
         <div
           role="listbox"
           aria-label={t('widgets.registered_agents')}

@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { Sun, Moon, Search, CircleDot } from 'lucide-react';
-// AgentSwitcher hidden — see comment near its render site below for context.
-// import { AgentSwitcher } from '@/app/shell/AgentSwitcher';
+import { AgentSwitcher } from '@/app/shell/AgentSwitcher';
 import { Icon } from '@/components/ui/icon';
 import { Kbd } from '@/components/ui/kbd';
 import { usePaletteStore } from '@/stores/palette';
@@ -68,17 +67,16 @@ export function Topbar() {
         <span>{gatewayLabel(gateway, gatewayLatencyMs, t)}</span>
       </button>
 
-      {/* AgentSwitcher hidden as of the Hermes-as-default pivot: Corey is
-          a GUI for Hermes Agent, so the previous multi-adapter switcher
-          (which exposed `aider` / `claude_code` / etc. as parallel agent
-          backends) only added confusion — the non-Hermes options were
-          never configured for real users and dominated the dropdown.
-          The Topbar now just shows the gateway pill on the left; the
-          conversation-level "which LLM does Hermes use" picker lives in
-          the chat composer where it belongs. Component file is kept in
-          place under @/app/shell/AgentSwitcher.tsx in case multi-backend
-          agent routing comes back as a power-user feature. */}
-      {/* <AgentSwitcher /> */}
+      {/* AgentSwitcher restored 2026-05-06 with a Hermes-only filter:
+          single-Hermes users see a readonly pill with the editable
+          label they set in Settings → Hermes Instances → primary
+          card; multi-Hermes users (work / home / staging gateways)
+          get the dropdown back. Mock adapters (`aider` /
+          `claude_code`) and LLM profiles (`hermes:profile:*`) are
+          filtered out so the dropdown only contains real
+          adapter-axis choices — model selection still lives in the
+          chat composer's LLM picker. */}
+      <AgentSwitcher />
 
       <div className="flex-1" />
 
