@@ -2,13 +2,15 @@
 
 > ⚡ **下一次会话从这里开始**（2026-05-06）
 >
-> **刚做完**：B-11 corey_starter 默认 Pack — `src-tauri/assets/skill-packs/corey_starter/` 三个 workflow（daily-news-digest / pdf-summary / ecommerce-promotion-approval），通过 `tauri.conf.json` 打包资源 + `pack::ensure_bundled_packs` 在启动时拷贝到 `~/.hermes/skill-packs/corey_starter/`（幂等，永不覆盖用户已有版本）。默认 disabled，用户在 `customer.yaml` 加 `packs.preinstall: [corey_starter]` 或 Settings → Packs 一键启用。
+> **刚做完**：路由瘦身审计（commit `8883785`）— 侧边栏 22 → 17。`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` 5 条路由从 sidebar 移除，但路由保留（N-2），通过 Settings → 「高级 / 实验功能」 入口可达。`/memory` 改名「长期记忆」、`/knowledge` 改名「文档知识库」消歧义。`workflow` 页的"历史"按钮改成"查看任务"链到 `/tasks`，删 `History.tsx`。corey_starter Pack 从 3 个减到 2 个 workflow（去掉电商促销审批，保留 daily-news-digest + pdf-summary），基座 `workflow/templates.rs` 也清空（电商 demo 整体撤）。
 >
-> **再之前**：v0.2.4 任务面板 / 通知 / Artifact 块 / 审批 IPC（B-9.1~9.4，全局审批抽屉留待迭代）
+> **再之前**：B-11 corey_starter 默认 Pack — `src-tauri/assets/skill-packs/corey_starter/` 通过 `pack::ensure_bundled_packs` 启动时拷贝到 `~/.hermes/skill-packs/corey_starter/`（幂等）；v0.2.4 任务面板 / 通知 / Artifact 块 / 审批 IPC（B-9.1~9.4）。
 >
 > **下一件事**：v0.2.5 工作流硬化（B-10：timeout / retry / on_error / Tool step / Browser 实测）→ v0.3.0 跨境电商 Pack
 >
-> **关键铁律提醒**：(1) Pack 不写 React 只写 manifest.yaml；(2) Browser MCP 永不出现在付费交付里，等 SP-API；(3) 每次会话 token 易爆——读文件用 offset/limit，回答短而准。
+> **路由审计待办**（如需进一步合并）：scheduler 改只读 + 创建跳 workflow（1h）；runbooks 数据合到 skills 作为 multi-step tag（半天）；profiles 真正合到 settings sandbox 区（半天）。当前只是 sidebar 隐藏，页面本身没动。
+>
+> **关键铁律提醒**：(1) Pack 不写 React 只写 manifest.yaml；(2) Browser MCP 永不出现在付费交付里，等 SP-API；(3) 每次会话 token 易爆——读文件用 offset/limit，回答短而准；(4) 新增/降级路由后必须同步更新 `DEMOTED_ROUTES`（N-3）。
 
 ---
 
