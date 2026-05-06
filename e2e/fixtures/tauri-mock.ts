@@ -473,6 +473,26 @@ export const tauriMockInitScript = /* js */ `
       case 'scheduler_delete_job':
         return null;
 
+      // v0.2.4 — global tasks polling + /tasks page. Tasks store
+      // polls workflow_active_runs every 5s on every page; default
+      // empty list keeps the sidebar badge / desktop notifications
+      // quiet during unrelated tests. Specs that exercise /tasks
+      // can push fixtures via state.workflowActive / workflowHistory.
+      case 'workflow_active_runs':
+        return state.workflowActive ?? [];
+      case 'workflow_history_list':
+        return state.workflowHistory ?? [];
+      case 'workflow_run_cancel':
+        return null;
+      case 'workflow_run_get': {
+        const id = args.runId;
+        const fromActive = (state.workflowActive ?? []).find((r) => r.id === id);
+        const fromHistory = (state.workflowHistory ?? []).find((r) => r.id === id);
+        return fromActive ?? fromHistory ?? null;
+      }
+      case 'workflow_run_delete':
+        return null;
+
       case 'app_paths':
         return state.appPaths;
 

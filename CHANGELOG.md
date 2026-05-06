@@ -6,6 +6,30 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-06 — v0.2.5-dev · Route audit + Pack starter + UX cleanup
+
+### Shipped
+
+- **B-11 corey_starter default Pack** (`d2827a5`): `src-tauri/assets/skill-packs/corey_starter/` with 2 sample workflows (daily-news-digest, pdf-summary). Bundled as Tauri resource and seeded to `~/.hermes/skill-packs/corey_starter/` on first launch via `pack::ensure_bundled_packs` (idempotent, never overwrites user copies). Default disabled — enable via Settings → Packs or `customer.yaml` `packs.preinstall: [corey_starter]`. The base binary now ships zero workflow templates; demos live exclusively in Packs.
+- **v0.2.4 tasks page + global polling** (`315edc6`): new `/tasks` route consolidates Active + History runs across every workflow. Sidebar badge counts running tasks, desktop notifications fire on completion / failure / paused transitions. Backed by `useTasksStore` polling `workflow_active_runs` every 5s.
+- **Chat ArtifactBlock**: long code/data outputs (≥30 lines or ≥2KB) collapse into a labeled card with copy / download / expand controls. Helpers split out to `artifactHelpers.ts` so React Fast Refresh stays clean.
+- **Approval IPC polish** (`315edc6`): server-side `/api/approval/respond` + `/api/approval/pending` patches written into Hermes `api_server.py` on gateway start; `chat_approval_*` IPC commands route through them.
+- **Workflow history → /tasks consolidation** (`4cab4ed`): the "历史" button on `/workflows` now links to `/tasks`. Old `History.tsx` component deleted; the orphan `workflow_page.history_*` i18n keys cleaned up. Run audit data (active + completed) is now in one place.
+- **Route audit — sidebar 22 → 17** (`8883785`): `/agents` `/scheduler` `/runbooks` `/voice` `/profiles` removed from the sidebar but routes preserved (per N-2). They surface in **Settings → Advanced** via `DEMOTED_ROUTES` (new N-3 rule). `/memory` renamed to "长期记忆 / Long-term memory", `/knowledge` to "文档知识库 / Document knowledge base" to disambiguate.
+- **`/tasks` Playwright spec**: empty state + populated active/history fixtures (T-3 compliance).
+- **Bundle-size budget**: bumped 320 → 330 KB gzip per chunk (`ef2d35a`) to absorb v0.2.4 main-bundle growth (tasks store, ArtifactBlock, Pack store wiring). Documented the per-feature attribution in `scripts/check-bundle-size.mjs`.
+
+### Fixed
+
+- ArtifactBlock `react-refresh/only-export-components` warning (`f1477ce`).
+- Memory / Knowledge in-page titles now match the renamed sidebar labels.
+
+### Deferred
+
+- **B-10 workflow hardening**: `timeout_minutes` enforcement, retry, on_error policies, real Tool step execution, Browser step end-to-end. Engine is currently sync; proper timeout requires async refactor of `StepExecutor` + cancellation tokens. Tracked for v0.2.5 proper.
+- **Tauri save_file dialog IPC**: `<a download>` blob URLs are flaky in WebView2 / WKWebView. Affects `/compare` export buttons; will land alongside future `/tasks` run export.
+- **Deep route merges**: scheduler / runbooks / profiles still have their own pages. They're hidden from the sidebar but otherwise untouched. Merging them into Workflow / Skills / Settings is half-day-each work tracked in `docs/global-todo.md`.
+
 ## 2026-05-02 — v0.2.3 · Home dashboard glow-up
 
 ### Shipped
