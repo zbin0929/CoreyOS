@@ -6,11 +6,19 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
-## 2026-05-06 — v0.2.7-dev · TBD
+## 2026-05-06 — v0.2.7 · B-9 / B-10 close-out + audit
 
 ### Shipped
 
-_(empty — staging area for the next batch of work; promote to a tagged version when shipping.)_
+- **B-10.6 sub-workflow step** — new `step_type: "workflow"` invokes another workflow def, renders inputs through the parent context, drives the child to completion synchronously, and surfaces per-step outputs under `outputs.<step_id>`. Cycle protection via a per-context run-stack (depth-aware: A→B→A is caught even if A is the top-level run). Validation in `store::validate_step` requires `workflow_id`. 6 unit tests in `engine/tests.rs` + `context.rs`; no disk I/O needed for either case.
+- **B-10.7 webhook trigger** — `POST /webhook/{workflow_id}` on the existing 127.0.0.1-only axum listener, JSON body becomes the workflow inputs map, Bearer-token auth (token auto-generated as a UUID and persisted to `~/.hermes/.corey-webhook-token` with 0600 on Unix). Shared `start_workflow_run` helper used by both MCP `run_workflow` and the new HTTP entry point. Settings → Webhook surface shows URL, masked token (with reveal toggle), copy-paste curl example, rotate button. 7 backend tests + 2 e2e specs.
+- **B-9.4 long-table → artifact card** — markdown tables with ≥10 rows now render with a header bar showing row count + `Download CSV` button. CSV escaping follows RFC 4180 (quoted cells, doubled inner quotes, newlines preserved). DOM-walk extraction at click time so any inline formatting in cells is included verbatim.
+- **B-9.2 notification level toggle** — Settings → Notifications radio for `all` / `failure` / `off`, persisted via zustand to `caduceus.notification-prefs`. Read synchronously inside `useWorkflowNotifications` so a toggle takes effect on the next finish event without re-mounting. Tray counter is independent of this setting.
+
+### Audit
+
+- **Production `unwrap()`**: 0 in `src-tauri/src/**.rs` excluding `*_tests.rs` and `#[cfg(test)]` blocks. The "141 baseline" recorded in earlier release notes was a stale grep that included test code. No cleanup work needed.
+- **Route walk-through**: all 25 routes in `routes.tsx` map to existing feature modules with the named export their lazy import declares. No broken `to=` Link targets, no stale nav-config entries.
 
 ---
 

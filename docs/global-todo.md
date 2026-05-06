@@ -1,6 +1,14 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 published · **B-9 + B-10 全闭环** · 下一步建议：v0.2.6 cut release，然后开 P-1 P1 自动化深度）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.6 published + v0.2.7 ready to tag** · B-9 / B-10 全部子项接通 · 路由 + unwrap 巡检干净 · 下一步建议：tag v0.2.7 → 选 P-1 P1 跨境自动化深度 或 B-9.4 artifacts dir 等）
+
+### v0.2.7-dev 本轮交付（2026-05-06 第二批）
+- B-10.6 子工作流（cycle 检测 + 输入模板 + 6 单测）— `03320ac`
+- B-10.7 webhook HTTP 触发（Bearer token + Settings UI + e2e）— `fd3ac64` `dfdf00b`
+- B-9.4 长表格 → CSV artifact 卡片 — `2257aab`
+- B-9.2 通知分级（off / failure / all） — `2257aab`
+- 路由巡检：25 条路由全部健康
+- unwrap 巡检：生产代码 0 个 unwrap，"141 基线"是包含测试的过时数
 >
 > **今天 19 个 commit 落地（`d2827a5` → `b014a84`）**：
 > 1. **路由瘦身**（22 → 15）：`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` `/compare` `/terminal` 全部从 sidebar 移除，URL 保留，落到 Settings → Advanced（`DEMOTED_ROUTES` 数组 + `<DemotedRouteBanner>` 横幅）。详见 N-2 / N-3 规则。
