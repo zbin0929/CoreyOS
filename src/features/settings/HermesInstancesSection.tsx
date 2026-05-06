@@ -17,6 +17,7 @@ import {
 import { AgentWizard } from './AgentWizard';
 import { HermesInstanceCard, type AgentProbeState } from './HermesInstanceCard';
 import { HermesInstanceRow } from './HermesInstanceRow';
+import { PrimaryHermesCard } from './PrimaryHermesCard';
 import { Section } from './shared';
 
 export function HermesInstancesSection() {
@@ -82,6 +83,12 @@ export function HermesInstancesSection() {
       title={t('settings.hermes_instances.title')}
       description={t('settings.hermes_instances.desc')}
     >
+      {/* Default Hermes (`id="hermes"`) lives in gateway.json, not in
+          hermes_instances.json. Surface it as a dedicated primary card
+          at the top so users can rename / repoint it without dropping
+          to the config file. */}
+      <PrimaryHermesCard />
+
       <div className="flex items-center gap-2">
         <Button
           type="button"

@@ -36,6 +36,14 @@ pub struct GatewayConfig {
     pub api_key: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    /// Human-friendly label shown in the AgentSwitcher and Settings
+    /// for the **default** Hermes adapter (id `"hermes"`). Empty
+    /// string falls back to "Hermes" at render time. Surfaced in
+    /// the Hermes Instances list as a synthetic first row so users
+    /// can rename their primary agent without dropping into a config
+    /// file.
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 impl GatewayConfig {
@@ -55,6 +63,7 @@ impl GatewayConfig {
             base_url,
             api_key,
             default_model,
+            label: None,
         }
     }
 
@@ -114,12 +123,14 @@ mod tests {
             base_url: "http://example.com:9000".into(),
             api_key: Some("secret".into()),
             default_model: Some("deepseek-chat".into()),
+            label: Some("我的本地 Hermes".into()),
         };
         cfg.save(&tmp).unwrap();
         let loaded = GatewayConfig::load_or_default(&tmp);
         assert_eq!(loaded.base_url, cfg.base_url);
         assert_eq!(loaded.api_key, cfg.api_key);
         assert_eq!(loaded.default_model, cfg.default_model);
+        assert_eq!(loaded.label, cfg.label);
     }
 
     #[test]

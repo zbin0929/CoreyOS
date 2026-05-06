@@ -14,6 +14,7 @@ use tauri::State;
 
 use crate::adapters::hermes::gateway::{HealthProbe, HermesGateway};
 use crate::adapters::hermes::HermesAdapter;
+use crate::adapters::AgentAdapter;
 use crate::config::GatewayConfig;
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
@@ -25,6 +26,11 @@ pub struct GatewayConfigDto {
     pub api_key: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    /// Editable display name for the default Hermes adapter; UI
+    /// surfaces this as the AgentSwitcher label so users don't have
+    /// to live with the literal string "Hermes" forever.
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 impl From<GatewayConfig> for GatewayConfigDto {
@@ -33,6 +39,7 @@ impl From<GatewayConfig> for GatewayConfigDto {
             base_url: c.base_url,
             api_key: c.api_key,
             default_model: c.default_model,
+            label: c.label,
         }
     }
 }
@@ -43,6 +50,7 @@ impl From<GatewayConfigDto> for GatewayConfig {
             base_url: d.base_url,
             api_key: d.api_key,
             default_model: d.default_model,
+            label: d.label,
         }
     }
 }
@@ -74,6 +82,7 @@ pub async fn config_set(state: State<'_, AppState>, config: GatewayConfigDto) ->
         base_url,
         api_key: config.api_key.filter(|s| !s.is_empty()),
         default_model: config.default_model.filter(|s| !s.is_empty()),
+        label: config.label.filter(|s| !s.trim().is_empty()),
     };
 
     // 1. Build. Propagates AdapterError → IpcError via `?`.
@@ -91,7 +100,20 @@ pub async fn config_set(state: State<'_, AppState>, config: GatewayConfigDto) ->
         })?;
 
     // 3. Hot-swap in the registry + update in-memory snapshot.
-    state.adapters.register(Arc::new(adapter));
+    //
+    // Use `register_with_id_and_label` so the saved label propagates
+    // to the AgentSwitcher without an app restart. Empty label falls
+    // back to the adapter's trait-level `name()` (typically "Hermes")
+    // so blanking the field also "works" — it just resets to the
+    // default rather than rendering an empty pill.
+    let label = new_cfg
+        .label
+        .clone()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| adapter.name().to_string());
+    state
+        .adapters
+        .register_with_id_and_label("hermes".to_string(), label, Arc::new(adapter));
     *state.config.write().expect("config poisoned") = new_cfg;
 
     tracing::info!("gateway config updated via IPC");

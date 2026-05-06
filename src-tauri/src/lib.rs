@@ -55,6 +55,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use crate::adapters::{
     aider::AiderAdapter, claude_code::ClaudeCodeAdapter, hermes::HermesAdapter, AdapterRegistry,
+    AgentAdapter,
 };
 use crate::config::GatewayConfig;
 use crate::state::AppState;
@@ -336,8 +337,25 @@ pub fn run() {
             );
 
             // Build the registry + state with the resolved config.
+            //
+            // Default Hermes registers under `id="hermes"` with the
+            // user-configured label (falls back to "Hermes" if unset).
+            // Without the explicit label call here, the registry would
+            // use the trait-level `name()` constant and the
+            // AgentSwitcher would always show "Hermes" regardless of
+            // what the user typed in Settings.
             let registry = AdapterRegistry::new();
-            registry.register(build_hermes_adapter(&cfg));
+            let default_hermes = build_hermes_adapter(&cfg);
+            let default_label = cfg
+                .label
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| default_hermes.name().to_string());
+            registry.register_with_id_and_label(
+                "hermes".to_string(),
+                default_label,
+                default_hermes,
+            );
             // Phase 5 · T5.2a — register the Claude Code mock adapter so the
             // upcoming AgentSwitcher (T5.5) has a second citizen to list.
             // Mock mode only; the real CLI integration lands in T5.2b.

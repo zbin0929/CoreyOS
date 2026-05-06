@@ -6,6 +6,9 @@ export interface GatewayConfigDto {
   base_url: string;
   api_key?: string | null;
   default_model?: string | null;
+  /** Editable display name for the default Hermes adapter, surfaced in
+   *  the AgentSwitcher pill. Empty / null falls back to "Hermes". */
+  label?: string | null;
 }
 
 export interface HealthProbe {
