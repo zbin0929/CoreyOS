@@ -1,6 +1,6 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 published · B-10 全闭环 · 测 MCP 看 `docs/testing-mcp-tool-step.md`）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 published · **B-9 + B-10 全闭环** · 下一步建议：v0.2.6 cut release，然后开 P-1 P1 自动化深度）
 >
 > **今天 19 个 commit 落地（`d2827a5` → `b014a84`）**：
 > 1. **路由瘦身**（22 → 15）：`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` `/compare` `/terminal` 全部从 sidebar 移除，URL 保留，落到 Settings → Advanced（`DEMOTED_ROUTES` 数组 + `<DemotedRouteBanner>` 横幅）。详见 N-2 / N-3 规则。
@@ -174,41 +174,50 @@
   - [x] 完整卸载手册（Windows + macOS）
 - **价值**：出问题时的逃生通道，客户支持成本下降
 
-#### B-9. 任务执行体验补完（v0.2.4）
+#### B-9. 任务执行体验补完（v0.2.4 / v0.2.6）
 
-- **状态**：📋 计划中
-- **目标版本**：v0.2.4（约 2 周）
+- **状态**：✅ 主链路完成（2026-05-06 晚 · 4 个缺口全部接通）· 部分 B-9.4 增量留 v0.2.7
+- **目标版本**：v0.2.6
 - **背景**：v0.2.3 之后，"用户下任务 → CoreyOS 执行 → 出结果"的主链路上仍有 4 个核心缺口。补完后产品从"聊天 + 仪表板"跃升到真正的 control plane。
 
-##### B-9.1 任务面板 `/tasks`（缺口 1，最严重）
-- [ ] 新增侧边栏 Tools 层入口 + 路由 `/tasks`
-- [ ] 后端：Task 数据模型（id / title / kind=chat|workflow|skill|cron / status / started_at / ended_at / error / artifacts[] / token_usage）
-- [ ] 后端 IPC：`task_list` / `task_get` / `task_cancel` / `task_rerun`
-- [ ] 持久化：复用 `state.db`（新增 `tasks` 表 + migration）
-- [ ] UI：任务卡片列表（运行中/已完成/失败 三段）+ 详情面板（timeline 复用现有 trajectory 组件）
-- [ ] Workflow / Cron / 长 chat 自动注册为 Task；普通短问答不进面板（避免噪音）
+##### B-9.1 任务面板 `/tasks` ✅
+- [x] 路由 + UI：`@/Users/zbin/AI项目/CoreyOS/src/features/tasks/index.tsx`（506 行；workflow run 即 task 模型，无需独立 `tasks` 表）
+- [x] 复用 IPC：`workflow_active_runs` / `workflow_history_list` / `workflow_run_get` / `workflow_run_cancel`
+- [x] UI：运行中 / 历史两段 + 可展开行 + 自动 5 s 轮询
+- [x] sidebar workspace 层入口 + ⌘T 快捷键
+- [x] e2e：`e2e/tasks.spec.ts`
+- [ ] **延后**：长 chat 自动注册为 task（噪音风险，按需再做）
 
-##### B-9.2 系统通知 + Tray 红点（缺口 2）
-- [ ] 接入 `tauri-plugin-notification`（Cargo 已声明）→ 任务完成/失败时弹通知
-- [ ] Tray menu 显示"运行中 N / 待审批 M"+ 红点 indicator
-- [ ] 通知点击 → 跳到 `/tasks/<id>` 或 `/approvals`
-- [ ] 用户可在 Settings 关闭/分级（仅失败 / 全部 / 关闭）
+##### B-9.2 系统通知 + Tray 红点 ✅
+- [x] 后端 emit `workflow:run-started` / `workflow:run-finished` Tauri 事件（`spawn_run_executor`）
+- [x] 全局 `crate::app_handle::get()` 让 background tasks 拿到 AppHandle 不用穿参
+- [x] 前端 `useWorkflowNotifications` 订阅事件 → `tauri-plugin-notification` 发系统通知（macOS / Windows / Linux）
+- [x] Tray 模块：`AtomicI64 ACTIVE_RUNS` 计数 + tooltip + macOS title `●N` 实时刷新
+- [x] 权限：开机自动 `requestPermission`，第一个 run 完成时静默不打扰
+- [ ] **延后**：Settings 通知开关分级（仅失败 / 全部 / 关闭）— 一行按钮，按需做
 
-##### B-9.3 审批 UI（缺口 3，决策归还闭环）
-- [ ] 后端轮询/SSE 订阅 Hermes `/api/approval/pending`（Corey 已 patch 该端点）
-- [ ] 全局审批抽屉（右下角浮窗）+ 路由 `/approvals` 详情页
-- [ ] 卡片显示：工具名 / 参数 / 风险等级 / 批准 / 拒绝 / 编辑参数后批准
-- [ ] 点击批准/拒绝 → POST `/api/approval/respond`
-- [ ] 与 B-9.2 联动：待审批数推 Tray + 通知
+##### B-9.3 审批 UI ✅
+- [x] 路由 `/approvals` + sidebar workspace 层入口（`ShieldCheck` icon）
+- [x] UI：`@/Users/zbin/AI项目/CoreyOS/src/features/approvals/index.tsx`（轮询 4 s · 列出所有 `awaiting_approval` 步骤 · 批准/驳回 + 备注输入框 + 步骤上下文展开）
+- [x] 复用 IPC：`workflow_active_runs` + `workflow_approve`
+- [x] e2e：`e2e/approvals.spec.ts`
+- [x] 与 B-9.2 联动：批准/驳回完成后立刻刷新；如果是"resume → run finishes"链路，B-9.2 通知会自动弹
+- [ ] **延后**：右下角全局抽屉浮窗（暂用全屏页够用）；与 chat 工具审批的统一面板（chat 已有 ApprovalCard 内嵌，二者职责清晰，不强行合并）
 
-##### B-9.4 Artifact 块（缺口 5，文件交付）
-- [ ] chat 消息渲染器识别长 markdown / 代码 / 表格 → 折叠成 artifact 卡片
-- [ ] 卡片自带按钮：复制 / 下载（保存到 `~/.hermes/artifacts/<task_id>/`）/ 在外部应用打开
-- [ ] Workflow 产出文件统一落 artifacts 目录 + 关联到任务（B-9.1）
-- [ ] artifact 列表在任务详情面板可见
+##### B-9.4 Artifact 块 🟡 部分完成
+- [x] chat 渲染器：长代码块（≥30 行 / ≥2000 字符）自动折叠成 ArtifactBlock 卡片（行号 + 体积 + 复制 + 下载 + 折叠）— 已经存在，本轮升级
+- [x] 下载走原生 save dialog：`saveText()` → tauri save dialog → `save_text_file` IPC（之前是 `<a download>` 在 Tauri WebView 里静默失败）
+- [ ] **延后**：长 markdown 表格 / 长纯文本作为 artifact（≥ N 行表格 + 顶部下载 CSV 按钮）
+- [ ] **延后**：workflow 产出文件统一落 `~/.hermes/artifacts/<run_id>/` + 关联 run（需后端 artifact 模型 + migration，独立工作量）
+- [ ] **延后**：任务详情面板的 artifact 列表（依赖上一项）
+- [ ] **延后**：在外部应用打开（`tauri::api::shell::open` 包一下）
 
-- **价值**：把"工具集"升级为"OS"。客户演示第一眼看到"任务在跑、有审批、能下载结果"，差异化立刻显化。
-- **依赖**：无（全部基于现有基础设施扩展）
+- **价值**：把"工具集"升级为"OS"。客户演示第一眼看到"任务在跑、有通知、有审批、长输出能下载"。
+- **本轮交付增量**（commits `f229805` → `e2377fe`，4 个 commit）：
+  - `f229805` desktop notification 通路
+  - `313a1f4` tray 计数器 + 红点
+  - `3034c54` /approvals 路由 + e2e
+  - `e2377fe` artifact 下载切原生 save 对话框
 - **不做**（已砍）：
   - ❌ 任务调度器 GUI（Cron 编辑用 schedules.yaml）
   - ❌ 任务模板市场（与定制模式冲突）
