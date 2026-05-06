@@ -114,32 +114,13 @@ pub fn tail_log(kind: LogKind, max_lines: usize) -> io::Result<LogTail> {
 mod tests {
     use super::*;
     use std::io::Write;
+    use tempfile::TempDir;
 
-    /// Cheap unique tempdir without the `tempfile` crate — same shape as
-    /// other tests in this crate (see `config.rs::tempfile_dir`).
-    struct TempDir(PathBuf);
-    impl TempDir {
-        fn new() -> Self {
-            let base = std::env::temp_dir().join(format!(
-                "caduceus-logs-{}-{}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos(),
-            ));
-            fs::create_dir_all(&base).unwrap();
-            Self(base)
-        }
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
+    // Note: previous home-rolled TempDir keyed on `process::id() + nanos`
+    // raced when two parallel tests landed on the same nanosecond on
+    // macOS CI runners (clock resolution coarser than expected under
+    // load). `tempfile::TempDir` uses an OS-level mkdtemp/rand_string
+    // and guarantees uniqueness across siblings.
 
     fn write_log(dir: &Path, name: &str, contents: &str) -> PathBuf {
         let path = dir.join(name);
@@ -150,7 +131,7 @@ mod tests {
 
     #[test]
     fn tail_returns_last_n_in_chronological_order() {
-        let tmp = TempDir::new();
+        let tmp = TempDir::new().expect("tempdir");
         let p = write_log(tmp.path(), "x.log", "a\nb\nc\nd\ne\n");
 
         let got = tail_log_at(&p, 3).unwrap();
@@ -161,7 +142,7 @@ mod tests {
 
     #[test]
     fn tail_with_max_larger_than_file_returns_all_lines() {
-        let tmp = TempDir::new();
+        let tmp = TempDir::new().expect("tempdir");
         let p = write_log(tmp.path(), "x.log", "one\ntwo\n");
 
         let got = tail_log_at(&p, 100).unwrap();
@@ -171,7 +152,7 @@ mod tests {
 
     #[test]
     fn tail_missing_file_reports_missing_without_error() {
-        let tmp = TempDir::new();
+        let tmp = TempDir::new().expect("tempdir");
         let p = tmp.path().join("nope.log");
 
         let got = tail_log_at(&p, 10).unwrap();
@@ -184,7 +165,7 @@ mod tests {
     fn tail_preserves_interior_empty_lines() {
         // If a log has a blank line between entries we want to keep it —
         // otherwise the UI's line count diverges from the file.
-        let tmp = TempDir::new();
+        let tmp = TempDir::new().expect("tempdir");
         let p = write_log(tmp.path(), "x.log", "a\n\nb\n");
 
         let got = tail_log_at(&p, 10).unwrap();
@@ -194,7 +175,7 @@ mod tests {
 
     #[test]
     fn tail_handles_file_without_trailing_newline() {
-        let tmp = TempDir::new();
+        let tmp = TempDir::new().expect("tempdir");
         let p = write_log(tmp.path(), "x.log", "a\nb\nc");
 
         let got = tail_log_at(&p, 10).unwrap();
