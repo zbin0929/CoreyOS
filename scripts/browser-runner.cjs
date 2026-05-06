@@ -1,3 +1,17 @@
+// Stagehand bridge for the workflow engine's `browser` step.
+//
+// Spawned by the Rust executor as a subprocess; receives the task as
+// a single JSON arg and writes a single JSON line to stdout:
+//   { ok: true, data: <result> }    on success
+//   { ok: false, error: "<msg>" }   on failure (also stderr-logged)
+//
+// Updated 2026-05-06 for Stagehand v3 API:
+//   - v2 exposed `stagehand.page` directly; v3 moved it to
+//     `stagehand.context.pages()[0]` (CDP engine refactor).
+//   - v3 `extract(instruction)` without a schema returns the default
+//     pageText shape; passing a string without schema in v2 returned
+//     free-form text. We pin to the no-schema form so the runner
+//     stays generic across action types.
 const { Stagehand } = require("@browserbasehq/stagehand");
 const path = require("path");
 const os = require("os");
@@ -48,8 +62,15 @@ async function run() {
   try {
     await stagehand.init();
 
+    // v3: `stagehand.page` is undefined; the CDP engine exposes pages
+    // via the underlying playwright context. We grab the first page
+    // (the one Stagehand opens on init) and reuse it for goto +
+    // subsequent actions. If a future task wants multi-tab support,
+    // hook a `task.tab_index` here.
+    const page = stagehand.context.pages()[0];
+
     if (task.url) {
-      await stagehand.page.goto(task.url, { timeout: 30000, waitUntil: "domcontentloaded" });
+      await page.goto(task.url, { timeout: 30000, waitUntil: "domcontentloaded" });
     }
 
     let result;
@@ -59,6 +80,11 @@ async function run() {
         result = await stagehand.act(task.instruction);
         break;
       case "extract":
+        // v3 with no schema falls back to `pageTextSchema` which
+        // returns `{ pageText: string }`. Callers that need
+        // structured data should use `agent` (LLM-driven multi-step)
+        // or extend this runner with a `task.schema` JSON-Schema
+        // input that we deserialise into Zod.
         result = await stagehand.extract(task.instruction);
         break;
       case "observe":
