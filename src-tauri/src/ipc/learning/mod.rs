@@ -30,7 +30,7 @@ const MAX_FACT_CHARS: usize = 120;
 /// a denser overlap distribution: short Chinese sentences that are
 /// semantically equivalent typically land at 0.4-0.7 instead of
 /// 0.0-0.2 under whitespace tokenisation.
-const SIMILARITY_THRESHOLD: f64 = 0.45;
+pub(crate) const SIMILARITY_THRESHOLD: f64 = 0.45;
 
 #[derive(Debug, Deserialize)]
 pub struct LearningExtractArgs {
@@ -257,7 +257,7 @@ fn truncate_str(s: &str, max: usize) -> String {
 ///
 /// Both kinds go into the same `Vec<String>` so Jaccard treats
 /// them uniformly. Empty strings are filtered.
-fn tokenize(s: &str) -> Vec<String> {
+pub(crate) fn tokenize(s: &str) -> Vec<String> {
     let lower = s.to_lowercase();
     let mut out: Vec<String> = lower
         .split_whitespace()
@@ -306,7 +306,7 @@ fn is_cjk(c: char) -> bool {
     )
 }
 
-fn jaccard(a: &[String], b: &[String]) -> f64 {
+pub(crate) fn jaccard(a: &[String], b: &[String]) -> f64 {
     if a.is_empty() || b.is_empty() {
         return 0.0;
     }

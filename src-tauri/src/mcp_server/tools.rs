@@ -779,19 +779,18 @@ struct AppendMemoryArgs {
 async fn append_memory(args: Value) -> Result<String, (i32, String)> {
     let args: AppendMemoryArgs = serde_json::from_value(args)
         .map_err(|e| (-32602, format!("invalid append_memory args: {e}")))?;
-    let trimmed = args.fact.trim();
+    let trimmed = args.fact.trim().to_string();
     if trimmed.is_empty() {
         return Err((-32602, "fact must not be empty".into()));
     }
 
-    let block = format!(
-        "\n\n## [auto] {}\n- {}\n",
-        chrono::Utc::now().format("%Y-%m-%d"),
-        trimmed.replace('\n', "\n- "),
-    );
-    let written_len = block.len();
-
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
+    // Run dedup + append on a blocking thread so the chat task isn't
+    // parked on disk I/O. We share the same bigram tokenize +
+    // jaccard threshold the auto-extract path uses, so the agent
+    // can't trivially re-introduce noise the user just compacted
+    // away — if a near-paraphrase of `fact` is already in
+    // MEMORY.md, we report skipped instead of writing.
+    let outcome = tokio::task::spawn_blocking(move || -> Result<AppendOutcome, String> {
         let path = crate::paths::hermes_data_dir()
             .map_err(|e| format!("resolve dir: {e}"))?
             .join("MEMORY.md");
@@ -799,21 +798,65 @@ async fn append_memory(args: Value) -> Result<String, (i32, String)> {
             std::fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
         }
         let existing = std::fs::read_to_string(&path).unwrap_or_default();
+
+        // Bigram dedup against EVERY fact bullet already in
+        // MEMORY.md, not just the most recent block. Same scope
+        // `learning_compact_memory` uses on its semantic pass.
+        let new_tokens = crate::ipc::learning::tokenize(&trimmed);
+        if !new_tokens.is_empty() {
+            for line in existing.lines() {
+                let line_trim = line.trim();
+                if !line_trim.starts_with('-') {
+                    continue;
+                }
+                let kept_tokens = crate::ipc::learning::tokenize(line_trim);
+                if kept_tokens.is_empty() {
+                    continue;
+                }
+                let sim = crate::ipc::learning::jaccard(&new_tokens, &kept_tokens);
+                if sim >= crate::ipc::learning::SIMILARITY_THRESHOLD {
+                    return Ok(AppendOutcome::Skipped {
+                        reason: format!("near-duplicate of existing line (jaccard={sim:.2})"),
+                    });
+                }
+            }
+        }
+
+        let block = format!(
+            "\n\n## [auto] {}\n- {}\n",
+            chrono::Utc::now().format("%Y-%m-%d"),
+            trimmed.replace('\n', "\n- "),
+        );
+        let written_len = block.len();
         let next = format!("{existing}{block}");
         if next.len() as u64 > crate::ipc::memory::MEMORY_MAX_BYTES {
             return Err("MEMORY.md would exceed 256 KB cap; run /memory cleanup first".into());
         }
-        std::fs::write(&path, next.as_bytes()).map_err(|e| format!("write: {e}"))
+        std::fs::write(&path, next.as_bytes()).map_err(|e| format!("write: {e}"))?;
+        Ok(AppendOutcome::Wrote { bytes: written_len })
     })
     .await
     .map_err(|e| (-32603, format!("append_memory join: {e}")))?
     .map_err(|e| (-32603, e))?;
 
-    Ok(json!({
-        "appended_bytes": written_len,
-        "ok": true,
-    })
-    .to_string())
+    let payload = match outcome {
+        AppendOutcome::Wrote { bytes } => json!({
+            "ok": true,
+            "skipped": false,
+            "appended_bytes": bytes,
+        }),
+        AppendOutcome::Skipped { reason } => json!({
+            "ok": true,
+            "skipped": true,
+            "reason": reason,
+        }),
+    };
+    Ok(payload.to_string())
+}
+
+enum AppendOutcome {
+    Wrote { bytes: usize },
+    Skipped { reason: String },
 }
 
 async fn list_active_runs(app: AppHandle) -> Result<String, (i32, String)> {
