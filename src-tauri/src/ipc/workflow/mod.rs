@@ -484,21 +484,7 @@ impl StepExecutor for HermesExecutor {
         profile: &str,
         timeout: Option<std::time::Duration>,
     ) -> Result<String, String> {
-        // Browser timeout enforcement requires reworking the
-        // subprocess wait into a poll-+-kill loop, deferred to
-        // B-10.5 alongside the Playwright smoke test. For now we
-        // log the requested timeout and fall back to the existing
-        // `cmd.output()` blocking call. A hung browser-runner will
-        // still hang the workflow step today; agent timeouts cover
-        // the dominant failure mode (network-hung LLM call).
-        if let Some(d) = timeout {
-            tracing::debug!(
-                action = %action,
-                requested_timeout_seconds = d.as_secs(),
-                "browser step timeout requested but enforcement deferred (B-10.5)",
-            );
-        }
-        self.execute_browser(action, url, instruction, profile)
+        run_browser_subprocess(action, url, instruction, profile, timeout)
     }
 
     fn execute_browser(
@@ -508,70 +494,267 @@ impl StepExecutor for HermesExecutor {
         instruction: &str,
         profile: &str,
     ) -> Result<String, String> {
-        use std::process::Command;
+        // Trait-default fallback used by callers that haven't
+        // adopted `_with_timeout` yet (e.g. tests). The timeout
+        // path is the production one; this just calls it with
+        // `None`.
+        run_browser_subprocess(action, url, instruction, profile, None)
+    }
+}
 
-        let cfg = browser_config::load();
+/// Spawn the `browser-runner` subprocess and wait for it, optionally
+/// enforcing a wall-clock timeout. Extracted from the trait impl so
+/// the kill-on-timeout logic can be unit-tested directly via
+/// `run_command_capturing` against a synthetic `sleep` command.
+fn run_browser_subprocess(
+    action: &str,
+    url: &str,
+    instruction: &str,
+    profile: &str,
+    timeout: Option<std::time::Duration>,
+) -> Result<String, String> {
+    use std::process::Command;
 
-        let script_path = browser_config_ipc::find_browser_runner();
-        let is_binary = script_path.extension().is_some_and(|e| e == "exe")
-            || !script_path.extension().is_some_and(|e| e == "cjs");
+    let cfg = browser_config::load();
+    let script_path = browser_config_ipc::find_browser_runner();
+    let is_binary = script_path.extension().is_some_and(|e| e == "exe")
+        || !script_path.extension().is_some_and(|e| e == "cjs");
 
-        tracing::info!(action = %action, url = %url, profile = %profile, "browser step start");
+    tracing::info!(action = %action, url = %url, profile = %profile, "browser step start");
 
-        let task = serde_json::json!({
-            "action": action,
-            "url": url,
-            "instruction": instruction,
-            "profile": if profile.is_empty() { "" } else { profile },
-        });
+    let task = serde_json::json!({
+        "action": action,
+        "url": url,
+        "instruction": instruction,
+        "profile": if profile.is_empty() { "" } else { profile },
+    });
 
-        let start = std::time::Instant::now();
+    let mut cmd = if is_binary {
+        let mut c = Command::new(&script_path);
+        c.arg(task.to_string());
+        crate::hermes_config::suppress_window(&mut c);
+        c
+    } else {
+        let mut c = Command::new("node");
+        c.arg(&script_path).arg(task.to_string());
+        crate::hermes_config::suppress_window(&mut c);
+        c
+    };
 
-        let mut cmd = if is_binary {
-            let mut c = Command::new(&script_path);
-            c.arg(task.to_string());
-            crate::hermes_config::suppress_window(&mut c);
+    if !cfg.model.is_empty() {
+        cmd.env("BROWSER_LLM_MODEL", &cfg.model);
+    }
+    if let Some(key) = browser_config::resolve_api_key(&cfg) {
+        cmd.env("BROWSER_LLM_API_KEY", key);
+    }
+    if !cfg.base_url.is_empty() {
+        cmd.env("BROWSER_LLM_BASE_URL", &cfg.base_url);
+    }
+
+    let started = std::time::Instant::now();
+    let outcome = run_command_capturing(cmd, timeout);
+    let duration_ms = started.elapsed().as_millis() as u64;
+
+    match outcome {
+        Ok(CommandOutcome::Exited {
+            success,
+            stdout,
+            stderr,
+        }) => {
+            if !success {
+                tracing::warn!(
+                    action = %action,
+                    duration_ms,
+                    stderr = %stderr,
+                    "browser step failed"
+                );
+                return Err(format!("browser-runner failed: {}{}", stdout, stderr));
+            }
+            tracing::info!(action = %action, duration_ms, "browser step done");
+            Ok(stdout.trim().to_string())
+        }
+        Ok(CommandOutcome::TimedOut { secs }) => {
+            tracing::warn!(action = %action, duration_ms, timeout_seconds = secs, "browser step timeout");
+            Err(format!("step timeout after {secs}s"))
+        }
+        Err(e) => {
+            tracing::warn!(action = %action, duration_ms, error = %e, "browser step spawn failed");
+            Err(format!("failed to spawn browser-runner: {e}"))
+        }
+    }
+}
+
+/// Outcome of `run_command_capturing`. A clean `Exited` carries the
+/// captured stdout/stderr regardless of exit status — the caller
+/// decides what counts as success. `TimedOut` means we proactively
+/// killed the child after the deadline; any partial output is
+/// discarded since it can't be trusted to be a complete response.
+enum CommandOutcome {
+    Exited {
+        success: bool,
+        stdout: String,
+        stderr: String,
+    },
+    TimedOut {
+        secs: u64,
+    },
+}
+
+/// Run `cmd` to completion, capturing stdout/stderr, with an optional
+/// wall-clock timeout. When the deadline expires we send SIGKILL (or
+/// the Windows equivalent), reap the zombie, and return `TimedOut`.
+///
+/// Implementation notes:
+///
+/// - Stdio is `piped()` so we can read the child's output. Reader
+///   threads are necessary because writing more than ~64 KB to a
+///   piped FD without a reader will deadlock the child.
+/// - Polling with `try_wait` every 100 ms is the simplest
+///   cross-platform pattern. We don't use `wait-timeout` (extra
+///   crate) or signals (POSIX-only); 100 ms latency before kill is
+///   fine for human-perceptible step boundaries.
+/// - `None` timeout means "wait forever", same shape as the legacy
+///   `cmd.output()` call this replaces.
+fn run_command_capturing(
+    mut cmd: std::process::Command,
+    timeout: Option<std::time::Duration>,
+) -> std::io::Result<CommandOutcome> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::Instant;
+
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+
+    let mut stdout = child
+        .stdout
+        .take()
+        .expect("piped stdout missing on spawned child");
+    let mut stderr = child
+        .stderr
+        .take()
+        .expect("piped stderr missing on spawned child");
+
+    let stdout_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr.read_to_end(&mut buf);
+        buf
+    });
+
+    let deadline = timeout.map(|d| Instant::now() + d);
+
+    loop {
+        match child.try_wait()? {
+            Some(status) => {
+                let stdout_buf = stdout_thread.join().unwrap_or_default();
+                let stderr_buf = stderr_thread.join().unwrap_or_default();
+                return Ok(CommandOutcome::Exited {
+                    success: status.success(),
+                    stdout: String::from_utf8_lossy(&stdout_buf).into_owned(),
+                    stderr: String::from_utf8_lossy(&stderr_buf).into_owned(),
+                });
+            }
+            None => {
+                if let Some(dl) = deadline {
+                    if Instant::now() >= dl {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        // Reader threads will see EOF once the child's
+                        // FDs close; let them drain so we don't leak.
+                        let _ = stdout_thread.join();
+                        let _ = stderr_thread.join();
+                        let secs = timeout.map(|d| d.as_secs()).unwrap_or(0);
+                        return Ok(CommandOutcome::TimedOut { secs });
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod browser_subprocess_tests {
+    use super::*;
+    use std::process::Command;
+    use std::time::Duration;
+
+    fn sleep_cmd(seconds: &str) -> Command {
+        // POSIX `sleep` ships on macOS / Linux. On Windows the CI
+        // also has `sleep` via Git Bash's coreutils, but to be safe
+        // we shell out to `cmd /c timeout`. Either way the binary is
+        // expected to print nothing and exit 0 after `seconds`.
+        #[cfg(target_os = "windows")]
+        {
+            let mut c = Command::new("cmd");
+            c.args(["/c", "timeout", "/t", seconds, "/nobreak", ">", "NUL"]);
             c
-        } else {
-            let mut c = Command::new("node");
-            c.arg(&script_path).arg(task.to_string());
-            crate::hermes_config::suppress_window(&mut c);
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut c = Command::new("sleep");
+            c.arg(seconds);
             c
-        };
-
-        if !cfg.model.is_empty() {
-            cmd.env("BROWSER_LLM_MODEL", &cfg.model);
         }
-        if let Some(key) = browser_config::resolve_api_key(&cfg) {
-            cmd.env("BROWSER_LLM_API_KEY", key);
+    }
+
+    #[test]
+    fn run_command_capturing_completes_normally_under_timeout() {
+        // 0-second sleep exits immediately; we should see Exited
+        // with success=true and empty output, well before the 5 s
+        // timeout fires.
+        let cmd = sleep_cmd("0");
+        let outcome =
+            run_command_capturing(cmd, Some(Duration::from_secs(5))).expect("spawn failed");
+        match outcome {
+            CommandOutcome::Exited { success, .. } => {
+                assert!(success, "sleep 0 should exit successfully");
+            }
+            CommandOutcome::TimedOut { .. } => {
+                panic!("sleep 0 should not time out under a 5 s deadline");
+            }
         }
-        if !cfg.base_url.is_empty() {
-            cmd.env("BROWSER_LLM_BASE_URL", &cfg.base_url);
-        }
+    }
 
-        let output = cmd
-            .output()
-            .map_err(|e| format!("failed to spawn browser-runner: {e}"))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        if !output.status.success() {
-            tracing::warn!(
-                action = %action,
-                duration_ms = start.elapsed().as_millis() as u64,
-                stderr = %stderr,
-                "browser step failed"
-            );
-            return Err(format!("browser-runner failed: {}{}", stdout, stderr));
-        }
-
-        tracing::info!(
-            action = %action,
-            duration_ms = start.elapsed().as_millis() as u64,
-            "browser step done"
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn run_command_capturing_kills_child_on_timeout() {
+        // 5-second sleep with 200 ms timeout → must kill the child
+        // and return TimedOut. We bound the test wall clock at 2 s
+        // so a hung implementation fails CI loudly instead of
+        // silently making the suite slow. (Skipped on Windows
+        // because `cmd /c timeout` doesn't accept a sub-second
+        // value and the timing is too coarse to assert on.)
+        let cmd = sleep_cmd("5");
+        let started = std::time::Instant::now();
+        let outcome =
+            run_command_capturing(cmd, Some(Duration::from_millis(200))).expect("spawn failed");
+        let elapsed = started.elapsed();
+        assert!(
+            matches!(outcome, CommandOutcome::TimedOut { .. }),
+            "expected TimedOut, got Exited"
         );
-        Ok(stdout.trim().to_string())
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "kill-on-timeout took too long: {elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn run_command_capturing_no_timeout_waits_for_completion() {
+        // None = no enforcement, same shape as legacy cmd.output().
+        // sleep 0 finishes naturally.
+        let cmd = sleep_cmd("0");
+        let outcome = run_command_capturing(cmd, None).expect("spawn failed");
+        assert!(matches!(
+            outcome,
+            CommandOutcome::Exited { success: true, .. }
+        ));
     }
 }
 

@@ -1,6 +1,6 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 tag · B-10.1/2/3/4 完成 · 仅剩 B-10.5 browser）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 published · B-10 全闭环 · 测 MCP 看 `docs/testing-mcp-tool-step.md`）
 >
 > **今天 19 个 commit 落地（`d2827a5` → `b014a84`）**：
 > 1. **路由瘦身**（22 → 15）：`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` `/compare` `/terminal` 全部从 sidebar 移除，URL 保留，落到 Settings → Advanced（`DEMOTED_ROUTES` 数组 + `<DemotedRouteBanner>` 横幅）。详见 N-2 / N-3 规则。
@@ -214,13 +214,14 @@
   - ❌ 任务模板市场（与定制模式冲突）
   - ❌ 多人协作 / 任务分配（不是 CoreyOS 的事）
 
-#### B-10. 工作流硬化（v0.2.5）
+#### B-10. 工作流硬化（v0.2.5/0.2.6）
 
-- **状态**：📋 计划中
-- **目标版本**：v0.2.5（约 1-2 周）
+- **状态**：✅ 完成（B-10.1-5 全闭环 · 2026-05-06）· 剩 B-10.6/7 按需
+- **目标版本**：v0.2.5 cut + v0.2.6-dev 收尾
 - **背景**：现有 workflow engine 打 7/10 分。DAG 调度 / 流式 agent / 审批 / 持久化 / Cron / 历史已就绪，但缺关键的"生产可靠性"特性。**Pack 真实跑前必须补完**，否则跨境 Pack 长跑必崩。
+- **测试指南**：`docs/testing-mcp-tool-step.md`（用 `@modelcontextprotocol/server-filesystem` 跑通 tool step）
 
-##### B-10.1 Step 超时 ✅（agent 完成 / browser 待 B-10.5）
+##### B-10.1 Step 超时 ✅
 - [x] Trait 扩 `_with_timeout` 三件套（agent / agent_streaming / browser），默认 impl 转发到原方法（零测试 churn）
 - [x] Engine `default_timeout()`：agent 30min / browser 10min / tool 5min / 其它 None
 - [x] `step.timeout_minutes` 优先级高于默认（`resolve_step_timeout`）
@@ -228,7 +229,7 @@
 - [x] Timeout 错误天然走 retry/on_error 通路（同一字符串接口）
 - [x] Parallel/loop 子步独立计算 timeout（`resolve_step_timeout(child)`）
 - [x] 测试覆盖：default_30min / step_field_overrides / error_composes_with_retry / branch_uses_agent_default
-- [ ] **B-10.5 联动**：`execute_browser_with_timeout` 仍 fallback 到 `cmd.output()`，需子进程 poll+kill 改造
+- [x] **B-10.5 联动**：`execute_browser_with_timeout` 现在真的 enforce（B-10.5 done）
 
 ##### B-10.2 Retry + Backoff ✅
 - [x] `WorkflowStep.retry: RetryPolicy { max, backoff_seconds, exponential }` 落到 `model.rs`
@@ -253,10 +254,13 @@
 - [x] 测试覆盖：`tool_step_dispatches_to_executor_with_args_and_timeout`（forward 验证）/ `tool_step_executor_error_propagates_to_run`（错误链路）/ `tool_step_default_simulated_for_simulated_executor`（向后兼容）
 - [ ] **P-1 联调**：跨境 Pack manifest 用 `mcp:amazon-sp-api:list_orders` 这种格式，需在 P-1 上实测一次 stdio + http 两条链路
 
-##### B-10.5 Browser Runner 实测
-- [ ] `execute_browser` 调子进程 `browser-runner`，不知道是真 Playwright 还是 stub
-- [ ] 0.5 天调研：跑一次真实 demo（打开 google.com → 截图 → 返回）
-- [ ] 如果是 stub 则纳入跨境 Pack 准备工作
+##### B-10.5 Browser Runner ✅
+- [x] **确认是真 Stagehand + Playwright**（不是 stub）：`scripts/browser-runner.cjs` 用 `@browserbasehq/stagehand`，4 actions（act / extract / observe / agent），LLM 驱动
+- [x] **subprocess kill-on-timeout**：`run_command_capturing(cmd, timeout)` helper，poll `try_wait` 100ms cadence，超时 SIGKILL + 收 zombie；reader 线程读 stdout/stderr 防 64KB pipe 死锁
+- [x] `execute_browser_with_timeout` 用真实 timeout enforcement，超时 → `Err("step timeout after Xs")` 走 retry/on_error
+- [x] `execute_browser`（旧路径）也走同一 helper，传 `None` 表示「永远等」，与之前 `cmd.output()` 行为完全一致
+- [x] 测试覆盖：`run_command_capturing_completes_normally_under_timeout` / `run_command_capturing_kills_child_on_timeout`（5s sleep + 200ms timeout，wall-clock < 2s）/ `run_command_capturing_no_timeout_waits_for_completion`
+- [ ] **真实 demo 测试**：用 `corey_starter` 加一个 browser step 跑 `https://example.com` extract title — 留作冒烟测试，需要 BROWSER_LLM_API_KEY 配置
 
 ##### B-10.6 Sub-workflow（v0.2.5 之后做也可以）
 - [ ] `WorkflowStep.type: 'workflow'` + `workflow_id: string` + `workflow_inputs`
