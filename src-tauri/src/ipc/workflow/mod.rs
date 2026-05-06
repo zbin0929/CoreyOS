@@ -678,29 +678,16 @@ fn run_command_capturing(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod browser_subprocess_tests {
     use super::*;
     use std::process::Command;
     use std::time::Duration;
 
     fn sleep_cmd(seconds: &str) -> Command {
-        // POSIX `sleep` ships on macOS / Linux. On Windows the CI
-        // also has `sleep` via Git Bash's coreutils, but to be safe
-        // we shell out to `cmd /c timeout`. Either way the binary is
-        // expected to print nothing and exit 0 after `seconds`.
-        #[cfg(target_os = "windows")]
-        {
-            let mut c = Command::new("cmd");
-            c.args(["/c", "timeout", "/t", seconds, "/nobreak", ">", "NUL"]);
-            c
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let mut c = Command::new("sleep");
-            c.arg(seconds);
-            c
-        }
+        let mut c = Command::new("sleep");
+        c.arg(seconds);
+        c
     }
 
     #[test]
@@ -722,14 +709,11 @@ mod browser_subprocess_tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "windows"))]
     fn run_command_capturing_kills_child_on_timeout() {
         // 5-second sleep with 200 ms timeout → must kill the child
         // and return TimedOut. We bound the test wall clock at 2 s
         // so a hung implementation fails CI loudly instead of
-        // silently making the suite slow. (Skipped on Windows
-        // because `cmd /c timeout` doesn't accept a sub-second
-        // value and the timing is too coarse to assert on.)
+        // silently making the suite slow.
         let cmd = sleep_cmd("5");
         let started = std::time::Instant::now();
         let outcome =
