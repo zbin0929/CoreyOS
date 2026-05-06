@@ -19,6 +19,7 @@ import {
   BookOpen,
   Mic,
   Plug,
+  ShieldCheck,
   Workflow as WorkflowIcon,
   Settings,
   type LucideIcon,
@@ -79,6 +80,7 @@ export const NAV: NavEntry[] = [
   { id: 'home', path: '/', labelKey: 'nav.home', icon: Home, group: 'workspace', phase: 0, shortcut: ['mod', '0'] },
   { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'workspace', phase: 9, shortcut: ['mod', '2'] },
   { id: 'tasks', path: '/tasks', labelKey: 'nav.tasks', icon: ListChecks, group: 'workspace', phase: 9, shortcut: ['mod', 't'] },
+  { id: 'approvals', path: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, group: 'workspace', phase: 9 },
   { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'workspace', phase: 2 },
 
   // ─── Library ────────────────────────────────────────────────

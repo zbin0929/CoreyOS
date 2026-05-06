@@ -24,6 +24,7 @@
     "mcp": "MCP",
     "workflows": "Workflows",
     "tasks": "Tasks",
+    "approvals": "Approvals",
     "agents": "Agents",
     "settings": "Settings",
     "section_core": "Core",

@@ -57,6 +57,7 @@ const WorkflowRoute = lazyFeature(() => import('@/features/workflow'), 'Workflow
 const HelpRoute = lazyFeature(() => import('@/features/help'), 'HelpRoute');
 const PackRoute = lazyFeature(() => import('@/features/pack'), 'PackRoute');
 const TasksRoute = lazyFeature(() => import('@/features/tasks'), 'TasksRoute');
+const ApprovalsRoute = lazyFeature(() => import('@/features/approvals'), 'ApprovalsRoute');
 
 /**
  * Wrap a route component so it renders the
@@ -98,6 +99,7 @@ const PATH_TO_NAV_ID: Record<string, string> = {
   '/voice': 'voice',
   '/mcp': 'mcp',
   '/tasks': 'tasks',
+  '/approvals': 'approvals',
   '/settings': 'settings',
   '/help': 'help',
 };
@@ -264,6 +266,12 @@ const tasksRoute = createRoute({
   component: TasksRoute,
 });
 
+const approvalsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/approvals',
+  component: ApprovalsRoute,
+});
+
 const helpRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/help',
@@ -301,6 +309,7 @@ const routeTree = rootRoute.addChildren([
   mcpRoute,
   workflowRoute,
   tasksRoute,
+  approvalsRoute,
   helpRoute,
   packRoute,
   settingsRoute,
