@@ -1367,4 +1367,101 @@ mod tests {
         let json = yaml_to_json(&result);
         assert_eq!(json["static"]["revenue"], 100);
     }
+
+    /// End-to-end smoke test for B-10.4: spin up a real
+    /// `@modelcontextprotocol/server-filesystem` over stdio and verify
+    /// `resolve_mcp_source` can boot it, do the JSON-RPC handshake,
+    /// call `tools/call(read_text_file)`, and return the file contents.
+    ///
+    /// `#[ignore]` — requires `npx` / network access to fetch the
+    /// server package on first run, plus a populated `~/corey-mcp-test/`
+    /// directory. Run manually with:
+    ///
+    /// ```
+    /// cargo test --manifest-path src-tauri/Cargo.toml --lib \
+    ///   ipc::pack::tests::b10_e2e_filesystem_mcp_server -- --ignored --nocapture
+    /// ```
+    ///
+    /// What this proves vs the existing mocked unit tests:
+    ///
+    /// - mocked tests verify the *engine ↔ executor* contract
+    /// - this test verifies the *executor ↔ MCP transport ↔ real MCP
+    ///   process* contract — i.e. the bottom of the stack, the part
+    ///   the unit tests deliberately skip to stay fast
+    #[test]
+    #[ignore]
+    fn b10_e2e_filesystem_mcp_server() {
+        // Preconditions — bail with a clear message if the test env
+        // isn't set up. Don't fail-loud because this is run by
+        // operators, not CI.
+        let test_root_str = std::env::var("HOME")
+            .map(|h| format!("{h}/corey-mcp-test"))
+            .expect("HOME must be set");
+        let test_root = std::path::Path::new(&test_root_str);
+        let test_file = test_root.join("test.txt");
+        assert!(
+            test_file.exists(),
+            "precondition failed: {} does not exist. \
+             Run `mkdir -p {} && echo hi > {}` first.",
+            test_file.display(),
+            test_root.display(),
+            test_file.display()
+        );
+
+        let which = |c: &str| {
+            std::process::Command::new(c)
+                .arg("--version")
+                .output()
+                .is_ok()
+        };
+        assert!(which("npx"), "npx not on PATH; install Node ≥ 18");
+
+        // Build a fake hermes_data_dir and seed it with a config.yaml
+        // that declares `fs-test` as a stdio MCP server pointing at
+        // ~/corey-mcp-test. Then point COREY_HERMES_DIR at it.
+        let hermes_tmp = tempfile::tempdir().expect("tempdir");
+        let config_yaml = format!(
+            "mcp_servers:\n  fs-test:\n    command: npx\n    args:\n      - -y\n      - \"@modelcontextprotocol/server-filesystem\"\n      - {}\n",
+            test_root.display()
+        );
+        std::fs::write(hermes_tmp.path().join("config.yaml"), config_yaml)
+            .expect("write config.yaml");
+
+        // SAFETY: This test is `#[ignore]` and meant to be run alone
+        // (`-- --test-threads=1` recommended). Setting env in a Rust
+        // test alongside parallel tests is unsound; we accept that
+        // for the integration-style test.
+        std::env::set_var("COREY_HERMES_DIR", hermes_tmp.path());
+
+        let authority = std::sync::Arc::new(crate::sandbox::PathAuthority::new());
+        let cfg = serde_json::json!({
+            "server": "fs-test",
+            "tool": "read_text_file",
+            "params": { "path": test_file.to_string_lossy() },
+            "timeout_secs": 30,
+        });
+        let runtime_params = serde_json::Value::Object(serde_json::Map::new());
+
+        let rt = tokio::runtime::Runtime::new().expect("rt");
+        let result = rt.block_on(resolve_mcp_source(&cfg, &authority, &runtime_params));
+
+        // Clean up env var even on test failure.
+        std::env::remove_var("COREY_HERMES_DIR");
+
+        let value = result.expect("resolve_mcp_source must succeed");
+        let text = value
+            .as_str()
+            .map(String::from)
+            .or_else(|| {
+                value
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
+            .unwrap_or_else(|| serde_json::to_string(&value).unwrap_or_default());
+        assert!(
+            text.contains("B-10"),
+            "expected file contents to contain 'B-10' marker, got: {text}"
+        );
+    }
 }

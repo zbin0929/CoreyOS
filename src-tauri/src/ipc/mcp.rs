@@ -38,7 +38,6 @@
 //! already uses).
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -259,15 +258,12 @@ fn validate_id(id: &str) -> IpcResult<()> {
 /// but not reused because that function is private to the channels
 /// module. Duplicating four lines costs less than threading a `pub` out.
 pub fn read_config_yaml(authority: &Arc<PathAuthority>) -> std::io::Result<YamlValue> {
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "neither $HOME nor %USERPROFILE% set",
-            )
-        })?;
-    let path = Path::new(&home).join(".hermes/config.yaml");
+    // Honor COREY_HERMES_DIR / HERMES_HOME / override file the same way
+    // every other Hermes-touching code path does. Reading from a hard-
+    // coded `$HOME/.hermes/config.yaml` here meant relocating the data
+    // dir broke MCP server resolution silently — caught by the B-10.4
+    // `b10_e2e_filesystem_mcp_server` integration test.
+    let path = crate::paths::hermes_data_dir()?.join("config.yaml");
     let raw = match sandbox::fs::read_to_string_blocking(authority, &path) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(YamlValue::Null),
