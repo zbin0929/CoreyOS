@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Copy, Download, FileText } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/icon';
+import { saveText } from '@/lib/saveText';
 
 import { formatArtifactBytes } from './artifactHelpers';
 
@@ -76,15 +77,12 @@ export function ArtifactBlock({ rawContent, language, highlightedHtml }: Props) 
   const onDownload = () => {
     const ext = (language && LANGUAGE_TO_EXT[language.toLowerCase()]) ?? 'txt';
     const filename = `artifact-${Date.now()}.${ext}`;
-    const blob = new Blob([rawContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    // Inside Tauri this opens a native save sheet; outside Tauri
+    // (Storybook / Playwright) `saveText` falls back to the blob
+    // download path. Either way the user gets a working save flow
+    // without the silent no-op the bare `<a download>` had inside
+    // a Tauri WebView.
+    void saveText(rawContent, filename, 'text/plain');
   };
 
   const sizeLabel = `${lineCount} 行 · ${formatArtifactBytes(charCount)}`;
