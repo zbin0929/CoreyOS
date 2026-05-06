@@ -1103,3 +1103,111 @@ fn tool_step_default_simulated_for_simulated_executor() {
     assert_eq!(out["tool"], "noop");
     assert_eq!(out["args"], json!({ "x": 1 }));
 }
+
+// ── B-10.6 sub-workflow ───────────────────────────────────────────
+
+#[test]
+fn subworkflow_step_without_id_fails_validation_at_dispatch() {
+    // We can't drive the engine through a real sub-workflow load
+    // without seeding paths::set_app_config_dir + writing a YAML
+    // file (the store reads from disk). Instead we validate the
+    // shape contracts:
+    //   1. Missing workflow_id → step fails at dispatch with a
+    //      clear error, does NOT panic, does NOT auto-load.
+    //   2. Self-id → cycle detected before any disk I/O.
+    //
+    // Both paths exit through `execute_subworkflow_step` before
+    // ever touching `store::get`, so they're safe to test without
+    // a workspace.
+    let def = WorkflowDef {
+        id: "outer".into(),
+        name: "outer".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "child".into(),
+            name: "child".into(),
+            step_type: "workflow".into(),
+            workflow_id: None,
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = SimulatedExecutor;
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Failed);
+    let sr = &run.step_runs["child"];
+    assert_eq!(sr.status, StepRunStatus::Failed);
+    assert!(
+        sr.error
+            .as_deref()
+            .unwrap_or("")
+            .contains("missing workflow_id"),
+        "expected missing-id error, got {:?}",
+        sr.error
+    );
+}
+
+#[test]
+fn subworkflow_self_call_is_caught_as_cycle() {
+    let def = WorkflowDef {
+        id: "loop".into(),
+        name: "loop".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "recurse".into(),
+            name: "recurse".into(),
+            step_type: "workflow".into(),
+            workflow_id: Some("loop".into()),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = SimulatedExecutor;
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Failed);
+    let sr = &run.step_runs["recurse"];
+    assert_eq!(sr.status, StepRunStatus::Failed);
+    assert!(
+        sr.error
+            .as_deref()
+            .unwrap_or("")
+            .contains("cycle detected"),
+        "expected cycle error, got {:?}",
+        sr.error
+    );
+}
+
+#[test]
+fn subworkflow_inputs_render_against_parent_context() {
+    use super::render_subworkflow_inputs;
+    let mut ctx = RunContext::new("p", "r", json!({ "topic": "AI", "count": 3 }));
+    ctx.set_step_output("scrape", json!({ "text": "hello world" }));
+
+    let inputs = json!({
+        "from_inputs": "{{ inputs.topic }}",
+        "from_step": "{{ scrape.text }}",
+        "literal_number": 42,
+        "literal_array": [1, 2],
+    });
+    let rendered = render_subworkflow_inputs(Some(&inputs), &ctx);
+    assert_eq!(rendered["from_inputs"], "AI");
+    assert_eq!(rendered["from_step"], "hello world");
+    assert_eq!(rendered["literal_number"], 42);
+    assert_eq!(rendered["literal_array"], json!([1, 2]));
+}
+
+#[test]
+fn subworkflow_inputs_default_when_none() {
+    use super::render_subworkflow_inputs;
+    let ctx = RunContext::new("p", "r", json!({}));
+    let rendered = render_subworkflow_inputs(None, &ctx);
+    assert_eq!(rendered, json!({}));
+}

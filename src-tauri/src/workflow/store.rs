@@ -131,7 +131,7 @@ fn validate_step(step: &WorkflowStep, known_ids: &[&str], errors: &mut Vec<Valid
     }
 
     let valid_types = [
-        "agent", "tool", "browser", "parallel", "branch", "loop", "approval",
+        "agent", "tool", "browser", "parallel", "branch", "loop", "approval", "workflow",
     ];
     if !valid_types.contains(&step.step_type.as_str()) {
         errors.push(ValidationError {
@@ -199,6 +199,19 @@ fn validate_step(step: &WorkflowStep, known_ids: &[&str], errors: &mut Vec<Valid
             });
         }
         "approval" => {}
+        // B-10.6 sub-workflow. Field shape only — we deliberately
+        // don't load the child def here to validate it exists,
+        // because (a) the child YAML may live in a different
+        // workspace path that's only resolvable at runtime, and
+        // (b) it would block the editor's save path on disk I/O.
+        // Cycle detection happens when the engine actually invokes
+        // the sub-workflow.
+        "workflow" if step.workflow_id.as_deref().unwrap_or("").is_empty() => {
+            errors.push(ValidationError {
+                field: format!("steps[{}].workflow_id", step.id),
+                message: "Sub-workflow step requires workflow_id".into(),
+            });
+        }
         _ => {}
     }
 

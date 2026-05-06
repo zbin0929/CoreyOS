@@ -79,6 +79,23 @@ pub struct WorkflowStep {
     pub retry: Option<RetryPolicy>,
     #[serde(default)]
     pub on_error: Option<String>,
+    /// **B-10.6 sub-workflow**. When `step_type == "workflow"`, this
+    /// names the child workflow def to invoke (looked up via
+    /// `workflow::store::get`). The engine renders `workflow_inputs`
+    /// against the parent's RunContext, builds a fresh child run,
+    /// drives it to completion synchronously, and surfaces the
+    /// child's final step outputs as this step's output. Required
+    /// for `step_type == "workflow"`; ignored for other types.
+    #[serde(default)]
+    pub workflow_id: Option<String>,
+    /// Input values passed to the child workflow (B-10.6). Each value
+    /// is template-rendered against the parent's RunContext before
+    /// the child run starts, so a sub-workflow can take inputs like
+    /// `"{{ steps.scrape.text }}"`. Optional; defaults to `{}` (no
+    /// inputs) which only works if the child def has no required
+    /// inputs of its own.
+    #[serde(default)]
+    pub workflow_inputs: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

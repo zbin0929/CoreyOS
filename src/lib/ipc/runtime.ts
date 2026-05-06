@@ -399,7 +399,15 @@ export interface WorkflowInput {
 export interface WorkflowStep {
   id: string;
   name: string;
-  type: 'agent' | 'tool' | 'browser' | 'parallel' | 'branch' | 'loop' | 'approval';
+  type:
+    | 'agent'
+    | 'tool'
+    | 'browser'
+    | 'parallel'
+    | 'branch'
+    | 'loop'
+    | 'approval'
+    | 'workflow';
   after: string[];
   agent_id?: string;
   prompt?: string;
@@ -417,6 +425,21 @@ export interface WorkflowStep {
   approval_message?: string;
   output_format?: string;
   browser_profile?: string;
+  /**
+   * **B-10.6 sub-workflow**. When `type === 'workflow'`, names the
+   * child workflow def to invoke. Required for sub-workflow steps;
+   * ignored otherwise. The engine renders `workflow_inputs`
+   * against the parent's RunContext, drives the child to
+   * completion synchronously, and exposes the child's per-step
+   * outputs under `outputs.<step_id>` for downstream templates.
+   */
+  workflow_id?: string;
+  /**
+   * Inputs map passed to the child workflow (B-10.6). String
+   * leaves are template-rendered against the parent context;
+   * non-strings pass through unchanged.
+   */
+  workflow_inputs?: Record<string, unknown>;
 }
 
 export interface WorkflowDef {

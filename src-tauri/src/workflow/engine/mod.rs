@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::context::{evaluate_condition, RunContext};
 use super::model::{RetryPolicy, WorkflowDef, WorkflowStep};
 use super::planner;
+use super::store;
 
 /// How long to sleep before the Nth retry attempt (1-indexed) given a
 /// retry policy. Linear by default; exponential doubles each step
@@ -549,6 +550,12 @@ fn execute_step_live(
         "parallel" => execute_parallel_step_live(step, ctx, executor),
         "branch" => execute_branch_step(step, ctx),
         "loop" => execute_loop_step_live(step, ctx, executor),
+        // B-10.6 — invoke another workflow def synchronously and
+        // surface its outputs. The whole thing happens on this
+        // thread; cancellation / progress for the inner steps don't
+        // bubble up, but the outer step's StepRun status reflects
+        // success/failure cleanly.
+        "workflow" => execute_subworkflow_step(step, ctx, executor),
         // `approval` is handled inline in `execute_with_executor`'s
         // outer loop — it pauses the run instead of returning a value.
         // Reaching here would mean the loop forgot to short-circuit
@@ -558,6 +565,124 @@ fn execute_step_live(
             .into()),
         other => Err(format!("Unknown step type: {other}")),
     }
+}
+
+/// **B-10.6 sub-workflow.** Look up `step.workflow_id` from the on-disk
+/// store, build a fresh `RunContext` from the rendered
+/// `step.workflow_inputs`, and drive the child workflow to completion
+/// using the same `executor`. Returns the child run's final step
+/// outputs as a JSON object so the parent's downstream steps can
+/// reference them via `{{ steps.<this_step>.outputs.<child_step>.* }}`.
+///
+/// **Cycle protection**: we refuse to invoke a workflow whose id is
+/// already on the parent context's run stack. This keeps a YAML typo
+/// (workflow A → B → A) from spinning the engine until OOM.
+///
+/// **Failure semantics**: a child run that ends in `Failed` /
+/// `Cancelled` propagates as `Err` here, which means the parent's
+/// step retry / on_error policy applies — same as any other step.
+/// A child run that ends in `Paused` (waiting for approval inside
+/// the child) is treated as failure for now, since the parent has
+/// no UI to surface "child is paused on approval"; pausing the
+/// PARENT and round-tripping through the child's approval gate is a
+/// future enhancement (B-10.6 follow-up).
+fn execute_subworkflow_step(
+    step: &WorkflowStep,
+    ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+) -> Result<serde_json::Value, String> {
+    let child_workflow_id = step
+        .workflow_id
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .ok_or("workflow step missing workflow_id")?;
+
+    if ctx.is_in_run_stack(child_workflow_id) {
+        return Err(format!(
+            "sub-workflow cycle detected: '{child_workflow_id}' is already on the run stack"
+        ));
+    }
+
+    let def = store::get(child_workflow_id)
+        .map_err(|e| format!("failed to load sub-workflow '{child_workflow_id}': {e}"))?;
+
+    // Render each input value through the parent's template engine
+    // so callers can pass `{{ steps.x.text }}` / `{{ inputs.foo }}`.
+    let rendered_inputs = render_subworkflow_inputs(step.workflow_inputs.as_ref(), ctx);
+
+    let (mut child_run, mut child_ctx) = create_initial_run(&def, rendered_inputs);
+    // Seed the child stack with the FULL ancestry so a grandchild
+    // calling back into the top-level parent is caught:
+    //
+    //   parent.workflow_id  ↓ (push)
+    //   parent.run_stack[…] ↓ (push, dedup)
+    //   def.id              ↓ (push, deepest level)
+    //
+    // `push_run_stack` is idempotent so duplicates are dropped.
+    child_ctx.push_run_stack(&ctx.workflow_id);
+    for ancestor in ctx.run_stack() {
+        child_ctx.push_run_stack(ancestor);
+    }
+    child_ctx.push_run_stack(&def.id);
+
+    execute_with_executor(&def, &mut child_run, &mut child_ctx, executor);
+
+    match child_run.status {
+        RunStatus::Completed => {
+            // Surface every completed child step's output under
+            // `outputs.<step_id>` so parent templates can reach in.
+            // We deliberately don't flatten further — the parent
+            // chooses which child step's data it wants.
+            let mut outputs = serde_json::Map::new();
+            for (sid, sr) in &child_run.step_runs {
+                if sr.status == StepRunStatus::Completed {
+                    if let Some(out) = &sr.output {
+                        outputs.insert(sid.clone(), out.clone());
+                    }
+                }
+            }
+            Ok(json!({
+                "workflow_id": def.id,
+                "child_run_id": child_run.id,
+                "outputs": serde_json::Value::Object(outputs),
+            }))
+        }
+        RunStatus::Failed => Err(child_run
+            .error
+            .unwrap_or_else(|| "sub-workflow failed without error message".into())),
+        RunStatus::Cancelled => Err("sub-workflow cancelled".into()),
+        RunStatus::Paused => Err(
+            "sub-workflow paused on approval; nested approvals not yet supported (B-10.6 follow-up)"
+                .into(),
+        ),
+        RunStatus::Pending | RunStatus::Running => Err(
+            "sub-workflow returned in non-terminal state; this is an engine bug".into(),
+        ),
+    }
+}
+
+/// Render every leaf string in `workflow_inputs` against the parent
+/// `RunContext`. Non-string values (numbers, bools, arrays, objects)
+/// pass through unchanged — only strings can contain `{{ … }}`
+/// placeholders. Returns `{}` if `workflow_inputs` is `None` or
+/// `Some(non-object)`, which mirrors what `create_initial_run`
+/// accepts.
+fn render_subworkflow_inputs(
+    inputs: Option<&serde_json::Value>,
+    ctx: &RunContext,
+) -> serde_json::Value {
+    let Some(serde_json::Value::Object(map)) = inputs else {
+        return json!({});
+    };
+    let mut out = serde_json::Map::new();
+    for (k, v) in map {
+        let rendered = match v {
+            serde_json::Value::String(s) => serde_json::Value::String(ctx.render_template(s)),
+            other => other.clone(),
+        };
+        out.insert(k.clone(), rendered);
+    }
+    serde_json::Value::Object(out)
 }
 
 fn execute_agent_step_live(

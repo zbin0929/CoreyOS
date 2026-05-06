@@ -9,6 +9,12 @@ pub struct RunContext {
     pub run_id: String,
     pub inputs: Value,
     pub step_outputs: HashMap<String, Value>,
+    /// Stack of workflow ids active when this context was built —
+    /// outermost first, current innermost last. Used by B-10.6
+    /// sub-workflow dispatch to detect cycles before re-entering
+    /// the engine. Empty for a top-level run.
+    #[serde(default)]
+    pub run_stack: Vec<String>,
 }
 
 impl RunContext {
@@ -18,11 +24,29 @@ impl RunContext {
             run_id: run_id.to_string(),
             inputs,
             step_outputs: HashMap::new(),
+            run_stack: Vec::new(),
         }
     }
 
     pub fn set_step_output(&mut self, step_id: &str, output: Value) {
         self.step_outputs.insert(step_id.to_string(), output);
+    }
+
+    /// Push `workflow_id` onto the run stack. Idempotent — pushing
+    /// the same id twice is silently ignored so callers don't have
+    /// to track membership themselves.
+    pub fn push_run_stack(&mut self, workflow_id: &str) {
+        if !self.run_stack.iter().any(|id| id == workflow_id) {
+            self.run_stack.push(workflow_id.to_string());
+        }
+    }
+
+    pub fn run_stack(&self) -> &[String] {
+        &self.run_stack
+    }
+
+    pub fn is_in_run_stack(&self, workflow_id: &str) -> bool {
+        self.run_stack.iter().any(|id| id == workflow_id) || self.workflow_id == workflow_id
     }
 
     pub fn render_template(&self, template: &str) -> String {
@@ -180,5 +204,26 @@ mod tests {
     fn evaluate_string_eq() {
         let ctx = ctx_with_outputs();
         assert!(evaluate_condition("inputs.topic == \"AI\"", &ctx));
+    }
+
+    #[test]
+    fn run_stack_self_id_counts_as_member() {
+        // The current workflow_id is implicitly on the stack — a
+        // step that tries to invoke its own def is a one-cycle.
+        let ctx = RunContext::new("self", "r", json!({}));
+        assert!(ctx.is_in_run_stack("self"));
+        assert!(!ctx.is_in_run_stack("other"));
+    }
+
+    #[test]
+    fn run_stack_push_is_idempotent() {
+        let mut ctx = RunContext::new("a", "r", json!({}));
+        ctx.push_run_stack("b");
+        ctx.push_run_stack("b");
+        ctx.push_run_stack("c");
+        assert_eq!(ctx.run_stack(), &["b".to_string(), "c".to_string()]);
+        assert!(ctx.is_in_run_stack("b"));
+        assert!(ctx.is_in_run_stack("c"));
+        assert!(!ctx.is_in_run_stack("d"));
     }
 }
