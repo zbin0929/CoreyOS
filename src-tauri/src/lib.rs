@@ -641,6 +641,7 @@ pub fn run() {
             // and we need these to spawn the resume tasks below.
             let runs_for_resume = app_state.workflow_runs.clone();
             let adapters_for_resume = app_state.adapters.clone();
+            let authority_for_resume = app_state.authority.clone();
             let db_for_resume = app_state.db.clone();
             let cancel_flags_for_resume = app_state.workflow_cancel_flags.clone();
 
@@ -652,6 +653,7 @@ pub fn run() {
             for (run_id, workflow_id) in to_resume {
                 let runs = runs_for_resume.clone();
                 let adapters = adapters_for_resume.clone();
+                let authority = authority_for_resume.clone();
                 let db = db_for_resume.clone();
                 let cancel_flags = cancel_flags_for_resume.clone();
                 tauri::async_runtime::spawn_blocking(move || {
@@ -676,7 +678,7 @@ pub fn run() {
                     cancel_flags.lock().insert(run_id.clone(), flag.clone());
                     info!(run_id = %run_id, workflow_id = %workflow_id, "auto-resuming workflow run after restart");
                     crate::ipc::workflow::spawn_run_executor(
-                        runs, adapters, db, def, run_id, ctx, flag,
+                        runs, adapters, authority, db, def, run_id, ctx, flag,
                     );
                 });
             }

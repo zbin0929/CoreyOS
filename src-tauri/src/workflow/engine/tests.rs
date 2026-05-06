@@ -957,3 +957,149 @@ fn timeout_default_none_for_branch_step() {
         .iter()
         .all(|t| *t == Some(Duration::from_secs(30 * 60))));
 }
+
+// ───────────────────────── B-10.4 tool step routing ─────────────────────────
+
+/// Records every (tool_name, args, timeout) tuple the engine sends to
+/// the tool dispatcher. Used to pin engine→executor plumbing without
+/// spinning up a real MCP server. Returns whatever `reply` is set to,
+/// so a single executor instance can power both the success and error
+/// paths.
+struct ToolRecorder {
+    calls: Mutex<Vec<(String, serde_json::Value, Option<Duration>)>>,
+    reply: Mutex<Result<serde_json::Value, String>>,
+}
+
+impl StepExecutor for ToolRecorder {
+    fn execute_agent(&self, _agent_id: &str, prompt: &str) -> Result<String, String> {
+        Ok(prompt.to_string())
+    }
+
+    fn execute_tool_with_timeout(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+        timeout: Option<Duration>,
+    ) -> Result<serde_json::Value, String> {
+        self.calls
+            .lock()
+            .expect("calls")
+            .push((tool_name.to_string(), args.clone(), timeout));
+        self.reply.lock().expect("reply").clone()
+    }
+}
+
+#[test]
+fn tool_step_dispatches_to_executor_with_args_and_timeout() {
+    // Asserts the trinity: tool_name forwarded verbatim, tool_args
+    // rendered through the template engine, and the per-type
+    // default timeout (5 min for tool steps) reaches the executor.
+    let def = WorkflowDef {
+        id: "tool-dispatch".into(),
+        name: "tool-dispatch".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "t".into(),
+            name: "t".into(),
+            step_type: "tool".into(),
+            tool_name: Some("mcp:amazon-sp-api:get_orders".into()),
+            tool_args: Some(json!({ "marketplace": "{{inputs.market}}" })),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({ "market": "US" }));
+    let executor = ToolRecorder {
+        calls: Mutex::new(Vec::new()),
+        reply: Mutex::new(Ok(json!({ "orders": 42 }))),
+    };
+
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Completed);
+    let calls = executor.calls.lock().expect("calls");
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "mcp:amazon-sp-api:get_orders");
+    assert_eq!(calls[0].1, json!({ "marketplace": "US" }));
+    assert_eq!(calls[0].2, Some(Duration::from_secs(5 * 60)));
+    assert_eq!(
+        run.step_runs["t"].output,
+        Some(json!({ "orders": 42 })),
+        "executor's reply must land in the step output verbatim"
+    );
+}
+
+#[test]
+fn tool_step_executor_error_propagates_to_run() {
+    // Tool failure flows through the same retry / on_error path as
+    // agent failures — no special-casing. Without retry, one error
+    // → run Failed.
+    let def = WorkflowDef {
+        id: "tool-fail".into(),
+        name: "tool-fail".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "t".into(),
+            name: "t".into(),
+            step_type: "tool".into(),
+            tool_name: Some("mcp:bad-server:nope".into()),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = ToolRecorder {
+        calls: Mutex::new(Vec::new()),
+        reply: Mutex::new(Err("mcp tool error: server 'bad-server' not found".into())),
+    };
+
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Failed);
+    assert_eq!(run.step_runs["t"].status, StepRunStatus::Failed);
+    assert!(run.step_runs["t"]
+        .error
+        .as_deref()
+        .unwrap_or_default()
+        .contains("bad-server"));
+}
+
+#[test]
+fn tool_step_default_simulated_for_simulated_executor() {
+    // SimulatedExecutor uses the trait's default `execute_tool` impl,
+    // which returns `{tool, args, status: simulated}`. This pins the
+    // backward-compat contract the existing `execute_with_hooks_skips_progress_for_tool_step`
+    // test relies on, surfaced here as a focused assertion.
+    let def = WorkflowDef {
+        id: "tool-sim".into(),
+        name: "tool-sim".into(),
+        description: String::new(),
+        version: 1,
+        trigger: WorkflowTrigger::Manual,
+        inputs: vec![],
+        steps: vec![WorkflowStep {
+            id: "t".into(),
+            name: "t".into(),
+            step_type: "tool".into(),
+            tool_name: Some("noop".into()),
+            tool_args: Some(json!({ "x": 1 })),
+            ..Default::default()
+        }],
+    };
+    let (mut run, mut ctx) = create_initial_run(&def, json!({}));
+    let executor = SimulatedExecutor;
+    execute_with_executor(&def, &mut run, &mut ctx, &executor);
+
+    assert_eq!(run.status, RunStatus::Completed);
+    let out = run.step_runs["t"]
+        .output
+        .as_ref()
+        .expect("tool step must have output");
+    assert_eq!(out["status"], "simulated");
+    assert_eq!(out["tool"], "noop");
+    assert_eq!(out["args"], json!({ "x": 1 }));
+}

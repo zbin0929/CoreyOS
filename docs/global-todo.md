@@ -1,6 +1,6 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 tag · B-10.1+10.2+10.3 完成）
+> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · v0.2.5 已 tag · B-10.1/2/3/4 完成 · 仅剩 B-10.5 browser）
 >
 > **今天 19 个 commit 落地（`d2827a5` → `b014a84`）**：
 > 1. **路由瘦身**（22 → 15）：`/agents` `/scheduler` `/runbooks` `/voice` `/profiles` `/compare` `/terminal` 全部从 sidebar 移除，URL 保留，落到 Settings → Advanced（`DEMOTED_ROUTES` 数组 + `<DemotedRouteBanner>` 横幅）。详见 N-2 / N-3 规则。
@@ -244,11 +244,14 @@
 - [x] 防御：dispatch 循环跳过已 Completed/Failed step（避免 on_error 目标重跑）
 - [x] 测试覆盖：`on_error_routes_to_handler_step` / `retry_then_on_error_handler`
 
-##### B-10.4 验证 / 实现 Tool Step（type: tool）
-- [ ] 当前 `tool_name` / `tool_args` 字段定义了，executor 没有 `execute_tool` 实现
-- [ ] 实现：通过 MCP server 调用，需要 Pack 启用的 MCP server id 路由
-- [ ] 如果 `tool_name` 是 `mcp_<server>_<method>` 格式 → resolve_mcp_source 复用
-- [ ] 没接通 = Pack 的"调外部数据"链路全断，**P-1 跨境 Pack 跑前必须验证**
+##### B-10.4 Tool Step（type: tool） ✅
+- [x] Trait 加 `execute_tool` / `execute_tool_with_timeout`，默认返回 `{tool, args, status: "simulated"}` 保持向后兼容
+- [x] Engine `execute_tool_step` 改为调 `executor.execute_tool_with_timeout`，传 timeout（默认 5min）+ 渲染后 `tool_args`
+- [x] HermesExecutor 复用 `pack::resolve_mcp_source`（提升为 `pub(crate)`）
+- [x] **Tool name 格式**：`mcp:<server>:<tool>`，冒号分隔；非此格式直接报错（typo 不静默回落 simulated stub）
+- [x] HermesExecutor 加 `Arc<PathAuthority>` 字段，3 个 spawn_run_executor 调用点全部更新（ipc/workflow + mcp_server/tools + lib.rs）
+- [x] 测试覆盖：`tool_step_dispatches_to_executor_with_args_and_timeout`（forward 验证）/ `tool_step_executor_error_propagates_to_run`（错误链路）/ `tool_step_default_simulated_for_simulated_executor`（向后兼容）
+- [ ] **P-1 联调**：跨境 Pack manifest 用 `mcp:amazon-sp-api:list_orders` 这种格式，需在 P-1 上实测一次 stdio + http 两条链路
 
 ##### B-10.5 Browser Runner 实测
 - [ ] `execute_browser` 调子进程 `browser-runner`，不知道是真 Playwright 还是 stub

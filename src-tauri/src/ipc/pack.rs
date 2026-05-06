@@ -366,7 +366,13 @@ enum McpTransport {
     },
 }
 
-async fn resolve_mcp_source(
+/// Crate-public so the workflow engine's tool-step dispatch
+/// (`HermesExecutor::execute_tool_with_timeout`, B-10.4) can reuse
+/// the same MCP routing the Pack data-source loader uses. Splitting
+/// into a separate helper would mean two implementations drifting on
+/// every Hermes config-yaml schema bump — Pack writes are the source
+/// of truth, so workflows piggyback.
+pub(crate) async fn resolve_mcp_source(
     cfg: &serde_json::Value,
     authority: &Arc<crate::sandbox::PathAuthority>,
     runtime_params: &serde_json::Value,

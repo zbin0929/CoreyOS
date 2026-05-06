@@ -207,6 +207,36 @@ pub trait StepExecutor: Send + Sync {
     ) -> Result<String, String> {
         self.execute_browser(action, url, instruction, profile)
     }
+
+    // ── B-10.4 Tool step (MCP routing) ─────────────────────────────
+    //
+    // The default impl returns a structured "simulated" stub that
+    // matches the shape `execute_tool_step` produced before B-10.4 —
+    // this keeps `SimulatedExecutor` and the test executors working
+    // without any code changes. `HermesExecutor` overrides
+    // `execute_tool_with_timeout` to parse `mcp:<server>:<tool>`
+    // tool names and dispatch through `pack::resolve_mcp_source`,
+    // which is the same code path the Pack data-source loader uses.
+    fn execute_tool(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        Ok(json!({
+            "tool": tool_name,
+            "args": args,
+            "status": "simulated",
+        }))
+    }
+
+    fn execute_tool_with_timeout(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+        _timeout: Option<Duration>,
+    ) -> Result<serde_json::Value, String> {
+        self.execute_tool(tool_name, args)
+    }
 }
 
 /// Default per-type timeout. `step.timeout_minutes` overrides
@@ -514,7 +544,7 @@ fn execute_step_live(
 ) -> Result<serde_json::Value, String> {
     match step.step_type.as_str() {
         "agent" => execute_agent_step_live(step, ctx, executor, timeout),
-        "tool" => execute_tool_step(step, ctx),
+        "tool" => execute_tool_step(step, ctx, executor, timeout),
         "browser" => execute_browser_step(step, ctx, executor, timeout),
         "parallel" => execute_parallel_step_live(step, ctx, executor),
         "branch" => execute_branch_step(step, ctx),
@@ -660,11 +690,17 @@ fn execute_loop_step_live(
 fn execute_tool_step(
     step: &WorkflowStep,
     ctx: &mut RunContext,
+    executor: &dyn StepExecutor,
+    timeout: Option<Duration>,
 ) -> Result<serde_json::Value, String> {
     let tool = step
         .tool_name
         .as_deref()
         .ok_or("tool step missing tool_name")?;
+    // `tool_args` is rendered as JSON-string-roundtrip so `{{ inputs.x }}`
+    // template tokens land in nested string values too. Failed
+    // re-parse falls back to an empty object — the executor surfaces
+    // a clearer error than a parse panic ever would.
     let args_rendered = step
         .tool_args
         .as_ref()
@@ -673,11 +709,7 @@ fn execute_tool_step(
             serde_json::from_str::<serde_json::Value>(&ctx.render_template(&s)).unwrap_or(json!({}))
         })
         .unwrap_or(json!({}));
-    Ok(json!({
-        "tool": tool,
-        "args": args_rendered,
-        "status": "simulated"
-    }))
+    executor.execute_tool_with_timeout(tool, &args_rendered, timeout)
 }
 
 fn execute_branch_step(

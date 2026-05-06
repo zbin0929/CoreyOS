@@ -435,6 +435,7 @@ async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, Strin
     let state = app.state::<AppState>();
     let runs = state.workflow_runs.clone();
     let adapters = state.adapters.clone();
+    let authority = state.authority.clone();
     let db = state.db.clone();
     let cancel_flags = state.workflow_cancel_flags.clone();
 
@@ -475,6 +476,7 @@ async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, Strin
     crate::ipc::workflow::spawn_run_executor(
         runs,
         adapters,
+        authority,
         db,
         def,
         run_id.clone(),

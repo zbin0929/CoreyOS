@@ -126,6 +126,11 @@ pub async fn workflow_validate(def: WorkflowDef) -> IpcResult<ValidationResult> 
 
 struct HermesExecutor {
     adapters: std::sync::Arc<crate::adapters::AdapterRegistry>,
+    /// Threaded through so `execute_tool_with_timeout` (B-10.4) can
+    /// reach `pack::resolve_mcp_source` without going via Tauri
+    /// State (the executor runs inside `spawn_blocking`, no
+    /// `app.state::<AppState>()` available there).
+    authority: std::sync::Arc<crate::sandbox::PathAuthority>,
 }
 
 impl StepExecutor for HermesExecutor {
@@ -396,6 +401,81 @@ impl StepExecutor for HermesExecutor {
         })
     }
 
+    fn execute_tool_with_timeout(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<serde_json::Value, String> {
+        // Tool step routing (B-10.4). We accept exactly one format:
+        //
+        //     mcp:<server>:<tool>
+        //
+        // where `<server>` is an `mcp_servers.<id>` key from
+        // config.yaml and `<tool>` is the JSON-RPC tool name the
+        // server exposes. Underscores in either field are fine —
+        // colons can't appear in either (verified against the
+        // tools/list responses we've seen so far), so the format is
+        // unambiguous. Any other prefix is rejected so a typo in
+        // the workflow definition becomes a loud error at run time
+        // instead of silently shadowing into the simulated stub.
+        let parts: Vec<&str> = tool_name.splitn(3, ':').collect();
+        if parts.len() != 3 || parts[0] != "mcp" || parts[1].is_empty() || parts[2].is_empty() {
+            return Err(format!(
+                "tool step expects 'mcp:<server>:<tool>' format, got '{}'",
+                tool_name
+            ));
+        }
+        let server = parts[1].to_string();
+        let tool = parts[2].to_string();
+        // `pack::resolve_mcp_source` reads its own `timeout_secs`
+        // from the cfg map and applies it as the HTTP / stdio
+        // session timeout. If the engine handed us a `None`, fall
+        // back to 30 s — the same default the Pack data-source
+        // path uses, so behaviour is identical across surfaces.
+        let timeout_secs = timeout.map(|d| d.as_secs()).unwrap_or(30);
+        let cfg = serde_json::json!({
+            "server": server,
+            "tool": tool,
+            "params": args,
+            "timeout_secs": timeout_secs,
+        });
+
+        let authority = self.authority.clone();
+        let rt = tokio::runtime::Handle::current();
+        let started = std::time::Instant::now();
+        let result = rt.block_on(async move {
+            crate::ipc::pack::resolve_mcp_source(
+                &cfg,
+                &authority,
+                &serde_json::Value::Object(serde_json::Map::new()),
+            )
+            .await
+            .map_err(|e| match e {
+                crate::error::IpcError::Internal { message } => {
+                    format!("mcp tool error: {message}")
+                }
+                other => format!("mcp tool error: {other:?}"),
+            })
+        });
+        match &result {
+            Ok(_) => tracing::info!(
+                server = %server,
+                tool = %tool,
+                duration_ms = started.elapsed().as_millis() as u64,
+                "tool step done",
+            ),
+            Err(e) => tracing::warn!(
+                server = %server,
+                tool = %tool,
+                duration_ms = started.elapsed().as_millis() as u64,
+                error = %e,
+                "tool step failed",
+            ),
+        }
+        result
+    }
+
     fn execute_browser_with_timeout(
         &self,
         action: &str,
@@ -539,6 +619,7 @@ pub async fn workflow_run(
     spawn_run_executor(
         runs.clone(),
         state.adapters.clone(),
+        state.authority.clone(),
         db.clone(),
         def,
         run_id.clone(),
@@ -563,6 +644,7 @@ pub async fn workflow_run(
 pub fn spawn_run_executor(
     runs: std::sync::Arc<parking_lot::Mutex<std::collections::HashMap<String, WorkflowRun>>>,
     adapters: std::sync::Arc<crate::adapters::AdapterRegistry>,
+    authority: std::sync::Arc<crate::sandbox::PathAuthority>,
     db: Option<Arc<Db>>,
     def: WorkflowDef,
     run_id: String,
@@ -572,7 +654,10 @@ pub fn spawn_run_executor(
     let rid_for_log = run_id.clone();
     let wf_id_for_log = def.id.clone();
     tokio::task::spawn_blocking(move || {
-        let executor = HermesExecutor { adapters };
+        let executor = HermesExecutor {
+            adapters,
+            authority,
+        };
         let hook = make_step_end_hook(
             runs.clone(),
             db.clone(),
@@ -858,6 +943,7 @@ pub async fn workflow_approve(
     spawn_run_executor(
         runs.clone(),
         adapters,
+        state.authority.clone(),
         db.clone(),
         def,
         run_id.clone(),
