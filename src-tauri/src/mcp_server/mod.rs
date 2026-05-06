@@ -140,7 +140,10 @@ pub fn start(app: AppHandle) {
         .route("/", get(handle_get).post(rpc_handler))
         // B-10.7 webhook trigger. See `webhook` module for the full
         // contract (Bearer token, JSON body = workflow inputs).
-        .route("/webhook/{workflow_id}", axum::routing::post(webhook::handle))
+        .route(
+            "/webhook/{workflow_id}",
+            axum::routing::post(webhook::handle),
+        )
         .with_state(shared);
 
     tauri::async_runtime::spawn(async move {

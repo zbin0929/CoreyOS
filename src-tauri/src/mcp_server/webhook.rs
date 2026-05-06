@@ -142,7 +142,10 @@ fn token_eq(a: &str, b: &str) -> bool {
 }
 
 fn extract_bearer(headers: &HeaderMap) -> Option<String> {
-    let raw = headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?;
+    let raw = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
     let trimmed = raw.trim();
     let rest = trimmed
         .strip_prefix("Bearer ")
@@ -238,14 +241,18 @@ mod tests {
 
     #[test]
     fn token_eq_matches_equal_strings() {
-        assert!(token_eq("550e8400-e29b-41d4-a716-446655440000",
-                         "550e8400-e29b-41d4-a716-446655440000"));
+        assert!(token_eq(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "550e8400-e29b-41d4-a716-446655440000"
+        ));
     }
 
     #[test]
     fn token_eq_rejects_different_strings() {
-        assert!(!token_eq("550e8400-e29b-41d4-a716-446655440000",
-                          "550e8400-e29b-41d4-a716-446655440001"));
+        assert!(!token_eq(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "550e8400-e29b-41d4-a716-446655440001"
+        ));
     }
 
     #[test]

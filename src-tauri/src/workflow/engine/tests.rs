@@ -1176,10 +1176,7 @@ fn subworkflow_self_call_is_caught_as_cycle() {
     let sr = &run.step_runs["recurse"];
     assert_eq!(sr.status, StepRunStatus::Failed);
     assert!(
-        sr.error
-            .as_deref()
-            .unwrap_or("")
-            .contains("cycle detected"),
+        sr.error.as_deref().unwrap_or("").contains("cycle detected"),
         "expected cycle error, got {:?}",
         sr.error
     );

@@ -801,9 +801,7 @@ async fn append_memory(args: Value) -> Result<String, (i32, String)> {
         let existing = std::fs::read_to_string(&path).unwrap_or_default();
         let next = format!("{existing}{block}");
         if next.len() as u64 > crate::ipc::memory::MEMORY_MAX_BYTES {
-            return Err(
-                "MEMORY.md would exceed 256 KB cap; run /memory cleanup first".into(),
-            );
+            return Err("MEMORY.md would exceed 256 KB cap; run /memory cleanup first".into());
         }
         std::fs::write(&path, next.as_bytes()).map_err(|e| format!("write: {e}"))
     })

@@ -123,12 +123,15 @@ fn effective_endpoint(cfg: &VisionProxyConfig) -> Option<EffectiveEndpoint> {
         let profiles = crate::llm_profiles::load(&config_dir);
         let profile = profiles.iter().find(|p| p.id == cfg.llm_profile_id)?;
         let api_key = profile.api_key_env.as_ref().and_then(|name| {
-            std::env::var(name).ok().filter(|v| !v.is_empty()).or_else(|| {
-                crate::hermes_config::read_env_value(name)
-                    .ok()
-                    .flatten()
-                    .filter(|v| !v.is_empty())
-            })
+            std::env::var(name)
+                .ok()
+                .filter(|v| !v.is_empty())
+                .or_else(|| {
+                    crate::hermes_config::read_env_value(name)
+                        .ok()
+                        .flatten()
+                        .filter(|v| !v.is_empty())
+                })
         });
         return Some(EffectiveEndpoint {
             model: profile.model.clone(),
@@ -244,7 +247,8 @@ pub async fn describe_image(
     }
 
     let endpoint = effective_endpoint(cfg).ok_or_else(|| {
-        "vision proxy: no usable endpoint — pick an LLM profile or fill model + base_url".to_string()
+        "vision proxy: no usable endpoint — pick an LLM profile or fill model + base_url"
+            .to_string()
     })?;
     let api_key = endpoint.api_key.ok_or_else(|| {
         "vision proxy: no API key resolved (set api_key_env on the LLM profile or here)".to_string()
@@ -275,7 +279,10 @@ pub async fn describe_image(
         "max_tokens": 800,
     });
 
-    let url = format!("{}/chat/completions", endpoint.base_url.trim_end_matches('/'));
+    let url = format!(
+        "{}/chat/completions",
+        endpoint.base_url.trim_end_matches('/')
+    );
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()
@@ -347,27 +354,22 @@ pub async fn expand_images_in_messages(
     // attachment. Walking from the end keeps the cost O(messages)
     // worst case but typically O(1) — agents send N-many turns
     // with images on the latest only.
-    let target_idx = messages
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(i, m)| {
-            if m.role == "user" && m.attachments.iter().any(|a| a.mime.starts_with("image/")) {
-                Some(i)
-            } else {
-                None
-            }
-        });
+    let target_idx = messages.iter().enumerate().rev().find_map(|(i, m)| {
+        if m.role == "user" && m.attachments.iter().any(|a| a.mime.starts_with("image/")) {
+            Some(i)
+        } else {
+            None
+        }
+    });
     let Some(idx) = target_idx else {
         return messages;
     };
 
     let msg = &mut messages[idx];
-    let (images, others): (Vec<ChatAttachmentRef>, Vec<ChatAttachmentRef>) = std::mem::take(
-        &mut msg.attachments,
-    )
-    .into_iter()
-    .partition(|a| a.mime.starts_with("image/"));
+    let (images, others): (Vec<ChatAttachmentRef>, Vec<ChatAttachmentRef>) =
+        std::mem::take(&mut msg.attachments)
+            .into_iter()
+            .partition(|a| a.mime.starts_with("image/"));
     msg.attachments = others;
 
     let mut additions = String::new();
