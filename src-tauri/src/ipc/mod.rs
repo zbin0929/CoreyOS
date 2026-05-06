@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod artifacts;
 pub mod attachments;
 pub mod browser_config;
 pub mod budgets;

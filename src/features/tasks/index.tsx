@@ -8,6 +8,8 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Copy,
+  FileBox,
   ListChecks,
   Loader2,
   MessageSquare,
@@ -21,11 +23,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
+  artifactList,
   ipcErrorMessage,
   workflowActiveRuns,
   workflowHistoryList,
   workflowRunCancel,
   workflowRunGet,
+  type ArtifactInfo,
   type WorkflowRunResult,
   type WorkflowRunSummary,
   type WorkflowStepRun,
@@ -503,6 +507,12 @@ function TaskDetail({
           </pre>
         </details>
       )}
+
+      {/* B-9.4 — files this run produced (via `save_artifact`
+          MCP tool, agent steps that write to artifacts dir, or
+          power-user IPC). Lazy-loaded; missing dir = empty. */}
+      <ArtifactsList runId={fallbackId} />
+
       <div className="mt-2 text-[10px] text-fg-subtle">
         <Link
           to="/workflows"
@@ -587,6 +597,128 @@ function formatTime(ts: number): string {
  * session id query param so the chat page restores that session.
  * Stays minimal — message count + last-touched + "go to chat" hint.
  */
+/**
+ * Renders the artifact list for a single workflow run inside the
+ * expanded TaskDetail. Lazy-loads on first mount; missing dir is
+ * an empty list (not an error).
+ *
+ * Each row shows filename + size + mtime + two click actions:
+ *
+ * - **Copy path**: writes the absolute path to clipboard. Useful
+ *   for piping into `code <path>` / `open <path>` from Terminal.
+ * - **Open**: triggers the OS default app via `tauri-plugin-shell`'s
+ *   `open` (already registered as a default-allowed scheme). Falls
+ *   back to silently doing nothing outside Tauri (Storybook /
+ *   Playwright); the copy-path button still works there.
+ */
+function ArtifactsList({ runId }: { runId: string }) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<ArtifactInfo[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await artifactList(runId);
+        if (!cancelled) setItems(list);
+      } catch (e) {
+        if (!cancelled) setError(ipcErrorMessage(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
+
+  if (error) {
+    return (
+      <div className="mt-3 text-[11px] text-danger">
+        {t('tasks.artifacts_error', { defaultValue: '产物列表加载失败：' })}
+        {error}
+      </div>
+    );
+  }
+  if (items === null) {
+    return null;
+  }
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <details className="mt-3" open>
+      <summary className="cursor-pointer text-[11px] font-medium text-fg-subtle hover:text-fg">
+        <Icon icon={FileBox} size={12} className="mr-1 inline" />
+        {t('tasks.artifacts', { defaultValue: '产物文件' })}
+        <span className="ml-1 text-fg-subtle">({items.length})</span>
+      </summary>
+      <ul className="mt-1.5 flex flex-col gap-1.5">
+        {items.map((a) => (
+          <ArtifactRow key={a.path} artifact={a} />
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function ArtifactRow({ artifact }: { artifact: ArtifactInfo }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const onCopyPath = async () => {
+    try {
+      await navigator.clipboard.writeText(artifact.path);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* best effort */
+    }
+  };
+  const onOpen = async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(artifact.path);
+    } catch {
+      /* outside Tauri or open denied — silent */
+    }
+  };
+  return (
+    <li className="flex items-center gap-2 rounded border border-border/40 bg-bg-elev-1 px-2 py-1 text-[11px]">
+      <Icon icon={FileBox} size={12} className="shrink-0 text-fg-subtle" />
+      <span className="truncate font-mono text-fg" title={artifact.path}>
+        {artifact.name}
+      </span>
+      <span className="shrink-0 text-fg-subtle">{formatBytes(artifact.size)}</span>
+      <span className="shrink-0 text-fg-subtle">{formatTime(artifact.mtime_ms)}</span>
+      <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => void onCopyPath()}
+          title={t('tasks.artifact_copy_path', { defaultValue: '复制路径' })}
+          className="rounded px-1.5 py-0.5 text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg"
+          data-testid={`artifact-copy-${artifact.name}`}
+        >
+          <Icon icon={copied ? CheckCircle2 : Copy} size={11} />
+        </button>
+        <button
+          type="button"
+          onClick={() => void onOpen()}
+          title={t('tasks.artifact_open', { defaultValue: '打开' })}
+          className="rounded px-1.5 py-0.5 text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg"
+          data-testid={`artifact-open-${artifact.name}`}
+        >
+          <Icon icon={ChevronRight} size={11} />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
+  return `${(n / 1024 / 1024).toFixed(1)}MB`;
+}
+
 function LongChatRow({ chat }: { chat: LongChatTask }) {
   const { t } = useTranslation();
   return (

@@ -5,6 +5,7 @@
 
 mod adapters;
 mod app_handle;
+mod artifacts;
 mod attachments;
 mod changelog;
 mod channel_status;
@@ -117,6 +118,9 @@ pub fn run() {
             ipc::agents::adapter_list,
             ipc::health::health_check,
             ipc::file_export::save_text_file,
+            ipc::artifacts::artifact_list,
+            ipc::artifacts::artifact_path,
+            ipc::artifacts::artifact_write,
             ipc::webhook::webhook_token_get,
             ipc::webhook::webhook_token_rotate,
             ipc::webhook::webhook_listener_port,

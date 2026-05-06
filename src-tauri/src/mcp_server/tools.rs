@@ -273,6 +273,38 @@ pub fn manifest() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "save_artifact",
+            "description": "Persist a text file under the current run's \
+                artifact directory (`~/.hermes/artifacts/<run_id>/<name>`). \
+                Use when the user asks you to save something — a CSV, a \
+                markdown report, a generated config — instead of dumping \
+                a wall of text into chat. The file is then visible in the \
+                /tasks detail panel with one-click open / reveal in Finder.\n\n\
+                If you don't have a `run_id` (typical for ad-hoc chats), \
+                pass the literal string `chat` and the file lands under \
+                `artifacts/chat/`. Same name overwrites; pick a different \
+                name when versioning matters.\n\n\
+                Hard cap: 8 MB per file. Returns the absolute path.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Filename (no slashes; we sanitise but don't path-join). Include the extension so previewers know the type — `report-2026-05.md`, `weekly-revenue.csv`, etc."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Text content. Binary blobs aren't supported here — base64 + a `.b64.txt` extension is the workaround."
+                    },
+                    "run_id": {
+                        "type": "string",
+                        "description": "Workflow run id from `run_workflow` / `list_active_runs`. Use the literal `chat` for non-workflow contexts."
+                    }
+                },
+                "required": ["name", "content"]
+            }
+        }),
+        json!({
             "name": "list_active_runs",
             "description": "List currently-running workflows (id, \
                 workflow_id, status, started_at). Use after \
@@ -356,6 +388,7 @@ pub async fn call(app: AppHandle, params: &Value) -> Result<Value, (i32, String)
         "list_chat_sessions" => list_chat_sessions(app, args).await?,
         "read_memory" => read_memory(args).await?,
         "append_memory" => append_memory(args).await?,
+        "save_artifact" => save_artifact(args).await?,
         "list_active_runs" => list_active_runs(app).await?,
         "cancel_run" => cancel_run(app, args).await?,
         _ => return Err((-32601, format!("unknown tool: {name}"))),
@@ -857,6 +890,44 @@ async fn append_memory(args: Value) -> Result<String, (i32, String)> {
 enum AppendOutcome {
     Wrote { bytes: usize },
     Skipped { reason: String },
+}
+
+#[derive(Debug, Deserialize)]
+struct SaveArtifactArgs {
+    name: String,
+    content: String,
+    #[serde(default)]
+    run_id: Option<String>,
+}
+
+async fn save_artifact(args: Value) -> Result<String, (i32, String)> {
+    let args: SaveArtifactArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid save_artifact args: {e}")))?;
+    let run_id = args
+        .run_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("chat")
+        .to_string();
+    let name = args.name.clone();
+    let content = args.content.clone();
+
+    let info = tokio::task::spawn_blocking(move || {
+        crate::artifacts::write_artifact(&run_id, &name, content.as_bytes())
+    })
+    .await
+    .map_err(|e| (-32603, format!("save_artifact join: {e}")))?
+    .map_err(|e| (-32602, format!("save_artifact: {e}")))?;
+
+    Ok(json!({
+        "ok": true,
+        "run_id": info.run_id,
+        "name": info.name,
+        "path": info.path,
+        "size": info.size,
+    })
+    .to_string())
 }
 
 async fn list_active_runs(app: AppHandle) -> Result<String, (i32, String)> {
