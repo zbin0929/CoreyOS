@@ -53,8 +53,8 @@ export const NAV: NavEntry[] = [
   { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'primary', phase: 2 },
 
   { id: 'tasks', path: '/tasks', labelKey: 'nav.tasks', icon: ListChecks, group: 'tools', phase: 9, shortcut: ['mod', 't'] },
-  { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'tools', phase: 2, shortcut: ['mod', '4'] },
-  { id: 'logs', path: '/logs', labelKey: 'nav.logs', icon: ScrollText, group: 'tools', phase: 2, shortcut: ['mod', '6'], requires: 'logs' },
+  { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'tools', phase: 2, shortcut: ['mod', '3'] },
+  { id: 'logs', path: '/logs', labelKey: 'nav.logs', icon: ScrollText, group: 'tools', phase: 2, shortcut: ['mod', '4'], requires: 'logs' },
 
   // Sidebar entries for the More tier. Per the 2026-05-06 route audit,
   // `agents` / `scheduler` / `runbooks` / `voice` / `profiles` were

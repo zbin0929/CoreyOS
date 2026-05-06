@@ -7,7 +7,7 @@ import { Icon } from '@/components/ui/icon';
 import { usePaletteStore } from '@/stores/palette';
 import { useUIStore } from '@/stores/ui';
 import { useComposerStore } from '@/stores/composer';
-import { NAV } from '@/app/nav-config';
+import { NAV, DEMOTED_ROUTES } from '@/app/nav-config';
 import { Kbd } from '@/components/ui/kbd';
 import { runbookList, type RunbookRow } from '@/lib/ipc';
 import { detectParams, renderRunbook, runbookScopeApplies } from '@/features/runbooks/utils';
@@ -94,6 +94,21 @@ export function CommandPalette() {
                   icon={entry.icon}
                   label={t(entry.labelKey)}
                   hint={entry.shortcut}
+                />
+              ))}
+            </Command.Group>
+
+            <Command.Group
+              heading={t('palette.group.advanced', { defaultValue: '高级（已从侧边栏隐藏）' })}
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-fg-subtle"
+            >
+              {DEMOTED_ROUTES.map((entry) => (
+                <PaletteItem
+                  key={entry.id}
+                  value={`goto ${entry.id} ${t(entry.labelKey)} advanced`}
+                  onSelect={() => run(() => navigate({ to: entry.path }))}
+                  icon={entry.icon}
+                  label={t(entry.labelKey)}
                 />
               ))}
             </Command.Group>
