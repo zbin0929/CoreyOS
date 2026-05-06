@@ -54,7 +54,6 @@ export const NAV: NavEntry[] = [
 
   { id: 'tasks', path: '/tasks', labelKey: 'nav.tasks', icon: ListChecks, group: 'tools', phase: 9, shortcut: ['mod', 't'] },
   { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'tools', phase: 2, shortcut: ['mod', '4'] },
-  { id: 'terminal', path: '/terminal', labelKey: 'nav.terminal', icon: Terminal, group: 'tools', phase: 4, shortcut: ['mod', '5'], requires: 'terminal' },
   { id: 'logs', path: '/logs', labelKey: 'nav.logs', icon: ScrollText, group: 'tools', phase: 2, shortcut: ['mod', '6'], requires: 'logs' },
 
   // Sidebar entries for the More tier. Per the 2026-05-06 route audit,
@@ -91,4 +90,5 @@ export const DEMOTED_ROUTES: DemotedRoute[] = [
   { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree },
   { id: 'voice', path: '/voice', labelKey: 'nav.voice', icon: Mic },
   { id: 'compare', path: '/compare', labelKey: 'nav.compare', icon: Columns3 },
+  { id: 'terminal', path: '/terminal', labelKey: 'nav.terminal', icon: Terminal },
 ];

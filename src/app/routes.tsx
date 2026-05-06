@@ -168,7 +168,7 @@ const logsRoute = createRoute({
 const terminalRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/terminal',
-  component: TerminalRoute,
+  component: withDemotedBanner(TerminalRoute),
 });
 
 const schedulerRoute = createRoute({
