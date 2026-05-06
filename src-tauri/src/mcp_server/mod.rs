@@ -55,6 +55,7 @@ use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
 pub mod tools;
+pub mod webhook;
 
 /// Globally-resolved port the MCP server is listening on. Populated
 /// by `start()` exactly once per process. Used by `register_with_hermes`
@@ -110,8 +111,8 @@ struct JsonRpcError {
 /// implementations call back into Tauri's main thread (e.g. for native
 /// dialogs that must run on the AppKit main loop on macOS).
 #[derive(Clone)]
-struct McpState {
-    app: AppHandle,
+pub(crate) struct McpState {
+    pub(crate) app: AppHandle,
 }
 
 /// Spawn the MCP HTTP server on a tokio task. Returns immediately — the
@@ -121,13 +122,26 @@ struct McpState {
 /// without the MCP bridge (it just means Hermes loses access to native
 /// capabilities, not that the app stops working).
 pub fn start(app: AppHandle) {
+    // Pre-warm the webhook token (B-10.7). Done synchronously before
+    // we start listening so the first webhook request can never race
+    // the first-write of the file. Failure is logged but non-fatal:
+    // the auth middleware will return 503 until the user re-launches
+    // and the data dir is healthy.
+    if let Err(e) = webhook::ensure_token() {
+        warn!(error = %e, "failed to ensure webhook token; webhook will return 503 until fixed");
+    }
+
     let state = McpState { app };
+    let shared = Arc::new(state);
     let router = Router::new()
         // GET → 405 for MCP clients (Accept: text/event-stream),
         //      banner JSON for everyone else. See `handle_get`.
         // POST → JSON-RPC dispatch.
         .route("/", get(handle_get).post(rpc_handler))
-        .with_state(Arc::new(state));
+        // B-10.7 webhook trigger. See `webhook` module for the full
+        // contract (Bearer token, JSON body = workflow inputs).
+        .route("/webhook/{workflow_id}", axum::routing::post(webhook::handle))
+        .with_state(shared);
 
     tauri::async_runtime::spawn(async move {
         // Try the pinned port first. Pinning matters because

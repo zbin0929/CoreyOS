@@ -41,5 +41,6 @@ pub mod session_search;
 pub mod skill_hub;
 pub mod skills;
 pub mod voice;
+pub mod webhook;
 pub mod workflow;
 pub mod workflow_intent;

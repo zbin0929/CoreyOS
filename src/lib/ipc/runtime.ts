@@ -581,6 +581,26 @@ export function workflowExtractIntent(message: string): Promise<WorkflowIntent> 
   return invoke<WorkflowIntent>('workflow_extract_intent', { message });
 }
 
+/**
+ * **B-10.7 webhook trigger**. Read or lazily generate the bearer
+ * token used to authenticate `POST /webhook/<workflow_id>` calls
+ * against the local MCP server (bound 127.0.0.1 only). Surface in
+ * Settings → Advanced so users can copy it into cron / IFTTT / IM
+ * bot integrations. The token persists across restarts in
+ * `~/.hermes/.corey-webhook-token`.
+ */
+export function webhookTokenGet(): Promise<string> {
+  return invoke<string>('webhook_token_get');
+}
+
+/**
+ * Force-rotate the webhook token. Returns the new value. Anyone
+ * holding the previous token loses access on the next request.
+ */
+export function webhookTokenRotate(): Promise<string> {
+  return invoke<string>('webhook_token_rotate');
+}
+
 export function workflowApprove(
   runId: string,
   stepId: string,

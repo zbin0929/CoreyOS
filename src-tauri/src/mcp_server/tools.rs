@@ -416,21 +416,45 @@ async fn list_workflows(app: AppHandle) -> Result<String, (i32, String)> {
 #[derive(Debug, Deserialize)]
 struct RunWorkflowArgs {
     workflow_id: String,
-    #[serde(default)]
     inputs: Option<Value>,
 }
 
 async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
+    let args: RunWorkflowArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid run_workflow args: {e}")))?;
+    let workflow_id = args.workflow_id.clone();
+    let inputs = args.inputs.unwrap_or(Value::Object(Default::default()));
+
+    let run_id = start_workflow_run(&app, &workflow_id, inputs).await?;
+
+    Ok(json!({
+        "run_id": run_id,
+        "workflow_id": workflow_id,
+        "status": "started",
+        "ui_path": "/workflow",
+    })
+    .to_string())
+}
+
+/// **Shared workflow start helper.** Used by `run_workflow` (MCP
+/// tool, JSON-RPC entry) and `webhook` (B-10.7 HTTP entry) so a
+/// fix in any of the boot dance (def load → cancel-flag alloc →
+/// initial persist → spawn) lands in both call paths.
+///
+/// Returns the new run id on success, `(rpc_code, message)` on
+/// failure where the rpc_code is JSON-RPC compatible
+/// (-32602 = invalid params, -32603 = internal). HTTP callers
+/// translate those to 400 / 500 respectively.
+pub(crate) async fn start_workflow_run(
+    app: &AppHandle,
+    workflow_id: &str,
+    inputs: Value,
+) -> Result<String, (i32, String)> {
     use crate::state::AppState;
     use crate::workflow::engine;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     use tauri::Manager;
-
-    let args: RunWorkflowArgs = serde_json::from_value(args)
-        .map_err(|e| (-32602, format!("invalid run_workflow args: {e}")))?;
-    let workflow_id = args.workflow_id.clone();
-    let inputs = args.inputs.unwrap_or(Value::Object(Default::default()));
 
     let state = app.state::<AppState>();
     let runs = state.workflow_runs.clone();
@@ -445,7 +469,7 @@ async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, Strin
     // current thread so a slow disk read doesn't park other MCP
     // requests behind us.
     let (run_id, def) = tokio::task::spawn_blocking({
-        let workflow_id = workflow_id.clone();
+        let workflow_id = workflow_id.to_string();
         move || -> Result<(String, crate::workflow::model::WorkflowDef), String> {
             let def = crate::workflow::store::get(&workflow_id)
                 .map_err(|e| format!("workflow not found: {e}"))?;
@@ -457,11 +481,8 @@ async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, Strin
     .map_err(|e| (-32602, e))?;
 
     let (mut run, ctx) = engine::create_initial_run(&def, inputs);
-    // Override the engine's freshly-minted UUID with our own so the
-    // run_id we report to the agent matches what ends up in SQLite.
     run.id = run_id.clone();
     let mut owned_run = run;
-    // Stamp the initial state to disk before kicking the executor.
     if let Some(db) = db.as_ref() {
         owned_run.updated_at_ms = chrono::Utc::now().timestamp_millis();
         let _ = db.upsert_workflow_run(&owned_run);
@@ -484,13 +505,7 @@ async fn run_workflow(app: AppHandle, args: Value) -> Result<String, (i32, Strin
         cancel_flag,
     );
 
-    Ok(json!({
-        "run_id": run_id,
-        "workflow_id": workflow_id,
-        "status": "started",
-        "ui_path": "/workflow",
-    })
-    .to_string())
+    Ok(run_id)
 }
 
 async fn open_settings(app: AppHandle, args: Value) -> Result<String, (i32, String)> {

@@ -115,6 +115,8 @@ pub fn run() {
             ipc::agents::adapter_list,
             ipc::health::health_check,
             ipc::file_export::save_text_file,
+            ipc::webhook::webhook_token_get,
+            ipc::webhook::webhook_token_rotate,
             ipc::session::session_list,
             ipc::session::session_get,
             ipc::model::model_list,
