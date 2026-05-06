@@ -2,6 +2,7 @@ import { type ReactNode, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, RefreshCw, X, AlertCircle } from 'lucide-react';
 
+import { PendingApprovalsBadge } from './PendingApprovalsBadge';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { Topbar } from './Topbar';
@@ -29,6 +30,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <CommandPalette />
       <ShortcutsDialog />
+      {/* Global pending-approvals chip — bottom-right, auto-hides
+          when no workflow steps await approval. Stays out of the
+          way of the UpdateBanner (z-50) by living at z-40. */}
+      <PendingApprovalsBadge />
       <UpdateBanner />
     </div>
   );
