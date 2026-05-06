@@ -4,6 +4,7 @@ import { ArrowRight, MessageSquare } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { useChatStore } from '@/stores/chat';
 
 import { useDashboard } from '../useDashboard';
 import { EmptyHint, WidgetCard } from './shared';
@@ -11,7 +12,13 @@ import { EmptyHint, WidgetCard } from './shared';
 export function RecentChatsWidget() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const switchTo = useChatStore((s) => s.switchTo);
   const { recentSessions } = useDashboard();
+
+  function open(id: string) {
+    switchTo(id);
+    void navigate({ to: '/chat' });
+  }
   return (
     <WidgetCard
       id="recent_chats"
@@ -35,9 +42,7 @@ export function RecentChatsWidget() {
             <li key={s.id}>
               <button
                 type="button"
-                onClick={() =>
-                  void navigate({ to: '/chat', search: { session: s.id } })
-                }
+                onClick={() => open(s.id)}
                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition hover:bg-bg-elev-2"
               >
                 <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-blue-500/10 text-blue-500">

@@ -6,7 +6,25 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
-## 2026-05-06 — v0.2.5-dev · Route audit + Pack starter + UX cleanup
+## 2026-05-06 — v0.2.6-dev · TBD
+
+### Shipped
+
+_(empty — staging area for the next batch of work; promote to a tagged version when shipping.)_
+
+### Deferred
+
+- **B-10 workflow hardening**: timeout / retry / on_error / Tool & Browser steps. Owner: nobody yet.
+- **B-5 BGE-M3 offline zip packaging**.
+- **B-6 usage analytics 7d/30d dashboard**.
+- **B-7 uninstall / reset (FEAT-001)**.
+- **Pack `display_name` field**: cross-frontend-backend contract change to give bundled Pack workflows a human-readable label instead of the raw `pack__corey_starter__daily-news-digest` id.
+- **Production `unwrap()` cleanup**: 141 hits in the clippy baseline; chip away by module.
+- **Talk Mode**: scoped for v0.4.0+.
+
+---
+
+## 2026-05-06 — v0.2.5 · Route audit + Pack starter + Sidebar Chat hero + Home customization
 
 ### Shipped
 
@@ -22,18 +40,18 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 - **Bundle-size budget**: bumped 320 → 330 KB gzip per chunk (`ef2d35a`) to absorb v0.2.4 main-bundle growth (tasks store, ArtifactBlock, Pack store wiring). Documented the per-feature attribution in `scripts/check-bundle-size.mjs`.
 - **Sidebar Chat hero + persistent recent sessions**: the assistant is now a single oversized block at the top of the sidebar — taller padding, gold accent on the active state, an inline `+ New chat` CTA, and the 5 most-recent sessions (filtered by the active adapter) listed underneath. Click a session to switch + navigate; click "All chats" to drop into `/chat`'s full panel. Implementation: new `<ChatHeroBlock>` (`src/app/shell/ChatHeroBlock.tsx`) reading from `useChatStore`. Sidebar groups renamed `primary/tools/more` → `hero/workspace/library/utility` so the structure matches the visual hierarchy. The `localStorage` key for the collapsed library tier is now `corey:sidebar:library-expanded`.
 - **Home page customization**: every block on Home is now a registered widget. New `useHomeLayoutStore` (persisted) tracks per-user `hidden` / `extra` overrides; `useIsWidgetVisible(id, defaultVisible)` resolves the final state. A "自定义首页" gear button next to the page header expands into a chip list (one chip per widget) with click-to-toggle visibility plus a reset button. While editing, each widget shows an inline 隐藏 button. Catalog (`src/features/home/widgets/catalog.ts`) ships 7 widgets: `metrics_today`, `system_status`, `recent_chats`, `quick_actions` (default-on); `tasks_active`, `recent_workflows` (default-off — opt in for ops focus); `pack_home_views` (only renders when at least one Pack declared `nav_section: home`). The HomeRoute file shrank from 283 → 130 lines as a side-effect of the extraction.
-- **Pack as Home widget**: Pack manifests can now set `nav_section: home` on a `view` to surface that view as a tile inside the new `pack_home_views` widget on Home. No Rust schema change — `nav_section` was already a free-form string. Clicking jumps to `/pack/<packId>/<viewId>` like any other Pack view. Forms the white-label B2B story: every customer Pack can ship its own dashboard tile out of the box.
+- **Pack as Home widget**: Pack manifests can now set `nav_section: home` on a `view` to surface that view as a tile inside the new `pack_home_views` widget on Home. No Rust schema change — `nav_section` was already a free-form string. Clicking jumps to `/pack/<packId>/<viewId>` like any other Pack view. Forms the white-label B2B story: every customer Pack can ship its own dashboard tile out of the box. `corey_starter` ships a `starter-overview` MetricsCard view as the canonical example.
+- **Library tier default-open**: the bottom-most sidebar tier (Skills / Knowledge / Memory / MCP / Channels / Trajectory / Budgets) now opens by default on fresh installs. Users who explicitly collapse it have their preference persisted (`corey:sidebar:library-expanded = "false"`); everyone else sees Library entries on first run instead of having to discover the chevron.
 
 ### Fixed
 
 - ArtifactBlock `react-refresh/only-export-components` warning (`f1477ce`).
 - Memory / Knowledge in-page titles now match the renamed sidebar labels.
+- Recent-chats Home widget now actually switches to the clicked session via `useChatStore.switchTo` before navigating to `/chat` (previously it just landed on `/chat` with the most-recent session still active).
 
-### Deferred
+### Deferred (rolled into v0.2.6-dev)
 
-- **B-10 workflow hardening**: `timeout_minutes` enforcement, retry, on_error policies, real Tool step execution, Browser step end-to-end. Engine is currently sync; proper timeout requires async refactor of `StepExecutor` + cancellation tokens. Tracked for v0.2.5 proper.
-- **Deep route merges**: scheduler / runbooks / profiles still have their own pages. They're hidden from the sidebar but otherwise untouched. Merging them into Workflow / Skills / Settings is half-day-each work tracked in `docs/global-todo.md`.
-- **Pack `display_name` field**: bundled Pack workflows currently render with raw `pack__corey_starter__daily-news-digest` ids in the workflow list. Adding a frontend-visible label is a contract change (Rust `PackWorkflow` struct + frontend reader) tracked for v0.2.5.
+- B-10 workflow hardening, deep route merges, Pack `display_name`, production unwrap cleanup. See the v0.2.6-dev block above.
 
 ## 2026-05-02 — v0.2.3 · Home dashboard glow-up
 

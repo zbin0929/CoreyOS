@@ -41,7 +41,10 @@ export function Sidebar() {
   const { t } = useTranslation();
   const { location } = useRouterState();
   const [libraryExpanded, setLibraryExpanded] = useState<boolean>(
-    () => localStorage.getItem('corey:sidebar:library-expanded') === 'true',
+    // Default-open for fresh installs: fall through unless the user
+    // has explicitly collapsed the tier (which writes 'false').
+    // Without this, new users miss every Library entry on first run.
+    () => localStorage.getItem('corey:sidebar:library-expanded') !== 'false',
   );
   const [libraryUserCollapsed, setLibraryUserCollapsed] = useState(false);
 

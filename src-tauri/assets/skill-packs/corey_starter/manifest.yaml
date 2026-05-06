@@ -12,3 +12,19 @@ requires:
 workflows:
   - workflows/daily-news-digest.yaml
   - workflows/pdf-summary.yaml
+
+# 演示 nav_section: home —— Pack 视图直接在首页落卡，
+# 用户点进去看的是这个 Pack 的关键指标。
+# 真实场景里换成你 Pack 的核心 KPI（例如电商：今日销售额）。
+views:
+  - id: starter-overview
+    title: Corey Starter 速览
+    icon: sparkles
+    nav_section: home
+    template: MetricsCard
+    metrics: [today_runs, total_runs, last_status]
+    data_source:
+      static:
+        today_runs: "—"
+        total_runs: "—"
+        last_status: "尚未运行"
