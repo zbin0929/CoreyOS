@@ -15,8 +15,10 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 - **Chat ArtifactBlock**: long code/data outputs (≥30 lines or ≥2KB) collapse into a labeled card with copy / download / expand controls. Helpers split out to `artifactHelpers.ts` so React Fast Refresh stays clean.
 - **Approval IPC polish** (`315edc6`): server-side `/api/approval/respond` + `/api/approval/pending` patches written into Hermes `api_server.py` on gateway start; `chat_approval_*` IPC commands route through them.
 - **Workflow history → /tasks consolidation** (`4cab4ed`): the "历史" button on `/workflows` now links to `/tasks`. Old `History.tsx` component deleted; the orphan `workflow_page.history_*` i18n keys cleaned up. Run audit data (active + completed) is now in one place.
-- **Route audit — sidebar 22 → 17** (`8883785`): `/agents` `/scheduler` `/runbooks` `/voice` `/profiles` removed from the sidebar but routes preserved (per N-2). They surface in **Settings → Advanced** via `DEMOTED_ROUTES` (new N-3 rule). `/memory` renamed to "长期记忆 / Long-term memory", `/knowledge` to "文档知识库 / Document knowledge base" to disambiguate.
-- **`/tasks` Playwright spec**: empty state + populated active/history fixtures (T-3 compliance).
+- **Route audit — sidebar 22 → 15** (`8883785` → `a24d431`): seven routes pulled from the sidebar but URLs preserved (per N-2). `/agents` `/scheduler` `/runbooks` `/voice` `/profiles` first, then `/compare` (`2227b8a`) and `/terminal` (`a24d431`). All seven surface in **Settings → Advanced** via `DEMOTED_ROUTES` (new N-3 rule) and ship a `DemotedRouteBanner` strip on every demoted page (`161a80b`). `/memory` renamed to "长期记忆 / Long-term memory", `/knowledge` to "文档知识库 / Document knowledge base" to disambiguate.
+- **Palette "Advanced" group** (`9074c5c`): `⌘K` now lists demoted routes under their own heading so power users can still find them by name. Tools shortcuts renumbered to stay contiguous after the demotions: ⌘3 → Analytics, ⌘4 → Logs.
+- **`/tasks` Playwright spec + Settings → Advanced spec**: T-3 compliance for the new route + the new section. Covers empty/populated rows, expandable step detail, the Advanced demoted-badge stamp, and the demoted banner on `/compare`.
+- **Tauri save dialog for chat / compare exports**: new `save_text_file` IPC (`src-tauri/src/ipc/file_export.rs`) + shared `src/lib/saveText.ts` helper. Inside Tauri the export buttons now open the native save sheet and write through Rust; outside Tauri (Storybook, Playwright) we still fall back to the `<a download>` blob trick. Replaces the silent no-op users hit on `/compare` and `ExportSessionMenu`.
 - **Bundle-size budget**: bumped 320 → 330 KB gzip per chunk (`ef2d35a`) to absorb v0.2.4 main-bundle growth (tasks store, ArtifactBlock, Pack store wiring). Documented the per-feature attribution in `scripts/check-bundle-size.mjs`.
 
 ### Fixed
@@ -27,8 +29,8 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 ### Deferred
 
 - **B-10 workflow hardening**: `timeout_minutes` enforcement, retry, on_error policies, real Tool step execution, Browser step end-to-end. Engine is currently sync; proper timeout requires async refactor of `StepExecutor` + cancellation tokens. Tracked for v0.2.5 proper.
-- **Tauri save_file dialog IPC**: `<a download>` blob URLs are flaky in WebView2 / WKWebView. Affects `/compare` export buttons; will land alongside future `/tasks` run export.
 - **Deep route merges**: scheduler / runbooks / profiles still have their own pages. They're hidden from the sidebar but otherwise untouched. Merging them into Workflow / Skills / Settings is half-day-each work tracked in `docs/global-todo.md`.
+- **Pack `display_name` field**: bundled Pack workflows currently render with raw `pack__corey_starter__daily-news-digest` ids in the workflow list. Adding a frontend-visible label is a contract change (Rust `PackWorkflow` struct + frontend reader) tracked for v0.2.5.
 
 ## 2026-05-02 — v0.2.3 · Home dashboard glow-up
 

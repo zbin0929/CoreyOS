@@ -113,6 +113,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ipc::agents::adapter_list,
             ipc::health::health_check,
+            ipc::file_export::save_text_file,
             ipc::session::session_list,
             ipc::session::session_get,
             ipc::model::model_list,

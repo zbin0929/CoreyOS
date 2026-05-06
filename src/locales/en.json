@@ -221,6 +221,7 @@
     "empty": "No results found.",
     "group": {
       "goto": "Go to",
+      "advanced": "Advanced (hidden from sidebar)",
       "actions": "Actions",
       "runbooks": "Runbooks",
       "preferences": "Preferences"
@@ -228,6 +229,10 @@
     "theme": {
       "toggle": "Toggle light / dark theme"
     }
+  },
+  "demoted_banner": {
+    "body": "This page is hidden from the main sidebar — the URL still works. Canonical entry: Settings → Advanced.",
+    "link": "Open Settings"
   },
   "runbooks": {
     "title": "Runbooks",

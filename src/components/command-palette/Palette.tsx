@@ -99,7 +99,7 @@ export function CommandPalette() {
             </Command.Group>
 
             <Command.Group
-              heading={t('palette.group.advanced', { defaultValue: '高级（已从侧边栏隐藏）' })}
+              heading={t('palette.group.advanced')}
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-fg-subtle"
             >
               {DEMOTED_ROUTES.map((entry) => (

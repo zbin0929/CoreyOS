@@ -4,6 +4,7 @@ import { ChevronDown, Download, FileCode2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { saveText } from '@/lib/saveText';
 import type { UiMessage } from '@/stores/chat';
 
 /**
@@ -90,20 +91,20 @@ export function ExportSessionMenu({
     setOpen(false);
     const slug = fileSlug(title);
     if (format === 'md') {
-      downloadBlob(
-        `${slug}.md`,
-        'text/markdown;charset=utf-8',
+      void saveText(
         sessionToMarkdown(title, messages),
+        `${slug}.md`,
+        'text/markdown',
       );
     } else {
-      downloadBlob(
-        `${slug}.json`,
-        'application/json;charset=utf-8',
+      void saveText(
         JSON.stringify(
           { title, exportedAt: new Date().toISOString(), messages },
           null,
           2,
         ),
+        `${slug}.json`,
+        'application/json',
       );
     }
     announceExport(format);
@@ -256,19 +257,3 @@ function fileSlug(title: string): string {
   return base || 'chat';
 }
 
-function downloadBlob(filename: string, mime: string, contents: string) {
-  const blob = new Blob([contents], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  // `revokeObjectURL` after a tick — some browsers cancel the
-  // download if the URL is revoked synchronously in the same frame
-  // as the click().
-  window.setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 0);
-}

@@ -270,11 +270,11 @@ export function CompareRoute() {
   const canExport = lanes.length > 0 && lanes.every((l) => l.state.kind !== 'streaming');
   const exportMarkdown = useCallback(() => {
     const md = renderMarkdownReport(prompt, lanes);
-    downloadBlob(md, `compare-${Date.now()}.md`, 'text/markdown');
+    void downloadBlob(md, `compare-${Date.now()}.md`, 'text/markdown');
   }, [prompt, lanes]);
   const exportJson = useCallback(() => {
     const json = JSON.stringify(toJsonReport(prompt, lanes), null, 2);
-    downloadBlob(json, `compare-${Date.now()}.json`, 'application/json');
+    void downloadBlob(json, `compare-${Date.now()}.json`, 'application/json');
   }, [prompt, lanes]);
 
   // ───────────────────────── Render ─────────────────────────

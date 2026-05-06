@@ -12,6 +12,7 @@ pub mod db;
 pub mod demo;
 pub mod download;
 pub mod embedding;
+pub mod file_export;
 pub mod gateway_sessions;
 pub mod health;
 pub mod hermes_config;

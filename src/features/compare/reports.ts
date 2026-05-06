@@ -54,15 +54,4 @@ export function toJsonReport(prompt: string, lanes: Lane[]) {
   };
 }
 
-export function downloadBlob(data: string, filename: string, mime: string) {
-  const blob = new Blob([data], { type: `${mime};charset=utf-8` });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Defer revoke; some browsers need a tick to actually fire the download.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+export { saveText as downloadBlob } from '@/lib/saveText';

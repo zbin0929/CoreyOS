@@ -221,6 +221,7 @@
     "empty": "无匹配结果。",
     "group": {
       "goto": "跳转",
+      "advanced": "高级（已从侧边栏隐藏）",
       "actions": "操作",
       "runbooks": "运行手册",
       "preferences": "偏好"
@@ -228,6 +229,10 @@
     "theme": {
       "toggle": "切换 浅色 / 深色"
     }
+  },
+  "demoted_banner": {
+    "body": "本页已从主侧边栏移除，URL 仍可直达。规范入口：Settings → 高级 / 实验功能。",
+    "link": "前往 Settings"
   },
   "runbooks": {
     "title": "运行手册",
