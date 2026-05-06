@@ -48,37 +48,102 @@ const CACHE_DIR: &str = "vision_cache";
 
 /// On-disk shape persisted at `~/.hermes/vision_proxy.json`.
 ///
-/// Mirrors `BrowserConfig` (browser_config.rs) so users have a
-/// single mental model for "configure an OpenAI-compatible
-/// endpoint": model name, base URL, and either an inline key or
-/// the **name** of an env var that holds the key (the latter is
-/// preferred — keeps secrets out of JSON files).
+/// **Recommended** flow: set `llm_profile_id` to one of the entries
+/// from Settings → Models (LLM Profiles). At call time we resolve
+/// model / base_url / api_key_env from that profile, so the user
+/// keeps a single source of truth for provider config.
+///
+/// **Manual override** flow (legacy / advanced): leave
+/// `llm_profile_id` empty and fill in `model` / `base_url` /
+/// `api_key_env` (or `api_key`) directly. Keeps the config file
+/// portable for users who don't use LLM profiles.
+///
+/// Resolution precedence (see `effective_endpoint`):
+///
+///   1. `llm_profile_id` non-empty → look up the profile, use its
+///      `model` / `base_url` / `api_key_env`. Inline fields are
+///      ignored.
+///   2. `llm_profile_id` empty → use the inline fields verbatim.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct VisionProxyConfig {
     /// Disabled by default; user opts in via Settings.
     #[serde(default)]
     pub enabled: bool,
-    /// Provider/model in the form the user's gateway expects, e.g.
-    /// `"openai/gpt-4o-mini"` or `"qwen-vl-plus"`.
+    /// **Preferred** — id of an LLM profile (Settings → Models).
+    /// When non-empty, the profile's model / base_url / api_key_env
+    /// are used at call time and the inline fields below are
+    /// ignored. Empty string = fall back to manual entry.
+    #[serde(default)]
+    pub llm_profile_id: String,
+    /// Manual override: provider/model in the form the user's
+    /// gateway expects, e.g. `"openai/gpt-4o-mini"` or
+    /// `"qwen-vl-plus"`. Ignored when `llm_profile_id` is set.
     #[serde(default)]
     pub model: String,
-    /// OpenAI-compatible chat completions endpoint base URL.
-    /// Trailing slash optional; we strip it on send.
+    /// Manual override: OpenAI-compatible chat completions
+    /// endpoint base URL. Trailing slash optional; we strip it on
+    /// send. Ignored when `llm_profile_id` is set.
     #[serde(default)]
     pub base_url: String,
-    /// Inline API key. Plaintext — for users who don't mind it
-    /// living in JSON. Falls back to `api_key_env` if empty.
+    /// Manual override: inline API key. Plaintext — for users who
+    /// don't mind it living in JSON. Falls back to `api_key_env`
+    /// if empty. Ignored when `llm_profile_id` is set.
     #[serde(default)]
     pub api_key: String,
-    /// Name of an environment variable that holds the key (read
-    /// from the process env first, then `~/.hermes/.env` via
-    /// `hermes_config::read_env_value`). Preferred over inline.
+    /// Manual override: name of an environment variable that holds
+    /// the key (read from the process env first, then
+    /// `~/.hermes/.env`). Ignored when `llm_profile_id` is set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key_env: Option<String>,
     /// Optional override for the describe prompt. Empty = use the
     /// default from `default_prompt()`.
     #[serde(default)]
     pub prompt: String,
+}
+
+/// Resolved endpoint after applying profile lookup. Returned by
+/// `effective_endpoint`; describe_image consumes only this struct
+/// so the call-site doesn't have to care which mode the user
+/// configured.
+struct EffectiveEndpoint {
+    model: String,
+    base_url: String,
+    /// Already-resolved API key string (read from env / .env /
+    /// inline). `None` for key-less providers (Ollama).
+    api_key: Option<String>,
+}
+
+/// Resolve which endpoint to actually hit. See struct doc for
+/// precedence. Returns `None` if neither path produced a usable
+/// (model + base_url) pair, so the caller can fail loud rather
+/// than silently 404.
+fn effective_endpoint(cfg: &VisionProxyConfig) -> Option<EffectiveEndpoint> {
+    if !cfg.llm_profile_id.is_empty() {
+        let config_dir = crate::paths::app_config_dir()?;
+        let profiles = crate::llm_profiles::load(&config_dir);
+        let profile = profiles.iter().find(|p| p.id == cfg.llm_profile_id)?;
+        let api_key = profile.api_key_env.as_ref().and_then(|name| {
+            std::env::var(name).ok().filter(|v| !v.is_empty()).or_else(|| {
+                crate::hermes_config::read_env_value(name)
+                    .ok()
+                    .flatten()
+                    .filter(|v| !v.is_empty())
+            })
+        });
+        return Some(EffectiveEndpoint {
+            model: profile.model.clone(),
+            base_url: profile.base_url.clone(),
+            api_key,
+        });
+    }
+    if cfg.model.is_empty() || cfg.base_url.is_empty() {
+        return None;
+    }
+    Some(EffectiveEndpoint {
+        model: cfg.model.clone(),
+        base_url: cfg.base_url.clone(),
+        api_key: resolve_api_key(cfg),
+    })
 }
 
 fn config_path() -> std::io::Result<PathBuf> {
@@ -178,12 +243,12 @@ pub async fn describe_image(
         }
     }
 
-    let api_key = resolve_api_key(cfg).ok_or_else(|| {
-        "vision proxy: no API key resolved (set api_key_env or api_key)".to_string()
+    let endpoint = effective_endpoint(cfg).ok_or_else(|| {
+        "vision proxy: no usable endpoint — pick an LLM profile or fill model + base_url".to_string()
     })?;
-    if cfg.base_url.is_empty() || cfg.model.is_empty() {
-        return Err("vision proxy: base_url and model must be set".into());
-    }
+    let api_key = endpoint.api_key.ok_or_else(|| {
+        "vision proxy: no API key resolved (set api_key_env on the LLM profile or here)".to_string()
+    })?;
 
     let prompt = if cfg.prompt.trim().is_empty() {
         default_prompt().to_string()
@@ -198,7 +263,7 @@ pub async fn describe_image(
     // and the latency overhead of streaming a 500-char response is
     // bigger than the response itself.
     let body = serde_json::json!({
-        "model": cfg.model,
+        "model": endpoint.model,
         "messages": [{
             "role": "user",
             "content": [
@@ -210,7 +275,7 @@ pub async fn describe_image(
         "max_tokens": 800,
     });
 
-    let url = format!("{}/chat/completions", cfg.base_url.trim_end_matches('/'));
+    let url = format!("{}/chat/completions", endpoint.base_url.trim_end_matches('/'));
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()

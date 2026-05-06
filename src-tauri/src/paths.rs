@@ -51,7 +51,11 @@ pub fn set_app_config_dir(dir: PathBuf) {
     }
 }
 
-fn app_config_dir() -> Option<PathBuf> {
+/// Resolve the Tauri app config dir set by `setup()`. Public so
+/// modules outside `paths` (e.g. `vision_proxy::effective_endpoint`)
+/// can locate per-app config files like `llm_profiles.json` without
+/// re-implementing the platform dance Tauri does.
+pub fn app_config_dir() -> Option<PathBuf> {
     APP_CONFIG_DIR.read().ok().and_then(|g| g.clone())
 }
 

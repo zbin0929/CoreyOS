@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye, Loader2, Save, Trash2 } from 'lucide-react';
+import { Eye, ExternalLink, Loader2, Save, Sparkles, Trash2 } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import {
   ipcErrorMessage,
+  llmProfileList,
   visionProxyClearCache,
   visionProxyGet,
   visionProxySet,
+  type LlmProfile,
   type VisionProxyConfig,
 } from '@/lib/ipc';
 
@@ -24,31 +27,52 @@ import { Field, Section } from '../shared';
  * `deepseek-chat` / `o1-preview` / many local LLMs can still
  * respond meaningfully to screenshots.
  *
- * Behaviour:
- * - Disabled by default. Toggle on, fill in model + endpoint +
- *   key (or env var name), save.
- * - Cache lives at `~/.hermes/vision_cache/<sha256>.txt`. The
- *   "Clear cache" button wipes it; use after changing the model
- *   to force re-describe the same image with the new one.
- * - Default prompt asks for objects + on-image text + relative
- *   coordinates. Override prompt to tune for your use case
- *   (e.g. "extract all numeric values as a markdown table").
+ * Two configuration modes:
+ *
+ *   1. **Profile mode** (default + recommended) — pick a vision-
+ *      capable profile from Settings → Models. Single source of
+ *      truth: model / base_url / api_key_env all come from the
+ *      profile, so re-keying / re-pointing happens once.
+ *
+ *   2. **Manual mode** (advanced) — type model + base_url +
+ *      api_key_env yourself. For users who don't keep an LLM
+ *      Profile but already have, say, `OPENAI_API_KEY` in their
+ *      env. Toggle "高级配置 (手填)" to expose.
+ *
+ * Cache lives at `~/.hermes/vision_cache/<sha256>.txt`. Clear
+ * after changing the model to force re-describe the same image.
  */
+
+type Mode = 'profile' | 'manual';
+
 export function VisionProxySection() {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<VisionProxyConfig | null>(null);
+  const [profiles, setProfiles] = useState<LlmProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState(0);
   const [clearedCount, setClearedCount] = useState<number | null>(null);
+  const [mode, setMode] = useState<Mode>('profile');
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const cfg = await visionProxyGet();
-        if (!cancelled) setDraft(cfg);
+        const [cfg, profilesFile] = await Promise.all([
+          visionProxyGet(),
+          llmProfileList().catch(() => ({ profiles: [] })),
+        ]);
+        if (cancelled) return;
+        setDraft(cfg);
+        setProfiles(profilesFile.profiles);
+        // Pick the right initial mode: if there's no profile id
+        // saved AND any of the inline fields are non-empty, the
+        // user's already in manual mode; otherwise default to
+        // profile mode (the new preferred path).
+        const hasManual = !cfg.llm_profile_id && (cfg.model || cfg.base_url);
+        setMode(hasManual ? 'manual' : 'profile');
       } catch (e) {
         if (!cancelled) setError(ipcErrorMessage(e));
       } finally {
@@ -65,14 +89,29 @@ export function VisionProxySection() {
     setSaving(true);
     setError(null);
     try {
-      await visionProxySet({
-        enabled: draft.enabled,
-        model: draft.model.trim(),
-        base_url: draft.base_url.trim(),
-        api_key: draft.api_key.trim(),
-        api_key_env: draft.api_key_env?.trim() || null,
-        prompt: draft.prompt,
-      });
+      // When saving in profile mode, blank out the inline fields so
+      // a switch back to manual later starts from a clean slate (no
+      // stale model + stale profile_id fighting each other).
+      const next: VisionProxyConfig =
+        mode === 'profile'
+          ? {
+              ...draft,
+              llm_profile_id: draft.llm_profile_id.trim(),
+              model: '',
+              base_url: '',
+              api_key: '',
+              api_key_env: null,
+            }
+          : {
+              ...draft,
+              llm_profile_id: '',
+              model: draft.model.trim(),
+              base_url: draft.base_url.trim(),
+              api_key: draft.api_key.trim(),
+              api_key_env: draft.api_key_env?.trim() || null,
+            };
+      await visionProxySet(next);
+      setDraft(next);
       setSavedAt(Date.now());
     } catch (e) {
       setError(ipcErrorMessage(e));
@@ -110,6 +149,14 @@ export function VisionProxySection() {
   }
 
   const justSaved = savedAt && Date.now() - savedAt < 2000;
+  // Only show vision-capable profiles in the picker, but keep the
+  // currently-saved id even if it isn't flagged vision (so a user
+  // who flipped vision=false on their profile still sees the
+  // selection and gets a chance to fix it).
+  const visionProfiles = profiles.filter((p) => p.vision === true);
+  const selectedProfileExists =
+    !draft.llm_profile_id ||
+    profiles.some((p) => p.id === draft.llm_profile_id);
 
   return (
     <Section
@@ -148,62 +195,54 @@ export function VisionProxySection() {
           data-testid="vision-proxy-enabled"
         />
         <span>
-          {t('settings.vision_proxy.enable', { defaultValue: '启用视觉代理（仅在当前模型不支持视觉时触发）' })}
+          {t('settings.vision_proxy.enable', {
+            defaultValue: '启用视觉代理（仅在当前模型不支持视觉时触发）',
+          })}
         </span>
       </label>
 
-      <div className={`flex flex-col gap-3 ${draft.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
-        <Field
-          label={t('settings.vision_proxy.model', { defaultValue: '视觉模型' })}
-          hint={t('settings.vision_proxy.model_hint', {
-            defaultValue: '示例：openai/gpt-4o-mini · qwen-vl-plus · anthropic/claude-3.5-sonnet',
-          })}
-        >
-          <input
-            type="text"
-            value={draft.model}
-            onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-            placeholder="gpt-4o-mini"
-            className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
+      <div
+        className={`flex flex-col gap-3 ${draft.enabled ? '' : 'opacity-50 pointer-events-none'}`}
+      >
+        {/* Mode toggle. Profile mode is the headline path. */}
+        <div className="flex gap-2 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setMode('profile')}
+            className={`rounded-full border px-3 py-1 ${
+              mode === 'profile'
+                ? 'border-gold-500/60 bg-gold-500/10 text-fg'
+                : 'border-border text-fg-subtle hover:bg-bg-elev-2'
+            }`}
+          >
+            <Icon icon={Sparkles} size={11} />
+            {t('settings.vision_proxy.mode_profile', { defaultValue: '从大模型库选择' })}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('manual')}
+            className={`rounded-full border px-3 py-1 ${
+              mode === 'manual'
+                ? 'border-gold-500/60 bg-gold-500/10 text-fg'
+                : 'border-border text-fg-subtle hover:bg-bg-elev-2'
+            }`}
+          >
+            {t('settings.vision_proxy.mode_manual', { defaultValue: '高级 · 手填字段' })}
+          </button>
+        </div>
+
+        {mode === 'profile' ? (
+          <ProfileMode
+            draft={draft}
+            setDraft={setDraft}
+            visionProfiles={visionProfiles}
+            allProfiles={profiles}
+            selectedExists={selectedProfileExists}
           />
-        </Field>
-        <Field label={t('settings.vision_proxy.base_url', { defaultValue: 'Base URL' })}>
-          <input
-            type="text"
-            value={draft.base_url}
-            onChange={(e) => setDraft({ ...draft, base_url: e.target.value })}
-            placeholder="https://api.openai.com/v1"
-            className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
-          />
-        </Field>
-        <Field
-          label={t('settings.vision_proxy.api_key_env', { defaultValue: 'API Key 环境变量名（推荐）' })}
-          hint={t('settings.vision_proxy.api_key_env_hint', {
-            defaultValue: '比如 OPENAI_API_KEY、DASHSCOPE_API_KEY，从进程 env 或 ~/.hermes/.env 读取。优先级高于下面的明文。',
-          })}
-        >
-          <input
-            type="text"
-            value={draft.api_key_env ?? ''}
-            onChange={(e) => setDraft({ ...draft, api_key_env: e.target.value })}
-            placeholder="OPENAI_API_KEY"
-            className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
-          />
-        </Field>
-        <Field
-          label={t('settings.vision_proxy.api_key', { defaultValue: 'API Key（明文，备用）' })}
-          hint={t('settings.vision_proxy.api_key_hint', {
-            defaultValue: '不推荐写在这里。设置上面的环境变量名后留空即可。',
-          })}
-        >
-          <input
-            type="password"
-            value={draft.api_key}
-            onChange={(e) => setDraft({ ...draft, api_key: e.target.value })}
-            placeholder="sk-..."
-            className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
-          />
-        </Field>
+        ) : (
+          <ManualMode draft={draft} setDraft={setDraft} />
+        )}
+
         <Field
           label={t('settings.vision_proxy.prompt', { defaultValue: '识别提示词（留空走默认）' })}
         >
@@ -212,7 +251,8 @@ export function VisionProxySection() {
             value={draft.prompt}
             onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
             placeholder={t('settings.vision_proxy.prompt_placeholder', {
-              defaultValue: '默认会让模型描述对象、可见文字（含坐标）、风格、表格数据。可覆盖以适配你的场景。',
+              defaultValue:
+                '默认会让模型描述对象、可见文字（含坐标）、风格、表格数据。可覆盖以适配你的场景。',
             })}
             className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 text-xs text-fg outline-none focus:border-gold-500"
           />
@@ -245,5 +285,157 @@ export function VisionProxySection() {
         </Button>
       </div>
     </Section>
+  );
+}
+
+function ProfileMode({
+  draft,
+  setDraft,
+  visionProfiles,
+  allProfiles,
+  selectedExists,
+}: {
+  draft: VisionProxyConfig;
+  setDraft: (next: VisionProxyConfig) => void;
+  visionProfiles: LlmProfile[];
+  allProfiles: LlmProfile[];
+  selectedExists: boolean;
+}) {
+  const { t } = useTranslation();
+
+  if (visionProfiles.length === 0) {
+    return (
+      <div className="rounded border border-amber-500/40 bg-amber-500/5 p-3 text-[11px] text-fg-muted">
+        <p className="mb-2">
+          {t('settings.vision_proxy.no_vision_profiles', {
+            defaultValue:
+              '没有标记为「支持视觉」的大模型配置。先去 /models 添加一条 vision-capable profile（GPT-4o / Claude 3.5 / Qwen-VL 等），或者切到「高级 · 手填字段」。',
+          })}
+        </p>
+        <Link
+          to="/models"
+          className="inline-flex items-center gap-1 text-gold-500 hover:underline"
+        >
+          <Icon icon={ExternalLink} size={11} />
+          {t('settings.vision_proxy.go_to_models', { defaultValue: '去 /models 配置' })}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <Field
+      label={t('settings.vision_proxy.profile_picker', { defaultValue: '视觉模型 Profile' })}
+      hint={t('settings.vision_proxy.profile_picker_hint', {
+        defaultValue: '只列出标记为「支持视觉」的 profile。Provider / model / API Key 都从 profile 解析。',
+      })}
+    >
+      <select
+        value={draft.llm_profile_id}
+        onChange={(e) => setDraft({ ...draft, llm_profile_id: e.target.value })}
+        className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 text-xs text-fg outline-none focus:border-gold-500"
+        data-testid="vision-proxy-profile"
+      >
+        <option value="">
+          {t('settings.vision_proxy.profile_picker_empty', { defaultValue: '— 选一个 profile —' })}
+        </option>
+        {visionProfiles.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.label || p.id} · {p.provider}/{p.model}
+          </option>
+        ))}
+      </select>
+      {!selectedExists && draft.llm_profile_id && (
+        <span className="text-[11px] text-danger">
+          {t('settings.vision_proxy.profile_missing', {
+            defaultValue: `所选 profile "${draft.llm_profile_id}" 已被删除，请重新选择。`,
+            id: draft.llm_profile_id,
+          })}
+        </span>
+      )}
+      {draft.llm_profile_id && selectedExists && (
+        <ProfileSummary
+          profile={
+            allProfiles.find((p) => p.id === draft.llm_profile_id) ?? null
+          }
+        />
+      )}
+    </Field>
+  );
+}
+
+function ProfileSummary({ profile }: { profile: LlmProfile | null }) {
+  if (!profile) return null;
+  return (
+    <div className="mt-1 rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-[10px] text-fg-subtle">
+      <div>provider: {profile.provider}</div>
+      <div>model: {profile.model}</div>
+      <div>base_url: {profile.base_url}</div>
+      <div>api_key_env: {profile.api_key_env ?? '(none)'}</div>
+      <div>vision: {profile.vision === true ? 'true' : 'false'}</div>
+    </div>
+  );
+}
+
+function ManualMode({
+  draft,
+  setDraft,
+}: {
+  draft: VisionProxyConfig;
+  setDraft: (next: VisionProxyConfig) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-3">
+      <Field
+        label={t('settings.vision_proxy.model', { defaultValue: '视觉模型' })}
+        hint={t('settings.vision_proxy.model_hint', {
+          defaultValue: '示例：openai/gpt-4o-mini · qwen-vl-plus · anthropic/claude-3.5-sonnet',
+        })}
+      >
+        <input
+          type="text"
+          value={draft.model}
+          onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+          placeholder="gpt-4o-mini"
+          className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
+        />
+      </Field>
+      <Field label={t('settings.vision_proxy.base_url', { defaultValue: 'Base URL' })}>
+        <input
+          type="text"
+          value={draft.base_url}
+          onChange={(e) => setDraft({ ...draft, base_url: e.target.value })}
+          placeholder="https://api.openai.com/v1"
+          className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
+        />
+      </Field>
+      <Field
+        label={t('settings.vision_proxy.api_key_env', { defaultValue: 'API Key 环境变量名（推荐）' })}
+        hint={t('settings.vision_proxy.api_key_env_hint', {
+          defaultValue:
+            '比如 OPENAI_API_KEY、DASHSCOPE_API_KEY，从进程 env 或 ~/.hermes/.env 读取。',
+        })}
+      >
+        <input
+          type="text"
+          value={draft.api_key_env ?? ''}
+          onChange={(e) => setDraft({ ...draft, api_key_env: e.target.value })}
+          placeholder="OPENAI_API_KEY"
+          className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
+        />
+      </Field>
+      <Field
+        label={t('settings.vision_proxy.api_key', { defaultValue: 'API Key（明文，备用）' })}
+      >
+        <input
+          type="password"
+          value={draft.api_key}
+          onChange={(e) => setDraft({ ...draft, api_key: e.target.value })}
+          placeholder="sk-..."
+          className="rounded border border-border bg-bg-elev-1 px-2 py-1.5 font-mono text-xs text-fg outline-none focus:border-gold-500"
+        />
+      </Field>
+    </div>
   );
 }
