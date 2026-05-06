@@ -4,6 +4,7 @@
 //! `docs/03-agent-adapter.md` for the adapter abstraction.
 
 mod adapters;
+mod app_handle;
 mod attachments;
 mod changelog;
 mod channel_status;
@@ -308,6 +309,11 @@ pub fn run() {
         ])
         .setup(|app| {
             info!(version = env!("CARGO_PKG_VERSION"), "Corey booting");
+
+            // Install the process-global AppHandle accessor before
+            // anything else fires up, so background tasks (workflow
+            // executor, scheduler, watchdogs) can emit events.
+            app_handle::set(app.handle().clone());
 
             // Resolve the config directory AFTER Tauri has initialized —
             // `app.path().app_config_dir()` is only available here.

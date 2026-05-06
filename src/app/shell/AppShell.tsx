@@ -11,12 +11,14 @@ import { useShortcutsHotkey } from '@/components/shortcuts/useShortcuts';
 import { Button } from '@/components/ui/button';
 import { useMenuEvents } from '../useMenuEvents';
 import { useNavShortcuts } from '../useNavShortcuts';
+import { useWorkflowNotifications } from '../useWorkflowNotifications';
 import { useAppUpdater } from '@/lib/useAppUpdater';
 
 export function AppShell({ children }: { children: ReactNode }) {
   useNavShortcuts();
   useShortcutsHotkey();
   useMenuEvents();
+  useWorkflowNotifications();
   return (
     <div className="flex h-full w-full overflow-hidden bg-bg text-fg">
       <Sidebar />

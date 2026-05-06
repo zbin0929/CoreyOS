@@ -867,12 +867,35 @@ pub fn spawn_run_executor(
         // transition; this is belt-and-suspenders for safety).
         runs.lock().insert(run_id.clone(), owned.clone());
         persist_run(&db, &mut owned);
+        let final_status = format!("{:?}", owned.status);
         tracing::info!(
             wf_id = %wf_id_for_log,
             run_id = %rid_for_log,
-            status = ?runs.lock().get(&rid_for_log).map(|r| &r.status),
+            status = %final_status,
             "workflow run finished"
         );
+
+        // Emit `workflow:run-finished` so the frontend can show a
+        // desktop notification (B-9.2). Skips if Tauri runtime
+        // isn't up (unit tests). Status string matches RunStatus
+        // Debug repr — frontend filters Completed / Failed /
+        // Cancelled and ignores Running / Paused (those would be
+        // mid-flight states from a partial finalize, not terminal).
+        if let Some(app) = crate::app_handle::get() {
+            use tauri::Emitter;
+            let payload = serde_json::json!({
+                "run_id": rid_for_log,
+                "workflow_id": wf_id_for_log,
+                "workflow_name": def.name.clone(),
+                "status": final_status,
+                "error": owned.error.clone(),
+                "started_at_ms": owned.started_at_ms,
+                "updated_at_ms": owned.updated_at_ms,
+            });
+            if let Err(e) = app.emit("workflow:run-finished", payload) {
+                tracing::warn!(error = %e, "failed to emit workflow:run-finished");
+            }
+        }
     });
 }
 
