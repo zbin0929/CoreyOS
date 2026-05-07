@@ -164,7 +164,7 @@ impl Tts for MacosSayTts {
 
         Ok(TtsAudio {
             bytes: wav,
-            mime: "audio/wav".into(),
+            mime: "audio/wav",
         })
     }
 }
@@ -296,25 +296,25 @@ impl Tts for SherpaTts {
         // child process can resolve them without a system-wide
         // install. Same pattern as the old PiperTts had — the
         // mechanism works for any ONNX-based local pipeline.
-        if let Some(bin_dir) = self.bin_path.parent() {
+        if let Some(_bin_dir) = self.bin_path.parent() {
             #[cfg(target_os = "macos")]
             {
                 let existing = std::env::var("DYLD_LIBRARY_PATH").unwrap_or_default();
                 let combined = if existing.is_empty() {
-                    bin_dir.to_string_lossy().into_owned()
+                    _bin_dir.to_string_lossy().into_owned()
                 } else {
-                    format!("{}:{}", bin_dir.display(), existing)
+                    format!("{}:{}", _bin_dir.display(), existing)
                 };
                 cmd.env("DYLD_LIBRARY_PATH", combined);
-                cmd.env("DYLD_FALLBACK_LIBRARY_PATH", bin_dir);
+                cmd.env("DYLD_FALLBACK_LIBRARY_PATH", _bin_dir);
             }
             #[cfg(target_os = "linux")]
             {
                 let existing = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
                 let combined = if existing.is_empty() {
-                    bin_dir.to_string_lossy().into_owned()
+                    _bin_dir.to_string_lossy().into_owned()
                 } else {
-                    format!("{}:{}", bin_dir.display(), existing)
+                    format!("{}:{}", _bin_dir.display(), existing)
                 };
                 cmd.env("LD_LIBRARY_PATH", combined);
             }

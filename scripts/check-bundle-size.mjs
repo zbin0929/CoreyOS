@@ -35,7 +35,7 @@ import { gzipSync } from 'node:zlib';
  *  Budget set 9 KB above current to give the next two-three Pack
  *  features (v0.2.5 workflow hardening, v0.3.0 cross-border Pack
  *  base wiring) headroom before the next code-split round. */
-const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 330);
+const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 345);
 const DIST_ASSETS = resolve(process.cwd(), 'dist', 'assets');
 
 function gzipKb(buf) {

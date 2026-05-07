@@ -326,12 +326,11 @@ fn sweep_stale_tempfiles_once() {
                 continue;
             }
             if let Ok(meta) = entry.metadata() {
-                if let Ok(modified) = meta.modified() {
-                    if modified < cutoff {
-                        if std::fs::remove_file(entry.path()).is_ok() {
-                            removed += 1;
-                        }
-                    }
+                let Ok(modified) = meta.modified() else {
+                    continue;
+                };
+                if modified < cutoff && std::fs::remove_file(entry.path()).is_ok() {
+                    removed += 1;
                 }
             }
         }
