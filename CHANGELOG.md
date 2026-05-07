@@ -6,6 +6,33 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-07 — v0.2.10 · In-process TTS engine (sherpa-onnx + VITS MeloTTS)
+
+> Talk Mode TTS 从 CLI 子进程迁移到进程内引擎，零 WAV 文件、零子进程、零延迟。
+
+### Shipped
+
+- **In-process sherpa-onnx TTS 引擎** — 新增 `tts_engine.rs`，通过 sherpa-onnx Rust crate 的 `OfflineTts` API 直接在进程内合成音频，不再 spawn `sherpa-onnx-offline-tts` CLI 子进程。消除子进程冷启动延迟、临时 WAV 文件清理、跨平台二进制兼容性问题。
+- **Web Audio API 播放** — 替代 afplay/CLI 播放方案，使用 `AudioContext` + `AudioBufferSourceNode` 实现无缝顺序播放，每句音频播放完毕自动播放下一句，无间隙无重叠。
+- **即时停止** — 用户打断时立即 `stop()` 当前 `AudioBufferSourceNode` + `close()` AudioContext，不再等待当前句子播完。
+- **TTS 语速可调** — Settings → Voice 的语速滑块（0.5~2.0）直接透传到 sherpa `GenerationConfig.speed`，调节后立即生效。
+- **中文标点预处理** — 匹配官方 `melo-tts-lexicon.cc` 的处理逻辑：`：；、` → 空格（避免 VITS 句内切分导致冷启动丢字），`。！？` → `.!?`。
+- **自然停顿** — 发现 sherpa-onnx Rust crate 的 `GenerationConfig::default()` 把 `silence_scale` 设为 0.2（只保留 20% 停顿），改为 1.0 完整保留。
+- **RMS 音量归一化** — 每句音频独立合成导致音量不一致，新增 `normalize_rms` 统一响度。
+- **按句号分句** — 只在句号/问号/感叹号处切分，逗号不切分，让 VITS 模型自己处理句内停顿。
+
+### Fixed
+
+- **E2E talk-mode spec** — 更新 test ID 匹配 TalkModeInline 组件（`chat-talk-mode`、`talk-mode-inline`、`talk-exit`），路由导航到 `/chat`。
+- **Windows 编译** — `tokio::process::Command` 有自己的 `creation_flags()` inherent method，不需要 `std::os::windows::process::CommandExt` trait import。
+
+### Deferred
+
+- Kokoro 多语言模型（中文带口音，VITS MeloTTS 中文更地道）
+- Matcha-TTS 中文模型（73MB，RTF 更快，韵律更好，但只有 1 个女声且不支持中英混合）
+
+---
+
 ## 2026-05-06 — v0.2.9 · Visibility & artifacts (AgentSwitcher / approvals chip / long chats / artifacts dir)
 
 > Premise: same as v0.2.8 — **all changes are Corey-side only**, zero modifications to Hermes Agent.
