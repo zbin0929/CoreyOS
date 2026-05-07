@@ -28,8 +28,6 @@ use std::process::Stdio;
 
 use anyhow::Context;
 use async_trait::async_trait;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use tokio::process::Command;
 
 use super::backend::Stt;
