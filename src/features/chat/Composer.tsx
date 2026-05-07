@@ -1,4 +1,5 @@
 import {
+  useState,
   type ClipboardEvent,
   type DragEvent,
   type FormEvent,
@@ -6,13 +7,22 @@ import {
   type RefObject,
 } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { AlertTriangle, Mic, Paperclip, Send, Square, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Headphones,
+  Mic,
+  Paperclip,
+  Send,
+  Square,
+  X,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import type { StagedAttachment } from '@/lib/ipc';
 import type { VisionSupport } from '@/lib/modelCapabilities';
+import { TalkModeInline } from '@/features/talk/TalkModeInline';
 
 import { ActiveLLMBadge } from './ActiveLLMBadge';
 import { TokenUsageBadge } from './TokenUsageBadge';
@@ -120,6 +130,10 @@ export function Composer({
   onVoiceStop,
 }: ComposerProps) {
   const { t } = useTranslation();
+  // Voice-mode toggle: when true, the textarea + send/attach row is
+  // hidden and `<TalkModeInline>` takes its place. Per-session UI
+  // state — exiting back to text resets it; we don't persist.
+  const [talkMode, setTalkMode] = useState(false);
   return (
     <div className="border-t border-border/80 bg-bg/80 shadow-[0_-1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm">
       <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 pt-3">
@@ -127,6 +141,11 @@ export function Composer({
         <RoutingHint draft={draft} />
         <TokenUsageBadge />
       </div>
+      {talkMode ? (
+        <div className="mx-auto max-w-3xl px-6 pb-4 pt-2">
+          <TalkModeInline onExit={() => setTalkMode(false)} />
+        </div>
+      ) : (
       <form
         onSubmit={onSubmit}
         onDragEnter={onDragEnter}
@@ -321,6 +340,22 @@ export function Composer({
               <Icon icon={Mic} size="md" className="text-fg-subtle" />
             </Button>
           )}
+          {/* Talk Mode entry — opens the inline voice surface in
+              place of the textarea. Distinct from voice-to-draft
+              (the Mic button above) which only transcribes a
+              single utterance into the input field; Talk Mode is
+              the full duplex back-and-forth pipeline. */}
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 px-3"
+            onClick={() => setTalkMode(true)}
+            aria-label={t('chat_page.talk_mode_open', { defaultValue: '语音对话' })}
+            title={t('chat_page.talk_mode_open', { defaultValue: '语音对话' })}
+            data-testid="chat-talk-mode"
+          >
+            <Icon icon={Headphones} size="md" className="text-fg-subtle" />
+          </Button>
           {sending ? (
             <Button
               type="submit"
@@ -346,6 +381,7 @@ export function Composer({
           )}
         </div>
       </form>
+      )}
     </div>
   );
 }

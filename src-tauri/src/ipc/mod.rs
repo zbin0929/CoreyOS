@@ -41,6 +41,7 @@ pub mod session;
 pub mod session_search;
 pub mod skill_hub;
 pub mod skills;
+pub mod talk;
 pub mod vision_proxy;
 pub mod voice;
 pub mod webhook;

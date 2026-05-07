@@ -14,6 +14,7 @@ import {
 } from '@/lib/ipc';
 
 import { Field, ProviderCard } from './ProviderCard';
+import { LocalVoicePackPanel } from './LocalVoicePackPanel';
 import { VoiceAuditPanel } from './VoiceAuditPanel';
 import { VoiceTestPanel } from './VoiceTestPanel';
 import { VOICE_PROVIDERS, getProvider } from './providers';
@@ -304,6 +305,8 @@ export function VoiceRoute() {
               </Field>
               <p className="text-xs text-fg-subtle">{t('voice.hotkey_hint')}</p>
             </section>
+
+            <LocalVoicePackPanel />
 
             <div className="flex justify-end">
               <Button

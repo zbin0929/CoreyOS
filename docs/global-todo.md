@@ -6,10 +6,41 @@
 >
 > **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号（SP-API 到位后 1-2 周做完）
 >
-> **当前进行中**：**B-8 Talk Mode v1（豆包式持续对话 · 全本地 STT/TTS · LLM 走现有配置）**
+> **当前进行中**：**B-8 Talk Mode v1.1（Sherpa-onnx 迁移）**
 > - v0 / v0.1 骨架 已合入 main：`5a87f95`（push-to-talk + 三态 UI + topbar 入口） → `a525be4`（readiness gate + 持久化进 chat session）
-> - **v1 锁定方案**：whisper.cpp + Piper + silero-vad，跨平台（macOS + Windows），3 周 11 项工程拆解 — 详见 §B-8 章节
-> - **下一会话起手**：从 §B-8 v1 任务 1（`crate::talk` 模块骨架 + `LocalTalkBackend` trait）+ 任务 2（silero-vad ONNX 集成）启动；这两步不依赖外部下载，3-4 小时可完成，立刻能感受"无按键持续对话"。
+> - **v1 锁定方案**：whisper.cpp + ~~Piper~~ → **sherpa-onnx (MeloTTS zh_en)** + silero-vad，跨平台（macOS arm64/x64 + Windows x64 + Linux x64），详见 §B-8 章节
+> - **🚨 **v1.1 迁移（2026-05-07）**：Piper → sherpa-onnx 切换。原因：rhasspy/piper macOS arm64 prebuilt 是 x86_64 字节，Apple Silicon SIGABRT；上游半年没动；不支持流式合成。Sherpa-onnx (k2-fsa) 全平台正确架构 + Matcha-TTS / VITS-MeloTTS 中英混读 + 流式 ready（v1.2 接 sherpa-rs FFI 即可启用 token-level streaming）。所有 Piper 代码已删 / 替换：
+>   - **paths.rs**：`piper_bin` → `sherpa_offline_tts_bin`；`piper_model_*` → `sherpa_tts_model_dir` + `sherpa_tts_model_main_file`；whisper 模型路径升级到 `ggml-medium-q5_0.bin`
+>   - **tts.rs**：`PiperTts` → `SherpaTts`（CLI wrapper，VITS args + DYLD_LIBRARY_PATH + 10s timeout + sticky broken flag）；保留 `MacosSayTts` 兜底；新增 WAV post-processing（silence trim + RMS loudness normalization）减少 VITS-style 音量跳变
+>   - **download.rs**：piper specs → 3 个 sherpa MeloTTS specs（model.onnx 165 MB + tokens + lexicon）；whisper spec 升级到 medium-q5_0（~540 MB，中文识别率显著提升）；offline-zip 支持斜杠前缀文件名 + sherpa shared libs + `vits-melo-tts-zh_en/` 子目录
+>   - **ipc/talk.rs**：`try_piper`/`piper_known_broken` → `try_sherpa`/`sherpa_known_broken`；删除 macOS arch mismatch 检测（sherpa CI 验证 arch，没必要）
+>   - **scripts**：`build-piper-from-source.sh` 删除；`fetch-talk-binaries.sh` 重写为拉 sherpa-onnx 上游 + MeloTTS HF 镜像；`build-talk-binaries-local.sh` 用 sherpa-onnx 替换 piper 段；`.github/workflows/release-talk-binaries.yml` 简化（sherpa-onnx 全平台直拉，4 platform matrix）
+> - **🚨 **v1.1.1 streaming TTS 优化（2026-05-07）**：解决"长回复停顿明显 / 最后一句不播"问题。
+>   - **useTalkMode.ts**：重构 streaming worker 为**轮询式常驻**（30ms interval），唯一退出条件是 `llmDone && pending 空`（或 barge-in）。消除旧版"exit when pending=0, restart on enqueue"的 race window，解决 clip4 卡在 INITIAL_BUFFER gate 的问题。
+>   - **并行 synth**：每句进队列立即启动 sherpa synthesis（pending: Promise<Tts>[]），不再限制 1-deep prefetch。M1 16GB 可承受 8 并行 sherpa CLI（~600MB × 8 = 4.8GB），后续若遇低配机加 semaphore 限流。
+>   - **clause-level splitting**：splitting regex 从 `[.!?。！？]` 扩展到 `[.!?。！？,，、;；:：]`，长句子按逗号/冒号/分号/顿号切分。配合并行 synth，避免 LLM 长句流完前 audio worker 饿死数秒。
+>   - **INITIAL_BUFFER gate**：首句等 2 个 clip 准备好或 LLM 流结束才开播。代价是首句延迟 ~400ms，收益是后续 clip 几乎无间隙连贯播放。
+>   - **诊断日志**：synth 失败 / null tts / playback 失败均 `console.warn('[talk.tts] ...')`，方便定位"最后一句不播"真因。
+> - **🚨 **v1.1 离线包打包（2026-05-07）**：4 个 cross-platform zip 完成，落 `/Users/zbin/Downloads/`：
+>   - **bge-m3.zip** (2.1 GB) - BGE-M3 离线向量模型（从本地 `~/.hermes/models/bge-m3/` 打包）
+>   - **talk-mac-arm64.zip** (691 MB) - macOS Apple Silicon (M1/M2/M3/M4) 全本地链路：whisper-cli (本地编) + ggml-medium-q5_0.bin + sherpa-onnx-offline-tts + vits-melo-tts-zh_en/ + silero_vad.onnx + 共享库
+>   - **talk-mac-x64.zip** (686 MB) - macOS Intel (x86_64) 全本地链路：whisper-cli (cross-compile from arm64, rpath @executable_path) + 同上模型 + sherpa-onnx x64 prebuilt
+>   - **talk-win-x64.zip** (674 MB) - Windows x64 全本地链路：whisper-cli.exe + ggml.dll + sherpa-onnx-offline-tts.exe + onnxruntime.dll + 同上模型
+>   - **打包方式**：本地 staging 目录 → `zip -1`（最快压缩，模型文件本身熵高压缩收益小）→ 直接落 Downloads。无 README（importer 不读）。
+> - ✅ **v1 任务 1 完成（2026-05-07）**：`crate::talk` 模块骨架 + `Stt`/`Tts`/`Vad` traits + `TalkBackend` 容器 + 二进制/模型路径常量（`<hermes>/talk/{bin,models}/`）+ cloud backend 占位 + NoopVad 单元测试
+> - ✅ **v1 任务 2 完成（2026-05-07）**：silero-vad v5 ONNX 集成（`talk-local` feature 拉 `ort`/`ndarray`），512-sample / 32 ms / 22-frame 静音阈值状态机 + LSTM 状态跨帧携带 + soft-fail。
+> - 🔧 **v1 任务 7 Phase A 完成（2026-05-07）**：Rust 后端零依赖持续监听循环上线——`talk::session` cpal 音频线程 + EnergyVad + Tauri events + 3 个 IPC commands；16 个 talk 单元测试过。
+> - ✅ **v1 任务 7 Phase B 完成（2026-05-07）**：前端闭环 — `useTalkMode` 抽取 `processWavBase64` 共享流水线，auto 模式订阅 `talk:speech-end/start/level/error` 事件，speech-start 中断 TTS 实现“豆包式按不住”体验；`<TalkModeOverlay>` 加模式切换胶囊 + auto-mode VU 晕环 + Space 在 auto 下自动脱开；Mic 授权失败/设备不可用 → 静默回退 PTT；tsc + lint + 112 个 vitest 双绿。
+> - ✅ **v1 任务 8 完成（2026-05-07）**：本地语音包下载 UI 上线。`talk::download` 镜像 fallback 链专门针对国内网络：HF/GitHub 上游 → `hf-mirror.com`（社区 HF 镜像）→ `ghfast.top` / `ghproxy.com`（GitHub 加速），任一镜像走通即接受；silero-vad / whisper-base-q5_1 / piper-huayan 三套模型 spec（每个 2-4 个镜像候选）；离线 zip 导入按文件名区分 + min-size 验证；3 个 IPC commands；`<LocalVoicePackPanel>` 塪香进 Settings → Voice，进度条 + 镜像身份显示（“通过 hf-mirror.com 下载”）；21 个 Rust talk 测试 × clippy `-D warnings` 双 feature 双绿，112 vitest + tsc + lint 双绿。
+> - ✅ **v1 任务 3-6 + 10-11 全部完成（2026-05-07）**：Talk Mode v1 11/11 任务全绿。
+>   - **任务 3-4**：`.github/workflows/release-talk-binaries.yml` 3×OS matrix 编译 whisper.cpp（从 v1.7.4 源码 + Metal/CoreML 开关）+ 拉 Piper 官方预构（v2023.11.14-2），打包 `talk-binaries-aarch64-apple-darwin.zip` / `x86_64-apple-darwin.zip` / `x86_64-pc-windows-msvc.zip` 上传 GitHub Releases；`scripts/fetch-talk-binaries.sh` 本地 dev 脚本带镜像回退；`talk::download::import_offline_zip` 扩展后可识别 binary + piper-runtime/ 並 +x。
+>   - **任务 5**：`WhisperCppStt::try_load` + `transcribe()` — hound 解码 + 16k 重采样 + tempfile 暂存 + spawn whisper-cli（-otxt -nt -l auto -t 4），90s 超时，Windows CREATE_NO_WINDOW。
+>   - **任务 6**：`PiperTts::try_load` + `synthesize()` — 文本 stdin 送 piper `--output-raw`，raw s16le PCM 读 stdout 后 hound 包装 WAV，采样率从 piper config json 动态读取。
+>   - **任务 5+6 IPC**：`talk_local_status` / `talk_local_transcribe` / `talk_local_tts` 三个 IPC commands。
+>   - **任务 10**：`useTalkMode` mount 同时探测 cloud + local 双 readiness，local sidecar 就绪时自动路由到 `talk_local_*`；`<LocalVoicePackPanel>` 表头塪香“全本地链路已启用（whisper + Piper）”。
+>   - **任务 11**：`e2e/talk-mode.spec.ts` Playwright smoke 验证 overlay 开关 + mode toggle + close；`tauri-mock.ts` 紫充 voice/talk stub。跨平台实机实验（3 轮真实语音对话 × macOS arm64/x64 + Windows x64）需人工现场跳。
+>   - **验证**：34 个 Rust talk 测试 + clippy `-D warnings` 双 feature 双绿，112 vitest + tsc + lint 双绿。
+> - **下一会话起手**：Talk Mode v1 已 ship-ready，可在动手下一个 B-9.x 或 P-1 P3 UI 美化 12 项。跨平台实机验证 v1（task 11 未完部分）需预留 1 天。
 >
 > **可继续选项**：B-8 Talk Mode v1（最优先）/ P-1 P3 UI 美化 12 项 / 真实付费客户合同 → P-2..P-8
 
@@ -328,12 +359,32 @@
 - **已交付**：
   - `5a87f95` v0 骨架 — push-to-talk + 三态 UI + Topbar 入口
   - `a525be4` v0.1 — readiness gate + 转写持久化进 chat session
-- **v1 起手**（下次会话）：
-  1. `crate::talk` 模块骨架 + `LocalTalkBackend` trait + 重构 v0 为 backend-pluggable（0.5 d）
-  2. silero-vad ONNX 集成（1.5 d）— 不依赖外部下载，3-4 小时落地，立刻能 demo 无按键持续对话
+  - **2026-05-07** v1 任务 1 — `crate::talk` 模块骨架（`backend.rs` traits / `paths.rs` 路径常量 / `cloud.rs` 占位 / `vad.rs` NoopVad）+ 单元测试 + 接入 `lib.rs`
+  - **2026-05-07** v1 任务 2 — silero-vad v5 ONNX 接入（`talk-local` feature），`SileroVad::load` + `process_frame` + LSTM 状态跨帧 + soft-fail
+  - **2026-05-07** v1 任务 7 Phase A — `talk::session` cpal 音频线程 + EnergyVad 驱动 + Tauri events + 3 个 IPC commands；16 个 talk 单元测试
+  - **2026-05-07** v1 任务 7 Phase B — `useTalkMode` v1（processWavBase64 共享管线 + auto 模式事件订阅 + interrupt-on-speech）+ `<TalkModeOverlay>` mode toggle 胶囊 + VU halo
+  - **2026-05-07** v1 任务 8 — `talk::download` 镜像 fallback 链（HF → hf-mirror.com → ghfast.top → ghproxy.com）专门针对国内直连 GitHub 问题；silero-vad / whisper-base-q5_1 / piper-huayan 三套 spec + 离线 zip 导入 + 3 个 IPC commands；`<LocalVoicePackPanel>` 塪香进 Settings → Voice，进度条 + 镜像身份显示
+  - **2026-05-07** v1 任务 3+4 — `.github/workflows/release-talk-binaries.yml` 3×OS matrix（macOS arm64/x64 + Windows x64）编译 whisper.cpp + 拉 Piper 官方预构 + 打包 per-triple zip + 上传 GitHub Releases；`scripts/fetch-talk-binaries.sh` 本地 dev 脚本带镜像回退
+  - **2026-05-07** v1 任务 5+6 — `WhisperCppStt::try_load`/`transcribe` + `PiperTts::try_load`/`synthesize` Rust 端调 sidecar 子进程，接入 `Stt`/`Tts` traits，`talk_local_transcribe` / `talk_local_tts` IPC 上线
+  - **2026-05-07** v1 任务 10 — `useTalkMode` 探测 local sidecar 后自动路由到全本地链路；`<LocalVoicePackPanel>` 表头塪香“全本地链路已启用”
+  - **2026-05-07** v1 任务 11 — `e2e/talk-mode.spec.ts` Playwright smoke + `tauri-mock.ts` voice/talk stub。跨平台真实语音循环需人工实机验证。
+- **✅ v1 ship-ready**：11/11 任务完成。下一会话可跳 B-9.x、P-1 P3 UI 美化 12 项，或人工跨平台实机验证 Talk Mode v1。
 - **v1 技术栈**：whisper.cpp（STT）+ Piper TTS + silero-vad + 现有 Hermes LLM adapter
 - **v1 工期**：3 周（11 项工程拆解，详见 `talk-mode-plan.md`）
 - **包大小**：安装包 +33 MB · 首次启用拉 122 MB 模型
+
+#### B-12. 多 Agent 并行编排（Backlog · 暂未启动）
+- **状态**：🗒️ Backlog · 后面可能会做
+- **触发时机**：当用户开始反馈"我想让多个 Hermes/模型同时干一件事"时再启动；目前没有真实需求驱动
+- **背景**：v0.2.x 的多 Hermes 实例（T6.2 ~ T8）解决了"多个 Gateway 共存 + 顶部切换 + 路由规则按消息分发"，但**单个任务永远只走一个 adapter**。下面这两个场景目前必须用户手动开多 session 或 Workflow 节点拆分，开箱不会自动并行：
+  - **同对话多 agent 协同回复**：例如左半屏 GPT-4 + 右半屏 Claude 同时打草稿、再让一个评审 agent 选最优——目前要手动切 AgentSwitcher 跑两遍
+  - **单任务跨 instance 拆分**：例如"把 100 条订单分给 5 个 Hermes instance 并行处理"——目前要在 Workflow 里手写 5 个 parallel branch
+- **可能的实现路径**（启动时再细化）：
+  - **方案 A · 多 agent chat**：Chat session 增加 `co_pilots: Vec<adapter_id>` 字段，UI 渲染成多列时间线；msg 同时 fan-out 到所有 co-pilots，UI 收并集流式展示；冲突时由用户选 / 由 judge agent 评分。参考 `docs/phases/phase-7.5-multi-agent.md`
+  - **方案 B · Workflow `parallel_agents` 节点**：在 B-10 已有 parallel branch 基础上加语法糖——`{ type: "parallel_agents", agents: [...], strategy: "first|all|vote" }`，避免用户手写每个 branch；engine 层是现有 parallel 的 thin wrapper
+  - **方案 C · 任务自动分片**：给 Pack manifest 加 `partitionable: true` 声明，runtime 按 instance 数量切 input、fan-out、聚合 output——只对 amazon SP-API 这种"每条订单独立可处理"的 Pack 有意义
+- **前置依赖**：B-10 Workflow 增强 ✅（parallel branch + sub-workflow + tool step 都已就绪，方案 B 可直接动）
+- **不做的理由（当下）**：单 instance 已能满足 90% 用户场景；多 agent 并行的真实痛点是"对比 / 投票"而不是"加速"，等 P-1 客户上线后看到底是不是真痛点再投 1-2 周做方案 A 或 B
 
 ### 第 3 层 — 已砍（与"只做定制"冲突，永久不做）
 

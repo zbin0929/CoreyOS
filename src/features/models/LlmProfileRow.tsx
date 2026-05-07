@@ -14,6 +14,7 @@ import {
   modelProviderProbe,
   type LlmProfile,
 } from '@/lib/ipc';
+import { visionSupport } from '@/lib/modelCapabilities';
 import { PROVIDER_TEMPLATES } from '@/features/settings/providerTemplates';
 
 /**
@@ -277,7 +278,27 @@ export function LlmProfileRow({
             return (
               <Combobox
                 value={draft.model}
-                onChange={(v) => setDraft({ ...draft, model: v })}
+                onChange={(v) => {
+                  // When the user picks a brand-new model, propose a
+                  // sensible default for the "supports vision" toggle
+                  // by running the model id past our heuristic. We
+                  // only auto-fill when the user hasn't explicitly
+                  // set the flag yet (vision === null/undefined) so
+                  // a deliberate "this is text-only" choice survives
+                  // a model rename.
+                  setDraft((prev) => {
+                    const userTouched = prev.vision !== null && prev.vision !== undefined;
+                    const heuristic = visionSupport(v);
+                    const nextVision = userTouched
+                      ? prev.vision
+                      : heuristic === 'yes'
+                        ? true
+                        : heuristic === 'no'
+                          ? false
+                          : prev.vision;
+                    return { ...prev, model: v, vision: nextVision };
+                  });
+                }}
                 options={suggestions.map((m) => ({ value: m, label: m }))}
                 placeholder={suggestions[0] ?? 'gpt-4o'}
                 inputClassName="font-mono"
@@ -375,6 +396,61 @@ export function LlmProfileRow({
           </div>
         </Field>
       </div>
+
+      {/* Vision-capable flag — drives the picker in
+          Settings → Vision Proxy. Pre-filled by `visionSupport()`
+          heuristic when the user changes the model id, but the
+          checkbox is the source of truth: tick it on for any
+          model the user knows accepts images, even if our
+          heuristic doesn't recognise it (custom fine-tunes, brand
+          new releases, OpenRouter aliases, etc.). */}
+      <Field
+        label={t('models_page.profile_field_vision', { defaultValue: '能力标识' })}
+        hint={t('models_page.profile_field_vision_hint', {
+          defaultValue:
+            '勾选后该模型会出现在 设置 → 视觉代理 的可选列表里。系统已根据模型名做了猜测，可手动调整。',
+        })}
+      >
+        <label className="flex items-center gap-2 text-xs text-fg">
+          <input
+            type="checkbox"
+            checked={draft.vision === true}
+            onChange={(e) => setDraft({ ...draft, vision: e.target.checked })}
+            className="accent-purple-500"
+            data-testid="llm-profile-vision"
+          />
+          <span>
+            {t('models_page.profile_field_vision_label', {
+              defaultValue: '此模型支持视觉（可识别图片）',
+            })}
+          </span>
+          {(() => {
+            const guess = visionSupport(draft.model);
+            if (guess === 'unknown') return null;
+            return (
+              <span
+                className={cn(
+                  'rounded border px-1.5 py-px text-[10px] font-medium uppercase tracking-wider',
+                  guess === 'yes'
+                    ? 'border-purple-500/40 bg-purple-500/10 text-purple-500'
+                    : 'border-border/60 bg-bg-elev-2 text-fg-subtle',
+                )}
+                title={t('models_page.profile_field_vision_guess_title', {
+                  defaultValue: '基于模型名的内置启发式猜测',
+                })}
+              >
+                {guess === 'yes'
+                  ? t('models_page.profile_field_vision_guess_yes', {
+                      defaultValue: '猜测：支持',
+                    })
+                  : t('models_page.profile_field_vision_guess_no', {
+                      defaultValue: '猜测：不支持',
+                    })}
+              </span>
+            );
+          })()}
+        </label>
+      </Field>
 
       {err && (
         <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 p-2 text-xs text-danger">

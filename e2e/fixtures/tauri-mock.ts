@@ -1381,6 +1381,50 @@ export const tauriMockInitScript = /* js */ `
         return [];
       case 'pack_view_data':
         return {};
+
+      // Talk Mode (B-8 v1). The overlay probes readiness on
+      // mount; we pretend cloud STT + cloud TTS are configured
+      // and the local sidecars are absent so the route stays
+      // on the cloud path.
+      case 'voice_get_config':
+        return {
+          asr_provider: 'openai',
+          asr_endpoint: null,
+          asr_api_key_set: true,
+          tts_provider: 'openai',
+          tts_endpoint: null,
+          tts_api_key_set: true,
+          tts_voice: 'alloy',
+          tts_speed: 1.0,
+          hotkey: 'Meta+Space',
+          tts_voices: ['alloy'],
+        };
+      case 'talk_local_status':
+        return { stt_ready: false, tts_ready: false };
+      case 'talk_session_status':
+        return { active: false };
+      case 'talk_session_start':
+        return { sample_rate: 16000, frame_size: 512 };
+      case 'talk_session_stop':
+        return null;
+      case 'talk_models_status':
+        return {
+          ready: false,
+          models_dir: '/tmp/talk/models',
+          bin_dir: '/tmp/talk/bin',
+          files: [],
+        };
+      // Mic permission helpers (B-8 v1 polish). The warmup IPC
+      // pretends mic access is granted so the overlay smoke test
+      // doesn't render the recovery banner; specs that need to
+      // exercise the denied path can override this.
+      case 'voice_warmup_mic':
+        return 'granted';
+      case 'voice_open_mic_settings':
+        return null;
+      case 'voice_play_wav_native':
+      case 'voice_play_stop':
+        return null;
     }
 
     // Anything we don't recognise is a real bug in the test — surface it loudly.

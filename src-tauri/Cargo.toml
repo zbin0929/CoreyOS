@@ -140,6 +140,12 @@ cron = "0.12"
 
 cpal = "0.15"
 hound = "3.5"
+# Used at runtime by `talk::stt` to stage the per-turn WAV file
+# whisper-cli reads from. Was previously dev-only; promotion is
+# justified because the talk path needs a process-scoped tempdir
+# that auto-cleans on drop, which `std::env::temp_dir()` doesn't
+# give us cross-platform.
+tempfile = "3"
 
 ort = { version = "2.0.0-rc.12", features = ["load-dynamic"], optional = true }
 ndarray = { version = "0.17", optional = true }
@@ -151,6 +157,11 @@ tempfile = "3"
 [features]
 default = ["custom-protocol"]
 rag = ["dep:ort", "dep:ndarray", "dep:tokenizers"]
+# B-8 Talk Mode v1 — silero-vad ONNX VAD + whisper.cpp + sherpa-onnx
+# integration. Pulls `ort` (onnxruntime) + `ndarray` like `rag` does;
+# the two features can be enabled independently or together (they
+# share the same dylib via `ort/load-dynamic`).
+talk-local = ["dep:ort", "dep:ndarray"]
 custom-protocol = ["tauri/custom-protocol"]
 
 [workspace]

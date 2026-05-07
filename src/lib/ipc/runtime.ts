@@ -290,6 +290,160 @@ export function voiceRecordStop(): Promise<void> {
   return invoke<void>('voice_record_stop');
 }
 
+/**
+ * Open the macOS System Settings panel pinned to Privacy & Security
+ * → Microphone, so the user can grant the running binary mic access
+ * with one click. macOS-only — on other platforms the IPC rejects.
+ */
+export function voiceOpenMicSettings(): Promise<void> {
+  return invoke<void>('voice_open_mic_settings');
+}
+
+/**
+ * Touch the input device once for ~500ms. On macOS this triggers
+ * the Privacy permission dialog if the user has never been asked,
+ * so the dialog appears when the Talk overlay opens rather than
+ * mid-PTT-press. Returns `'granted'` if a sample arrived in that
+ * window, `'denied'` otherwise.
+ */
+export function voiceWarmupMic(): Promise<'granted' | 'denied'> {
+  return invoke<'granted' | 'denied'>('voice_warmup_mic');
+}
+
+/**
+ * Play a base64-encoded WAV via the platform's native CLI player
+ * (macOS `afplay`, Linux `aplay`, Windows PowerShell SoundPlayer).
+ * Bypasses the WebView `<audio>` element which silently fails on
+ * Tauri 2 + macOS in some configurations. The IPC returns as soon
+ * as the player is spawned; call {@link voicePlayStop} to cancel
+ * mid-playback (e.g. user interrupts in auto-listen mode).
+ */
+export function voicePlayWavNative(audioBase64: string): Promise<void> {
+  return invoke<void>('voice_play_wav_native', { audioBase64 });
+}
+
+/** Stop whatever {@link voicePlayWavNative} is currently playing. */
+export function voicePlayStop(): Promise<void> {
+  return invoke<void>('voice_play_stop');
+}
+
+// ───────────────────────── Talk Mode v1 ─────────────────────────
+
+export interface TalkSessionStarted {
+  sample_rate: number;
+  frame_size: number;
+}
+
+export interface TalkSessionStatus {
+  active: boolean;
+}
+
+export interface TalkSpeechEndPayload {
+  wav_base64: string;
+  sample_rate: number;
+  duration_ms: number;
+}
+
+export interface TalkLevelPayload {
+  rms: number;
+  speaking: boolean;
+}
+
+export interface TalkErrorPayload {
+  message: string;
+}
+
+/** Tauri event names emitted by `crate::talk::session`. */
+export const TALK_EVENTS = {
+  level: 'talk:level',
+  speechStart: 'talk:speech-start',
+  speechEnd: 'talk:speech-end',
+  error: 'talk:error',
+} as const;
+
+export function talkSessionStart(): Promise<TalkSessionStarted> {
+  return invoke<TalkSessionStarted>('talk_session_start');
+}
+
+export function talkSessionStop(): Promise<void> {
+  return invoke<void>('talk_session_stop');
+}
+
+export function talkSessionStatus(): Promise<TalkSessionStatus> {
+  return invoke<TalkSessionStatus>('talk_session_status');
+}
+
+// Local voice pack (silero-vad / whisper-base / sherpa-onnx MeloTTS zh_en).
+
+export interface TalkModelFileStatus {
+  id: string;
+  label: string;
+  kind: 'model' | 'binary';
+  filename: string;
+  target_path: string;
+  exists: boolean;
+  size_bytes: number;
+  min_size_bytes: number;
+  mirror_count: number;
+}
+
+export interface TalkModelsStatus {
+  ready: boolean;
+  models_dir: string;
+  bin_dir: string;
+  files: TalkModelFileStatus[];
+}
+
+export interface TalkModelsDownloadResult {
+  used_mirrors: [string, string][];
+}
+
+export interface TalkModelsImportResult {
+  imported: number;
+}
+
+export function talkModelsStatus(): Promise<TalkModelsStatus> {
+  return invoke<TalkModelsStatus>('talk_models_status');
+}
+
+export function talkModelsDownload(): Promise<TalkModelsDownloadResult> {
+  return invoke<TalkModelsDownloadResult>('talk_models_download');
+}
+
+export function talkModelsImportZip(zipPath: string): Promise<TalkModelsImportResult> {
+  return invoke<TalkModelsImportResult>('talk_models_import_zip', { zipPath });
+}
+
+// Local STT/TTS routes — used when `talkLocalStatus().stt_ready` /
+// `tts_ready` is true (i.e. whisper-cli + sherpa-onnx-offline-tts
+// sidecars + models are installed).
+
+export interface TalkLocalReadiness {
+  stt_ready: boolean;
+  tts_ready: boolean;
+}
+
+export interface TalkLocalTranscribeResult {
+  text: string;
+}
+
+export interface TalkLocalTtsResult {
+  audio_base64: string;
+  mime: string;
+}
+
+export function talkLocalStatus(): Promise<TalkLocalReadiness> {
+  return invoke<TalkLocalReadiness>('talk_local_status');
+}
+
+export function talkLocalTranscribe(wavBase64: string): Promise<TalkLocalTranscribeResult> {
+  return invoke<TalkLocalTranscribeResult>('talk_local_transcribe', { wavBase64 });
+}
+
+export function talkLocalTts(text: string): Promise<TalkLocalTtsResult> {
+  return invoke<TalkLocalTtsResult>('talk_local_tts', { text });
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

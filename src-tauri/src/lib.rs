@@ -44,6 +44,7 @@ mod routing_rules;
 mod sandbox;
 mod skills;
 mod state;
+mod talk;
 mod tfidf;
 mod tray;
 mod vision_proxy;
@@ -264,6 +265,19 @@ pub fn run() {
             ipc::voice::voice_audit_log,
             ipc::voice::recorder::voice_record,
             ipc::voice::recorder::voice_record_stop,
+            ipc::voice::recorder::voice_open_mic_settings,
+            ipc::voice::recorder::voice_warmup_mic,
+            ipc::voice::recorder::voice_play_wav_native,
+            ipc::voice::recorder::voice_play_stop,
+            ipc::talk::talk_session_start,
+            ipc::talk::talk_session_stop,
+            ipc::talk::talk_session_status,
+            ipc::talk::talk_models_status,
+            ipc::talk::talk_models_download,
+            ipc::talk::talk_models_import_zip,
+            ipc::talk::talk_local_status,
+            ipc::talk::talk_local_transcribe,
+            ipc::talk::talk_local_tts,
             ipc::hermes_instances::hermes_instance_list,
             ipc::hermes_instances::hermes_instance_upsert,
             ipc::hermes_instances::hermes_instance_delete,

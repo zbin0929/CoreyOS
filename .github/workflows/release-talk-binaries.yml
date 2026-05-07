@@ -1,0 +1,206 @@
+name: Release Talk Mode binaries
+
+# B-8 v1.1 — produce per-platform zips containing the
+# `whisper-cli` + `sherpa-onnx-offline-tts` binaries Talk Mode
+# needs for its all-local STT/TTS path. Whisper.cpp is built from
+# source (no reliable upstream prebuilts for macOS arm64);
+# sherpa-onnx has correctly-architected official prebuilts on
+# every triple we target so we just download + repackage.
+#
+# Each matrix run produces:
+#   talk-binaries-<target-triple>.zip
+#     ├── whisper-cli                  (or .exe on Windows)
+#     ├── sherpa-onnx-offline-tts      (or .exe on Windows)
+#     ├── lib*.{dylib,so,dll}          (sherpa-onnx + onnxruntime)
+#     └── README.md                    (sha256 + install hints)
+#
+# Targets:
+#   macOS arm64    (aarch64-apple-darwin)
+#   macOS x86_64   (x86_64-apple-darwin)
+#   Windows x86_64 (x86_64-pc-windows-msvc)
+#   Linux x86_64   (x86_64-unknown-linux-gnu)
+#
+# Why the migration from Piper → sherpa-onnx (v1.0 → v1.1):
+#   rhasspy/piper's macOS arm64 prebuilt is x86_64 bytes (upstream
+#   packaging bug), forcing us into a multi-step source build with
+#   piper-phonemize + espeak-ng. sherpa-onnx ships native binaries
+#   for every triple and verifies arch in upstream CI, so this
+#   workflow becomes a straight "download + repackage" job.
+#
+# Manual-trigger only — these binaries don't change with every
+# Corey release; whisper.cpp / sherpa-onnx themselves rev maybe
+# quarterly.
+
+on:
+  workflow_dispatch:
+    inputs:
+      whisper_ref:
+        description: 'whisper.cpp git tag/commit'
+        required: false
+        default: 'v1.7.4'
+        type: string
+      sherpa_version:
+        description: 'sherpa-onnx release tag (e.g. v1.13.0)'
+        required: false
+        default: 'v1.13.0'
+        type: string
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            triple: aarch64-apple-darwin
+            whisper_cmake_flags: '-DGGML_METAL=ON -DGGML_NATIVE=OFF -DCMAKE_OSX_ARCHITECTURES=arm64'
+            sherpa_triple: 'osx-arm64-shared'
+            sherpa_archive_ext: 'tar.bz2'
+            ext: ''
+          - os: macos-13
+            triple: x86_64-apple-darwin
+            whisper_cmake_flags: '-DGGML_METAL=OFF -DGGML_NATIVE=OFF -DCMAKE_OSX_ARCHITECTURES=x86_64'
+            sherpa_triple: 'osx-x64-shared'
+            sherpa_archive_ext: 'tar.bz2'
+            ext: ''
+          - os: windows-latest
+            triple: x86_64-pc-windows-msvc
+            whisper_cmake_flags: '-DGGML_NATIVE=OFF'
+            # k2-fsa ships separate Win builds per MSVC runtime
+            # (MD/MT × Debug/MinSizeRel/Release/RelWithDebInfo).
+            # `MD-Release` = dynamic CRT + optimised, the variant
+            # their docs steer app integrators toward.
+            sherpa_triple: 'win-x64-shared-MD-Release'
+            sherpa_archive_ext: 'tar.bz2'
+            ext: '.exe'
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+            whisper_cmake_flags: '-DGGML_NATIVE=OFF'
+            sherpa_triple: 'linux-x64-shared'
+            sherpa_archive_ext: 'tar.bz2'
+            ext: ''
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ─── whisper.cpp build ───
+      - name: Clone whisper.cpp
+        shell: bash
+        run: |
+          git clone --depth 1 --branch ${{ inputs.whisper_ref }} \
+            https://github.com/ggerganov/whisper.cpp vendor/whisper.cpp
+
+      - name: Configure whisper.cpp
+        shell: bash
+        working-directory: vendor/whisper.cpp
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.whisper_cmake_flags }}
+
+      - name: Build whisper-cli
+        shell: bash
+        working-directory: vendor/whisper.cpp
+        run: |
+          cmake --build build --config Release -j --target whisper-cli
+
+      # ─── sherpa-onnx download ───
+      - name: Download sherpa-onnx prebuilt
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ASSET="sherpa-onnx-${{ inputs.sherpa_version }}-${{ matrix.sherpa_triple }}.${{ matrix.sherpa_archive_ext }}"
+          URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ inputs.sherpa_version }}/$ASSET"
+          mkdir -p vendor/sherpa
+          curl -fL -o "vendor/sherpa/$ASSET" "$URL"
+          # Universal extractor: handles tar.bz2 / tar.gz / zip.
+          case "$ASSET" in
+            *.tar.bz2) tar -xjf "vendor/sherpa/$ASSET" -C vendor/sherpa/ ;;
+            *.tar.gz)  tar -xzf "vendor/sherpa/$ASSET" -C vendor/sherpa/ ;;
+            *.zip)     (cd vendor/sherpa && unzip -q "$ASSET") ;;
+          esac
+          rm "vendor/sherpa/$ASSET"
+          ls -la vendor/sherpa/
+
+      # ─── Stage into talk-binaries-<triple>/ ───
+      - name: Stage release directory
+        shell: bash
+        run: |
+          set -euxo pipefail
+          STAGE="talk-binaries-${{ matrix.triple }}"
+          mkdir -p "$STAGE"
+
+          # whisper-cli — `.exe` only on Windows
+          if [[ "${{ matrix.os }}" == windows-* ]]; then
+            cp vendor/whisper.cpp/build/bin/Release/whisper-cli.exe "$STAGE/"
+          else
+            cp vendor/whisper.cpp/build/bin/whisper-cli "$STAGE/"
+            chmod +x "$STAGE/whisper-cli"
+          fi
+
+          # sherpa-onnx — find the extracted dir, copy bin/* + lib/*
+          # flat into stage so DYLD_LIBRARY_PATH resolution lines up
+          # with what the Rust SherpaTts expects at runtime.
+          SHERPA_DIR=$(find vendor/sherpa -maxdepth 1 -type d -name 'sherpa-onnx-*' | head -n1)
+          if [[ -z "$SHERPA_DIR" || ! -d "$SHERPA_DIR" ]]; then
+            echo "Couldn't locate extracted sherpa-onnx dir" >&2
+            exit 1
+          fi
+          [[ -d "$SHERPA_DIR/bin" ]] && cp -R "$SHERPA_DIR/bin/." "$STAGE/"
+          [[ -d "$SHERPA_DIR/lib" ]] && cp -R "$SHERPA_DIR/lib/." "$STAGE/"
+          # Some releases drop binaries/libs at the tarball root.
+          for f in "$SHERPA_DIR"/*.dylib "$SHERPA_DIR"/*.so "$SHERPA_DIR"/*.so.* "$SHERPA_DIR"/*.dll; do
+            [[ -e "$f" ]] && cp "$f" "$STAGE/" || true
+          done
+          if [[ "${{ matrix.os }}" != windows-* ]]; then
+            chmod +x "$STAGE/sherpa-onnx-offline-tts" 2>/dev/null || true
+          fi
+
+          # README
+          cat > "$STAGE/README.md" <<EOF
+          # CoreyOS Talk Mode binaries — ${{ matrix.triple }}
+
+          Built from:
+          - whisper.cpp ${{ inputs.whisper_ref }}
+          - sherpa-onnx ${{ inputs.sherpa_version }}
+
+          ## Install via Corey
+
+          1. Settings → Voice → "本地语音包" → "导入离线 zip"
+          2. Pick this zip. Corey extracts whisper-cli +
+             sherpa-onnx-offline-tts (and the matching shared
+             libs) into \`<hermes>/talk/bin/\` automatically.
+
+          The matching ggml + MeloTTS models are downloaded
+          separately from Settings → Voice → "下载本地语音包"
+          (mirror chain handles GFW).
+          EOF
+
+          ls -la "$STAGE/"
+
+      # ─── Zip + checksum ───
+      - name: Zip
+        shell: bash
+        run: |
+          set -euxo pipefail
+          STAGE="talk-binaries-${{ matrix.triple }}"
+          if command -v zip >/dev/null; then
+            zip -r "$STAGE.zip" "$STAGE"
+          else
+            powershell -Command "Compress-Archive -Path '$STAGE' -DestinationPath '$STAGE.zip'"
+          fi
+          # SHA-256 — handy for users verifying offline-zip uploads.
+          if command -v shasum >/dev/null; then
+            shasum -a 256 "$STAGE.zip" > "$STAGE.zip.sha256"
+          else
+            powershell -Command "(Get-FileHash '$STAGE.zip' -Algorithm SHA256).Hash" > "$STAGE.zip.sha256"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: talk-binaries-${{ matrix.triple }}
+          path: |
+            talk-binaries-${{ matrix.triple }}.zip
+            talk-binaries-${{ matrix.triple }}.zip.sha256

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
-import { Sun, Moon, Search, CircleDot, Mic } from 'lucide-react';
+import { Sun, Moon, Search, CircleDot } from 'lucide-react';
 import { AgentSwitcher } from '@/app/shell/AgentSwitcher';
 import { Icon } from '@/components/ui/icon';
 import { Kbd } from '@/components/ui/kbd';
@@ -96,18 +96,14 @@ export function Topbar() {
         <Kbd keys={['mod', 'k']} className="ml-2" />
       </button>
 
-      {/* B-8 v0 — Talk Mode launcher. Single button, no shortcut yet
-          (Space is reserved for push-to-talk inside the overlay). */}
-      <button
-        type="button"
-        onClick={() => useUIStore.getState().setTalkModeOpen(true)}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-bg-elev-2 hover:text-fg"
-        aria-label={t('topbar.open_talk', { defaultValue: '语音对话' })}
-        title={t('topbar.open_talk', { defaultValue: '语音对话' })}
-        data-testid="topbar-talk"
-      >
-        <Icon icon={Mic} size="sm" />
-      </button>
+      {/* Talk Mode used to live here as a topbar launcher; v1.1
+          moved it into the chat composer (📝/🎤 toggle) so voice
+          and typed input share the same conversation surface
+          rather than feeling like two separate apps. The store
+          flag + AppShell mount stay until v1.2 cleanup so any
+          deep links / e2e specs that still reference
+          `topbar-talk` get a graceful empty rather than a hard
+          MissingComponent error. */}
 
       {/* Theme toggle */}
       <button
