@@ -1,11 +1,17 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-06 晚 · **v0.2.9 published**）
+> ⚡ **下一次会话从这里开始**（2026-05-07 上午 · **v0.2.9 published · B-8 Talk Mode 进行中**）
 >
 > **铁律**：所有改动 0 修改 Hermes Agent 代码 / trait 表面 — 未来 Hermes 升级直接替换 binary 即可，CoreyOS 不会因 Hermes 改动而崩。
 >
 > **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号（SP-API 到位后 1-2 周做完）
-> **可继续选项**：B-8 Talk Mode（v0.4.0+，独立工作）/ P-1 P3 UI 美化 12 项 / 真实付费客户合同 → P-2..P-8
+>
+> **当前进行中**：**B-8 Talk Mode v1（豆包式持续对话 · 全本地 STT/TTS · LLM 走现有配置）**
+> - v0 / v0.1 骨架 已合入 main：`5a87f95`（push-to-talk + 三态 UI + topbar 入口） → `a525be4`（readiness gate + 持久化进 chat session）
+> - **v1 锁定方案**：whisper.cpp + Piper + silero-vad，跨平台（macOS + Windows），3 周 11 项工程拆解 — 详见 §B-8 章节
+> - **下一会话起手**：从 §B-8 v1 任务 1（`crate::talk` 模块骨架 + `LocalTalkBackend` trait）+ 任务 2（silero-vad ONNX 集成）启动；这两步不依赖外部下载，3-4 小时可完成，立刻能感受"无按键持续对话"。
+>
+> **可继续选项**：B-8 Talk Mode v1（最优先）/ P-1 P3 UI 美化 12 项 / 真实付费客户合同 → P-2..P-8
 
 ### v0.2.9 已发布交付（2026-05-06 晚 · 可见性 + 产物）
 - **AgentSwitcher 重启** — Hermes-only 过滤，单 Hermes 显示只读 pill（v0.2.8 改 label 现在真的能在顶栏看到）— `35feb58`
@@ -314,46 +320,20 @@
 - **价值**：Pack 在客户机器 24/7 跑不崩。timeout + retry + on_error 是任何 production workflow engine 的标配。
 - **依赖**：无（全部基于现有 engine 扩展）
 
-#### B-8. Talk Mode 语音持续对话
-- **状态**：📋 计划中
-- **目标版本**：v0.4.0+
-- **平台**：**macOS + Windows 双平台**（不做 Linux）
-- **参考**：OpenClaw Talk Mode（https://docs.openclaw.ai/nodes/talk）
-- **核心循环**：Listen（STT）→ Send（LLM 走现有 Hermes adapter，0 改动）→ Wait → Speak（TTS）→ 循环
-- **技术选型 — 单档：高质量本地 + 完全免费 + 离线**
-  | 平台 | TTS 引擎 | STT 引擎 | 模型大小 |
-  |---|---|---|---|
-  | macOS Apple Silicon | **MLX** + Soprano-80M-bf16 | `SFSpeechRecognizer` + `whisper.cpp` 兜底 | 80 MB TTS |
-  | macOS Intel | **Piper TTS** + zh_CN-huayan-medium (ONNX) | `whisper.cpp` (ggml-base) | 60 MB TTS + 140 MB STT |
-  | Windows | **Piper TTS** + zh_CN-huayan-medium (ONNX) | `whisper.cpp` (ggml-base) | 60 MB TTS + 140 MB STT |
-- **统一抽象**：
-  - 后端 Rust 加 `crate::talk` 模块，`TtsBackend` / `SttBackend` trait + 三种实现（mlx_tts / piper_tts / system_stt / whisper_stt）
-  - 前端只看到 `talk_session_start` / `talk_session_stop` / 3 个 Tauri event（state changes / partial transcript / final transcript）
-  - **零修改 Hermes Agent** — 走现有 `chat_stream_start` IPC，Talk Mode 只是替换"键盘输入 → 文字"为"麦克风 → STT → 文字"，"屏幕渲染 → 字"为"TTS → 声音"
-- **关键特性**：
-  - [ ] **静音检测**: 700ms（macOS）/ 900ms（iOS 移植时）窗口判定说完
-  - [ ] **interruptOnSpeech**: 用户开口 → 立刻 `audioPlayer.cancel()` + `<system>用户在你说"……"时打断了你</system>` 注入下一条 prompt
-  - [ ] **Voice Directives**: LLM 回复首行可带 JSON `{"voice":"warm","rate":0.9}` 切换声音 / 语速
-  - [ ] **三态 UI 覆盖层**: Listening（脉冲环）→ Thinking（下沉动画）→ Speaking（辐射环 + 边播边亮字幕）
-  - [ ] **Push-to-talk 快捷键**: Talk Mode 内 `Space` 长按说话；松开自动发送
-  - [ ] **MCP 工具集成**: Hermes 在 Talk Mode 下也能调 `save_artifact` / `run_workflow` / `list_active_runs` / 其它 13 个工具，不只是聊天
-- **需要补的组件**：
-  - [ ] STT 持续监听 + VAD 静音检测（现有 `voice_record` IPC 基础上扩展）
-  - [ ] TTS 流式 PCM 播放 + 中断机制（新建 `audio_player` 模块）
-  - [ ] Piper TTS 二进制打包（每平台 ~10 MB） + zh_CN-huayan 模型按需下载（类似 BGE-M3 离线包）
-  - [ ] MLX TTS helper（仅 macOS arm64 cfg）
-  - [ ] whisper.cpp 二进制 + ggml-base 模型下载
-  - [ ] 三态 UI 覆盖层 React 组件
-  - [ ] Voice Directives 解析层
-- **不做**：
-  - ❌ Linux 支持（基座暂不打 Linux 二进制）
-  - ❌ 系统原生 TTS 兜底（SAPI / AVSpeechSynthesizer）— **质量不及格，统一走 Piper / MLX**
-  - ❌ 云端 TTS / STT（OpenAI / ElevenLabs）— 单档方案，不再分级
-  - ❌ 唤醒词 / Voice Wake — v0.4.1 再说
-- **预估工期**：3-4 周（比之前估的多 1 周，因为要打包 Piper + whisper.cpp 二进制）
-- **价值**：客户演示一句"全离线、零成本、本地高质量中文 TTS"，对比 OpenClaw / 字节豆包等都需要联网或付费
-- **依赖**：无（voice 模块基础已有）
-- **包大小代价**：安装包 +20 MB（Piper × 2 平台）+ 首次启用拉 200 MB 模型（用户主动触发，不强推）
+#### B-8. Talk Mode 语音持续对话（豆包式 · 全本地 STT/TTS）
+- **状态**：🔧 进行中（v0 / v0.1 已合入 main，v1 待启动）
+- **目标版本**：v0.3.x（前置）
+- **平台**：macOS（arm64 + x64）+ Windows x64
+- **完整方案文档**：[`docs/talk-mode-plan.md`](./talk-mode-plan.md)
+- **已交付**：
+  - `5a87f95` v0 骨架 — push-to-talk + 三态 UI + Topbar 入口
+  - `a525be4` v0.1 — readiness gate + 转写持久化进 chat session
+- **v1 起手**（下次会话）：
+  1. `crate::talk` 模块骨架 + `LocalTalkBackend` trait + 重构 v0 为 backend-pluggable（0.5 d）
+  2. silero-vad ONNX 集成（1.5 d）— 不依赖外部下载，3-4 小时落地，立刻能 demo 无按键持续对话
+- **v1 技术栈**：whisper.cpp（STT）+ Piper TTS + silero-vad + 现有 Hermes LLM adapter
+- **v1 工期**：3 周（11 项工程拆解，详见 `talk-mode-plan.md`）
+- **包大小**：安装包 +33 MB · 首次启用拉 122 MB 模型
 
 ### 第 3 层 — 已砍（与"只做定制"冲突，永久不做）
 
