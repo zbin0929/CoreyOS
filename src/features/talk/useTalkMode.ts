@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 import {
   chatStream,
+  hermesApprovalRespond,
   ipcErrorMessage,
   talkLocalStatus,
   talkLocalTranscribe,
@@ -14,7 +15,6 @@ import {
   voiceGetConfig,
   voiceOpenMicSettings,
   voicePlayStop,
-  voicePlayWavNative,
   voiceRecord,
   voiceRecordStop,
   voiceTranscribe,
@@ -187,12 +187,11 @@ function stripMarkdownForSpeech(input: string): string {
       .replace(/\u{200D}/gu, '')
       .replace(/\u{FE0F}/gu, '')
       .replace(/\u{20E3}/gu, '')
-      // After emoji-strip we sometimes get stranded whitespace +
-      // punctuation runs ("，  ，  。"); collapse those.
-      .replace(/[,\u3001，]\s*[,\u3001，]+/g, '，')
       .replace(/[ \t]{2,}/g, ' ')
-      // Collapse runs of blank lines so Piper doesn't insert long
-      // dead air between paragraphs.
+      .replace(/[：；、，,]/g, ' ')
+      .replace(/。/g, '.')
+      .replace(/？/g, '?')
+      .replace(/！/g, '!')
       .replace(/\n{3,}/g, '\n\n')
       .trim()
   );
@@ -540,6 +539,26 @@ export function useTalkMode(): UseTalkModeReturn {
       const pending: Array<Promise<Tts | null>> = [];
       let queueWorkerActive = false;
       let bargeInRequested = false;
+      const MAX_CONCURRENT_SYNTH = 2;
+      let synthRunning = 0;
+      const synthQueue: Array<() => void> = [];
+      const acquireSynth = (): Promise<void> =>
+        new Promise((resolve) => {
+          if (synthRunning < MAX_CONCURRENT_SYNTH) {
+            synthRunning++;
+            resolve();
+          } else {
+            synthQueue.push(() => {
+              synthRunning++;
+              resolve();
+            });
+          }
+        });
+      const releaseSynth = () => {
+        synthRunning--;
+        const next = synthQueue.shift();
+        if (next) next();
+      };
       // Mutated via the closure-bound setter below so eslint's
       // `prefer-const` is happy: the value flips exactly once,
       // when the LLM stream's `onDone` fires, releasing the
@@ -548,6 +567,7 @@ export function useTalkMode(): UseTalkModeReturn {
       const streamFlags = { llmDone: false };
       const INITIAL_BUFFER = 2;
       const synthesize = async (text: string): Promise<Tts | null> => {
+        await acquireSynth();
         try {
           if (localRoute.tts) {
             return await talkLocalTts(text);
@@ -565,6 +585,8 @@ export function useTalkMode(): UseTalkModeReturn {
             error: String(e),
           });
           return null;
+        } finally {
+          releaseSynth();
         }
       };
       // Polling worker. Stays alive for the entire turn — sleeps
@@ -575,6 +597,18 @@ export function useTalkMode(): UseTalkModeReturn {
       // the trailing clip arrived between the while-condition check
       // and queueWorkerActive=false, then sat unplayed because the
       // restart speakNext call hit the queueWorkerActive guard.
+      let audioCtxRef: AudioContext | null = null;
+      let currentSourceRef: AudioBufferSourceNode | null = null;
+      const getOrCreateAudioContext = (): AudioContext => {
+        if (!audioCtxRef || audioCtxRef.state === 'closed') {
+          audioCtxRef = new AudioContext();
+        }
+        if (audioCtxRef.state === 'suspended') {
+          void audioCtxRef.resume();
+        }
+        return audioCtxRef;
+      };
+
       const POLL_INTERVAL_MS = 30;
       const speakNext = async (): Promise<void> => {
         if (queueWorkerActive) return;
@@ -604,34 +638,22 @@ export function useTalkMode(): UseTalkModeReturn {
               continue;
             }
             try {
-              if (localRoute.tts) {
-                // voice_play_wav_native blocks until the WAV
-                // finishes playing (or is cancelled by a newer
-                // call / voice_play_stop), so the next iteration
-                // of the loop fires only after audio drains.
-                nativePlaybackActiveRef.current = true;
-                try {
-                  await voicePlayWavNative(tts.audio_base64);
-                } finally {
-                  nativePlaybackActiveRef.current = false;
-                }
-              } else {
-                // Cloud TTS path: single-utterance via WebView
-                // <audio>. Per-sentence fan-out is local-only —
-                // cloud providers charge per request, so we keep
-                // the cloud branch one-shot until streaming TTS
-                // providers land.
-                const audio = new Audio(
-                  `data:${tts.mime};base64,${tts.audio_base64}`,
-                );
-                audioElRef.current = audio;
-                await new Promise<void>((resolve) => {
-                  audio.onended = () => resolve();
-                  audio.onerror = () => resolve();
-                  audio.play().catch(() => resolve());
-                });
-                if (audioElRef.current === audio) audioElRef.current = null;
-              }
+              const audioCtx = getOrCreateAudioContext();
+              const binaryStr = atob(tts.audio_base64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+              const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+              const source = audioCtx.createBufferSource();
+              source.buffer = audioBuffer;
+              source.connect(audioCtx.destination);
+              currentSourceRef = source;
+              await new Promise<void>((resolve) => {
+                source.onended = () => {
+                  currentSourceRef = null;
+                  resolve();
+                };
+                source.start();
+              });
             } catch (e) {
               console.warn('[talk.tts] playback failed', String(e));
             }
@@ -652,22 +674,7 @@ export function useTalkMode(): UseTalkModeReturn {
       };
 
       const enqueueSentences = (buffer: string): string => {
-        // Eager clause-level splitting. We treat CJK and Latin
-        // punctuation symmetrically and split on EVERY clause
-        // boundary (commas, colons, semicolons, 顿号, periods,
-        // exclamation/question marks) plus any newline. Each
-        // resulting clip is short enough that VITS-MeloTTS keeps
-        // its attention coherent (the model gets mumbly past
-        // ~40 chars), and the parallel synth pipeline below
-        // hides the per-clip spawn cost.
-        //
-        // Why split this aggressively (vs only on `[.!?。！？]`):
-        // by the time the LLM finishes streaming a long sentence
-        // ending in `。`, the audio worker has been starved for
-        // multiple seconds. Splitting on commas means we start
-        // playing the first clause within ~1 s of LLM first-token
-        // even when the full sentence runs 3-4 s.
-        const re = /[.!?。！？,，、;；:：]+["')\]」』]?\s*|\n+/g;
+        const re = /[.!?。！？]+["')\]」』]?\s*|\n{2,}/g;
         let lastEnd = 0;
         let m: RegExpExecArray | null;
         while ((m = re.exec(buffer)) !== null) {
@@ -676,8 +683,8 @@ export function useTalkMode(): UseTalkModeReturn {
         if (lastEnd === 0) return buffer;
         const ready = buffer.slice(0, lastEnd);
         const rest = buffer.slice(lastEnd);
-        const sentences = ready.split(re).filter((s) => s.trim().length > 0);
-        for (const s of sentences) enqueueSentence(s);
+        const raw = ready.split(re).filter((s) => s.trim().length > 0);
+        for (const s of raw) enqueueSentence(s);
         return rest;
       };
 
@@ -691,6 +698,14 @@ export function useTalkMode(): UseTalkModeReturn {
       const onCancel = () => {
         bargeInRequested = true;
         pending.length = 0;
+        if (currentSourceRef) {
+          try { currentSourceRef.stop(); } catch { /* already stopped */ }
+          currentSourceRef = null;
+        }
+        if (audioCtxRef && audioCtxRef.state !== 'closed') {
+          audioCtxRef.close().catch(() => {});
+          audioCtxRef = null;
+        }
       };
       cancelHookRef.current = onCancel;
 
@@ -739,6 +754,14 @@ export function useTalkMode(): UseTalkModeReturn {
                 settled = true;
                 reject(err);
               }
+            },
+            onApproval: (approval) => {
+              const sid = approval._session_id ?? '';
+              console.info(
+                '[talk.approval] auto-approving command:',
+                approval.command,
+              );
+              void hermesApprovalRespond(sid, 'session');
             },
           },
         )

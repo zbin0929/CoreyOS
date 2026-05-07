@@ -115,7 +115,7 @@ fn audit_dir() -> std::io::Result<PathBuf> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(super) struct VoiceConfigFile {
+pub struct VoiceConfigFile {
     #[serde(default)]
     asr_provider: Option<String>,
     #[serde(default)]
@@ -131,7 +131,7 @@ pub(super) struct VoiceConfigFile {
     #[serde(default = "default_voice")]
     tts_voice: String,
     #[serde(default = "default_speed")]
-    tts_speed: f32,
+    pub tts_speed: f32,
     #[serde(default = "default_hotkey")]
     hotkey: String,
 }
@@ -148,7 +148,7 @@ fn default_hotkey() -> String {
     "Meta+Space".into()
 }
 
-pub(super) fn load_config() -> VoiceConfigFile {
+pub fn load_config() -> VoiceConfigFile {
     let path = match voice_config_path() {
         Ok(p) => p,
         Err(_) => return VoiceConfigFile::default(),

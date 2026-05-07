@@ -173,7 +173,7 @@ export function LocalVoicePackPanel() {
             <Icon icon={CheckCircle2} size="xs" />
             {route.stt_ready && route.tts_ready
               ? t('voice.local_pack_active', {
-                  defaultValue: '全本地链路已启用（whisper + sherpa-onnx）',
+                  defaultValue: '全本地链路已启用',
                 })
               : t('voice.local_pack_ready', {
                   defaultValue: '模型已安装，等待 sidecar 二进制到位',

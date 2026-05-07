@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:dev:clean": "pkill -9 -f 'tauri:dev|tauri.js dev|cargo.*--no-default-features|rustc.*caduceus' 2>/dev/null; lsof -ti:5173 2>/dev/null | xargs kill -9 2>/dev/null; sleep 1; tauri dev",
+    "tauri:dev:clean": "pkill -9 -f 'tauri:dev|tauri.js dev|cargo.*--no-default-features|rustc.*caduceus' 2>/dev/null; lsof -ti:5173 2>/dev/null | xargs kill -9 2>/dev/null; sleep 1; tauri dev --features talk-local",
     "tauri:build": "tauri build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

@@ -188,6 +188,30 @@ pub struct TalkLocalTtsResult {
 /// `MacosSayTts` cleanly without nested `?` matching.
 async fn try_sherpa(text: &str) -> anyhow::Result<crate::talk::backend::TtsAudio> {
     use crate::talk::backend::Tts as _;
+    #[cfg(feature = "talk-local")]
+    {
+        use crate::talk::tts_engine::SherpaEngine;
+        static ENGINE: once_cell::sync::Lazy<anyhow::Result<SherpaEngine>> =
+            once_cell::sync::Lazy::new(|| match SherpaEngine::try_load() {
+                Ok(e) => {
+                    tracing::info!(target: "talk.tts_engine", "in-process sherpa engine ready");
+                    Ok(e)
+                }
+                Err(e) => {
+                    tracing::warn!(target: "talk.tts_engine", error = %format!("{e:#}"), "in-process engine load failed");
+                    Err(e)
+                }
+            });
+        if let Ok(engine) = ENGINE.as_ref() {
+            let speed = crate::ipc::voice::load_config().tts_speed;
+            let speed = if speed < 0.5 || speed > 2.0 {
+                1.0
+            } else {
+                speed
+            };
+            return engine.synthesize_with_speed(text, speed).await;
+        }
+    }
     let sherpa = SherpaTts::try_load()?;
     sherpa.synthesize(text).await
 }

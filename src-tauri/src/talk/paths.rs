@@ -111,6 +111,10 @@ pub fn sherpa_tts_model_dir() -> io::Result<PathBuf> {
     Ok(talk_models_dir()?.join("vits-melo-tts-zh_en"))
 }
 
+pub fn kokoro_tts_model_dir() -> io::Result<PathBuf> {
+    Ok(talk_models_dir()?.join("kokoro-multi-lang-v1_1"))
+}
+
 /// The single-file artifact that uniquely identifies a fully-
 /// installed sherpa TTS model. We probe this exact path in
 /// `ready()` checks because the model dir contains a dozen files

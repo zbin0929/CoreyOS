@@ -40,7 +40,7 @@ use super::paths::{sherpa_offline_tts_bin, sherpa_tts_model_dir};
 /// anything above that is a stuck process (model file truncated,
 /// dyld lookup loop, etc.) and the macOS `say` fallback should
 /// kick in to keep the conversation moving.
-const SHERPA_TIMEOUT_SECS: u64 = 10;
+const SHERPA_TIMEOUT_SECS: u64 = 30;
 
 /// Sticky "sherpa is broken on this host" flag. Set once on first
 /// synthesize failure (model missing, binary missing, dyld
@@ -275,6 +275,20 @@ impl Tts for SherpaTts {
         // gets cleaner overlap with whatever else the app's
         // doing on the other 2 cores.
         let threads_arg = "--num-threads=2".to_string();
+        let noise_arg = "--vits-noise-scale=0.5".to_string();
+        let noise_w_arg = "--vits-noise-scale-w=0.6".to_string();
+        let length_arg = "--vits-length-scale=1.0".to_string();
+        let mut rule_fsts = String::new();
+        let model_dir = &self.model_dir;
+        for fst in &["date.fst", "number.fst", "phone.fst", "new_heteronym.fst"] {
+            let p = model_dir.join(fst);
+            if p.exists() {
+                if !rule_fsts.is_empty() {
+                    rule_fsts.push(',');
+                }
+                rule_fsts.push_str(&p.to_string_lossy());
+            }
+        }
 
         let mut cmd = super::stt::make_command(
             &self.bin_path,
@@ -285,9 +299,15 @@ impl Tts for SherpaTts {
                 &dict_arg,
                 &output_arg,
                 &threads_arg,
-                text,
+                &noise_arg,
+                &noise_w_arg,
+                &length_arg,
             ],
         );
+        if !rule_fsts.is_empty() {
+            cmd.arg(format!("--tts-rule-fsts={rule_fsts}"));
+        }
+        cmd.arg(text);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
         // Sherpa-onnx ships its onnxruntime + sherpa-onnx shared
@@ -421,8 +441,8 @@ impl Tts for SherpaTts {
 fn post_process_wav(input: &[u8]) -> anyhow::Result<Vec<u8>> {
     use std::io::Cursor;
 
-    const SILENCE_GATE: i32 = (i16::MAX as i32) / 100; // 1%
-    const EDGE_PAD_MS: u32 = 30;
+    const SILENCE_GATE: i32 = (i16::MAX as i32) / 50; // 2%
+    const EDGE_PAD_MS: u32 = 10;
     // Target RMS in linear i16 amplitude. -18 dBFS over i16::MAX:
     //   10^(-18/20) * 32767 ≈ 4127.
     const TARGET_RMS: f32 = 4127.0;

@@ -38,4 +38,6 @@ pub mod paths;
 pub mod session;
 pub mod stt;
 pub mod tts;
+#[cfg(feature = "talk-local")]
+pub mod tts_engine;
 pub mod vad;
