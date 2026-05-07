@@ -21,7 +21,7 @@ import { test, expect } from './fixtures/test';
 
 test.describe('Talk Mode (smoke)', () => {
   test('composer talk button opens overlay; mode toggle + close work', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/chat');
 
     const talkBtn = page.getByTestId('chat-talk-mode');
     await expect(talkBtn).toBeVisible({ timeout: 10000 });

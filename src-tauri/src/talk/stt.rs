@@ -28,6 +28,8 @@ use std::process::Stdio;
 
 use anyhow::Context;
 use async_trait::async_trait;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use tokio::process::Command;
 
 use super::backend::Stt;
@@ -294,10 +296,7 @@ pub(super) fn make_command(bin: &PathBuf, args: &[&str]) -> Command {
     let mut cmd = Command::new(bin);
     cmd.args(args);
     #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
-    }
+    cmd.creation_flags(0x08000000);
     cmd
 }
 
