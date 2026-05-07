@@ -294,7 +294,10 @@ pub(super) fn make_command(bin: &PathBuf, args: &[&str]) -> Command {
     let mut cmd = Command::new(bin);
     cmd.args(args);
     #[cfg(target_os = "windows")]
-    crate::hermes_config::suppress_window(&mut cmd);
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
     cmd
 }
 

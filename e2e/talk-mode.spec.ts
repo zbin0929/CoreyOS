@@ -20,15 +20,13 @@ import { test, expect } from './fixtures/test';
  */
 
 test.describe('Talk Mode (smoke)', () => {
-  test('topbar mic opens overlay; mode toggle + close work', async ({ page }) => {
+  test('composer talk button opens overlay; mode toggle + close work', async ({ page }) => {
     await page.goto('/');
 
-    // Topbar mic button must exist on every route — it's the
-    // global entry point for Talk Mode.
-    const topbarMic = page.getByTestId('topbar-talk');
-    await expect(topbarMic).toBeVisible();
+    const talkBtn = page.getByTestId('chat-talk-mode');
+    await expect(talkBtn).toBeVisible({ timeout: 10000 });
 
-    await topbarMic.click();
+    await talkBtn.click();
 
     // Overlay opens. The mocked voice config has both providers
     // configured, so we should land on the configured path — the
