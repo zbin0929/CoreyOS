@@ -28,12 +28,8 @@ test.describe('Talk Mode (smoke)', () => {
 
     await talkBtn.click();
 
-    // Overlay opens. The mocked voice config has both providers
-    // configured, so we should land on the configured path — the
-    // mic button is visible, NOT the unconfigured banner.
-    const overlay = page.getByTestId('talk-mode-overlay');
+    const overlay = page.getByTestId('talk-mode-inline');
     await expect(overlay).toBeVisible();
-    await expect(page.getByTestId('talk-unconfigured')).toHaveCount(0);
     await expect(page.getByTestId('talk-mic')).toBeVisible();
 
     // Mode toggle starts in PTT (default). Click flips to auto;
@@ -49,7 +45,7 @@ test.describe('Talk Mode (smoke)', () => {
     await expect(page.getByTestId('talk-vu-halo')).toHaveCount(0);
 
     // Close dismisses the overlay.
-    await page.getByTestId('talk-close').click();
-    await expect(overlay).toHaveCount(0);
+    await page.getByTestId('talk-exit').click();
+    await expect(overlay).not.toBeVisible();
   });
 });
