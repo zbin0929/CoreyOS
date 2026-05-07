@@ -1007,7 +1007,31 @@ CoreyOS 内置一个**简化的 token 价格表**（`FALLBACK_PRICE`），覆盖
 
 **路径**：`/voice` · **快捷键**：⌘K → "voice"
 
-#### 配置 Provider
+#### 本地语音（Talk Mode）
+
+Talk Mode 提供**完全离线、零费用**的语音对话体验（LLM 部分仍使用你配置的云端/本地模型）。
+
+| 组件 | 技术 | 说明 |
+|---|---|---|
+| 语音识别 (STT) | whisper.cpp + medium 模型 | 中文 95+ 分，支持中英混合 |
+| 语音合成 (TTS) | sherpa-onnx + VITS MeloTTS | 进程内引擎，无需外部二进制 |
+| 语音检测 (VAD) | silero-vad | 自动判断说完/开始说 |
+
+**安装本地语音包**：
+1. 进入 Settings → Voice
+2. 点击"下载本地语音包"（约 710 MB，含 whisper 模型 + TTS 模型 + VAD）
+3. 或使用"导入离线包"从 zip 文件导入（适用于内网环境）
+4. 下载完成后 Talk Mode 自动启用本地 STT/TTS
+
+**Talk Mode 使用**：
+- 点击顶部麦克风图标开启
+- 自动模式：开口就说，说完自动发送
+- 按键模式：按住 Space 说话，松开发送
+- AI 回复会自动朗读，按任意键可打断
+
+#### 云端语音（可选）
+
+如果未安装本地语音包，或需要更多声音选择，可配置云端 Provider：
 
 ##### ASR（语音转文本）
 
@@ -1024,6 +1048,10 @@ CoreyOS 内置一个**简化的 token 价格表**（`FALLBACK_PRICE`），覆盖
 | OpenAI | alloy/echo/fable/onyx/nova/shimmer | 6 种 |
 | Zhipu | tongtong/xiaobai 等 | 中文自然 |
 | Edge TTS | 任何系统语音 | 免费，需 Edge 浏览器 |
+
+#### TTS 语速调节
+
+Settings → Voice → 语速滑块，范围 0.5~2.0（默认 1.0）。调节后立即生效，适用于本地和云端 TTS。
 
 #### 测试面板
 

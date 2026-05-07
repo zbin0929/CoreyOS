@@ -22,7 +22,7 @@
 | 组件 | 选择 | 跨平台 | 大小 | 中文质量 |
 |---|---|---|---|---|
 | **STT** | **whisper.cpp** + `ggml-medium-q5_0.bin`（v1.1 由 base 升 medium，实测 base 中文太差） | ✅ | bin 5 MB + 模型 540 MB | 95+ 分 |
-| **TTS** | **sherpa-onnx** + `vits-melo-tts-zh_en`（v1.1 由 Piper 迁移，Piper macOS arm64 prebuilt 是 x86_64 字节，SIGABRT；上游半年没动；不支持流式合成） | ✅ | bin 30 MB + 模型 165 MB | 95+ 分 |
+| **TTS** | **sherpa-onnx in-process** + `vits-melo-tts-zh_en`（v1.2 由 CLI spawn 改为进程内引擎，零 WAV 文件、零子进程；Web Audio API 播放） | ✅ | 引擎 0 + 模型 170 MB | 95+ 分 |
 | **VAD** | **silero-vad ONNX**（用 `ort` crate） | ✅ | 模型 2 MB | 业界标准 |
 | **音频 I/O** | `cpal`（已用） | ✅ | 0 | — |
 | **LLM** | 现有 Hermes adapter（用户配什么用什么） | — | — | — |
@@ -31,7 +31,7 @@
 - 三组件全部 C++ / ONNX 预编译二进制，Rust 直接 spawn 子进程或 FFI，**0 Python 依赖**
 - MIT / Apache，商用零授权费
 - 模型一次下载后断网正常工作
-- **v1.1 新增**：WAV post-processing（silence trim + RMS loudness normalization）减少 VITS-style 音量跳变；clause-level splitting + 并行 synth 消除长回复停顿
+- **v1.2 新增**：in-process sherpa-onnx TTS 引擎（`tts_engine.rs`），不再 spawn `sherpa-onnx-offline-tts` CLI 子进程，直接通过 sherpa-onnx Rust crate 的 `OfflineTts` API 在进程内合成；Web Audio API (`AudioContext` + `AudioBufferSourceNode`) 替代 afplay 实现无缝顺序播放；中文标点预处理（`：；、` → 空格，`。！？` → `.!?`，匹配官方 `melo-tts-lexicon.cc`）；按句号分句（逗号不切分，避免 VITS 冷启动丢字）；`silence_scale=1.0`（crate 默认 0.2 截断了 80% 停顿）；RMS 归一化统一音量；`tts_speed` 从 VoiceConfig 透传到 `GenerationConfig.speed`；barge-in 立即 stop AudioContext
 
 ## 包大小代价
 
@@ -82,7 +82,7 @@
 |---|---|
 | Windows onnxruntime DLL 体积膨胀 | 用 `ort` 的 `load-dynamic` feature 运行时按需加载 |
 | whisper.cpp Windows ARM 无官方 build | 不影响（Win ARM 用户极少） |
-| piper 中文音色少（zh_CN-huayan / zh_CN-mengxiang） | 接受现实；未来切 sherpa-onnx 多音色 |
+| piper 中文音色少（zh_CN-huayan / zh_CN-mengxiang） | 已迁移至 sherpa-onnx in-process VITS MeloTTS，Piper 不再使用 |
 | 首次 122 MB 下载体验差 | 进度条 + 校验和 + 离线 zip fallback（参考 BGE-M3） |
 
 ## 价值
