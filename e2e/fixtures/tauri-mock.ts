@@ -1407,6 +1407,8 @@ export const tauriMockInitScript = /* js */ `
         return { sample_rate: 16000, frame_size: 512 };
       case 'talk_session_stop':
         return null;
+      case 'talk_tts_reference':
+        return null;
       case 'talk_models_status':
         return {
           ready: false,

@@ -42,15 +42,31 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use tauri::Emitter;
 
+use super::aec::NlmsFilter;
 use super::backend::{Vad, VadDecision};
 use super::vad::EnergyVad;
 
-/// Tauri event names. Kept as constants so the frontend (next-task
-/// Phase B) can mirror them in one place.
 pub const EVT_LEVEL: &str = "talk:level";
 pub const EVT_SPEECH_START: &str = "talk:speech-start";
 pub const EVT_SPEECH_END: &str = "talk:speech-end";
 pub const EVT_ERROR: &str = "talk:error";
+
+static TTS_REFERENCE: parking_lot::Mutex<Vec<f32>> = parking_lot::Mutex::new(Vec::new());
+
+pub fn feed_tts_reference(pcm: &[f32]) {
+    let mut buf = TTS_REFERENCE.lock();
+    buf.extend_from_slice(pcm);
+    const MAX_REF_SAMPLES: usize = 480_000;
+    if buf.len() > MAX_REF_SAMPLES {
+        let drain = buf.len() - MAX_REF_SAMPLES;
+        buf.drain(..drain);
+    }
+}
+
+fn drain_tts_reference() -> Vec<f32> {
+    let mut buf = TTS_REFERENCE.lock();
+    std::mem::take(&mut *buf)
+}
 
 /// Emit `talk:level` at most once every N audio frames so we don't
 /// flood the frontend bus. At 32 ms frames a stride of 3 ≈ 10 Hz —
@@ -303,6 +319,7 @@ fn run_orchestrator(
     let mut speech_buffer: Vec<f32> = Vec::new();
     let mut emit_counter: u32 = 0;
     let mut speaking = false;
+    let mut aec = NlmsFilter::new(256, 0.3);
 
     while inner.active.load(Ordering::SeqCst) {
         // Drain one batch (with a short timeout so we notice the
@@ -313,13 +330,16 @@ fn run_orchestrator(
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
 
+        let ref_samples = drain_tts_reference();
+        if !ref_samples.is_empty() {
+            aec.push_reference_batch(&ref_samples);
+        }
+
         while accumulator.len() >= frame_size {
-            let frame: Vec<f32> = accumulator.drain(..frame_size).collect();
+            let mut frame: Vec<f32> = accumulator.drain(..frame_size).collect();
+            aec.process_frame(&mut frame);
             let decision = vad.process_frame(&frame);
 
-            // RMS for the level meter. Cheap; we already iterate
-            // the frame anyway, but a separate reduction keeps the
-            // VAD trait surface honest (no leaking RMS through it).
             let rms = rms(&frame);
 
             if speaking {

@@ -69,6 +69,28 @@ pub async fn talk_session_status() -> IpcResult<TalkSessionStatus> {
     })
 }
 
+#[tauri::command]
+pub async fn talk_tts_reference(audio_base64: String) -> IpcResult<()> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&audio_base64)
+        .map_err(|e| IpcError::Internal {
+            message: format!("base64 decode: {e}"),
+        })?;
+    let cursor = std::io::Cursor::new(&bytes);
+    let reader = hound::WavReader::new(cursor).map_err(|e| IpcError::Internal {
+        message: format!("wav parse: {e}"),
+    })?;
+    let pcm: Vec<f32> = reader
+        .into_samples::<i16>()
+        .filter_map(|s| s.ok())
+        .map(|s| s as f32 / i16::MAX as f32)
+        .collect();
+    if !pcm.is_empty() {
+        crate::talk::session::feed_tts_reference(&pcm);
+    }
+    Ok(())
+}
+
 // ──────────────────── Local voice pack (Task 8) ────────────────────
 
 #[tauri::command]

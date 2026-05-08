@@ -11,6 +11,7 @@ import {
   talkSessionStart,
   talkSessionStatus,
   talkSessionStop,
+  talkTtsReference,
   TALK_EVENTS,
   voiceGetConfig,
   voiceOpenMicSettings,
@@ -565,7 +566,7 @@ export function useTalkMode(): UseTalkModeReturn {
       // INITIAL_BUFFER gate so a short final reply still plays
       // even when fewer than 2 clauses were queued.
       const streamFlags = { llmDone: false };
-      const INITIAL_BUFFER = 2;
+      const INITIAL_BUFFER = 1;
       const synthesize = async (text: string): Promise<Tts | null> => {
         await acquireSynth();
         try {
@@ -638,6 +639,7 @@ export function useTalkMode(): UseTalkModeReturn {
               continue;
             }
             try {
+              talkTtsReference(tts.audio_base64).catch(() => {});
               const audioCtx = getOrCreateAudioContext();
               const binaryStr = atob(tts.audio_base64);
               const bytes = new Uint8Array(binaryStr.length);
@@ -674,13 +676,29 @@ export function useTalkMode(): UseTalkModeReturn {
       };
 
       const enqueueSentences = (buffer: string): string => {
-        const re = /[.!?。！？]+["')\]」』]?\s*|\n{2,}/g;
+        const re = /[.!?。！？,，、；：;:]+["')\]」』]?\s*|\n{2,}/g;
         let lastEnd = 0;
         let m: RegExpExecArray | null;
         while ((m = re.exec(buffer)) !== null) {
-          lastEnd = m.index + m[0].length;
+          const segStart = lastEnd;
+          const segEnd = m.index + m[0].length;
+          const isTerminal = /[.!?。！？]/.test(m[0]);
+          const segLen = segEnd - segStart;
+          if (isTerminal || segLen >= 20) {
+            lastEnd = segEnd;
+          }
         }
-        if (lastEnd === 0) return buffer;
+        if (lastEnd === 0) {
+          if (buffer.length >= 40) {
+            const mid = buffer.lastIndexOf(' ', 40);
+            const cut = mid > 10 ? mid + 1 : 40;
+            for (const s of buffer.slice(0, cut).split(/\s+/).filter((x: string) => x.trim())) {
+              enqueueSentence(s);
+            }
+            return buffer.slice(cut);
+          }
+          return buffer;
+        }
         const ready = buffer.slice(0, lastEnd);
         const rest = buffer.slice(lastEnd);
         const raw = ready.split(re).filter((s) => s.trim().length > 0);
@@ -1015,7 +1033,7 @@ export function useTalkMode(): UseTalkModeReturn {
       // tail audio leak through. If users in noisy rooms or
       // with reverberant speakers report missed barge-ins,
       // we'll lift this into a setting.
-      echoCooldownUntilRef.current = Date.now() + 1500;
+      echoCooldownUntilRef.current = Date.now() + 300;
     }
   }, [state]);
 

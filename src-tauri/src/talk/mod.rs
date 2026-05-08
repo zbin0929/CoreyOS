@@ -31,6 +31,7 @@
 //! `<hermes>/talk/` (bin + models + cache). That keeps HD-7 and HD-8
 //! invariants intact when Hermes upgrades.
 
+pub mod aec;
 pub mod backend;
 pub mod cloud;
 pub mod download;

@@ -444,6 +444,10 @@ export function talkLocalTts(text: string): Promise<TalkLocalTtsResult> {
   return invoke<TalkLocalTtsResult>('talk_local_tts', { text });
 }
 
+export function talkTtsReference(audioBase64: string): Promise<void> {
+  return invoke('talk_tts_reference', { audioBase64 });
+}
+
 // ───────────────────────── Sandbox ─────────────────────────
 
 export type SandboxAccessMode = 'read' | 'read_write';

@@ -278,6 +278,7 @@ pub fn run() {
             ipc::talk::talk_local_status,
             ipc::talk::talk_local_transcribe,
             ipc::talk::talk_local_tts,
+            ipc::talk::talk_tts_reference,
             ipc::hermes_instances::hermes_instance_list,
             ipc::hermes_instances::hermes_instance_upsert,
             ipc::hermes_instances::hermes_instance_delete,
