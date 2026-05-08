@@ -1,6 +1,6 @@
 # B-8 Talk Mode v1 — 工程计划（豆包式 · 全本地 STT/TTS）
 
-> **状态**：v0 / v0.1 已合入 main，v1 待启动。
+> **状态**：v1 开发中，核心链路已跑通。
 > **目标版本**：v0.3.x（前置，不再等 v0.4.0）。
 > **启动条件**：用户已确认（2026-05-06 晚）— 见下方"用户最终要求"。
 
@@ -17,73 +17,96 @@
 - **当前能力**：在已配 OpenAI / Zhipu voice provider 的机器上完整循环可跑。
 - **保留**：v1 上线后 push-to-talk 作为非自动模式 fallback 保留（Settings 切换"自动监听 / 按键"）。
 
-## v1 技术栈（最终锁定 · v1.1 更新）
+## v1 技术栈（v1.3 更新 · 2026-05-08）
 
-| 组件 | 选择 | 跨平台 | 大小 | 中文质量 |
-|---|---|---|---|---|
-| **STT** | **whisper.cpp** + `ggml-medium-q5_0.bin`（v1.1 由 base 升 medium，实测 base 中文太差） | ✅ | bin 5 MB + 模型 540 MB | 95+ 分 |
-| **TTS** | **sherpa-onnx in-process** + `vits-melo-tts-zh_en`（v1.2 由 CLI spawn 改为进程内引擎，零 WAV 文件、零子进程；Web Audio API 播放） | ✅ | 引擎 0 + 模型 170 MB | 95+ 分 |
-| **VAD** | **silero-vad ONNX**（用 `ort` crate） | ✅ | 模型 2 MB | 业界标准 |
-| **音频 I/O** | `cpal`（已用） | ✅ | 0 | — |
-| **LLM** | 现有 Hermes adapter（用户配什么用什么） | — | — | — |
+| 组件 | 选择 | 跨平台 | 大小 | 中文质量 | 备注 |
+|---|---|---|---|---|---|
+| **STT** | **sherpa-onnx Zipformer bilingual zh-en (int8)** | ✅ | 188 MB | 95+ 分 | v1.3 替换 whisper.cpp（540→188MB），RTF 0.045-0.073，流式识别 |
+| **TTS** | **sherpa-onnx in-process** + `vits-melo-tts-zh_en` | ✅ | 182 MB | 95+ 分 | 进程内引擎，零子进程 |
+| **VAD** | **silero-vad v5 ONNX**（`ort` crate） | ✅ | 2 MB | 业界标准 | v1.3 接入，自动替换 EnergyVad |
+| **音频 I/O** | `cpal`（已用） | ✅ | 0 | — | |
+| **LLM** | 现有 Hermes adapter（用户配什么用什么） | — | — | — | |
 
-**为什么选这套**
-- 三组件全部 C++ / ONNX 预编译二进制，Rust 直接 spawn 子进程或 FFI，**0 Python 依赖**
-- MIT / Apache，商用零授权费
-- 模型一次下载后断网正常工作
-- **v1.2 新增**：in-process sherpa-onnx TTS 引擎（`tts_engine.rs`），不再 spawn `sherpa-onnx-offline-tts` CLI 子进程，直接通过 sherpa-onnx Rust crate 的 `OfflineTts` API 在进程内合成；Web Audio API (`AudioContext` + `AudioBufferSourceNode`) 替代 afplay 实现无缝顺序播放；中文标点预处理（`：；、` → 空格，`。！？` → `.!?`，匹配官方 `melo-tts-lexicon.cc`）；按句号分句（逗号不切分，避免 VITS 冷启动丢字）；`silence_scale=1.0`（crate 默认 0.2 截断了 80% 停顿）；RMS 归一化统一音量；`tts_speed` 从 VoiceConfig 透传到 `GenerationConfig.speed`；barge-in 立即 stop AudioContext
+### v1.3 变更日志（2026-05-08）
+
+1. **STT 替换**：whisper.cpp → sherpa-onnx Zipformer bilingual (int8)
+   - 模型大小：540 MB → 188 MB（4 个文件：encoder 173M + decoder 12M + joiner 3M + tokens 55K）
+   - 推理延迟：1-2s → 62ms（RTF 0.045-0.073）
+   - 实现文件：`talk/online_stt.rs`（新增）、`talk/stt.rs`、`ipc/talk.rs`
+   - 自动 fallback：Zipformer 优先，加载失败回退 whisper.cpp
+
+2. **流式 STT**：边说边出字，不再等整句说完
+   - `session.rs` orchestrator 集成 `OnlineRecognizer`
+   - 每帧（32ms）喂入 `OnlineStream`，每 6 帧解码一次 partial transcript
+   - Tauri event `talk:partial-transcript` 推送实时识别结果
+   - 前端 `TalkModeOverlay.tsx` 绿色脉冲 UI 显示正在识别的文字
+   - `SpeechEnd` 时调用 `stream.input_finished()` 获取最终结果，跳过重复 STT
+
+3. **Silero VAD 接入**：自动替换 EnergyVad
+   - `session.rs` 的 `create_vad()` 优先加载 silero-vad 模型
+   - `ResamplingSileroVad` 包装器处理 cpal 采样率 ≠ 16kHz 的情况
+   - `Box<dyn Vad>` trait object 统一接口，fallback 到 EnergyVad
+   - 首次加载时日志输出 "Silero VAD loaded"，便于确认
+
+4. **Bug 修复**
+   - 修复 `SpeechEnd` 重复 feed 整个 `speech_buffer`（改为 `input_finished()`）
+   - 修复前端双重 STT 调用（`streamingTranscriptRef` 跳过已完成识别）
+   - 修复 download.rs encoder 第 3 个 URL 指向 tar.bz2（移除无效 mirror）
+
+### 模型文件清单
+
+| 模型 | 路径（~/.hermes/talk/models/ 下） | 大小 |
+|---|---|---|
+| Zipformer encoder | `streaming-zipformer-bilingual-zh-en/encoder.int8.onnx` | 173 MB |
+| Zipformer decoder | `streaming-zipformer-bilingual-zh-en/decoder.onnx` | 12 MB |
+| Zipformer joiner | `streaming-zipformer-bilingual-zh-en/joiner.int8.onnx` | 3.1 MB |
+| Zipformer tokens | `streaming-zipformer-bilingual-zh-en/tokens.txt` | 55 KB |
+| MeloTTS | `vits-melo-tts-zh_en/` | 182 MB |
+| Silero VAD | `silero-vad/silero_vad.onnx` | 2 MB |
+| **总计** | | **~372 MB** |
 
 ## 包大小代价
 
-- 安装包 +13 MB（whisper.cpp + sherpa-onnx bin × 各平台一份）+ ~20 MB onnxruntime（Win 必须 ship；mac 用 CoreML / 静态链接）
-- 首次启用 Talk Mode 时拉 **707 MB 模型**（whisper-medium-q5_0 540 + vits-melo-tts-zh_en 165 + silero-vad 2）
-- **离线 zip 方式**（v1.1 新增）：4 个 cross-platform zip（bge-m3.zip 2.1 GB + talk-mac-arm64.zip 691 MB + talk-mac-x64.zip 686 MB + talk-win-x64.zip 674 MB），客户可离线导入全本地链路
-
-## 工程拆解（11 项 · 共 ~15 工作日 ≈ 3 周）
-
-| # | 任务 | 工期 | 备注 |
-|---|---|---|---|
-| 1 | `crate::talk` 模块骨架 + `Stt`/`Tts`/`Vad` traits + `TalkBackend` 容器 + 二进制/模型路径常量 + cloud backend 占位 + NoopVad | 0.5 d | ✅ **2026-05-07 完成**（fmt + clippy baseline 绿） |
-| 2 | silero-vad ONNX 用 `ort` crate 加载 + 推理（32 ms 帧滑窗 + 700 ms 静音判定）+ `talk-local` feature 加 `ort`/`ndarray` | 1.5 d | ✅ **2026-05-07 完成**：SileroVad 推理 + LSTM 状态跨帧 + 22帧静音阈值转stateN + soft-fail；clippy `-D warnings` 双 feature 双绿，6 个单元测试 |
-| 3 | Tauri sidecar 打包 whisper.cpp 二进制（macOS x64/arm64 + Windows x64） | 1.5 d | ✅ **2026-05-07 完成**：`.github/workflows/release-talk-binaries.yml` 3×OS matrix（macOS arm64 + Intel + Windows x64）从源编译 whisper.cpp、拉官方 piper 预构、打包 `talk-binaries-<triple>.zip` 上传 GitHub Releases；`scripts/fetch-talk-binaries.sh` 本地下载脚本带镜像回退；`talk::download::import_offline_zip` 扩展 后可识别 binary + piper-runtime/ 并打 +x（Unix） |
-| 4 | Tauri sidecar 打包 piper 二进制 | 1 d | ✅ **2026-05-07 完成**（与任务 3 合并）：Piper 从 rhasspy/piper releases 拉预构（piper_macos_aarch64.tar.gz / piper_macos_x64.tar.gz / piper_windows_amd64.zip），stage 进同一个 per-triple zip，espeak-ng-data 附带 |
-| 5 | `crate::talk::stt` — spawn whisper.cpp，feed PCM，读 stdout | 1.5 d | ✅ **2026-05-07 完成**：`WhisperCppStt::try_load` + `transcribe()` 跳 hound解码 → 全介合 16k 单声道重采样 → tempfile 暂存 → spawn whisper-cli（-otxt -nt -l auto）→ 读回转录；90s 超时；Windows CREATE_NO_WINDOW；本机冷启动 try_load 堆示“下载本地语音包”的提示 |
-| 6 | `crate::talk::tts` — spawn piper，feed text，读 stdout PCM 流 | 1.5 d | ✅ **2026-05-07 完成**：`PiperTts::try_load` + `synthesize()` 文本 stdin 送入 piper `--output-raw`，raw s16le PCM 读出 stdout 后用 hound 包装 WAV；采样率从 piper config json 动态读取（60s 超时） |
-| 7 | 持续监听循环（核心状态机）— mic → VAD → STT → LLM → TTS → mic 自动循环 | 2 d | ✅ **2026-05-07 完成（Phase A + B）**：Rust 后端 cpal + EnergyVad + Tauri events + 3 IPC；前端 `useTalkMode` 抽取 `processWavBase64` 共享管线 + auto 模式事件订阅 + speech-start 中断 TTS；权限失败静默回退 PTT |
-| 8 | 模型下载管理 UI（参考 BGE-M3 离线包模式） | 1.5 d | ✅ **2026-05-07 完成**：`talk::download` 镜像 fallback 链（HF → hf-mirror.com → ghproxy/ghfast.top）解决国内直连 GitHub 问题；silero-vad / whisper-base-q5_1 / piper-huayan 三套模型 spec + 离线 zip 导入；Settings → Voice `<LocalVoicePackPanel>` 进度条 + 镜像身份显示；21 个 talk 测试 + clippy 双绿 |
-| 9 | 重写 `<TalkModeOverlay>` — 取消 push-to-talk，自动模式 + VAD 实时音量条 | 1 d | ✅ **2026-05-07 完成**（与任务 7 一并落地）：mode toggle 胶囊 + auto-mode VU halo + 多模式 hint 文案 + Space 在 auto 模式自动脱开 |
-| 10 | Settings → Voice 新增 "Local (whisper.cpp + Piper)" provider | 1 d | ✅ **2026-05-07 完成**：采用更低侵入性的路径 — `useTalkMode` 在 mount 同时探测 `talkLocalStatus`，local sidecar 就绪时自动路由到 `talk_local_transcribe` / `talk_local_tts`，provider 选项列表不变；`<LocalVoicePackPanel>` 表头塪香“全本地链路已启用（whisper + Piper）”当 stt+tts 都为 true |
-| 11 | 跨平台 e2e（macOS arm64/x64 + Windows x64 各跑 3 轮真实对话） | 1 d | ✅ **2026-05-07 完成**（smoke 部分）：`e2e/talk-mode.spec.ts` Playwright 验证 topbar 麦克起点 → overlay 开启 → readiness gate 走云端 → mode toggle PTT↔auto（VU halo 现身）→ close 关闭；`tauri-mock.ts` 增加 voice/talk 指令 stub。真实麦克 + LLM 循环需人工跨平台实机验证 |
+- 安装包 +13 MB（sherpa-onnx bin × 各平台一份）+ ~20 MB onnxruntime
+- 首次启用 Talk Mode 时拉 **~372 MB 模型**（zipformer 188 + melo-tts 182 + silero-vad 2）
+- 离线 zip 方式：4 个 cross-platform zip，客户可离线导入全本地链路
 
 ## 期望延迟（M1/M2 Mac · LLM 走现有云）
 
 | 阶段 | 耗时 |
 |---|---|
 | VAD 判定说完 | < 100 ms |
-| whisper.cpp base 转写 3 秒话 | ~1-2 s |
+| Zipformer 流式转写 | **< 100 ms**（v1.3 大幅优化，原 whisper 1-2s） |
 | LLM（OpenAI/Zhipu/etc.，~100 字回复） | ~2-3 s |
-| Piper 出第一段音频 | ~150 ms |
-| **整圈** | **3-5 s** |
+| MeloTTS 出第一段音频 | ~150 ms |
+| **整圈** | **~2.5-3.5 s**（v1.2 为 3-5s） |
 
-豆包是 ~1-2 s（字节自家 GPU），本地达不到那么快，但跟早期 ChatGPT Voice 体验相当，可接受。
+## 待做 / 未来优化
+
+| # | 任务 | 优先级 | 说明 |
+|---|---|---|---|
+| 1 | AEC 回声消除升级 | 中 | 当前 NLMS 太弱，外放时 AI 声音回传 mic |
+| 2 | TTS 音色选择 | 低 | 当前只有 MeloTTS 一个声音 |
+| 3 | 等 OmniVoice ONNX 版发布后集成 | 低 | k2-fsa 官方 646 语言 TTS |
+| 4 | 等 CosyVoice 2 / Qwen3-TTS ONNX 版 | 低 | 需 GPU（4-6GB），质量接近真人 |
+| 5 | Voice Wake 唤醒词 | 低 | v0.4.1+ |
+| 6 | Voice Directives（LLM 控制声音/语速） | 低 | v0.4.1+ |
 
 ## 不做（v1 范围外）
 
 - ❌ Linux 支持
 - ❌ 系统原生 TTS / STT 兜底（macOS AVSpeechSynthesizer / Windows SAPI）— 中文质量不及格
-- ❌ 唤醒词 / Voice Wake — v0.4.1+
-- ❌ Voice Directives（LLM 控制声音 / 语速）— v0.4.1+
-- ❌ MLX 本地 TTS（Apple Silicon 加速）— v0.4.1+ 看是否真的更好
 - ❌ 强制 Ollama 本地 LLM — LLM 这一段保持用户配什么用什么
+- ❌ PyTorch-only 模型集成（CosyVoice/Qwen3-TTS）— 等 ONNX 版本
 
 ## 风险
 
 | 风险 | 缓解 |
 |---|---|
 | Windows onnxruntime DLL 体积膨胀 | 用 `ort` 的 `load-dynamic` feature 运行时按需加载 |
-| whisper.cpp Windows ARM 无官方 build | 不影响（Win ARM 用户极少） |
-| piper 中文音色少（zh_CN-huayan / zh_CN-mengxiang） | 已迁移至 sherpa-onnx in-process VITS MeloTTS，Piper 不再使用 |
-| 首次 122 MB 下载体验差 | 进度条 + 校验和 + 离线 zip fallback（参考 BGE-M3） |
+| Silero VAD 在高采样率设备需要 resample | `ResamplingSileroVad` 包装器透明处理 |
+| MeloTTS 中文音色单一 | 等 OmniVoice ONNX 版（646 语言） |
+| 首次 372 MB 下载体验差 | 进度条 + 校验和 + 离线 zip fallback |
 
 ## 价值
 

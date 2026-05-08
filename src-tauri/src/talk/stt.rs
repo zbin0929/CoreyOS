@@ -192,7 +192,7 @@ impl Stt for WhisperCppStt {
 /// Decode an arbitrary-rate WAV blob into mono f32 samples
 /// resampled to 16 kHz. Linear interpolation; quality is fine for
 /// speech (whisper does its own perceptual smoothing).
-fn decode_and_resample_to_16k(wav: &[u8]) -> anyhow::Result<Vec<f32>> {
+pub(super) fn decode_and_resample_to_16k(wav: &[u8]) -> anyhow::Result<Vec<f32>> {
     let cursor = std::io::Cursor::new(wav);
     let mut reader = hound::WavReader::new(cursor).context("decode wav header")?;
     let spec = reader.spec();

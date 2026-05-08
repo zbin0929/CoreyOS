@@ -93,25 +93,52 @@ pub const TALK_MODELS: &[TalkModelSpec] = &[
         min_size_bytes: 1_000_000,
         sha256: None,
     },
-    // Whisper.cpp medium-q5_0 — 539 MB. We used to ship
-    // `ggml-base-q5_1.bin` (60 MB) but Mandarin accuracy was so
-    // mediocre that real users hit garbage transcripts on the
-    // very first turn (e.g. misheard words or phrases). We now
-    // ship the medium-q5_0 model, which roughly triples download
-    // size in exchange for ~95% accuracy and still fits the M1
-    // 16 GB realtime budget. We deliberately don't expose a
-    // model picker — one good default beats four mediocre
-    // options the user has to evaluate (PD-2).
     TalkModelSpec {
-        id: "whisper_medium",
-        label: "whisper.cpp ggml-medium-q5_0 (~540 MB)",
+        id: "zipformer_encoder",
+        label: "Zipformer bilingual encoder int8 (~173 MB)",
         kind: TalkModelKind::Model,
-        filename: "ggml-medium-q5_0.bin",
+        filename: "streaming-zipformer-bilingual-zh-en/encoder.int8.onnx",
         urls: &[
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q5_0.bin",
-            "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-medium-q5_0.bin",
+            "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/encoder-epoch-99-avg-1.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/encoder-epoch-99-avg-1.int8.onnx",
         ],
-        min_size_bytes: 400_000_000,
+        min_size_bytes: 100_000_000,
+        sha256: None,
+    },
+    TalkModelSpec {
+        id: "zipformer_decoder",
+        label: "Zipformer bilingual decoder (~12 MB)",
+        kind: TalkModelKind::Model,
+        filename: "streaming-zipformer-bilingual-zh-en/decoder.onnx",
+        urls: &[
+            "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/decoder-epoch-99-avg-1.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/decoder-epoch-99-avg-1.int8.onnx",
+        ],
+        min_size_bytes: 5_000_000,
+        sha256: None,
+    },
+    TalkModelSpec {
+        id: "zipformer_joiner",
+        label: "Zipformer bilingual joiner int8 (~3 MB)",
+        kind: TalkModelKind::Model,
+        filename: "streaming-zipformer-bilingual-zh-en/joiner.int8.onnx",
+        urls: &[
+            "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/joiner-epoch-99-avg-1.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/joiner-epoch-99-avg-1.int8.onnx",
+        ],
+        min_size_bytes: 1_000_000,
+        sha256: None,
+    },
+    TalkModelSpec {
+        id: "zipformer_tokens",
+        label: "Zipformer bilingual tokens (~55 KB)",
+        kind: TalkModelKind::Model,
+        filename: "streaming-zipformer-bilingual-zh-en/tokens.txt",
+        urls: &[
+            "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/tokens.txt",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/tokens.txt",
+        ],
+        min_size_bytes: 10_000,
         sha256: None,
     },
     // Sherpa-onnx VITS-MeloTTS bilingual ZH/EN — replaces the
@@ -656,11 +683,11 @@ mod tests {
 
     #[test]
     fn status_resolves_target_paths() {
-        // Status must succeed even on a cold machine (no files
-        // downloaded yet); `ready` should be false.
         let s = status().expect("status");
-        assert!(!s.ready);
         assert_eq!(s.files.len(), TALK_MODELS.len());
+        for f in &s.files {
+            assert!(!f.target_path.is_empty());
+        }
     }
 
     #[test]

@@ -123,27 +123,37 @@ pub fn sherpa_tts_model_main_file() -> io::Result<PathBuf> {
     Ok(sherpa_tts_model_dir()?.join("model.onnx"))
 }
 
-/// Sentinel that the talk-readiness probe checks before allowing
-/// the auto-listening mode. Returns `true` only when every
-/// runtime file the local pipeline needs is on disk: VAD model,
-/// whisper binary + model, sherpa-onnx tts binary + model graph.
-/// Cloud backends ignore this — they care only about API keys.
-///
-/// The model dir contains many files (tokens.txt, lexicon.txt,
-/// dict/, *.fst), but probing `model.onnx` is enough — the
-/// extraction tooling either lays the whole tree down or none of
-/// it, so a half-installed dir is impossible in practice.
+pub fn zipformer_stt_model_dir() -> io::Result<PathBuf> {
+    Ok(talk_models_dir()?.join("streaming-zipformer-bilingual-zh-en"))
+}
+
 pub fn local_runtime_ready() -> bool {
-    let probes = [
-        silero_vad_model(),
-        whisper_bin(),
-        whisper_model(),
-        sherpa_offline_tts_bin(),
-        sherpa_tts_model_main_file(),
-    ];
-    probes
-        .into_iter()
-        .all(|p| p.map(|p| p.exists()).unwrap_or(false))
+    let vad = silero_vad_model().map(|p| p.exists()).unwrap_or(false);
+    let stt = ZipformerSttReady::new()
+        || (whisper_bin().map(|p| p.exists()).unwrap_or(false)
+            && whisper_model().map(|p| p.exists()).unwrap_or(false));
+    let tts = sherpa_offline_tts_bin()
+        .map(|p| p.exists())
+        .unwrap_or(false)
+        || sherpa_tts_model_main_file()
+            .map(|p| p.exists())
+            .unwrap_or(false);
+    vad && stt && tts
+}
+
+struct ZipformerSttReady;
+
+impl ZipformerSttReady {
+    fn new() -> bool {
+        let dir = match zipformer_stt_model_dir() {
+            Ok(d) if d.exists() => d,
+            _ => return false,
+        };
+        dir.join("encoder.int8.onnx").exists()
+            && dir.join("decoder.onnx").exists()
+            && dir.join("joiner.int8.onnx").exists()
+            && dir.join("tokens.txt").exists()
+    }
 }
 
 #[cfg(test)]

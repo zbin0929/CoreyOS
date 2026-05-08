@@ -46,10 +46,48 @@ use super::aec::NlmsFilter;
 use super::backend::{Vad, VadDecision};
 use super::vad::EnergyVad;
 
+#[cfg(feature = "talk-local")]
+fn create_vad(sample_rate: u32) -> Box<dyn Vad> {
+    use super::paths::silero_vad_model;
+    match silero_vad_model() {
+        Ok(path) if path.exists() => {
+            match SileroVad::load(&path) {
+                Ok(s) => {
+                    tracing::info!(target: "talk.session", "Silero VAD loaded ({}Hz)", sample_rate);
+                    Box::new(ResamplingSileroVad::new(s, sample_rate))
+                }
+                Err(e) => {
+                    tracing::warn!(target: "talk.session", "silero-vad load failed: {e:#}, using EnergyVad");
+                    Box::new(EnergyVad::new(sample_rate))
+                }
+            }
+        }
+        _ => {
+            tracing::info!(target: "talk.session", "silero-vad model not found, using EnergyVad");
+            Box::new(EnergyVad::new(sample_rate))
+        }
+    }
+}
+
+#[cfg(not(feature = "talk-local"))]
+fn create_vad(sample_rate: u32) -> Box<dyn Vad> {
+    Box::new(EnergyVad::new(sample_rate))
+}
+
+#[cfg(feature = "talk-local")]
+use super::vad::ResamplingSileroVad;
+
+#[cfg(feature = "talk-local")]
+use super::vad::SileroVad;
+
+#[cfg(feature = "talk-local")]
+use sherpa_onnx::OnlineRecognizer;
+
 pub const EVT_LEVEL: &str = "talk:level";
 pub const EVT_SPEECH_START: &str = "talk:speech-start";
 pub const EVT_SPEECH_END: &str = "talk:speech-end";
 pub const EVT_ERROR: &str = "talk:error";
+pub const EVT_PARTIAL_TRANSCRIPT: &str = "talk:partial-transcript";
 
 static TTS_REFERENCE: parking_lot::Mutex<Vec<f32>> = parking_lot::Mutex::new(Vec::new());
 
@@ -89,6 +127,12 @@ pub struct LevelPayload {
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorPayload {
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PartialTranscriptPayload {
+    pub text: String,
+    pub is_final: bool,
 }
 
 // ─────────────────────── Singleton handle ───────────────────────
@@ -145,9 +189,7 @@ pub fn start(app: tauri::AppHandle) -> anyhow::Result<(u32, usize)> {
     let sample_format = supported.sample_format();
     let stream_config: cpal::StreamConfig = supported.into();
 
-    // VAD sized to the device's native rate so we can feed cpal
-    // samples in directly with no resampling.
-    let vad = EnergyVad::new(sample_rate);
+    let vad: Box<dyn Vad> = create_vad(sample_rate);
     let frame_size = vad.frame_size();
 
     // ── Active flag (shared with audio thread + orchestrator) ──
@@ -189,6 +231,9 @@ pub fn start(app: tauri::AppHandle) -> anyhow::Result<(u32, usize)> {
         }
     });
 
+    // ── Optional streaming STT recognizer ──
+    let online_stt = create_online_recognizer();
+
     // ── Orchestrator thread: VAD-drives the loop, emits events.
     let orch_inner = inner.clone();
     let orch_app = app.clone();
@@ -200,10 +245,31 @@ pub fn start(app: tauri::AppHandle) -> anyhow::Result<(u32, usize)> {
             sample_rate,
             frame_size,
             orch_inner,
+            online_stt,
         );
     });
 
     Ok((sample_rate, frame_size))
+}
+
+#[cfg(feature = "talk-local")]
+fn create_online_recognizer() -> Option<sherpa_onnx::OnlineRecognizer> {
+    use crate::talk::online_stt::ZipformerStt;
+    match ZipformerStt::try_load() {
+        Ok(stt) => {
+            tracing::info!(target: "talk.session", "streaming STT attached to session");
+            Some(stt.into_recognizer())
+        }
+        Err(e) => {
+            tracing::info!(target: "talk.session", "streaming STT not available: {e:#}");
+            None
+        }
+    }
+}
+
+#[cfg(not(feature = "talk-local"))]
+fn create_online_recognizer() -> Option<()> {
+    None
 }
 
 // ───────────────────────── Audio thread ─────────────────────────
@@ -314,6 +380,8 @@ fn run_orchestrator(
     sample_rate: u32,
     frame_size: usize,
     inner: Arc<SessionInner>,
+    #[cfg(feature = "talk-local")] online_stt: Option<OnlineRecognizer>,
+    #[cfg(not(feature = "talk-local"))] online_stt: Option<()>,
 ) {
     let mut accumulator: Vec<f32> = Vec::with_capacity(frame_size * 4);
     let mut speech_buffer: Vec<f32> = Vec::new();
@@ -321,9 +389,12 @@ fn run_orchestrator(
     let mut speaking = false;
     let mut aec = NlmsFilter::new(256, 0.3);
 
+    #[cfg(feature = "talk-local")]
+    let mut stt_stream = online_stt.as_ref().map(|r| r.create_stream());
+    #[cfg(not(feature = "talk-local"))]
+    let _ = &online_stt;
+
     while inner.active.load(Ordering::SeqCst) {
-        // Drain one batch (with a short timeout so we notice the
-        // active flag flipping mid-utterance).
         match rx.recv_timeout(Duration::from_millis(200)) {
             Ok(batch) => accumulator.extend_from_slice(&batch),
             Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -346,20 +417,72 @@ fn run_orchestrator(
                 speech_buffer.extend_from_slice(&frame);
             }
 
+            #[cfg(feature = "talk-local")]
+            if speaking {
+                if let (Some(ref recognizer), Some(ref mut stream)) =
+                    (online_stt.as_ref(), stt_stream.as_mut())
+                {
+                    let resampled = super::stt::linear_resample(&frame, sample_rate, 16_000);
+                    stream.accept_waveform(16_000, &resampled);
+                    while recognizer.is_ready(stream) {
+                        recognizer.decode(stream);
+                    }
+                    let partial_emit_stride: u32 = 6;
+                    if emit_counter % partial_emit_stride == 0 {
+                        if let Some(result) = recognizer.get_result(stream) {
+                            let text = result.text.trim().to_string();
+                            if !text.is_empty() {
+                                let _ = app.emit(
+                                    EVT_PARTIAL_TRANSCRIPT,
+                                    PartialTranscriptPayload {
+                                        text,
+                                        is_final: false,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             match decision {
                 VadDecision::Silence => {}
                 VadDecision::SpeechStart => {
                     speaking = true;
-                    // Capture the frame that triggered the start
-                    // too, so the utterance doesn't cut off the
-                    // first phoneme.
                     speech_buffer.clear();
                     speech_buffer.extend_from_slice(&frame);
+                    #[cfg(feature = "talk-local")]
+                    if let (Some(ref recognizer), Some(ref mut stream)) =
+                        (online_stt.as_ref(), stt_stream.as_mut())
+                    {
+                        recognizer.reset(stream);
+                    }
                     let _ = app.emit(EVT_SPEECH_START, ());
                 }
                 VadDecision::SpeechContinue => {}
                 VadDecision::SpeechEnd => {
                     speaking = false;
+                    #[cfg(feature = "talk-local")]
+                    if let (Some(ref recognizer), Some(ref mut stream)) =
+                        (online_stt.as_ref(), stt_stream.as_mut())
+                    {
+                        stream.input_finished();
+                        while recognizer.is_ready(stream) {
+                            recognizer.decode(stream);
+                        }
+                        if let Some(result) = recognizer.get_result(stream) {
+                            let text = result.text.trim().to_string();
+                            if !text.is_empty() {
+                                let _ = app.emit(
+                                    EVT_PARTIAL_TRANSCRIPT,
+                                    PartialTranscriptPayload {
+                                        text,
+                                        is_final: true,
+                                    },
+                                );
+                            }
+                        }
+                    }
                     if let Some(payload) = encode_wav(&speech_buffer, sample_rate) {
                         let _ = app.emit(EVT_SPEECH_END, payload);
                     }

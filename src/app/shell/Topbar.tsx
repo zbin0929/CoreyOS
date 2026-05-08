@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { Sun, Moon, Search, CircleDot } from 'lucide-react';
-import { AgentSwitcher } from '@/app/shell/AgentSwitcher';
 import { Icon } from '@/components/ui/icon';
 import { Kbd } from '@/components/ui/kbd';
 import { usePaletteStore } from '@/stores/palette';
@@ -76,8 +75,6 @@ export function Topbar() {
           filtered out so the dropdown only contains real
           adapter-axis choices — model selection still lives in the
           chat composer's LLM picker. */}
-      <AgentSwitcher />
-
       <div className="flex-1" />
 
       {/* Palette trigger */}

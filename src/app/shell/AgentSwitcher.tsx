@@ -129,9 +129,6 @@ export function AgentSwitcher() {
         data-testid="agent-switcher-trigger"
       >
         <HealthDot ok={activeOk} pending={loading} />
-        <span className="max-w-[140px] truncate font-medium">
-          {active?.name ?? t('widgets.agents_fallback')}
-        </span>
         {interactive && (
           <>
             <span className="text-fg-subtle">{visibleAdapters.length}</span>

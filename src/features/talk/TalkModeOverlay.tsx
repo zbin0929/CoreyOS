@@ -29,6 +29,7 @@ export function TalkModeOverlay({ onClose }: { onClose: () => void }) {
     state,
     mode,
     level,
+    partialTranscript,
     finalTranscript,
     reply,
     error,
@@ -178,6 +179,17 @@ export function TalkModeOverlay({ onClose }: { onClose: () => void }) {
               <Icon icon={SettingsIcon} size={12} />
               {t('talk.open_settings', { defaultValue: '前往 Settings › Voice' })}
             </button>
+          </div>
+        )}
+        {partialTranscript && !finalTranscript && (
+          <div
+            className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-left text-sm text-fg-muted animate-pulse"
+            data-testid="talk-partial"
+          >
+            <span className="block text-[10px] uppercase tracking-wider text-emerald-500">
+              {t('talk.hearing', { defaultValue: '正在识别' })}
+            </span>
+            <span className="mt-0.5 block">{partialTranscript}</span>
           </div>
         )}
         {finalTranscript && (

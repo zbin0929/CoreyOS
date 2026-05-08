@@ -34,6 +34,9 @@ use crate::talk::stt::WhisperCppStt;
 use crate::talk::tts::SherpaTts;
 use crate::talk::{download, session};
 
+#[cfg(feature = "talk-local")]
+use crate::talk::online_stt::ZipformerStt;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TalkSessionStarted {
     pub sample_rate: u32,
@@ -173,9 +176,19 @@ pub async fn talk_local_status() -> IpcResult<TalkLocalReadiness> {
     #[cfg(not(target_os = "macos"))]
     let tts_ready = crate::talk::tts::SherpaTts::ready();
     Ok(TalkLocalReadiness {
-        stt_ready: WhisperCppStt::ready(),
+        stt_ready: stt_ready(),
         tts_ready,
     })
+}
+
+fn stt_ready() -> bool {
+    #[cfg(feature = "talk-local")]
+    {
+        if ZipformerStt::ready() {
+            return true;
+        }
+    }
+    WhisperCppStt::ready()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -190,13 +203,26 @@ pub async fn talk_local_transcribe(wav_base64: String) -> IpcResult<TalkLocalTra
         .map_err(|e| IpcError::Internal {
             message: format!("decode wav b64: {e}"),
         })?;
-    let stt = WhisperCppStt::try_load().map_err(|e| IpcError::Internal {
-        message: format!("{e:#}"),
-    })?;
+    let stt: Box<dyn Stt> = match resolve_stt() {
+        Ok(s) => s,
+        Err(e) => return Err(IpcError::Internal { message: format!("{e:#}") }),
+    };
     let text = stt.transcribe(&wav).await.map_err(|e| IpcError::Internal {
-        message: format!("whisper transcribe: {e:#}"),
+        message: format!("{} transcribe: {e:#}", stt.name()),
     })?;
     Ok(TalkLocalTranscribeResult { text })
+}
+
+fn resolve_stt() -> anyhow::Result<Box<dyn Stt>> {
+    #[cfg(feature = "talk-local")]
+    {
+        if let Ok(z) = ZipformerStt::try_load() {
+            tracing::info!(target: "talk.stt", "using zipformer-online STT");
+            return Ok(Box::new(z));
+        }
+        tracing::info!(target: "talk.stt", "zipformer not available, falling back to whisper-cpp");
+    }
+    WhisperCppStt::try_load().map(|w| Box::new(w) as Box<dyn Stt>)
 }
 
 #[derive(Debug, Clone, Serialize)]

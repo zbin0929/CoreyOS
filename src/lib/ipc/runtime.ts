@@ -359,7 +359,13 @@ export const TALK_EVENTS = {
   speechStart: 'talk:speech-start',
   speechEnd: 'talk:speech-end',
   error: 'talk:error',
+  partialTranscript: 'talk:partial-transcript',
 } as const;
+
+export interface TalkPartialTranscriptPayload {
+  text: string;
+  is_final: boolean;
+}
 
 export function talkSessionStart(): Promise<TalkSessionStarted> {
   return invoke<TalkSessionStarted>('talk_session_start');

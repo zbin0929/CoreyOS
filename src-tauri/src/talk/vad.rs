@@ -345,11 +345,74 @@ mod silero {
             self.speaking = false;
         }
     }
+
+    pub struct ResamplingSileroVad {
+        inner: SileroVad,
+        device_sample_rate: u32,
+        device_frame_size: usize,
+    }
+
+    impl ResamplingSileroVad {
+        pub fn new(inner: SileroVad, device_sample_rate: u32) -> Self {
+            let device_frame_size =
+                ((device_sample_rate as usize) * 32 / 1000).max(64);
+            Self {
+                inner,
+                device_sample_rate,
+                device_frame_size,
+            }
+        }
+    }
+
+    impl Vad for ResamplingSileroVad {
+        fn sample_rate(&self) -> u32 {
+            self.device_sample_rate
+        }
+
+        fn frame_size(&self) -> usize {
+            self.device_frame_size
+        }
+
+        fn process_frame(&mut self, pcm: &[f32]) -> VadDecision {
+            if self.device_sample_rate == TALK_SAMPLE_RATE {
+                return self.inner.process_frame(pcm);
+            }
+            let resampled = crate::talk::stt::linear_resample(
+                pcm,
+                self.device_sample_rate,
+                TALK_SAMPLE_RATE,
+            );
+            let chunk_size = TALK_FRAME_SIZE;
+            let mut decision = VadDecision::Silence;
+            for start in (0..resampled.len()).step_by(chunk_size) {
+                let end = (start + chunk_size).min(resampled.len());
+                let chunk = &resampled[start..end];
+                if chunk.len() < TALK_FRAME_SIZE {
+                    let mut padded = chunk.to_vec();
+                    padded.resize(TALK_FRAME_SIZE, 0.0_f32);
+                    let d = self.inner.process_frame(&padded);
+                    if !matches!(d, VadDecision::Silence) {
+                        decision = d;
+                    }
+                } else {
+                    let d = self.inner.process_frame(chunk);
+                    if !matches!(d, VadDecision::Silence) {
+                        decision = d;
+                    }
+                }
+            }
+            decision
+        }
+
+        fn reset(&mut self) {
+            self.inner.reset();
+        }
+    }
 }
 
 #[cfg(feature = "talk-local")]
 #[allow(unused_imports)]
-pub use silero::SileroVad;
+pub use silero::{ResamplingSileroVad, SileroVad};
 
 #[cfg(test)]
 mod tests {

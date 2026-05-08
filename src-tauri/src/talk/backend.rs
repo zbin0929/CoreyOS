@@ -63,6 +63,24 @@ pub trait Vad: Send + Sync {
     fn reset(&mut self);
 }
 
+impl Vad for Box<dyn Vad> {
+    fn sample_rate(&self) -> u32 {
+        (**self).sample_rate()
+    }
+
+    fn frame_size(&self) -> usize {
+        (**self).frame_size()
+    }
+
+    fn process_frame(&mut self, pcm: &[f32]) -> VadDecision {
+        (**self).process_frame(pcm)
+    }
+
+    fn reset(&mut self) {
+        (**self).reset()
+    }
+}
+
 /// Speech-to-text. Inputs a complete utterance (16 kHz mono WAV bytes)
 /// and returns the transcript.
 ///

@@ -35,6 +35,8 @@ pub mod aec;
 pub mod backend;
 pub mod cloud;
 pub mod download;
+#[cfg(feature = "talk-local")]
+pub mod online_stt;
 pub mod paths;
 pub mod session;
 pub mod stt;

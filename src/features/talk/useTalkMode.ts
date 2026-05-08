@@ -23,6 +23,7 @@ import {
   voiceWarmupMic,
   type ChatStreamHandle,
   type TalkLevelPayload,
+  type TalkPartialTranscriptPayload,
   type TalkSpeechEndPayload,
   type VoiceConfig,
 } from '@/lib/ipc';
@@ -111,6 +112,7 @@ export interface UseTalkModeReturn {
   /** Live RMS from the auto-listening session (0..1). Always 0 in
    *  PTT mode — the recorder doesn't emit a level stream. */
   level: number;
+  partialTranscript: string;
   finalTranscript: string;
   reply: string;
   error: string | null;
@@ -211,6 +213,7 @@ export function useTalkMode(): UseTalkModeReturn {
   // overlay footer.
   const [mode, setModeState] = useState<TalkMode>('ptt');
   const [level, setLevel] = useState(0);
+  const [partialTranscript, setPartialTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [reply, setReply] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -251,6 +254,7 @@ export function useTalkMode(): UseTalkModeReturn {
   // the mic catches it → fake speechStart → fake "user said". This
   // is the cheap stand-in for proper acoustic echo cancellation.
   const echoCooldownUntilRef = useRef<number>(0);
+  const streamingTranscriptRef = useRef<string>('');
   // chatStream handle so we can cancel mid-stream on interrupt.
   const streamHandleRef = useRef<ChatStreamHandle | null>(null);
   // Per-turn barge-in hook installed by `processWavBase64` while
@@ -329,6 +333,7 @@ export function useTalkMode(): UseTalkModeReturn {
   }, []);
 
   const reset = useCallback(() => {
+    setPartialTranscript('');
     setFinalTranscript('');
     setReply('');
     setError(null);
@@ -382,24 +387,22 @@ export function useTalkMode(): UseTalkModeReturn {
    *  session, and plays the reply through a single `<audio>`
    *  element we can cancel on interrupt. */
   const processWavBase64 = useCallback(
-    async (wavBase64: string) => {
+    async (wavBase64: string, preTranscribed?: string) => {
     setState('thinking');
     try {
-      if (!wavBase64) {
+      if (!wavBase64 && !preTranscribed) {
         setState('idle');
         return;
       }
-      // Reaching the transcribe step means cpal delivered audio,
-      // which only happens when macOS has actually granted mic
-      // permission. Mark explicitly so any stale "denied" banner
-      // from a previous CoreAudio cold-start hiccup gets cleared.
       setMicPermission('granted');
-      const rawText = (
-        localRoute.stt
-          ? (await talkLocalTranscribe(wavBase64)).text
-          : (await voiceTranscribe(wavBase64, 'audio/wav')).text
-      )
-        ?.trim() ?? '';
+      const rawText = preTranscribed?.trim() ?? (
+        (
+          localRoute.stt
+            ? (await talkLocalTranscribe(wavBase64)).text
+            : (await voiceTranscribe(wavBase64, 'audio/wav')).text
+        )
+          ?.trim() ?? ''
+      );
       // whisper.cpp emits `[BLANK_AUDIO]`, `[Music]`, `[Sound]` and
       // similar bracket-tagged sentinels when its silence detector
       // can't find speech in the clip. If we forwarded these to the
@@ -566,7 +569,7 @@ export function useTalkMode(): UseTalkModeReturn {
       // INITIAL_BUFFER gate so a short final reply still plays
       // even when fewer than 2 clauses were queued.
       const streamFlags = { llmDone: false };
-      const INITIAL_BUFFER = 1;
+      const INITIAL_BUFFER = 0;
       const synthesize = async (text: string): Promise<Tts | null> => {
         await acquireSynth();
         try {
@@ -684,7 +687,7 @@ export function useTalkMode(): UseTalkModeReturn {
           const segEnd = m.index + m[0].length;
           const isTerminal = /[.!?。！？]/.test(m[0]);
           const segLen = segEnd - segStart;
-          if (isTerminal || segLen >= 20) {
+          if (isTerminal || segLen >= 10) {
             lastEnd = segEnd;
           }
         }
@@ -966,19 +969,24 @@ export function useTalkMode(): UseTalkModeReturn {
             if (Date.now() < echoCooldownUntilRef.current) return;
             cancelInFlight();
             setLevel(0);
+            setPartialTranscript('');
             setState('listening');
           }),
         );
         unlistens.push(
           await listen<TalkSpeechEndPayload>(TALK_EVENTS.speechEnd, (e) => {
             if (cancelled) return;
-            // Same echo guard for speechEnd — we don't want a
-            // captured AI utterance to be transcribed and fed
-            // back as a "user said" turn.
             const s = stateRef.current;
             if (s === 'speaking' || s === 'thinking') return;
             if (Date.now() < echoCooldownUntilRef.current) return;
-            void processWavBase64(e.payload.wav_base64);
+            setPartialTranscript('');
+            const streamingText = streamingTranscriptRef.current;
+            streamingTranscriptRef.current = '';
+            if (streamingText) {
+              void processWavBase64('', streamingText);
+            } else {
+              void processWavBase64(e.payload.wav_base64);
+            }
           }),
         );
         unlistens.push(
@@ -992,6 +1000,19 @@ export function useTalkMode(): UseTalkModeReturn {
             if (cancelled) return;
             setError(e.payload.message);
             setState('error');
+          }),
+        );
+        unlistens.push(
+          await listen<TalkPartialTranscriptPayload>(TALK_EVENTS.partialTranscript, (e) => {
+            if (cancelled) return;
+            const s = stateRef.current;
+            if (s === 'speaking' || s === 'thinking') return;
+            if (Date.now() < echoCooldownUntilRef.current) return;
+            setPartialTranscript(e.payload.text);
+            if (e.payload.is_final) {
+              streamingTranscriptRef.current = e.payload.text;
+              setFinalTranscript(e.payload.text);
+            }
           }),
         );
 
@@ -1041,6 +1062,7 @@ export function useTalkMode(): UseTalkModeReturn {
     state,
     mode,
     level,
+    partialTranscript,
     finalTranscript,
     reply,
     error,

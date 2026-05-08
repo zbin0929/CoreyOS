@@ -206,7 +206,7 @@ export function MessageBubble({
           {!isUser && msg.reasoning && msg.reasoning.length > 0 && (
             <ReasoningPanel
               reasoning={msg.reasoning}
-              streaming={!!msg.pending || msg.content.length === 0}
+              streaming={!!msg.pending}
             />
           )}
           {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (

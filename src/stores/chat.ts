@@ -17,7 +17,6 @@ import {
 } from '@/lib/ipc';
 
 import { useAgentsStore } from './agents';
-import { useAppStatusStore } from './appStatus';
 import { deriveTitle, fireWrite, newId, sessionFromDb } from './chatPersist';
 
 export const GATEWAY_SOURCE_LABELS: Record<string, string> = {
@@ -201,18 +200,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   newSession: () => {
     const id = newId('s');
     const now = Date.now();
-    // Stamp the current default model onto the session row so Analytics can
-    // group by `model` instead of lumping everything under `unknown`. This
-    // reads the cached value populated by `appStatus.refreshModel` at boot;
-    // if the app hasn't resolved a model yet we still write `null` (which
-    // SQL's `COALESCE(NULLIF(...), 'unknown')` catches cleanly).
-    const defaultModel = useAppStatusStore.getState().currentModel;
-    // T5.5c — stamp the active adapter so the unified inbox can badge
-    // + filter. Fallback to the registry default's id (usually
-    // `'hermes'`); if the registry hasn't loaded yet, fall back to a
-    // hard-coded `'hermes'` so offline-boot sessions still land in a
-    // valid bucket (they'll be merged with real Hermes sessions on
-    // next hydration).
     const agents = useAgentsStore.getState();
     const adapterId =
       agents.activeId ??
@@ -222,7 +209,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const session: ChatSession = {
       id,
       title: 'New chat',
-      model: defaultModel,
+      model: null,
       messages: [],
       createdAt: now,
       updatedAt: now,
@@ -237,7 +224,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       dbSessionUpsert({
         id,
         title: session.title,
-        model: defaultModel,
+        model: null,
         created_at: now,
         updated_at: now,
         adapter_id: adapterId,
