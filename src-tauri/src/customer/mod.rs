@@ -185,6 +185,7 @@ const MAX_KNOWN_SCHEMA_VERSION: u32 = 1;
 mod tests {
     use super::*;
     use std::fs;
+    #[cfg(not(target_os = "windows"))]
     use std::path::PathBuf;
 
     #[test]
@@ -392,6 +393,7 @@ future_field:
         }
     }
 
+    #[cfg(not(target_os = "windows"))]
     fn extract_section(haystack: &str, start_marker: &str, end_marker: &str) -> Option<String> {
         let start = haystack.find(start_marker)? + start_marker.len();
         let tail = &haystack[start..];
