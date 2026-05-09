@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  Download,
   FileBox,
   ListChecks,
   Loader2,
@@ -24,6 +25,7 @@ import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
   artifactList,
+  artifactWrite,
   ipcErrorMessage,
   workflowActiveRuns,
   workflowHistoryList,
@@ -493,7 +495,7 @@ function TaskDetail({
       ) : (
         <ol className="flex flex-col gap-1.5">
           {steps.map((s) => (
-            <StepRow key={s.step_id} step={s} />
+            <StepRow key={s.step_id} step={s} runId={fallbackId} />
           ))}
         </ol>
       )}
@@ -525,7 +527,8 @@ function TaskDetail({
   );
 }
 
-function StepRow({ step }: { step: WorkflowStepRun }) {
+function StepRow({ step, runId }: { step: WorkflowStepRun; runId: string }) {
+  const { t } = useTranslation();
   const colorMap: Record<WorkflowStepRun['status'], string> = {
     pending: 'bg-fg-muted/15 text-fg-muted',
     running: 'bg-info/15 text-info',
@@ -534,6 +537,19 @@ function StepRow({ step }: { step: WorkflowStepRun }) {
     skipped: 'bg-fg-muted/10 text-fg-subtle',
     awaiting_approval: 'bg-warning/15 text-warning',
   };
+  const outputText = step.output
+    ? typeof step.output === 'string'
+      ? step.output
+      : JSON.stringify(step.output, null, 2)
+    : null;
+  const handleExport = useCallback(async () => {
+    if (!outputText) return;
+    try {
+      await artifactWrite(runId, `${step.step_id}-output.md`, outputText);
+    } catch {
+      // artifact write best-effort
+    }
+  }, [runId, step.step_id, outputText]);
   return (
     <li className="flex flex-col gap-1 rounded border border-border/40 bg-bg-elev-1 px-2.5 py-1.5">
       <div className="flex items-center gap-2 text-[11px]">
@@ -556,6 +572,21 @@ function StepRow({ step }: { step: WorkflowStepRun }) {
       </div>
       {step.error && (
         <div className="text-[10px] text-danger">{step.error}</div>
+      )}
+      {outputText && (
+        <div className="flex items-start gap-1.5">
+          <pre className="min-w-0 max-h-24 flex-1 overflow-auto whitespace-pre-wrap break-all rounded bg-bg/50 px-2 py-1 text-[10px] font-mono text-fg-subtle">
+            {outputText.length > 500 ? outputText.slice(0, 500) + '…' : outputText}
+          </pre>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="shrink-0 rounded p-1 text-fg-muted hover:bg-bg-hover hover:text-fg"
+            title={t('tasks.export_output', { defaultValue: '导出产物' })}
+          >
+            <Download size={12} />
+          </button>
+        </div>
       )}
     </li>
   );

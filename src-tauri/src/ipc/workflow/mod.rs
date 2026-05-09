@@ -912,6 +912,30 @@ pub fn spawn_run_executor(
                 tracing::warn!(error = %e, "failed to emit workflow:run-finished");
             }
         }
+
+        if let Some(ref notify_cfg) = def.notify {
+            let is_done = owned.status == engine::RunStatus::Completed;
+            let is_failed = owned.status == engine::RunStatus::Failed;
+            let should_notify =
+                (is_done && notify_cfg.on_done) || (is_failed && notify_cfg.on_failure);
+            if should_notify {
+                let cfg = notify_cfg.clone();
+                let wf_name = def.name.clone();
+                let st = final_status.clone();
+                let err = owned.error.clone();
+                let elapsed = owned.updated_at_ms.saturating_sub(owned.started_at_ms) as u64;
+                tokio::task::spawn(async move {
+                    crate::workflow::notify::send_notify(
+                        &cfg,
+                        &wf_name,
+                        &st,
+                        err.as_deref(),
+                        elapsed,
+                    )
+                    .await;
+                });
+            }
+        }
     });
 }
 

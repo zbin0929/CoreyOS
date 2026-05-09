@@ -12,6 +12,8 @@ pub struct WorkflowDef {
     #[serde(default)]
     pub inputs: Vec<WorkflowInput>,
     pub steps: Vec<WorkflowStep>,
+    #[serde(default)]
+    pub notify: Option<NotifyConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,4 +146,25 @@ impl WorkflowDef {
             updated_at_ms,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotifyConfig {
+    #[serde(default)]
+    pub on_done: bool,
+    #[serde(default = "default_true")]
+    pub on_failure: bool,
+    pub webhook_url: String,
+    #[serde(default = "default_notify_format")]
+    pub format: String,
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+fn default_notify_format() -> String {
+    "generic".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }

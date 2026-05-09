@@ -130,6 +130,7 @@ mod tests {
     #[test]
     fn topo_simple_chain() {
         let def = WorkflowDef {
+            notify: None,
             id: "test".into(),
             name: "test".into(),
             description: String::new(),
@@ -149,6 +150,7 @@ mod tests {
     #[test]
     fn topo_parallel() {
         let def = WorkflowDef {
+            notify: None,
             id: "test".into(),
             name: "test".into(),
             description: String::new(),
@@ -172,6 +174,7 @@ mod tests {
     #[test]
     fn topo_detects_cycle() {
         let def = WorkflowDef {
+            notify: None,
             id: "test".into(),
             name: "test".into(),
             description: String::new(),
@@ -186,6 +189,7 @@ mod tests {
     #[test]
     fn plan_marks_completed() {
         let def = WorkflowDef {
+            notify: None,
             id: "test".into(),
             name: "test".into(),
             description: String::new(),
@@ -211,6 +215,7 @@ mod tests {
     #[test]
     fn plan_parallel_ready() {
         let def = WorkflowDef {
+            notify: None,
             id: "test".into(),
             name: "test".into(),
             description: String::new(),

@@ -236,6 +236,7 @@ mod tests {
 
     fn sample_workflow() -> WorkflowDef {
         WorkflowDef {
+            notify: None,
             id: "test-pipeline".into(),
             name: "Test Pipeline".into(),
             description: "A test workflow".into(),

@@ -27,6 +27,7 @@ fn parallel_step(id: &str, after: Vec<&str>, branches: Vec<WorkflowStep>) -> Wor
 #[test]
 fn execute_simple_chain() {
     let def = WorkflowDef {
+        notify: None,
         id: "chain".into(),
         name: "Chain".into(),
         description: String::new(),
@@ -47,6 +48,7 @@ fn execute_simple_chain() {
 #[test]
 fn execute_parallel() {
     let def = WorkflowDef {
+        notify: None,
         id: "par".into(),
         name: "Parallel".into(),
         description: String::new(),
@@ -74,6 +76,7 @@ fn execute_parallel() {
 #[test]
 fn execute_branch() {
     let def = WorkflowDef {
+        notify: None,
         id: "br".into(),
         name: "Branch".into(),
         description: String::new(),
@@ -110,6 +113,7 @@ fn execute_branch() {
 #[test]
 fn execute_with_inputs() {
     let def = WorkflowDef {
+        notify: None,
         id: "inp".into(),
         name: "Inputs".into(),
         description: String::new(),
@@ -127,6 +131,7 @@ fn execute_with_inputs() {
 #[test]
 fn execute_loop() {
     let def = WorkflowDef {
+        notify: None,
         id: "loop".into(),
         name: "Loop".into(),
         description: String::new(),
@@ -158,6 +163,7 @@ fn execute_with_custom_executor() {
     }
 
     let def = WorkflowDef {
+        notify: None,
         id: "custom".into(),
         name: "Custom".into(),
         description: String::new(),
@@ -278,6 +284,7 @@ impl StepExecutor for RecordingExecutor {
 #[test]
 fn execute_with_hooks_calls_step_end_for_each_transition() {
     let def = WorkflowDef {
+        notify: None,
         id: "h1".into(),
         name: "h1".into(),
         description: String::new(),
@@ -321,6 +328,7 @@ fn execute_with_hooks_calls_step_end_for_each_transition() {
 #[test]
 fn execute_with_hooks_streams_progress_only_for_agent_steps() {
     let def = WorkflowDef {
+        notify: None,
         id: "h2".into(),
         name: "h2".into(),
         description: String::new(),
@@ -374,6 +382,7 @@ fn execute_with_hooks_skips_progress_for_tool_step() {
     // Tool steps don't go through the streaming dispatcher; the
     // progress hook should not fire even once.
     let def = WorkflowDef {
+        notify: None,
         id: "h3".into(),
         name: "h3".into(),
         description: String::new(),
@@ -422,6 +431,7 @@ fn execute_with_hooks_pauses_on_approval_with_step_end_fire() {
     // see the AwaitingApproval transition so the IPC layer can
     // persist + sync the run.
     let def = WorkflowDef {
+        notify: None,
         id: "h4".into(),
         name: "h4".into(),
         description: String::new(),
@@ -483,6 +493,7 @@ fn execute_with_hooks_cancels_at_step_boundary() {
     // Completed status survives — we don't unwind history,
     // because the audit trail is the whole point.
     let def = WorkflowDef {
+        notify: None,
         id: "h5".into(),
         name: "h5".into(),
         description: String::new(),
@@ -565,6 +576,7 @@ fn retry_succeeds_after_transient_failures() {
     // max=3 the run should still complete cleanly and the step
     // should record the final success — not the earlier errors.
     let def = WorkflowDef {
+        notify: None,
         id: "retry-ok".into(),
         name: "retry-ok".into(),
         description: String::new(),
@@ -604,6 +616,7 @@ fn retry_exhausted_fails_run() {
     // max=2 → 3 total attempts; all 3 fail → run goes to Failed
     // and the step's error is the *last* one (no on_error set).
     let def = WorkflowDef {
+        notify: None,
         id: "retry-fail".into(),
         name: "retry-fail".into(),
         description: String::new(),
@@ -649,6 +662,7 @@ fn on_error_routes_to_handler_step() {
     // but does NOT fail the run). Steps depending on the failed
     // step's normal output are NOT unblocked — they stay Pending.
     let def = WorkflowDef {
+        notify: None,
         id: "on-err".into(),
         name: "on-err".into(),
         description: String::new(),
@@ -708,6 +722,7 @@ fn retry_then_on_error_handler() {
     // completes. Verifies the two policies compose in the right
     // order (retry first, on_error after retries are spent).
     let def = WorkflowDef {
+        notify: None,
         id: "retry+on_err".into(),
         name: "retry+on_err".into(),
         description: String::new(),
@@ -806,6 +821,7 @@ fn timeout_default_for_agent_step_is_30min() {
     // here so a future tweak to `default_timeout` doesn't drift
     // silently.
     let def = WorkflowDef {
+        notify: None,
         id: "to-default".into(),
         name: "to-default".into(),
         description: String::new(),
@@ -831,6 +847,7 @@ fn timeout_step_field_overrides_default() {
     // `timeout_minutes: 2` should land at the executor as 120s,
     // not the 30-min agent default.
     let def = WorkflowDef {
+        notify: None,
         id: "to-override".into(),
         name: "to-override".into(),
         description: String::new(),
@@ -876,6 +893,7 @@ fn timeout_error_marks_step_failed_and_composes_with_retry() {
     }
 
     let def = WorkflowDef {
+        notify: None,
         id: "to-fail".into(),
         name: "to-fail".into(),
         description: String::new(),
@@ -920,6 +938,7 @@ fn timeout_default_none_for_branch_step() {
     // gets the agent default; the branch parent is never sent to
     // an executor at all.)
     let def = WorkflowDef {
+        notify: None,
         id: "to-branch".into(),
         name: "to-branch".into(),
         description: String::new(),
@@ -995,6 +1014,7 @@ fn tool_step_dispatches_to_executor_with_args_and_timeout() {
     // rendered through the template engine, and the per-type
     // default timeout (5 min for tool steps) reaches the executor.
     let def = WorkflowDef {
+        notify: None,
         id: "tool-dispatch".into(),
         name: "tool-dispatch".into(),
         description: String::new(),
@@ -1037,6 +1057,7 @@ fn tool_step_executor_error_propagates_to_run() {
     // agent failures — no special-casing. Without retry, one error
     // → run Failed.
     let def = WorkflowDef {
+        notify: None,
         id: "tool-fail".into(),
         name: "tool-fail".into(),
         description: String::new(),
@@ -1075,6 +1096,7 @@ fn tool_step_default_simulated_for_simulated_executor() {
     // backward-compat contract the existing `execute_with_hooks_skips_progress_for_tool_step`
     // test relies on, surfaced here as a focused assertion.
     let def = WorkflowDef {
+        notify: None,
         id: "tool-sim".into(),
         name: "tool-sim".into(),
         description: String::new(),
@@ -1120,6 +1142,7 @@ fn subworkflow_step_without_id_fails_validation_at_dispatch() {
     // ever touching `store::get`, so they're safe to test without
     // a workspace.
     let def = WorkflowDef {
+        notify: None,
         id: "outer".into(),
         name: "outer".into(),
         description: String::new(),
@@ -1154,6 +1177,7 @@ fn subworkflow_step_without_id_fails_validation_at_dispatch() {
 #[test]
 fn subworkflow_self_call_is_caught_as_cycle() {
     let def = WorkflowDef {
+        notify: None,
         id: "loop".into(),
         name: "loop".into(),
         description: String::new(),
