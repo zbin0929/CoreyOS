@@ -181,11 +181,20 @@ See `docs/phases/`:
 | v0.2.0 | 2026-05-01 | White-label (customer.yaml) + Pack loader + 12 view templates + license features + preinstall + pin_to_primary + BGE-M3 offline import + analytics dashboard |
 | v0.2.1 | 2026-05-01 | MCP data flow + dashboard views + stdio fixes |
 | v0.2.2 | 2026-05-02 | CI fixes (Windows clippy + embedding stamp test) |
+| v0.2.3 | 2026-05-02 | UI overhaul — gradient + glow + animation + light theme parity |
+| v0.2.4 | 2026-05-03 | Task panel + notifications + artifacts + approval IPC |
+| v0.2.5 | 2026-05-04 | Workflow hardening — timeout + retry + on_error + tool step + browser |
+| v0.2.6 | 2026-05-05 | B-9 main path: tray count + desktop notifications + /approvals + artifact save |
+| v0.2.7 | 2026-05-05 | Sub-workflows + webhook + CSV export + notification tiers |
+| v0.2.8 | 2026-05-06 | Default label + visual proxy + 6 MCP tools + CJK bigram dedup |
+| v0.2.9 | 2026-05-06 | AgentSwitcher restart + approval chip + long-session tag + workflow artifacts |
+| v0.2.10 | 2026-05-08 | Talk Mode v1.3: zipformer STT + silero-vad v5 + streaming TTS + bug fixes |
 
 ## Upcoming
 
 | Version | Plan | Key features |
 |---------|------|-------------|
 | v0.3.0 | `docs/global-todo.md` § P-1 | Cross-border e-commerce Pack (9 capabilities, MCP browser automation, real data extraction) |
+| v0.3.1 | Soul injection + Pack content | Soul inject IPC + 7 industry Skills + 5 knowledge docs + end-to-end validation |
 
 Each phase file contains: goals, task breakdown (with owner/effort), file-level outputs, acceptance criteria, test plan, demo script.

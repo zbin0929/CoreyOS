@@ -1,33 +1,30 @@
 # CoreyOS 全局 TODO
 
-> ⚡ **下一次会话从这里开始**（2026-05-07 上午 · **v0.2.9 published · B-8 Talk Mode 进行中**）
+> ⚡ **下一次会话从这里开始**（2026-05-09 · **v0.2.10+ · 基座 100% 完成，进入行业内容建设阶段**）
 >
 > **铁律**：所有改动 0 修改 Hermes Agent 代码 / trait 表面 — 未来 Hermes 升级直接替换 binary 即可，CoreyOS 不会因 Hermes 改动而崩。
 >
-> **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号（SP-API 到位后 1-2 周做完）
+> **当前阻塞**：P-1 P1 跨境自动化深度等 Amazon SP-API 开发者账号（SP-API 到位后 1-2 周做完）。**不阻塞交付** — 先用报表上传方案验证价值。
 >
-> **当前进行中**：**B-8 Talk Mode v1.1（Sherpa-onnx 迁移）**
-> - v0 / v0.1 骨架 已合入 main：`5a87f95`（push-to-talk + 三态 UI + topbar 入口） → `a525be4`（readiness gate + 持久化进 chat session）
-> - **v1 锁定方案**：whisper.cpp + ~~Piper~~ → **sherpa-onnx (MeloTTS zh_en)** + silero-vad，跨平台（macOS arm64/x64 + Windows x64 + Linux x64），详见 §B-8 章节
-> - **🚨 **v1.1 迁移（2026-05-07）**：Piper → sherpa-onnx 切换。原因：rhasspy/piper macOS arm64 prebuilt 是 x86_64 字节，Apple Silicon SIGABRT；上游半年没动；不支持流式合成。Sherpa-onnx (k2-fsa) 全平台正确架构 + Matcha-TTS / VITS-MeloTTS 中英混读 + 流式 ready（v1.2 接 sherpa-rs FFI 即可启用 token-level streaming）。所有 Piper 代码已删 / 替换：
->   - **paths.rs**：`piper_bin` → `sherpa_offline_tts_bin`；`piper_model_*` → `sherpa_tts_model_dir` + `sherpa_tts_model_main_file`；whisper 模型路径升级到 `ggml-medium-q5_0.bin`
->   - **tts.rs**：`PiperTts` → `SherpaTts`（CLI wrapper，VITS args + DYLD_LIBRARY_PATH + 10s timeout + sticky broken flag）；保留 `MacosSayTts` 兜底；新增 WAV post-processing（silence trim + RMS loudness normalization）减少 VITS-style 音量跳变
->   - **download.rs**：piper specs → 3 个 sherpa MeloTTS specs（model.onnx 165 MB + tokens + lexicon）；whisper spec 升级到 medium-q5_0（~540 MB，中文识别率显著提升）；offline-zip 支持斜杠前缀文件名 + sherpa shared libs + `vits-melo-tts-zh_en/` 子目录
->   - **ipc/talk.rs**：`try_piper`/`piper_known_broken` → `try_sherpa`/`sherpa_known_broken`；删除 macOS arch mismatch 检测（sherpa CI 验证 arch，没必要）
->   - **scripts**：`build-piper-from-source.sh` 删除；`fetch-talk-binaries.sh` 重写为拉 sherpa-onnx 上游 + MeloTTS HF 镜像；`build-talk-binaries-local.sh` 用 sherpa-onnx 替换 piper 段；`.github/workflows/release-talk-binaries.yml` 简化（sherpa-onnx 全平台直拉，4 platform matrix）
-> - **🚨 **v1.1.1 streaming TTS 优化（2026-05-07）**：解决"长回复停顿明显 / 最后一句不播"问题。
->   - **useTalkMode.ts**：重构 streaming worker 为**轮询式常驻**（30ms interval），唯一退出条件是 `llmDone && pending 空`（或 barge-in）。消除旧版"exit when pending=0, restart on enqueue"的 race window，解决 clip4 卡在 INITIAL_BUFFER gate 的问题。
->   - **并行 synth**：每句进队列立即启动 sherpa synthesis（pending: Promise<Tts>[]），不再限制 1-deep prefetch。M1 16GB 可承受 8 并行 sherpa CLI（~600MB × 8 = 4.8GB），后续若遇低配机加 semaphore 限流。
->   - **clause-level splitting**：splitting regex 从 `[.!?。！？]` 扩展到 `[.!?。！？,，、;；:：]`，长句子按逗号/冒号/分号/顿号切分。配合并行 synth，避免 LLM 长句流完前 audio worker 饿死数秒。
->   - **INITIAL_BUFFER gate**：首句等 2 个 clip 准备好或 LLM 流结束才开播。代价是首句延迟 ~400ms，收益是后续 clip 几乎无间隙连贯播放。
->   - **诊断日志**：synth 失败 / null tts / playback 失败均 `console.warn('[talk.tts] ...')`，方便定位"最后一句不播"真因。
-> - **🚨 **v1.1 离线包打包（2026-05-07）**：4 个 cross-platform zip 完成，落 `/Users/zbin/Downloads/`：
->   - **bge-m3.zip** (2.1 GB) - BGE-M3 离线向量模型（从本地 `~/.hermes/models/bge-m3/` 打包）
->   - **talk-mac-arm64.zip** (691 MB) - macOS Apple Silicon (M1/M2/M3/M4) 全本地链路：whisper-cli (本地编) + ggml-medium-q5_0.bin + sherpa-onnx-offline-tts + vits-melo-tts-zh_en/ + silero_vad.onnx + 共享库
->   - **talk-mac-x64.zip** (686 MB) - macOS Intel (x86_64) 全本地链路：whisper-cli (cross-compile from arm64, rpath @executable_path) + 同上模型 + sherpa-onnx x64 prebuilt
->   - **talk-win-x64.zip** (674 MB) - Windows x64 全本地链路：whisper-cli.exe + ggml.dll + sherpa-onnx-offline-tts.exe + onnxruntime.dll + 同上模型
->   - **打包方式**：本地 staging 目录 → `zip -1`（最快压缩，模型文件本身熵高压缩收益小）→ 直接落 Downloads。无 README（importer 不读）。
-> - ✅ **v1 任务 1 完成（2026-05-07）**：`crate::talk` 模块骨架 + `Stt`/`Tts`/`Vad` traits + `TalkBackend` 容器 + 二进制/模型路径常量（`<hermes>/talk/{bin,models}/`）+ cloud backend 占位 + NoopVad 单元测试
+> **当前进行中**：**行业赋能三步走 — Soul 注入 + 内容建设 + 链路验证**
+>
+> **已完成里程碑（2026-05-08 ~ 05-09）**：
+> - **B-8 Talk Mode v1.3 完成**：whisper.cpp → zipformer bilingual STT（188MB，RTF 0.045，延迟 62ms）+ silero-vad v5 + streaming TTS 优化
+> - **Bug fixes**：推理 spinner 不停止、默认模型不传播、AgentSwitcher 从 header 移除
+> - **CI 修复**：cargo fmt + clippy warnings 全清
+>
+> **基座状态**：B-1 到 B-12 **全部完成** ✅。12 视图模板、白标、Pack 加载器、License、RAG、Workflow、Talk Mode 全部上线。
+>
+> **下一步三步走**（不写新功能，只喂内容）：
+> 1. **打通 Soul 注入**（代码，1 天）— `soul_inject` manifest 字段已定义但未实现注入逻辑；需要新增 `pack_active_souls` IPC + `enrichHistoryWithContext` 注入
+> 2. **建跨境电商 Pack 内容**（内容，2-3 天）— soul.md + 7 个 Skill（agentskills.io 格式）+ 5 个知识文档 + 3 个 Workflow
+> 3. **验证完整链路**（1 天）— 用户问"帮我分析广告" → Soul 注入角色 → KB 召回知识 → Skill 指导步骤 → AI 给专业建议
+>
+> **战略决策（2026-05-09 研究确认）**：
+> - **Skill 为主，Agent 为辅** — Hermes 的 Skill 系统天然适合知识密集型行业应用，竞品用 Multi-Agent 是因为没有 Hermes 的 Skill + 三层记忆
+> - **Browser Harness 不集成** — Alpha 阶段，5 个结构性 bug，只学 domain-skills 概念
+> - **不依赖 SP-API 即可交付** — 先用"报表上传 → RAG 索引 → Skill 分析"验证价值，SP-API 到位后升级
+> - **Anthropic financial-services 是参照模板** — 75 个 Skill + 11 个 MCP 数据源 + 10 个 Agent 模板，跟我们的 Pack 结构完全一致
 > - ✅ **v1 任务 2 完成（2026-05-07）**：silero-vad v5 ONNX 集成（`talk-local` feature 拉 `ort`/`ndarray`），512-sample / 32 ms / 22-frame 静音阈值状态机 + LSTM 状态跨帧携带 + soft-fail。
 > - 🔧 **v1 任务 7 Phase A 完成（2026-05-07）**：Rust 后端零依赖持续监听循环上线——`talk::session` cpal 音频线程 + EnergyVad + Tauri events + 3 个 IPC commands；16 个 talk 单元测试过。
 > - ✅ **v1 任务 7 Phase B 完成（2026-05-07）**：前端闭环 — `useTalkMode` 抽取 `processWavBase64` 共享流水线，auto 模式订阅 `talk:speech-end/start/level/error` 事件，speech-start 中断 TTS 实现“豆包式按不住”体验；`<TalkModeOverlay>` 加模式切换胶囊 + auto-mode VU 晕环 + Space 在 auto 下自动脱开；Mic 授权失败/设备不可用 → 静默回退 PTT；tsc + lint + 112 个 vitest 双绿。
@@ -352,8 +349,8 @@
 - **依赖**：无（全部基于现有 engine 扩展）
 
 #### B-8. Talk Mode 语音持续对话（豆包式 · 全本地 STT/TTS）
-- **状态**：🔧 进行中（v0 / v0.1 已合入 main，v1 待启动）
-- **目标版本**：v0.3.x（前置）
+- **状态**：✅ 完成（v1.3 — zipformer + silero-vad + streaming）
+- **目标版本**：v0.2.10+
 - **平台**：macOS（arm64 + x64）+ Windows x64
 - **完整方案文档**：[`docs/talk-mode-plan.md`](./talk-mode-plan.md)
 - **已交付**：
@@ -604,8 +601,9 @@ B-8 (Talk Mode)  独立（v0.4.0+，voice 模块已有基础）
 | v0.2.7 | ✅ | B-10.6 子工作流 + B-10.7 webhook + 长表格 CSV + 通知分级 + 路由/unwrap 巡检 + B-5 离线包 CI |
 | v0.2.8 | ✅ | Hermes 不变性约束下：默认 label 可改 + 视觉代理（走 LlmProfile）+ 6 个新 MCP 工具 + 记忆 CJK bigram 去重 |
 | v0.2.9 | ✅ | AgentSwitcher 重启 + 全局审批 chip + 长会话标签 + 工作流产物（IPC + MCP + UI） |
+| v0.2.10 | ✅ | Talk Mode v1.3：zipformer STT + silero-vad + streaming TTS + bug fixes |
 | v0.3.0 | 🔧 | 跨境电商助手 骨架完成 + 数据层待接 + **阻塞：Amazon SP-API 开发者账号** |
-| v0.4.0 | 📋 | Talk Mode 语音持续对话 + 按客户需求拉新 Pack |
+| v0.3.1 | 📋 | Soul 注入打通 + 跨境电商 Pack 内容建设（7 Skill + 5 知识文档）|
 
 ---
 
