@@ -3,6 +3,8 @@ pub mod generate;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::ipc::pack::mcp_transport::resolve_mcp_source;
+
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -445,7 +447,7 @@ impl StepExecutor for HermesExecutor {
         let rt = tokio::runtime::Handle::current();
         let started = std::time::Instant::now();
         let result = rt.block_on(async move {
-            crate::ipc::pack::resolve_mcp_source(
+            resolve_mcp_source(
                 &cfg,
                 &authority,
                 &serde_json::Value::Object(serde_json::Map::new()),

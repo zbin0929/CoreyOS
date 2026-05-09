@@ -2,7 +2,7 @@
 
 > CoreyOS 是你本地 AI Agent 生态的桌面控制台。所有 LLM、所有 IM 平台、所有技能/记忆/工具/工作流，集中到一个 Tauri 应用里。
 
-**最后更新**：2026-05-08 · 覆盖至 v0.2.10 · 21 个功能页
+**最后更新**：2026-05-09 · 覆盖至 v0.2.10 · 21 个功能页
 
 ---
 
@@ -822,10 +822,30 @@ Step 间通过 `after: [step_id]` 声明依赖，输出引用 `{{step_id.output}
 - 实时显示每个 step 状态：⏳ pending / 🔄 running / ✅ done / ❌ failed
 - approval 节点会暂停 → **Approve** / **Reject**
 
+#### 通知配置
+
+工作流支持完成/失败时通过 Webhook 推送通知到 IM 工具（钉钉/飞书/企业微信）：
+
+```yaml
+notify:
+  on_done: true          # 完成时通知
+  on_failure: true       # 失败时通知
+  webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=xxx"
+  format: dingtalk       # dingtalk/feishu/wecom/generic
+  message: "工作流 {{workflow_name}} {{status}}"
+```
+
+**消息模板变量**：
+- `{{workflow_name}}` - 工作流名称
+- `{{status}}` - 状态（Completed/Failed/Canceled）
+- `{{error}}` - 错误信息（仅失败时）
+- `{{duration}}` - 执行时长（如 "2 分 30 秒"）
+
 #### 持久化
 
 - 工作流定义：`~/.hermes/workflows/<id>.yaml`
 - 每次 run 输出：`~/.hermes/workflow-runs/<run-id>.json`
+- Artifact 文件：`~/.hermes/artifacts/<run-id>/`（导出的 Step Output）
 - Manual run 不限次；cron 触发的有自动归档
 
 #### 与 Scheduler 的区别
@@ -859,6 +879,14 @@ Step 间通过 `after: [step_id]` 声明依赖，输出引用 `{{step_id.output}
 - 已完成 / 失败 / 取消 的任务，MRU 排序
 - 显示：工作流 id / 完成步数 / 失败步数 / 启动时间
 - 失败任务会显示错误信息
+
+#### Step Output 预览与导出
+
+点击任意任务进入详情页，可查看每个步骤的执行输出：
+
+- **预览**：步骤输出内容以 JSON 格式展示
+- **导出**：每个步骤右侧有"导出"按钮，点击可将 Step Output 保存为 Markdown 文件到 Artifact 目录（`~/.hermes/artifacts/<run-id>/`）
+- **用途**：保存工作流执行结果、生成报告、记录审计轨迹
 
 #### 全局轮询
 

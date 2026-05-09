@@ -300,7 +300,45 @@ steps:
 
       数据来源：{{pack_config.seller_id}} 的 Amazon Advertising 数据
     output_format: markdown
+
+notify:
+  on_done: true
+  on_failure: true
+  webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=xxx"
+  format: dingtalk
+  message: "工作流 {{workflow_name}} {{status}}，耗时 {{duration}}"
 ```
+
+### 通知配置（notify）
+
+Workflow 完成或失败时可通过 Webhook 推送通知到 IM 工具。
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `on_done` | bool | 否 | 完成时发送通知（默认 false） |
+| `on_failure` | bool | 否 | 失败时发送通知（默认 true） |
+| `webhook_url` | string | 是 | Webhook 地址 |
+| `format` | string | 否 | 消息格式（dingtalk/feishu/wecom/generic，默认 generic） |
+| `message` | string | 否 | 自定义消息模板 |
+
+**支持的消息格式**：
+
+| format | 平台 | 说明 |
+|--------|------|------|
+| `dingtalk` | 钉钉 | Markdown 消息格式 |
+| `feishu` | 飞书 | 交互式卡片格式 |
+| `wecom` | 企业微信 | Markdown 消息格式 |
+| `generic` | 通用 | JSON 格式，包含 workflow_name、status、error、duration_ms |
+
+**消息模板变量**：
+
+| 变量 | 说明 |
+|------|------|
+| `{{workflow_name}}` | 工作流名称 |
+| `{{status}}` | 状态（Completed/Failed/Canceled） |
+| `{{error}}` | 错误信息（仅失败时） |
+| `{{duration}}` | 执行时长（如 "2 分 30 秒"） |
+| `{{duration_ms}}` | 执行时长（毫秒） |
 
 ### Step 类型
 
