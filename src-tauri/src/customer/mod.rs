@@ -330,7 +330,11 @@ future_field:
             .expect("repo root")
             .to_path_buf();
         let script = repo_root.join("scripts").join("new-customer.sh");
-        assert!(script.exists(), "new-customer.sh missing: {}", script.display());
+        assert!(
+            script.exists(),
+            "new-customer.sh missing: {}",
+            script.display()
+        );
 
         let out = Command::new("bash")
             .arg(&script)
@@ -367,7 +371,10 @@ future_field:
 
         match parse(&yaml) {
             LoadOutcome::Loaded(cfg) => {
-                assert_eq!(cfg.brand.app_name.as_deref(), Some("Smoke Test \u{5546}\u{4e1a}"));
+                assert_eq!(
+                    cfg.brand.app_name.as_deref(),
+                    Some("Smoke Test \u{5546}\u{4e1a}")
+                );
                 assert_eq!(cfg.brand.primary_color.as_deref(), Some("#FF6B00"));
                 assert_eq!(cfg.packs.preinstall, vec!["cross_border_ecom"]);
                 assert_eq!(

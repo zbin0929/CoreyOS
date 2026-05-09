@@ -199,12 +199,18 @@ mod tests {
         let src = root.join("src");
         let dst = root.join("dst");
         fs::create_dir_all(src.join("alpha")).expect("mk alpha src");
-        fs::write(src.join("alpha/manifest.yaml"), "id: alpha\nversion: 0.2.0\n")
-            .expect("new manifest");
+        fs::write(
+            src.join("alpha/manifest.yaml"),
+            "id: alpha\nversion: 0.2.0\n",
+        )
+        .expect("new manifest");
 
         fs::create_dir_all(dst.join("alpha")).expect("mk alpha dst (stale)");
-        fs::write(dst.join("alpha/manifest.yaml"), "id: alpha\nversion: 0.1.0\n")
-            .expect("stale manifest");
+        fs::write(
+            dst.join("alpha/manifest.yaml"),
+            "id: alpha\nversion: 0.1.0\n",
+        )
+        .expect("stale manifest");
         fs::write(dst.join("alpha/user-hack.txt"), "will be wiped").expect("user hack");
 
         let seeded = seed_dir(&src, &dst, true);
@@ -299,6 +305,10 @@ mod tests {
             checked += 1;
         }
 
-        assert!(checked > 0, "no bundled packs found under {}", assets_root.display());
+        assert!(
+            checked > 0,
+            "no bundled packs found under {}",
+            assets_root.display()
+        );
     }
 }
