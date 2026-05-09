@@ -321,6 +321,12 @@ future_field:
     /// / primary_color). Locks the delivery tooling contract so a
     /// future refactor of the script or of this parser can't silently
     /// desync.
+    ///
+    /// Skipped on Windows: the shell script needs bash + standard
+    /// POSIX utilities. Linux + macOS runners cover the contract;
+    /// delivery itself is macOS-first so cross-platform parity
+    /// isn't needed here.
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn new_customer_sh_emits_parseable_yaml() {
         use std::process::Command;
