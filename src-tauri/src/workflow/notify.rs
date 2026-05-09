@@ -127,7 +127,10 @@ mod tests {
         );
         assert_eq!(p["workflow"], "test-wf");
         assert_eq!(p["status"], "Completed");
-        assert!(p["message"].as_str().expect("message should be string").contains("已完成"));
+        assert!(p["message"]
+            .as_str()
+            .expect("message should be string")
+            .contains("已完成"));
     }
 
     #[test]
@@ -140,7 +143,10 @@ mod tests {
             3000,
         );
         assert_eq!(p["msgtype"], "markdown");
-        assert!(p["markdown"]["text"].as_str().expect("markdown text should be string").contains("失败"));
+        assert!(p["markdown"]["text"]
+            .as_str()
+            .expect("markdown text should be string")
+            .contains("失败"));
     }
 
     #[test]
