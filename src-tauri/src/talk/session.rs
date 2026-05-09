@@ -50,18 +50,16 @@ use super::vad::EnergyVad;
 fn create_vad(sample_rate: u32) -> Box<dyn Vad> {
     use super::paths::silero_vad_model;
     match silero_vad_model() {
-        Ok(path) if path.exists() => {
-            match SileroVad::load(&path) {
-                Ok(s) => {
-                    tracing::info!(target: "talk.session", "Silero VAD loaded ({}Hz)", sample_rate);
-                    Box::new(ResamplingSileroVad::new(s, sample_rate))
-                }
-                Err(e) => {
-                    tracing::warn!(target: "talk.session", "silero-vad load failed: {e:#}, using EnergyVad");
-                    Box::new(EnergyVad::new(sample_rate))
-                }
+        Ok(path) if path.exists() => match SileroVad::load(&path) {
+            Ok(s) => {
+                tracing::info!(target: "talk.session", "Silero VAD loaded ({}Hz)", sample_rate);
+                Box::new(ResamplingSileroVad::new(s, sample_rate))
             }
-        }
+            Err(e) => {
+                tracing::warn!(target: "talk.session", "silero-vad load failed: {e:#}, using EnergyVad");
+                Box::new(EnergyVad::new(sample_rate))
+            }
+        },
         _ => {
             tracing::info!(target: "talk.session", "silero-vad model not found, using EnergyVad");
             Box::new(EnergyVad::new(sample_rate))

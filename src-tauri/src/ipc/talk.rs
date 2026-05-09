@@ -205,7 +205,11 @@ pub async fn talk_local_transcribe(wav_base64: String) -> IpcResult<TalkLocalTra
         })?;
     let stt: Box<dyn Stt> = match resolve_stt() {
         Ok(s) => s,
-        Err(e) => return Err(IpcError::Internal { message: format!("{e:#}") }),
+        Err(e) => {
+            return Err(IpcError::Internal {
+                message: format!("{e:#}"),
+            })
+        }
     };
     let text = stt.transcribe(&wav).await.map_err(|e| IpcError::Internal {
         message: format!("{} transcribe: {e:#}", stt.name()),

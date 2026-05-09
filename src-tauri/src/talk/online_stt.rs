@@ -45,8 +45,8 @@ impl ZipformerStt {
             ..Default::default()
         };
 
-        let recognizer = OnlineRecognizer::create(&config)
-            .context("failed to create OnlineRecognizer")?;
+        let recognizer =
+            OnlineRecognizer::create(&config).context("failed to create OnlineRecognizer")?;
 
         tracing::info!(
             target: "talk.online_stt",

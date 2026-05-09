@@ -354,8 +354,7 @@ mod silero {
 
     impl ResamplingSileroVad {
         pub fn new(inner: SileroVad, device_sample_rate: u32) -> Self {
-            let device_frame_size =
-                ((device_sample_rate as usize) * 32 / 1000).max(64);
+            let device_frame_size = ((device_sample_rate as usize) * 32 / 1000).max(64);
             Self {
                 inner,
                 device_sample_rate,
@@ -377,11 +376,8 @@ mod silero {
             if self.device_sample_rate == TALK_SAMPLE_RATE {
                 return self.inner.process_frame(pcm);
             }
-            let resampled = crate::talk::stt::linear_resample(
-                pcm,
-                self.device_sample_rate,
-                TALK_SAMPLE_RATE,
-            );
+            let resampled =
+                crate::talk::stt::linear_resample(pcm, self.device_sample_rate, TALK_SAMPLE_RATE);
             let chunk_size = TALK_FRAME_SIZE;
             let mut decision = VadDecision::Silence;
             for start in (0..resampled.len()).step_by(chunk_size) {
