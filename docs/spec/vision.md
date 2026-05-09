@@ -1,6 +1,6 @@
 # 00 · Vision
 
-**Status as of 2026-05-02**: Phase 0–12 all shipped. v0.2.0 shipped (white-label + Pack loader + 12 view templates + license + analytics). Current release: **v0.2.2**. Next: v0.3.0 (cross-border e-commerce Pack). Business model: **B2B custom delivery only** (no SaaS). See `global-todo.md` for the locked product direction.
+**Status as of 2026-05-02**: Phase 0–12 all shipped. v0.2.0 shipped (white-label + Pack loader + 12 view templates + license + analytics). Current release: **v0.2.2**. Next: v0.3.0 (cross-border e-commerce Pack). Business model: **B2B custom delivery only** (no SaaS). See `status/TODO.md` for the locked product direction.
 
 ## One-line
 
@@ -22,7 +22,7 @@ Non-goals: enterprise RBAC, multi-tenant SaaS, consumer chat products, AI digita
 | Hermes built-in TUI           | Terminal interface for Hermes            | Rich UI, non-devs can use, cross-platform gateway visibility |
 | LangSmith / Langfuse          | Observability for LLM apps               | End-user agent operations (channels, skills, cost), not just traces |
 | OpenWebUI / LibreChat         | Chat UI for LLMs                         | Agent-native (skills, tools, schedulers, trajectories), not just chat |
-| ~~OpenClaw~~ | ~~Peer competitor~~ → **superseded 2026-04-23 pm**. Per `hermes-agent`'s README (`hermes claw migrate`), OpenClaw is being **merged/migrated into Hermes Agent**, not a competitor. The previous "peer competitor" framing was based on reading OpenClaw's README without cross-checking Hermes'. See `docs/hermes-reality-check-2026-04-23.md` for the correction. |
+| ~~OpenClaw~~ | ~~Peer competitor~~ → **superseded 2026-04-23 pm**. Per `hermes-agent`'s README (`hermes claw migrate`), OpenClaw is being **merged/migrated into Hermes Agent**, not a competitor. The previous "peer competitor" framing was based on reading OpenClaw's README without cross-checking Hermes'. See `docs/archive/audits/hermes-reality-check-2026-04-23.md` for the correction. |
 
 ## Differentiation axes (all four, staged)
 

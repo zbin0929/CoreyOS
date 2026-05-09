@@ -1,86 +1,71 @@
-# CoreyOS Documentation
+# CoreyOS 文档索引
 
-Top-level entry for the CoreyOS docs tree (last audit: **2026-05-02**).
-If you're new here, start in **Orient yourself** below.
+> 产品：本地部署的 B2B 定制 AI 控制平面（Tauri 2 + React 18 + Rust）
+> 面向读者：维护本项目的开发者 / 集成方 / 白标客户交付团队
+> 面向终端用户的文档请看 [`user/`](./user/)
 
-> Looking for a complete inventory with last-verified dates? See
-> [`document-index.md`](./document-index.md).
+## 目录结构
 
----
+```
+docs/
+├── spec/       规格 —— 描述"应该是什么"，很少改动
+├── status/     现状 —— 描述"当下实际是什么"，每月校验
+├── log/        日志 —— 只追加不修改
+├── plans/      按版本的实施计划
+├── user/       面向终端用户
+└── archive/    历史快照（只读，不代表当下事实）
+```
 
-## Orient yourself
+## 我想快速定位……
 
-Read these in order:
+| 我要知道 | 看这里 |
+|---|---|
+| **现在处于什么版本、哪些功能可用** | [`status/CURRENT-STATE.md`](./status/CURRENT-STATE.md) |
+| **当前应该做什么（P0/P1/P2）** | [`status/TODO.md`](./status/TODO.md) |
+| **路线图和已发布历史** | [`status/roadmap.md`](./status/roadmap.md) |
+| **已知问题 / 未修复 bug** | [`status/known-issues.md`](./status/known-issues.md) |
+| **产品定位与愿景** | [`spec/vision.md`](./spec/vision.md) |
+| **系统架构 + Pack 架构铁律** | [`spec/architecture.md`](./spec/architecture.md) |
+| **设计系统 / 组件规范** | [`spec/design-system.md`](./spec/design-system.md) |
+| **Agent 抽象层** | [`spec/agent-adapter.md`](./spec/agent-adapter.md) |
+| **Hermes 集成方式** | [`spec/hermes-integration.md`](./spec/hermes-integration.md) |
+| **Hermes 依赖面（上游升级前必看）** | [`status/hermes-deps.md`](./status/hermes-deps.md) |
+| **Pack 开发指南** | [`spec/pack-development.md`](./spec/pack-development.md) |
+| **沙箱隔离设计** | [`spec/sandbox.md`](./spec/sandbox.md) |
+| **Licensing 策略** | [`spec/licensing.md`](./spec/licensing.md) |
+| **测试策略** | [`spec/testing.md`](./spec/testing.md) |
+| **发布流程** | [`spec/release.md`](./spec/release.md) |
+| **术语表** | [`spec/glossary.md`](./spec/glossary.md) |
+| **工作流相对 Hermes 的定位** | [`spec/workflow-positioning.md`](./spec/workflow-positioning.md) |
+| **Hermes 自动压缩上下文策略** | [`spec/auto-compress.md`](./spec/auto-compress.md) |
+| **Memory 后端决策** | [`spec/memory-strategy.md`](./spec/memory-strategy.md) |
+| **会话存储边界决策** | [`spec/session-storage.md`](./spec/session-storage.md) |
+| **MCP 工具步骤测试** | [`spec/testing-mcp-tool-step.md`](./spec/testing-mcp-tool-step.md) |
+| **历代 AI 代理操作日志** | [`log/operations.md`](./log/operations.md) |
+| **按版本的实施计划** | [`plans/`](./plans/) |
+| **历史快照（审计 / phase 归档 / 旧方案）** | [`archive/`](./archive/) |
 
-1. [`00-vision.md`](./00-vision.md) — *what* CoreyOS is and *who* it's for.
-2. [`01-architecture.md`](./01-architecture.md) — Tauri + React layout, Rust
-   crate structure, IPC contract, persistence layout. The single most
-   useful map of the codebase.
-3. [`05-roadmap.md`](./05-roadmap.md) — what's shipped, what's next, and
-   the phases that got us here. Updated more often than the others.
-4. [`glossary.md`](./glossary.md) — terminology you'll see in code
-   comments and docs (Hermes, Caduceus, profile, instance, …).
+## 写新文档时的决策树
 
-After that, dip into the topical docs as the work demands.
+```
+你要写的内容描述：
+├─ "未来应该怎样设计"         → spec/
+├─ "当下系统是什么状态"       → status/
+├─ "某年某日做了某事"         → log/
+├─ "v0.x.y 版本的实施清单"    → plans/
+├─ "给终端用户看的操作指南"   → user/
+└─ "一次性审计 / 已完成的计划 / 历史分析" → archive/
+```
 
-## Topical docs (mostly current-state references)
+## 硬规则（防止再乱）
 
-| Doc | When you need it |
-|-----|------------------|
-| [`02-design-system.md`](./02-design-system.md) | Tailwind tokens, component patterns, motion |
-| [`03-agent-adapter.md`](./03-agent-adapter.md) | Adding a new LLM adapter or agent type |
-| [`04-hermes-integration.md`](./04-hermes-integration.md) | How CoreyOS embeds the Hermes CLI |
-| [`08-sandbox.md`](./08-sandbox.md) | Path authority + sandbox semantics |
-| [`09-conversational-scheduler.md`](./09-conversational-scheduler.md) | Scheduler design |
-| [`06-testing.md`](./06-testing.md) | Test strategy + how to run each suite |
-| [`07-release.md`](./07-release.md) | Cutting a release |
-| [`icon-audit.md`](./icon-audit.md), [`logo.md`](./logo.md) | Brand assets |
+1. **根目录只允许本文件**。任何新 markdown 进子目录。
+2. **archive/ 只进不出**。归档后不再修改内容，只追加归档原因。
+3. **spec/ 每 180 天至少校验一次**，过期由下一个接触者校验或归档。
+4. **status/ 每 30 天至少校验一次**，过期视作不可信。
+5. **一个主题只有一个文档**。发现重复立刻合并。
+6. **以数字前缀命名的文档不再新增**，按主题命名（如 `vision.md`、`architecture.md`）。
 
-## Active planning
+## 整理历史
 
-| Doc | Purpose |
-|-----|---------|
-| [`global-todo.md`](./global-todo.md) | **Primary TODO** — locked product direction + base TODO + Pack roadmap |
-| [`hermes-dependency-map.md`](./hermes-dependency-map.md) | Hermes upstream dependency surface map |
-| [`hermes-v0.12-impact-analysis.md`](./hermes-v0.12-impact-analysis.md) | Hermes v0.12 upgrade impact |
-| [`licensing.zh.md`](./licensing.zh.md) | License system usage manual |
-| [`ui-revamp-v1.md`](./ui-revamp-v1.md) | UI 全盘改造执行文档（Home → Analytics → Channels → Settings） |
-
-## Historical (archived, kept for reference)
-
-| Doc | Purpose |
-|-----|---------|
-| [`06-backlog.md`](./06-backlog.md) | Feature backlog (pre-v0.2.0, superseded by global-todo.md) |
-| [`optimization-backlog.md`](./optimization-backlog.md) | UX improvements (actions completed) |
-| [`10-product-audit-2026-04-23.md`](./10-product-audit-2026-04-23.md) | Product audit snapshot |
-| [`current-feature-quality-review-2026-04-26.md`](./current-feature-quality-review-2026-04-26.md) | Code quality review (actions completed) |
-| [`hermes-reality-check-2026-04-23.md`](./hermes-reality-check-2026-04-23.md) | Hermes integration reality check (issues fixed) |
-| [`customization-plan.md`](./customization-plan.md) | White-label plan (implemented in v0.2.0) |
-| [`competitor-maiduo-ai.md`](./competitor-maiduo-ai.md) | MaiduoX AI competitive research |
-
-## Subdirectories
-
-- [`phases/`](./phases) — historical phase plans (all shipped). See
-  [`phases/README.md`](./phases/README.md) for summary.
-- [`agent/`](./agent) — AI analysis notes and architecture decisions
-  (auto-compress, memory strategy, session storage, workflow positioning).
-- [`plans/`](./plans) — per-version implementation plans (shipped).
-- [`user/`](./user) — end-user documentation
-  ([`user/用户手册.md`](./user/用户手册.md)).
-
-## Conventions
-
-- **plan** docs describe intent. **current** docs describe the system as
-  it actually is. **changelog** docs are dated records. The full mapping
-  per file lives in [`document-index.md`](./document-index.md).
-- When you ship a non-trivial change, update both:
-  1. The relevant **current** doc (so it stays accurate), and
-  2. `05-roadmap.md` if it crosses a phase boundary.
-- New phase plans go under `phases/`, never into a sibling docs root.
-  Once a phase ships, mark it "Shipped" in the roadmap and let the
-  phase doc fall out of active rotation.
-
-## See also
-
-- Repo `README.md` (project root) — install + quickstart for end users.
-- `CHANGELOG.md` (project root) — dated log of shipped milestones.
+- **2026-05-09**：docs 大整理。根目录从 33 个 .md 缩到 1 个；建立 spec/status/log/archive 四分法；17 个 phase 文档、15+ 审计 / 旧方案类文档全部归档；删除冗余的 `document-index.md`。详见 [`archive/README.md`](./archive/README.md)。

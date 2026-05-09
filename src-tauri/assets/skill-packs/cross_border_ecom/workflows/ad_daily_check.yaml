@@ -1,0 +1,64 @@
+id: ad_daily_check
+name: 广告日巡检
+description: |
+  吃一份 SP 广告 CSV 报表，跑 ad_analyst skill，产出结构化 ACoS/CTR/CVR
+  诊断 + 3 条可执行动作。Pack 内置 samples/sp_ad_report_2026-05-08.csv
+  作为 demo 数据，真实使用时把 csv_path 指到真卖家报表即可。
+version: 1
+trigger:
+  type: manual
+inputs:
+  - name: csv_path
+    label: SP 广告报表 CSV 路径（留空用内置 demo 数据）
+    type: string
+    default: ""
+    required: false
+  - name: target_acos
+    label: 目标 ACoS（百分比，默认 25）
+    type: string
+    default: "25"
+    required: true
+
+steps:
+  - id: load_report
+    name: 读取广告报表
+    type: agent
+    after: []
+    agent_id: hermes-default
+    prompt: |
+      你要读取一份 SP 广告 CSV 报表并把原始内容原封不动传给下一步。
+
+      csv_path 输入：`{{inputs.csv_path}}`
+      - 如果非空：用 read_file 工具读该路径。
+      - 如果为空：使用下面内置的 demo 内容：
+
+      ```csv
+      Campaign,Impressions,Clicks,Spend,Sales,Orders,ACoS,CTR,CVR
+      SP-Auto-Main-US,18420,412,82.40,286.50,11,28.76,2.24,2.67
+      SP-KW-Exact-Core,9850,267,93.45,412.00,18,22.68,2.71,6.74
+      SP-KW-Broad-Expand,22100,183,64.05,128.20,5,49.96,0.83,2.73
+      SP-ASIN-Competitor,14200,340,119.00,215.80,7,55.14,2.39,2.06
+      SP-Brand-Defense,6120,198,23.76,284.50,12,8.35,3.23,6.06
+      SP-New-Launch-A14,11800,52,18.20,0.00,0,,0.44,0.00
+      SP-KW-LongTail-5,3420,89,22.25,156.00,8,14.26,2.60,8.99
+      ```
+
+      输出严格 JSON：`{"csv": "<原始 CSV 文本>", "source": "demo" | "file"}`
+    output_format: json
+
+  - id: analyze
+    name: 广告分析（调用 ad_analyst skill）
+    type: agent
+    after: [load_report]
+    agent_id: hermes-default
+    prompt: |
+      你是 cross_border_ecom Pack 的 ad_analyst skill。严格按该 skill
+      的系统提示词工作：读数 → 算结构 → 下判断 → 给 3 条动作。
+
+      目标 ACoS：{{inputs.target_acos}}%
+      报表 CSV 内容：
+      {{steps.load_report.output.csv}}
+
+      输出严格 JSON（结构同 ad_analyst skill 定义的 summary/campaigns/
+      actions 三段式）。不要 markdown 包裹。
+    output_format: json

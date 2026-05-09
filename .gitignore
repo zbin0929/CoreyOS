@@ -26,6 +26,13 @@ dist-ssr
 *.sln
 *.sw?
 
+# AI IDE / assistant workspace metadata (never commit; contain
+# local chat history, rule drafts, per-user settings).
+# `.trae/rules/` is the team-shared project rules folder — keep tracked.
+.trae/*
+!.trae/rules/
+.qoder/
+
 # Rust / Tauri
 src-tauri/target
 src-tauri/gen/schemas
@@ -56,3 +63,7 @@ e2e/screenshots/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 *.db
+
+# Customer delivery bundles (contain signed license tokens, never commit).
+# Use scripts/new-customer.sh to regenerate; see docs/spec/licensing.md.
+customers/

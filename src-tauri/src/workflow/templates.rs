@@ -4,19 +4,33 @@ use super::model::WorkflowDef;
 /// first boot via `ensure_templates`. Existing files are NEVER
 /// overwritten — `ensure_templates` only adds files that are missing.
 ///
-/// ## v10 audit (2026-05-06)
+/// ## History
 ///
-/// The single remaining base-image demo (`ecommerce-promotion-approval`)
-/// has moved into the `corey_starter` default Pack so the base binary
-/// ships with **no** workflow templates. New users see workflows only
-/// after they enable the Pack (or import their own), which keeps the
-/// "what is a workflow" surface to one place.
+/// - **v10 (2026-05-06)**: Emptied the list; demos moved into the
+///   `corey_starter` default Pack so the base binary shipped with
+///   zero workflow templates.
+/// - **2026-05-10**: Decision reversed — `corey_starter` felt
+///   awkward as a user-facing "Pack" when it only existed to ship
+///   two generic demo workflows. Those demos are back here as true
+///   builtin templates (`daily-news-digest`, `pdf-summary`) and the
+///   `corey_starter` Pack was removed. Rationale: base binary users
+///   want "a few useful workflows that just work"; a Pack entry they
+///   can't uninstall cleanly is worse UX than two seeded yaml files.
 ///
-/// Re-add demos here only when there's a workflow primitive that
-/// MUST exist before any Pack is loaded (extremely rare). The default
-/// path is to ship demos in a Pack instead.
+/// The yaml payloads live under `assets/default-workflows/` and are
+/// inlined via `include_str!` so they're compiled into the binary
+/// (no `tauri.conf.json` resources entry needed for these).
 pub fn builtin_templates() -> Vec<(&'static str, &'static str)> {
-    Vec::new()
+    vec![
+        (
+            "daily-news-digest.yaml",
+            include_str!("../../assets/default-workflows/daily-news-digest.yaml"),
+        ),
+        (
+            "pdf-summary.yaml",
+            include_str!("../../assets/default-workflows/pdf-summary.yaml"),
+        ),
+    ]
 }
 
 pub fn ensure_templates() -> anyhow::Result<usize> {

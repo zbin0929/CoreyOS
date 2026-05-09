@@ -1614,8 +1614,8 @@ Windows：
 ## 反馈与贡献
 
 - Bug / 建议：[GitHub Issues](https://github.com/zbin0929/CoreyOS/issues)
-- Roadmap：[`docs/05-roadmap.md`](../05-roadmap.md)
-- 架构：[`docs/01-architecture.md`](../01-architecture.md)
+- Roadmap：[`docs/status/roadmap.md`](../status/roadmap.md)
+- 架构：[`docs/spec/architecture.md`](../spec/architecture.md)
 - Changelog：[`CHANGELOG.md`](../../CHANGELOG.md)
 
 ---

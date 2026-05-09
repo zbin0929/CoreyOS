@@ -285,7 +285,7 @@ Measured in CI via Playwright tracing + `performance.now()` marks. Phase 0 sets 
 
 > 锁定日期：2026-05-01
 > 适用范围：v0.2.0 起所有 Pack 加载、白标定制、license 联动、升级流程
-> 配套文档：`docs/competitor-maiduo-ai.md`、`docs/global-todo.md`
+> 配套文档：`docs/archive/competitor-maiduo-ai.md`、`docs/status/TODO.md`
 
 CoreyOS 商业模式是**只做定制（B2B 直签 + 本地部署）**，不做 SaaS。这套架构所有设计都为这个目标服务。
 
@@ -475,7 +475,7 @@ migrations:                          # 跨版本数据迁移
 
 ### License Features 联动
 
-- `license.txt` 的 `Payload.features` 字段是单一权限源（已有 ed25519 离线签名机制，见 `docs/licensing.zh.md`）
+- `license.txt` 的 `Payload.features` 字段是单一权限源（已有 ed25519 离线签名机制，见 `docs/spec/licensing.md`）
 - 每个 Pack `manifest.license_feature` 必须出现在客户 license 的 features 数组中，否则 Pack 不加载（UI 显示"需要授权"占位）
 - 不做在线激活、不做心跳、不做联网管控 — 完全离线
 - 续费 / 加 Pack = 重新签一张新 license token 发给客户
@@ -523,5 +523,5 @@ packs:
 - ❌ 远程更新服务后端（手动交付 / GitHub Releases）
 - ❌ 单独的 Persona 角色管理系统（并入 Pack `soul_inject`）
 
-详见 `docs/global-todo.md` 第 2 节"已砍清单"。
+详见 `docs/status/TODO.md` 第 2 节"已砍清单"。
 

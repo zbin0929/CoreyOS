@@ -1,0 +1,90 @@
+schema_version: 1
+id: cross_border_ecom
+version: "0.2.0"
+title: 跨境电商运营顾问
+description: |
+  亚马逊 FBA 美国站运营顾问 Pack（v0.2.0）。
+  资深顾问人设 + 3 条日巡检 workflow（广告 / 库存 / 差评）+ 3 个专业 skill +
+  demo CSV 数据。真实 SP-API 对接随客户需求迭代。
+author: CoreyOS
+requires:
+  corey: ">=0.2.0"
+  templates:
+    - CompositeDashboard
+
+# 注入到 chat system prompt 头部的行业人设。
+soul_inject:
+  - prompts/soul.md
+
+# 直接以 Hermes skill .md 格式分发；Pack 启用时拷贝到
+# ~/.hermes/skills/pack__cross_border_ecom/ 下。
+skills:
+  - skills/ad_analyst.md
+  - skills/inventory_sentinel.md
+  - skills/review_monitor.md
+
+# 手动 / 按钮 / cron 触发的工作流。
+workflows:
+  - workflows/ad_daily_check.yaml
+  - workflows/inventory_alert.yaml
+  - workflows/review_alert.yaml
+
+# Home 卡片：用 CompositeDashboard 做广告总览 +「广告巡检」一键入口。
+# 上层 CompositeDashboard 硬编码了 ad_daily_check / inventory_alert /
+# review_alert 三个按钮（见 src/features/pack/templates/CompositeDashboard.tsx），
+# 所以这里挂上 view 即可让"一键调整"入口自动浮出。
+#
+# layout: 严格要求数组（LayoutCell[]），每格用 ref: 引用同一 Pack
+# 的另一个 view（同级 siblings）。内联写法子视图会在子模板调
+# pack_view_data 时报 view not found，因后端只认顶层 views。
+views:
+  # 子视图 1：KPI 卡片（隐藏导航，仅供 ad-overview 以 ref 引用）
+  - id: ad-kpis
+    title: 昨日关键指标（demo）
+    icon: bar-chart-3
+    nav_section: hidden
+    template: MetricsCard
+    metrics: [acos, revenue, orders]
+    data_source:
+      static:
+        acos: "27.8%"
+        revenue: 1483
+        orders: 61
+
+  # 子视图 2：一键巡检入口提示（隐藏导航）
+  - id: ad-overview-hints
+    title: 一键巡检入口
+    icon: alert-triangle
+    nav_section: hidden
+    template: AlertList
+    data_source:
+      static:
+        items:
+          - severity: info
+            title: 点击「广告日巡检」分析 SP 广告效率
+            detail: 找出高花费低转化关键词、ACOS 异常 campaign
+          - severity: info
+            title: 点击「库存巡检」识别断货 / 冗余 ASIN
+            detail: 🔴断货 / 🟡告警 / 🟢健康 / ⚫冗余 四档分级
+          - severity: info
+            title: 点击「差评巡检」汇总 1-2 星反馈
+            detail: Q/L/D/F/S/X 六桶分类 + P0/P1/P2 严重度
+
+  # 主视图：Home 总览卡片
+  - id: ad-overview
+    title: 亚马逊广告总览
+    icon: trending-up
+    nav_section: home
+    template: CompositeDashboard
+    layout:
+      - span: 12
+        ref: ad-kpis
+      - span: 12
+        ref: ad-overview-hints
+    actions:
+      - label: 广告日巡检
+        workflow: ad_daily_check
+      - label: 库存巡检
+        workflow: inventory_alert
+      - label: 差评巡检
+        workflow: review_alert

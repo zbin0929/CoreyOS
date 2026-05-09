@@ -55,7 +55,7 @@ pub async fn workflow_extract_intent(message: String) -> IpcResult<WorkflowInten
             // well as templates we ship. We rely solely on the generic
             // jaccard score above; the LLM-side intent flow can do the
             // smarter "what does the user actually want" matching.
-            // See `docs/agent/workflow-positioning.md`.
+            // See `docs/spec/workflow-positioning.md`.
             let boosted = confidence;
 
             if boosted > 0.2 {

@@ -97,7 +97,11 @@ export function Sidebar() {
   const utility = visible.filter((n) => n.group === 'utility');
   const settingsEntries = visible.filter((n) => n.group === 'settings');
 
-  const packViewsForSidebar = effectivePackViews;
+  // `nav_section: hidden` 仅供 CompositeDashboard 等通过 ref 引用，
+  // 不出现在侧边栏 / Home 卡片 / Pack 导航中。
+  const packViewsForSidebar = effectivePackViews.filter(
+    (v) => v.navSection !== 'hidden',
+  );
 
   const libraryHasActive = library.some(
     (entry) => isActive(location.pathname, entry.path),

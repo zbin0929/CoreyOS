@@ -1,0 +1,69 @@
+id: review_alert
+name: 差评巡检
+description: |
+  吃一份差评列表 CSV，跑 review_monitor skill，产出按根因分桶 + 按
+  严重度（P0/P1/P2）分级 + 给客服 copy-paste 的回评模板 + 给内部的
+  action items。Pack 内置 samples/reviews_2026-05-08.csv 作为 demo
+  数据，真实使用把 csv_path 指到 Seller Central 导出的差评列表即可。
+version: 1
+trigger:
+  type: manual
+inputs:
+  - name: csv_path
+    label: 差评列表 CSV 路径（留空用内置 demo 数据）
+    type: string
+    default: ""
+    required: false
+
+steps:
+  - id: load_report
+    name: 读取差评列表
+    type: agent
+    after: []
+    agent_id: hermes-default
+    prompt: |
+      你要读取一份差评 CSV 并把原始内容原封不动传给下一步。
+
+      csv_path 输入：`{{inputs.csv_path}}`
+      - 如果非空：用 read_file 工具读该路径。
+      - 如果为空：使用下面内置的 demo 内容：
+
+      ```csv
+      ASIN,Review_Title,Rating,Review_Body,Review_Date,Verified_Purchase,Helpful_Votes
+      B08N5WRWNW,Broke after second use,1,"Cracked along the bottom after only two ice cycles. The silicone quality feels thin compared to other brands. Money wasted.",2026-05-06,true,7
+      B08N5WRWNW,Same problem as other reviewers,1,"I read the reviews before buying and still got a defective one. Split on day 3. How is this still being sold?",2026-05-07,true,4
+      B08N5WRWNW,Third one cracked,2,"Ordered a second batch of 2 and both cracked within a week. Seems like a batch quality problem.",2026-05-08,true,3
+      B08N5WRWNW,Cheap feel,3,"Not as rigid as I expected but functional so far.",2026-05-04,true,0
+      B09XCHM2K9,Box arrived crushed,2,"The bottle itself is fine but the box was smashed. Clearly the packaging can't survive shipping. Gift ruined.",2026-05-07,true,5
+      B09XCHM2K9,Dented on arrival,2,"Huge dent on the side. Functions OK but looks awful. Returned.",2026-05-05,true,2
+      B09XCHM2K9,Love it,5,"Keeps drinks cold for 24h as advertised. Five stars.",2026-05-03,true,1
+      B0B7FLCK5N,Not what the pictures show,1,"The listing shows a brushed nickel finish but what arrived is glossy plastic. Completely misleading.",2026-05-08,true,11
+      B0B7FLCK5N,Missing USB ports,2,"Description says two USB ports, mine has only one. Won't return because of the hassle but very annoyed.",2026-05-06,true,6
+      B0B7FLCK5N,Different color,2,"Color on my unit is grey not white like in the pictures. Same model number though.",2026-05-05,true,3
+      B0BQK9YGCX,Too small,3,"Advertised as room-size humidifier but this is desk-size at best. Photos should show scale.",2026-05-07,true,4
+      B0BQK9YGCX,App won't connect,2,"The Bluetooth pairing never completes. Spent an hour on the instructions. Not worth it.",2026-05-04,true,2
+      B0C2VM4HPK,terrible,1,"bad",2026-05-08,false,0
+      B0C2VM4HPK,scam,1,"do not buy",2026-05-07,false,0
+      B0D4M1RNPH,Great lids,4,"Fit my bowls perfectly.",2026-05-08,true,0
+      ```
+
+      输出严格 JSON：`{"csv": "<原始 CSV 文本>", "source": "demo" | "file"}`
+    output_format: json
+
+  - id: analyze
+    name: 差评分析（调用 review_monitor skill）
+    type: agent
+    after: [load_report]
+    agent_id: hermes-default
+    prompt: |
+      你是 cross_border_ecom Pack 的 review_monitor skill。严格按
+      该 skill 的系统提示词工作：过滤 4+ 星 → 6 桶分类 → severity
+      评级 → listing_alerts 阈值判断 → 生成回评模板。
+
+      差评 CSV 内容：
+      {{steps.load_report.output.csv}}
+
+      输出严格 JSON（结构同 review_monitor skill 定义的 summary/
+      critical_reviews/listing_alerts/editor_note 四段式）。
+      不要 markdown 包裹。
+    output_format: json

@@ -1381,6 +1381,12 @@ export const tauriMockInitScript = /* js */ `
         return [];
       case 'pack_view_data':
         return {};
+      // Soul injection fixture: tests that exercise the persona
+      // pipeline override this via window.__CADUCEUS_MOCK__.state.packSouls
+      // (a PackSoulEntry[] array). Default empty = no soul, so
+      // unrelated specs see the app exactly as a fresh install.
+      case 'pack_active_souls':
+        return state.packSouls ?? [];
 
       // Talk Mode (B-8 v1). The overlay probes readiness on
       // mount; we pretend cloud STT + cloud TTS are configured

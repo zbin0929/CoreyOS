@@ -185,6 +185,7 @@ const MAX_KNOWN_SCHEMA_VERSION: u32 = 1;
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn empty_string_yields_default() {
@@ -312,5 +313,76 @@ future_field:
         }
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Smoke test: `scripts/new-customer.sh --dry-run` produces a
+    /// customer.yaml that this parser accepts, with all fields we
+    /// expect flowing through (app_name / preinstall / hidden_routes
+    /// / primary_color). Locks the delivery tooling contract so a
+    /// future refactor of the script or of this parser can't silently
+    /// desync.
+    #[test]
+    fn new_customer_sh_emits_parseable_yaml() {
+        use std::process::Command;
+
+        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("repo root")
+            .to_path_buf();
+        let script = repo_root.join("scripts").join("new-customer.sh");
+        assert!(script.exists(), "new-customer.sh missing: {}", script.display());
+
+        let out = Command::new("bash")
+            .arg(&script)
+            .args([
+                "smoke-test",
+                "--app-name",
+                "Smoke Test \u{5546}\u{4e1a}", // 商业 — exercise non-ASCII flow
+                "--machine-id",
+                "1f4d1e2c-9b8a-4d2c-bc01-7e8a09f1b6c4",
+                "--expires",
+                "1y",
+                "--packs",
+                "cross_border_ecom",
+                "--hide",
+                "terminal,mcp,compare",
+                "--primary-color",
+                "#FF6B00",
+                "--license-features",
+                "cross_border_ecom",
+                "--dry-run",
+            ])
+            .output()
+            .expect("spawn new-customer.sh");
+
+        assert!(
+            out.status.success(),
+            "new-customer.sh --dry-run failed. stderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let yaml = extract_section(&stdout, "# --- customer.yaml ---", "# --- INSTALL.md")
+            .expect("customer.yaml section in dry-run output");
+
+        match parse(&yaml) {
+            LoadOutcome::Loaded(cfg) => {
+                assert_eq!(cfg.brand.app_name.as_deref(), Some("Smoke Test \u{5546}\u{4e1a}"));
+                assert_eq!(cfg.brand.primary_color.as_deref(), Some("#FF6B00"));
+                assert_eq!(cfg.packs.preinstall, vec!["cross_border_ecom"]);
+                assert_eq!(
+                    cfg.navigation.hidden_routes,
+                    vec!["terminal", "mcp", "compare"]
+                );
+            }
+            other => panic!("expected Loaded, got {other:?}. yaml was:\n{yaml}"),
+        }
+    }
+
+    fn extract_section(haystack: &str, start_marker: &str, end_marker: &str) -> Option<String> {
+        let start = haystack.find(start_marker)? + start_marker.len();
+        let tail = &haystack[start..];
+        let end = tail.find(end_marker)?;
+        Some(tail[..end].to_string())
     }
 }

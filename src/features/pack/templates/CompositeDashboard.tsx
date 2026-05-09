@@ -137,6 +137,25 @@ function formatValue(input: string): string {
   return n.toLocaleString();
 }
 
+// Tauri IPC rejects with structured `{ message, kind }` objects;
+// `String({message})` collapses to "[object Object]". Peel off the
+// common shapes so action-button failures actually tell the user
+// what went wrong.
+function formatActionError(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object') {
+    const maybeMessage = (err as { message?: unknown }).message;
+    if (typeof maybeMessage === 'string') return maybeMessage;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return 'unknown error';
+    }
+  }
+  return String(err);
+}
+
 function buildChildView(cell: LayoutCell, parentPackId: string, parentPackTitle: string, siblingViews: PackView[]): PackView | null {
   if (cell.ref) {
     const found = siblingViews.find((sv) => sv.viewId === cell.ref && sv.packId === parentPackId);
@@ -382,7 +401,7 @@ function ActionTrigger({ label, workflow, packId }: { label: string; workflow: s
       await workflowRun(workflow, { packId });
       setDone(true);
     } catch (e) {
-      setError(String(e));
+      setError(formatActionError(e));
     } finally {
       setBusy(false);
     }
