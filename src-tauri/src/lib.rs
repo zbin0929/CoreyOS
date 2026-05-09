@@ -300,6 +300,7 @@ pub fn run() {
             ipc::customer::customer_config_get,
             ipc::pack::pack_list,
             ipc::pack::pack_rescan,
+            ipc::pack::pack_active_souls,
             ipc::pack::pack_set_enabled,
             ipc::pack::pack_config_get,
             ipc::pack::pack_config_set,

@@ -42,5 +42,6 @@ export * from './ipc/hermes-config';
 export * from './ipc/hermes-instances';
 export * from './ipc/runtime';
 export * from './ipc/license';
+export * from './ipc/pack';
 export * from './ipc/vision-proxy';
 export * from './ipc/artifacts';

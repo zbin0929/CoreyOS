@@ -843,6 +843,51 @@ pub async fn pack_set_enabled(
 }
 
 #[tauri::command]
+pub async fn pack_active_souls(state: State<'_, AppState>) -> IpcResult<Vec<PackSoulEntry>> {
+    let registry = state.packs.read();
+    let mut souls = Vec::new();
+    for entry in registry.packs.iter() {
+        if !entry.enabled {
+            continue;
+        }
+        let Some(manifest) = entry.manifest.as_deref() else {
+            continue;
+        };
+        if manifest.soul_inject.is_empty() {
+            continue;
+        }
+        let mut parts: Vec<String> = Vec::new();
+        for rel in &manifest.soul_inject {
+            let path = entry.dir_path.join(rel);
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    parts.push(content);
+                }
+                Err(e) => {
+                    tracing::warn!(path = %path.display(), "soul_inject read failed: {e}");
+                }
+            }
+        }
+        if !parts.is_empty() {
+            souls.push(PackSoulEntry {
+                pack_id: manifest.id.clone(),
+                pack_title: manifest.title.clone(),
+                content: parts.join("\n\n"),
+            });
+        }
+    }
+    Ok(souls)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackSoulEntry {
+    pub pack_id: String,
+    pub pack_title: String,
+    pub content: String,
+}
+
+#[tauri::command]
 pub async fn pack_config_get(
     pack_id: String,
     state: State<'_, AppState>,

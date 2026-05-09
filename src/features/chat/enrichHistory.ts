@@ -3,6 +3,7 @@ import {
   learningSearchSimilar,
   knowledgeSearch,
   learningReadLearnings,
+  packActiveSouls,
 } from '@/lib/ipc';
 
 // v9: `ragSearch` removed. The Rust-side `rag_search` IPC was a
@@ -23,6 +24,21 @@ export async function enrichHistoryWithContext(
   userText: string,
 ): Promise<ChatMessageDto[]> {
   const enriched = [...history];
+
+  try {
+    const souls = await packActiveSouls();
+    if (souls.length > 0) {
+      const soulText = souls
+        .map((s) => `## ${s.packTitle}\n${s.content}`)
+        .join('\n\n');
+      enriched.unshift({
+        role: 'system',
+        content: `[Industry role definition]\n${soulText}`,
+      });
+    }
+  } catch {
+    // non-critical — proceed without soul injection
+  }
 
   try {
     const similar = await learningSearchSimilar(userText, 3);

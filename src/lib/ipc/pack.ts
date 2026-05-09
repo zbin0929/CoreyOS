@@ -56,6 +56,16 @@ export function packSetEnabled(packId: string, enabled: boolean): Promise<void> 
   return invoke<void>('pack_set_enabled', { packId, enabled });
 }
 
+export interface PackSoulEntry {
+  packId: string;
+  packTitle: string;
+  content: string;
+}
+
+export function packActiveSouls(): Promise<PackSoulEntry[]> {
+  return invoke<PackSoulEntry[]>('pack_active_souls');
+}
+
 export function packViewsList(): Promise<PackView[]> {
   return invoke<PackView[]>('pack_views_list');
 }
