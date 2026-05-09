@@ -129,7 +129,7 @@ pub fn zipformer_stt_model_dir() -> io::Result<PathBuf> {
 
 pub fn local_runtime_ready() -> bool {
     let vad = silero_vad_model().map(|p| p.exists()).unwrap_or(false);
-    let stt = ZipformerSttReady::new()
+    let stt = ZipformerSttReady::check()
         || (whisper_bin().map(|p| p.exists()).unwrap_or(false)
             && whisper_model().map(|p| p.exists()).unwrap_or(false));
     let tts = sherpa_offline_tts_bin()
@@ -144,7 +144,7 @@ pub fn local_runtime_ready() -> bool {
 struct ZipformerSttReady;
 
 impl ZipformerSttReady {
-    fn new() -> bool {
+    fn check() -> bool {
         let dir = match zipformer_stt_model_dir() {
             Ok(d) if d.exists() => d,
             _ => return false,

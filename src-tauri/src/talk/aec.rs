@@ -72,8 +72,8 @@ mod tests {
             aec.push_reference(r);
         }
         let mut max_error = 0.0_f32;
-        for i in 1000..2000 {
-            let mic = reference[i] * 0.8;
+        for (i, &r) in reference.iter().enumerate().skip(1000) {
+            let mic = r * 0.8;
             let clean = aec.process_sample(mic);
             let err = clean.abs();
             if i > 1500 {
