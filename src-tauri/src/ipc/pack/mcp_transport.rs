@@ -50,10 +50,11 @@ pub async fn resolve_mcp_source(
     let authority_clone = authority.clone();
     let server_name_owned = server_name.to_string();
     let transport = tokio::task::spawn_blocking(move || -> IpcResult<McpTransport> {
-        let doc =
-            super::super::mcp::read_config_yaml(&authority_clone).map_err(|e| IpcError::Internal {
+        let doc = super::super::mcp::read_config_yaml(&authority_clone).map_err(|e| {
+            IpcError::Internal {
                 message: format!("read config.yaml: {e}"),
-            })?;
+            }
+        })?;
         let servers = super::super::mcp::extract_servers(&doc);
         let srv = servers
             .into_iter()
@@ -208,34 +209,67 @@ async fn mcp_stdio_session(
 
     let init_req = JsonValue::Object(serde_json::Map::from_iter([
         ("jsonrpc".to_string(), JsonValue::String("2.0".to_string())),
-        ("id".to_string(), JsonValue::Number(serde_json::Number::from(1))),
-        ("method".to_string(), JsonValue::String("initialize".to_string())),
-        ("params".to_string(), JsonValue::Object(serde_json::Map::from_iter([
-            ("protocolVersion".to_string(), JsonValue::String("2024-11-05".to_string())),
-            ("capabilities".to_string(), JsonValue::Object(serde_json::Map::new())),
-            ("clientInfo".to_string(), JsonValue::Object(serde_json::Map::from_iter([
-                ("name".to_string(), JsonValue::String("corey-data-source".to_string())),
-                ("version".to_string(), JsonValue::String("1.0".to_string())),
-            ]))),
-        ]))),
+        (
+            "id".to_string(),
+            JsonValue::Number(serde_json::Number::from(1)),
+        ),
+        (
+            "method".to_string(),
+            JsonValue::String("initialize".to_string()),
+        ),
+        (
+            "params".to_string(),
+            JsonValue::Object(serde_json::Map::from_iter([
+                (
+                    "protocolVersion".to_string(),
+                    JsonValue::String("2024-11-05".to_string()),
+                ),
+                (
+                    "capabilities".to_string(),
+                    JsonValue::Object(serde_json::Map::new()),
+                ),
+                (
+                    "clientInfo".to_string(),
+                    JsonValue::Object(serde_json::Map::from_iter([
+                        (
+                            "name".to_string(),
+                            JsonValue::String("corey-data-source".to_string()),
+                        ),
+                        ("version".to_string(), JsonValue::String("1.0".to_string())),
+                    ])),
+                ),
+            ])),
+        ),
     ]));
     write_jsonrpc(&mut stdin, &init_req).await?;
     let _init_resp = read_jsonrpc(&mut reader).await?;
 
     let init_notif = JsonValue::Object(serde_json::Map::from_iter([
         ("jsonrpc".to_string(), JsonValue::String("2.0".to_string())),
-        ("method".to_string(), JsonValue::String("notifications/initialized".to_string())),
+        (
+            "method".to_string(),
+            JsonValue::String("notifications/initialized".to_string()),
+        ),
     ]));
     write_jsonrpc(&mut stdin, &init_notif).await?;
 
     let call_req = JsonValue::Object(serde_json::Map::from_iter([
         ("jsonrpc".to_string(), JsonValue::String("2.0".to_string())),
-        ("id".to_string(), JsonValue::Number(serde_json::Number::from(2))),
-        ("method".to_string(), JsonValue::String("tools/call".to_string())),
-        ("params".to_string(), JsonValue::Object(serde_json::Map::from_iter([
-            ("name".to_string(), JsonValue::String(tool.to_string())),
-            ("arguments".to_string(), params.clone()),
-        ]))),
+        (
+            "id".to_string(),
+            JsonValue::Number(serde_json::Number::from(2)),
+        ),
+        (
+            "method".to_string(),
+            JsonValue::String("tools/call".to_string()),
+        ),
+        (
+            "params".to_string(),
+            JsonValue::Object(serde_json::Map::from_iter([
+                ("name".to_string(), JsonValue::String(tool.to_string())),
+                ("arguments".to_string(), params.clone()),
+            ])),
+        ),
     ]));
     write_jsonrpc(&mut stdin, &call_req).await?;
     let call_resp = read_jsonrpc(&mut reader).await?;
@@ -243,10 +277,7 @@ async fn mcp_stdio_session(
     super::data_source::extract_mcp_text_content(&call_resp)
 }
 
-async fn write_jsonrpc(
-    stdin: &mut tokio::process::ChildStdin,
-    msg: &JsonValue,
-) -> IpcResult<()> {
+async fn write_jsonrpc(stdin: &mut tokio::process::ChildStdin, msg: &JsonValue) -> IpcResult<()> {
     use tokio::io::AsyncWriteExt;
     let mut line = serde_json::to_string(msg).map_err(|e| IpcError::Internal {
         message: format!("mcp jsonrpc serialize: {e}"),
@@ -327,12 +358,25 @@ mod tests {
 
         let authority = Arc::new(crate::sandbox::PathAuthority::new());
         let cfg = JsonValue::Object(serde_json::Map::from_iter([
-            ("server".to_string(), JsonValue::String("fs-test".to_string())),
-            ("tool".to_string(), JsonValue::String("read_text_file".to_string())),
-            ("params".to_string(), JsonValue::Object(serde_json::Map::from_iter([
-                ("path".to_string(), JsonValue::String(test_file.to_string_lossy().to_string())),
-            ]))),
-            ("timeout_secs".to_string(), JsonValue::Number(serde_json::Number::from(30))),
+            (
+                "server".to_string(),
+                JsonValue::String("fs-test".to_string()),
+            ),
+            (
+                "tool".to_string(),
+                JsonValue::String("read_text_file".to_string()),
+            ),
+            (
+                "params".to_string(),
+                JsonValue::Object(serde_json::Map::from_iter([(
+                    "path".to_string(),
+                    JsonValue::String(test_file.to_string_lossy().to_string()),
+                )])),
+            ),
+            (
+                "timeout_secs".to_string(),
+                JsonValue::Number(serde_json::Number::from(30)),
+            ),
         ]));
         let runtime_params = JsonValue::Object(serde_json::Map::new());
 

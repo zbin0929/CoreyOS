@@ -24,9 +24,7 @@ pub fn yaml_to_json(v: &YamlValue) -> JsonValue {
             }
         }
         YamlValue::String(s) => JsonValue::String(s.clone()),
-        YamlValue::Sequence(s) => {
-            JsonValue::Array(s.iter().map(yaml_to_json).collect())
-        }
+        YamlValue::Sequence(s) => JsonValue::Array(s.iter().map(yaml_to_json).collect()),
         YamlValue::Mapping(m) => {
             let mut out = serde_json::Map::new();
             for (k, v) in m {
@@ -172,8 +170,7 @@ pub fn extract_mcp_text_content(result: &JsonValue) -> IpcResult<JsonValue> {
         .and_then(|c| c.get("text"))
         .and_then(|t| t.as_str());
     if let Some(text) = content {
-        Ok(serde_json::from_str(text)
-            .unwrap_or_else(|_| JsonValue::String(text.to_string())))
+        Ok(serde_json::from_str(text).unwrap_or_else(|_| JsonValue::String(text.to_string())))
     } else {
         Ok(result.clone())
     }
@@ -199,8 +196,7 @@ mod tests {
 
     #[test]
     fn resolve_data_source_async_returns_empty_for_unknown_kind() {
-        let ds: YamlValue =
-            serde_yaml::from_str("sql: { query: \"SELECT 1\" }").expect("yaml");
+        let ds: YamlValue = serde_yaml::from_str("sql: { query: \"SELECT 1\" }").expect("yaml");
         let authority = Arc::new(crate::sandbox::PathAuthority::new());
         let empty = JsonValue::Object(serde_json::Map::new());
         let rt = tokio::runtime::Runtime::new().expect("rt");
@@ -220,37 +216,48 @@ mod tests {
 
     #[test]
     fn extract_mcp_text_content_parses_json_string() {
-        let resp = JsonValue::Object(serde_json::Map::from_iter([
-            ("result".to_string(), JsonValue::Object(serde_json::Map::from_iter([
-                ("content".to_string(), JsonValue::Array(vec![JsonValue::Object(serde_json::Map::from_iter([
+        let resp = JsonValue::Object(serde_json::Map::from_iter([(
+            "result".to_string(),
+            JsonValue::Object(serde_json::Map::from_iter([(
+                "content".to_string(),
+                JsonValue::Array(vec![JsonValue::Object(serde_json::Map::from_iter([
                     ("type".to_string(), JsonValue::String("text".to_string())),
-                    ("text".to_string(), JsonValue::String("{\"revenue\": 999}".to_string())),
-                ]))]))
-            ]))),
-        ]));
+                    (
+                        "text".to_string(),
+                        JsonValue::String("{\"revenue\": 999}".to_string()),
+                    ),
+                ]))]),
+            )])),
+        )]));
         let out = extract_mcp_text_content(&resp).expect("extract");
         assert_eq!(out["revenue"], 999);
     }
 
     #[test]
     fn extract_mcp_text_content_returns_raw_when_not_json() {
-        let resp = JsonValue::Object(serde_json::Map::from_iter([
-            ("result".to_string(), JsonValue::Object(serde_json::Map::from_iter([
-                ("content".to_string(), JsonValue::Array(vec![JsonValue::Object(serde_json::Map::from_iter([
+        let resp = JsonValue::Object(serde_json::Map::from_iter([(
+            "result".to_string(),
+            JsonValue::Object(serde_json::Map::from_iter([(
+                "content".to_string(),
+                JsonValue::Array(vec![JsonValue::Object(serde_json::Map::from_iter([
                     ("type".to_string(), JsonValue::String("text".to_string())),
-                    ("text".to_string(), JsonValue::String("plain string".to_string())),
-                ]))]))
-            ]))),
-        ]));
+                    (
+                        "text".to_string(),
+                        JsonValue::String("plain string".to_string()),
+                    ),
+                ]))]),
+            )])),
+        )]));
         let out = extract_mcp_text_content(&resp).expect("extract");
         assert_eq!(out.as_str().expect("str"), "plain string");
     }
 
     #[test]
     fn extract_mcp_text_content_fallback_for_missing_content() {
-        let resp = JsonValue::Object(serde_json::Map::from_iter([
-            ("id".to_string(), JsonValue::Number(serde_json::Number::from(1))),
-        ]));
+        let resp = JsonValue::Object(serde_json::Map::from_iter([(
+            "id".to_string(),
+            JsonValue::Number(serde_json::Number::from(1)),
+        )]));
         let out = extract_mcp_text_content(&resp).expect("extract");
         assert_eq!(out["id"], 1);
     }
