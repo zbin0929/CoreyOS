@@ -5,6 +5,7 @@ import {
   chatStream,
   hermesApprovalRespond,
   ipcErrorMessage,
+  packActiveSouls,
   talkLocalStatus,
   talkLocalTranscribe,
   talkLocalTts,
@@ -27,6 +28,8 @@ import {
   type TalkSpeechEndPayload,
   type VoiceConfig,
 } from '@/lib/ipc';
+import { llmProfileEnsureAdapter, llmProfileList } from '@/lib/ipc/hermes-instances';
+import { useAppStatusStore } from '@/stores/appStatus';
 import { useChatStore } from '@/stores/chat';
 
 /**
@@ -480,9 +483,30 @@ export function useTalkMode(): UseTalkModeReturn {
         '4. 直接回答用户的问题，不要绕弯、不要反问"对不对"、不要刻意撒娇；',
         '5. 如果信息不够，就直接说"这个我不太确定"或"我需要再了解一下"，不要瞎编。',
       ].join('\n');
+      // **Pack soul injection** — without this Talk Mode loses the
+      // industry persona (e.g. cross_border_ecom Amazon consultant)
+      // that the typed-chat path injects via `enrichHistoryWithContext`.
+      // Symptom pre-fix: "你懂亚马逊吗" got a generic "I know a bit"
+      // answer, not the Amazon-consultant persona's domain reply.
+      // Best-effort: a missing/empty soul list silently keeps the
+      // generic Talk-mode prompt.
+      let packSoulSystem: string | null = null;
+      try {
+        const souls = await packActiveSouls();
+        if (souls.length > 0) {
+          packSoulSystem = `[Industry role definition]\n${souls
+            .map((s) => `## ${s.packTitle}\n${s.content}`)
+            .join('\n\n')}`;
+        }
+      } catch {
+        // pack souls IPC may fail in dev / fixture mode; ignore
+      }
       const history: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         { role: 'system', content: TALK_SYSTEM_PROMPT },
       ];
+      if (packSoulSystem) {
+        history.push({ role: 'system', content: packSoulSystem });
+      }
       if (sessionId) {
         // Re-fetch the store state instead of reading the
         // stale `chatStore` snapshot we captured before the
@@ -730,6 +754,32 @@ export function useTalkMode(): UseTalkModeReturn {
       };
       cancelHookRef.current = onCancel;
 
+      // **Adapter routing** — match the typed-chat path so Talk Mode
+      // gets the same agent loop / MCP tools / SOUL.md treatment.
+      // Resolve the LLM Profile that matches the gateway-default
+      // model id; if found, ensureAdapter and pass `hermes:profile:<id>`
+      // as adapter_id. Without this Talk Mode falls into the bare
+      // `hermes` adapter → Hermes runs OpenAI passthrough → tools
+      // schema is NOT injected → the agent can't actually call any
+      // corey-native tool, even though Talk Mode and Chat are
+      // supposed to be the same conversation.
+      let talkAdapterId: string | undefined;
+      let talkModelOverride: string | undefined;
+      try {
+        const currentModel = useAppStatusStore.getState().currentModel;
+        if (currentModel) {
+          const list = await llmProfileList();
+          const match = list.profiles.find((p) => p.model === currentModel);
+          if (match) {
+            await llmProfileEnsureAdapter(match.id);
+            talkAdapterId = `hermes:profile:${match.id}`;
+            talkModelOverride = match.model;
+          }
+        }
+      } catch {
+        // best-effort; fall back to the bare hermes adapter
+      }
+
       let acc = '';
       let pendingForTts = '';
       const replyText = await new Promise<string>((resolve, reject) => {
@@ -737,6 +787,8 @@ export function useTalkMode(): UseTalkModeReturn {
         chatStream(
           {
             messages: history,
+            adapter_id: talkAdapterId,
+            model: talkModelOverride,
           },
           {
             onDelta: (chunk) => {
