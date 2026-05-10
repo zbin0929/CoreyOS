@@ -20,8 +20,11 @@ docs/
 
 | 我要知道 | 看这里 |
 |---|---|
+| **🎯 当下唯一聚焦（覆盖 TODO）** | [`status/FOCUS.md`](./status/FOCUS.md) |
+| **客户冷启动话术** | [`sales/cold-outreach.md`](./sales/cold-outreach.md) |
+| **5 分钟客户演示脚本** | [`sales/demo-script.md`](./sales/demo-script.md) |
 | **现在处于什么版本、哪些功能可用** | [`status/CURRENT-STATE.md`](./status/CURRENT-STATE.md) |
-| **当前应该做什么（P0/P1/P2）** | [`status/TODO.md`](./status/TODO.md) |
+| **当前应该做什么（P0/P1/P2）** | [`status/TODO.md`](./status/TODO.md)（暂被 FOCUS.md 覆盖）|
 | **路线图和已发布历史** | [`status/roadmap.md`](./status/roadmap.md) |
 | **已知问题 / 未修复 bug** | [`status/known-issues.md`](./status/known-issues.md) |
 | **产品定位与愿景** | [`spec/vision.md`](./spec/vision.md) |

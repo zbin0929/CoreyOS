@@ -46,7 +46,15 @@ function ActionBtn({ action, packId, viewId }: { action: PackAction; packId: str
       }
       setConfirming(false);
     } catch (e) {
-      setError(String(e));
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'string'
+            ? e
+            : e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string'
+              ? (e as { message: string }).message
+              : JSON.stringify(e);
+      setError(msg);
     } finally {
       setBusy(false);
     }

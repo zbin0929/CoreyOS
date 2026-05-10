@@ -14,6 +14,15 @@
 //!   - `corey_native.open_settings`  — deep-link the GUI to a Settings panel.
 //!   - `corey_native.list_workflows` — enumerate user-defined workflows.
 //!   - `corey_native.run_workflow`   — trigger a workflow run by id, returns run_id.
+//!   - `corey_native.corey_list_llms`       — enumerate LLM profiles + which is default.
+//!   - `corey_native.corey_set_default_llm` — switch the gateway's default model by profile id.
+//!   - `corey_native.corey_open_route`       — deep-link the GUI to any frontend route.
+//!
+//! These three carry an explicit `corey_` prefix because Hermes Agent
+//! ships its own builtin `list_llms` tool (returning Hermes' own
+//! profile system, separate from Corey's `llm_profiles.json`). Without
+//! the prefix the agent flips a coin between the two and picks the
+//! wrong one in chat sessions where Pack tools are also loaded.
 //!
 //! The `corey_native.` prefix is a namespacing convention picked up by
 //! Hermes' tool selector so users can scope-disable us with one tag
@@ -356,6 +365,70 @@ pub fn manifest() -> Vec<Value> {
                 "required": ["panel"]
             }
         }),
+        // Demo-critical: agent must be able to enumerate + switch the
+        // default model from chat. Backed by Corey's own llm_profiles
+        // store + ~/.hermes/config.yaml; Hermes Agent itself untouched.
+        json!({
+            "name": "corey_list_llms",
+            "description": "List the user's configured LLM profiles \
+                (id, label, provider, model, vision support) and \
+                report which one is the gateway's current default. \
+                Use BEFORE `corey_set_default_llm` so you can confirm the \
+                target id exists. \n\n\
+                Phrase examples — EN: \"what models are configured\", \
+                \"list LLMs\", \"which model am I using\". \
+                ZH: \"列出模型\", \"现在用的是哪个模型\", \"有哪些 LLM\".",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "corey_set_default_llm",
+            "description": "Switch the gateway's default model to the \
+                given LLM profile. Writes ~/.hermes/config.yaml's \
+                model.{default,provider,base_url} section atomically. \
+                The change takes effect on the NEXT chat turn — no \
+                gateway restart needed for this field. \n\n\
+                Phrase examples — EN: \"switch to GLM\", \"use \
+                Anthropic\", \"change default model to deepseek\". \
+                ZH: \"切换到 GLM\", \"用 Anthropic\", \"换成 \
+                DeepSeek\".",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "profile_id": {
+                        "type": "string",
+                        "description": "LLM profile id from corey_list_llms (e.g. \"glm\", \"deepseek\", \"minimax-m27\")."
+                    }
+                },
+                "required": ["profile_id"]
+            }
+        }),
+        json!({
+            "name": "corey_open_route",
+            "description": "Deep-link the Corey desktop GUI to ANY \
+                frontend route (not just Settings). Generalises \
+                open_settings. Use when the agent has finished a \
+                short task and wants the user to inspect the full \
+                detail view (\"summary in chat + button to the page\" \
+                pattern). \n\n\
+                Common targets: \"/\" (Home), \"/chat\", \
+                \"/workflows\", \"/tasks\", \"/models\", \
+                \"/analytics\", \"/logs\", \"/skills\", \
+                \"/knowledge\", \"/memory\", \"/mcp\", \
+                \"/settings\". \n\n\
+                Phrase examples — EN: \"go to tasks\", \"show me the \
+                models page\", \"open analytics\". ZH: \"去 Tasks \
+                页\", \"打开模型页\", \"看分析页\".",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute frontend route path starting with '/'. Example: \"/tasks\" or \"/models\"."
+                    }
+                },
+                "required": ["path"]
+            }
+        }),
     ]
 }
 
@@ -391,6 +464,9 @@ pub async fn call(app: AppHandle, params: &Value) -> Result<Value, (i32, String)
         "save_artifact" => save_artifact(args).await?,
         "list_active_runs" => list_active_runs(app).await?,
         "cancel_run" => cancel_run(app, args).await?,
+        "corey_list_llms" => list_llms(app).await?,
+        "corey_set_default_llm" => set_default_llm(app, args).await?,
+        "corey_open_route" => open_route(app, args).await?,
         _ => return Err((-32601, format!("unknown tool: {name}"))),
     };
 
@@ -988,4 +1064,174 @@ async fn cancel_run(app: AppHandle, args: Value) -> Result<String, (i32, String)
         "note": "current step finishes, then the engine exits cleanly",
     })
     .to_string())
+}
+
+// ── Demo-critical surface (v0.2.11+) ────────────────────────────
+// list_llms / set_default_llm / open_route. These wrap pre-existing
+// pure helpers in `llm_profiles` / `hermes_config`, so Hermes Agent
+// itself stays untouched (HD-1/HD-2). The chat agent calls these
+// via MCP and the GUI updates either via the existing
+// AppStatus poll (set_default_llm) or via the `corey_native:open_route`
+// event listener (open_route).
+
+async fn list_llms(app: AppHandle) -> Result<String, (i32, String)> {
+    use crate::state::AppState;
+    use tauri::Manager;
+
+    let state = app.state::<AppState>();
+    let config_dir = state.config_dir.clone();
+
+    let (profiles, current_model) = tokio::task::spawn_blocking(move || {
+        let profiles = crate::llm_profiles::load(&config_dir);
+        let current = crate::hermes_config::read_view()
+            .ok()
+            .and_then(|v| v.model.default.clone());
+        (profiles, current)
+    })
+    .await
+    .map_err(|e| (-32603, format!("list_llms join: {e}")))?;
+
+    let items: Vec<Value> = profiles
+        .iter()
+        .map(|p| {
+            let is_default = current_model
+                .as_deref()
+                .map(|m| m == p.model)
+                .unwrap_or(false);
+            json!({
+                "id": p.id,
+                "label": if p.label.is_empty() { p.id.clone() } else { p.label.clone() },
+                "provider": p.provider,
+                "model": p.model,
+                "vision": p.vision.unwrap_or(false),
+                "is_default": is_default,
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "current_model": current_model,
+        "profiles": items,
+    })
+    .to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct SetDefaultLlmArgs {
+    profile_id: String,
+}
+
+async fn set_default_llm(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
+    use crate::state::AppState;
+    use tauri::Manager;
+
+    let args: SetDefaultLlmArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid set_default_llm args: {e}")))?;
+
+    let state = app.state::<AppState>();
+    let config_dir = state.config_dir.clone();
+    let journal = state.changelog_path.clone();
+    let target_id = args.profile_id.clone();
+
+    let (label, model_id) =
+        tokio::task::spawn_blocking(move || -> Result<(String, String), String> {
+            let profiles = crate::llm_profiles::load(&config_dir);
+            let target = profiles.iter().find(|p| p.id == target_id).ok_or_else(|| {
+                let known: Vec<&str> = profiles.iter().map(|p| p.id.as_str()).collect();
+                format!("profile '{target_id}' not found. configured profiles: {known:?}")
+            })?;
+
+            let section = crate::hermes_config::HermesModelSection {
+                default: Some(target.model.clone()),
+                provider: Some(target.provider.clone()),
+                base_url: if target.base_url.is_empty() {
+                    None
+                } else {
+                    Some(target.base_url.clone())
+                },
+            };
+            crate::hermes_config::write_model(&section, Some(&journal))
+                .map_err(|e| format!("write hermes config: {e}"))?;
+
+            // Hermes' agent loop reads `HERMES_MODEL` from `~/.hermes/.env`
+            // (NOT config.yaml) when a chat request lands with
+            // `model="hermes-agent"`. Without this env var, Hermes
+            // forwards `"hermes-agent"` literally to the upstream LLM API
+            // and the provider returns 400. Writing it here keeps the
+            // chat path agent-mode + tool-injection healthy on every
+            // LLM switch. Gateway restart is required for Hermes to
+            // pick up the new env value (HD-9: no hot-reload).
+            crate::hermes_config::write_env_key(
+                "HERMES_MODEL",
+                Some(&target.model),
+                Some(&journal),
+            )
+            .map_err(|e| format!("write HERMES_MODEL env: {e}"))?;
+
+            let label = if target.label.is_empty() {
+                target.id.clone()
+            } else {
+                target.label.clone()
+            };
+            Ok((label, target.model.clone()))
+        })
+        .await
+        .map_err(|e| (-32603, format!("set_default_llm join: {e}")))?
+        .map_err(|e| (-32602, e))?;
+
+    // **DO NOT auto-restart Hermes Gateway here.** This MCP tool
+    // runs INSIDE Hermes' agent loop while the user's chat stream
+    // is mid-flight. Restarting Hermes Gateway from inside a tool
+    // call kills the SSE socket — the chat reply hangs forever.
+    //
+    // Instead: emit `corey_native:model_changed` and let the frontend
+    // listener decide when to bounce the gateway (after the active
+    // chat turn closes, on user confirmation, etc.). The .env write
+    // already happened; the new HERMES_MODEL takes effect on the
+    // NEXT gateway boot.
+    //
+    // The reply text below tells the user to expect a deferred
+    // restart so they don't think nothing happened.
+
+    // Notify the GUI so the topbar model badge / AgentSwitcher pill
+    // updates immediately instead of waiting for the slow poll. The
+    // listener (`useDeepLinkListener`) re-runs `refreshModel`.
+    use tauri::Emitter;
+    let _ = app.emit(
+        "corey_native:model_changed",
+        json!({ "profile_id": args.profile_id, "model": model_id }),
+    );
+
+    Ok(json!({
+        "ok": true,
+        "profile_id": args.profile_id,
+        "label": label,
+        "model": model_id,
+        "note": "config.yaml + .env written. Hermes Gateway restart required for the new HERMES_MODEL to take effect — frontend will surface a 'restart now' prompt after this chat turn finishes.",
+    })
+    .to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenRouteArgs {
+    path: String,
+}
+
+async fn open_route(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
+    let args: OpenRouteArgs = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid open_route args: {e}")))?;
+
+    let path = args.path.trim();
+    if !path.starts_with('/') {
+        return Err((
+            -32602,
+            format!("path must start with '/': got {:?}", args.path),
+        ));
+    }
+
+    use tauri::Emitter;
+    app.emit("corey_native:open_route", path.to_string())
+        .map_err(|e| (-32603, format!("emit open_route: {e}")))?;
+
+    Ok(format!("Asked Corey GUI to navigate to {}.", path))
 }

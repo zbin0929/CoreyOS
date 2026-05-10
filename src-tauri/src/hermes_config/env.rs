@@ -169,6 +169,18 @@ pub(super) fn is_allowed_env_key(key: &str) -> bool {
     if key.ends_with("_API_KEY") {
         return true;
     }
+    // Phase 4: Hermes agent-routing env vars that Corey owns —
+    // these decide which upstream LLM Hermes' agent loop talks to
+    // when chat requests arrive with `model="hermes-agent"`. They
+    // must be writable by `corey_set_default_llm` so the user can
+    // switch LLMs through chat. Keep this list explicit, not a
+    // wildcard, so the env-write surface stays tight.
+    if matches!(
+        key,
+        "HERMES_MODEL" | "HERMES_PROVIDER" | "HERMES_BASE_URL" | "HERMES_API_KEY",
+    ) {
+        return true;
+    }
     // Phase 3: any env name declared by a channel spec. Keeps the
     // allowlist tight — we never let the UI write arbitrary env vars.
     crate::channels::allowed_channel_env_keys()

@@ -1,5 +1,8 @@
+import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ArrowRight } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
 
 import { cn } from '@/lib/cn';
 
@@ -15,7 +18,66 @@ import { TableArtifact } from './TableArtifact';
  * Also used by the `/compare` route to render each lane's response in
  * the same visual chrome — see `src/features/compare/index.tsx`.
  */
+/**
+ * Plain-text deep-link aliases the agent often emits without proper
+ * markdown link syntax — e.g. `[去 Models 页 →]`. We rewrite these to
+ * canonical markdown links pointing at the matching frontend route so
+ * the `a` renderer below can turn them into clickable buttons.
+ *
+ * Keep this list aligned with the routes registered in
+ * `src/app/routes.tsx`. The agent's Soul tells it to use proper
+ * markdown syntax, but rewriting here is belt + suspenders for when
+ * the model forgets.
+ */
+const PLAIN_LINK_ROUTES: Array<{ pattern: RegExp; href: string }> = [
+  { pattern: /^(去\s*)?Models\s*页?\s*→?$/i, href: '/models' },
+  { pattern: /^(去\s*)?Tasks\s*页?\s*→?$/i, href: '/tasks' },
+  { pattern: /^(去\s*)?Workflows?\s*页?\s*→?$/i, href: '/workflows' },
+  { pattern: /^(去\s*)?Analytics\s*页?\s*→?$/i, href: '/analytics' },
+  { pattern: /^(去\s*)?Logs\s*页?\s*→?$/i, href: '/logs' },
+  { pattern: /^(去\s*)?Skills\s*页?\s*→?$/i, href: '/skills' },
+  { pattern: /^(去\s*)?Knowledge\s*页?\s*→?$/i, href: '/knowledge' },
+  { pattern: /^(去\s*)?Memory\s*页?\s*→?$/i, href: '/memory' },
+  { pattern: /^(去\s*)?MCP\s*页?\s*→?$/i, href: '/mcp' },
+  { pattern: /^(去\s*)?(Settings|设置)\s*页?\s*→?$/i, href: '/settings' },
+  { pattern: /^(回到\s*)?(Home|主页|首页)\s*→?$/i, href: '/' },
+];
+
+function rewritePlainDeepLinks(src: string): string {
+  return src.replace(/\[([^\]\n]+?)\](?!\()/g, (full, label: string) => {
+    const trimmed = label.trim();
+    for (const { pattern, href } of PLAIN_LINK_ROUTES) {
+      if (pattern.test(trimmed)) return `[${label}](${href})`;
+    }
+    return full;
+  });
+}
+
+function isInternalRoute(href: string | undefined): href is string {
+  return typeof href === 'string' && href.startsWith('/') && !href.startsWith('//');
+}
+
+function DeepLinkButton({ href, children }: { href: string; children: ReactNode }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() => void navigate({ to: href })}
+      className={cn(
+        'my-1 inline-flex items-center gap-1.5 rounded-full border border-gold-500/40',
+        'bg-gold-500/10 px-3 py-1 text-xs font-medium text-gold-700 dark:text-gold-300',
+        'transition-colors duration-fast hover:bg-gold-500/20 hover:border-gold-500/60',
+        'focus:outline-none focus:ring-2 focus:ring-gold-500/40',
+      )}
+    >
+      <span>{children}</span>
+      <ArrowRight className="h-3 w-3" aria-hidden />
+    </button>
+  );
+}
+
 export function Markdown({ children }: { children: string }) {
+  const source = rewritePlainDeepLinks(children);
   return (
     <div className="prose-chat">
       <ReactMarkdown
@@ -44,16 +106,27 @@ export function Markdown({ children }: { children: string }) {
           li: ({ children }) => <li>{children}</li>,
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-gold-600 dark:text-gold-400 underline decoration-gold-500/40 underline-offset-2 hover:decoration-gold-500"
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            // Internal route → render as a deep-link pill that drives
+            // the in-app router. The chat agent uses `[label](/route)`
+            // syntax to hand control back to the user ("决策归还")
+            // after a tool-driven summary; making it a button keeps
+            // the user inside the desktop app instead of opening a
+            // new browser tab.
+            if (isInternalRoute(href)) {
+              return <DeepLinkButton href={href}>{children}</DeepLinkButton>;
+            }
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-gold-600 dark:text-gold-400 underline decoration-gold-500/40 underline-offset-2 hover:decoration-gold-500"
+              >
+                {children}
+              </a>
+            );
+          },
           blockquote: ({ children }) => (
             <blockquote className="my-2 border-l-2 border-border pl-3 text-fg-muted">
               {children}
@@ -121,7 +194,7 @@ export function Markdown({ children }: { children: string }) {
           hr: () => <hr className="my-3 border-border" />,
         }}
       >
-        {children}
+        {source}
       </ReactMarkdown>
     </div>
   );

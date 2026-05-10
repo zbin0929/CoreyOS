@@ -242,8 +242,29 @@ impl AgentAdapter for HermesAdapter {
                 gateway,
                 default_model,
             } => {
-                let (model, messages) = resolve_turn(turn, default_model);
-                gateway.chat_stream(&model, messages, tx).await
+                // Wire-level `model` is always `"hermes-agent"` so
+                // Hermes Gateway takes the agent path (SOUL.md /
+                // AGENTS.md / MCP tools schema injection / agent
+                // loop / tool execution). The user's chosen LLM is
+                // resolved by Hermes itself from `HERMES_MODEL` env
+                // (~/.hermes/.env) — that's the var Hermes' agent
+                // loop reads to pick the upstream provider/model.
+                //
+                // NOT sending the LLM id directly (e.g.
+                // `deepseek-v4-pro`) because that flips Hermes into
+                // OpenAI-compatible passthrough — no tools, no
+                // SOUL.md, no agent. v0.2.10 pre-fix: that was the
+                // root cause of all the "AI hallucinates model
+                // names" bugs. See docs/spec/system-prompt-stack.md.
+                //
+                // `corey_set_default_llm` MCP tool keeps two files
+                // in sync when the user switches LLM via chat:
+                //   1. `~/.hermes/config.yaml :: model.default` (UI)
+                //   2. `~/.hermes/.env :: HERMES_MODEL`        (agent route)
+                // After the env-file write, gateway must restart for
+                // Hermes to pick up the new HERMES_MODEL value.
+                let (_resolved_model, messages) = resolve_turn(turn, default_model);
+                gateway.chat_stream("hermes-agent", messages, tx).await
             }
         }
     }

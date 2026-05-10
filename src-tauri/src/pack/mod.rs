@@ -59,7 +59,7 @@ pub use skills::{install_skills, uninstall_skills};
 pub use state::{load, save, PackStateFile};
 pub use sync::{disable_updates, enable_updates};
 pub use templates::{current_platform, TemplateContext};
-pub use workflows::{install_workflows, uninstall_workflows};
+pub use workflows::{install_workflows, prefix_workflow_id, uninstall_workflows};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

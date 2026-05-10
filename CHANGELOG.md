@@ -6,6 +6,41 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-10 — v0.2.11 · Conversational product control (chat-driven LLM switch + deep-link buttons)
+
+> 把"对话即操控"做成基座能力。任何 Pack 自动继承——chat 里说话就能换模型、跳页面、调真工具。
+
+### Shipped
+
+- **3 个新 corey-native MCP 工具** — `corey_list_llms` / `corey_set_default_llm` / `corey_open_route`，前缀 `corey_` 防与 Hermes builtin / 其他 MCP 同名冲突。三个 handler 都包装现有 IPC 纯逻辑，Hermes Agent 一行不动（HD-1/HD-2）。
+- **3 层 system prompt 架构落地** — 新 `docs/spec/system-prompt-stack.md` 钉死契约：L1 基座 SOUL.md（元操作纪律 + 工具映射 + 决策归还格式）/ L2 Pack soul（行业人设）/ L3 检索上下文。基座规则跟 Pack 解耦，多 Pack 自然继承元操作能力。
+- **基座 SOUL.md 自动注入** — Hermes 把 `~/.hermes/SOUL.md` 当 slot #1 system prompt 加载。Corey 写一份"元操作铁律 + 28 工具映射 + 3 段格式 + deep-link 语法"进去，AI 不再被 Pack 人设盖掉产品操控能力。
+- **Pack soul 回归纯人设** — `cross_border_ecom/prompts/soul.md` 删光所有工具调用规则，只保留亚马逊运营顾问业务人设。3 段格式 / 工具调用 / deep-link 语法都归基座管。
+- **chat 路径强制走 Hermes agent loop** — `HermesAdapter::chat_stream` 永远发 `model="hermes-agent"`，触发 Hermes Gateway agent 模式（注入工具 schema + SOUL.md + 执行 tool calls）。之前 `model="deepseek-v4-pro"` 走 OpenAI 透传，工具不注入，是所有"AI 脑补模型名"症状的真凶。
+- **`HERMES_MODEL` env 自动同步** — `corey_set_default_llm` 写完 config.yaml 后**额外**写 `~/.hermes/.env :: HERMES_MODEL`（Hermes agent loop 用这个决定上游 LLM）。`env.rs` 新增对 `HERMES_MODEL/HERMES_PROVIDER/HERMES_BASE_URL/HERMES_API_KEY` 的写入豁免（之前只允许 `*_API_KEY`）。
+- **deferred Gateway restart** — `corey_set_default_llm` 写完文件后**不立即**重启 Gateway（会杀正在跑的 SSE chat stream）。改为 emit `corey_native:model_changed`，前端 listener 2s 防抖后调 `hermesGatewayRestart` IPC，让 Hermes 加载新 HERMES_MODEL。
+- **Markdown 内部链接渲染成可点按钮** — `messageBubble/Markdown.tsx` 把 `[文本](/路径)` 形式渲染成金色 DeepLinkButton（TanStack Router 跳转），同时兼容裸文本 `[去 Models 页 →]` 的常见 fallback。点了直接跳路由，不开新浏览器。
+- **chat 顶部 subtitle 显示当前模型** — `features/chat/index.tsx` PageHeader subtitle 加 `· 🧠 deepseek-v4-pro`，user 一眼看到"现在跟谁说话"。
+- **useChatSend 自动 LLM Profile pin** — session 没显式 pin 但 effectiveModel 匹配某 profile 时，自动 ensureAdapter + setSessionLlmProfile。session 落到 `hermes:profile:<id>` 而非裸 `hermes`，路由健康。
+- **`llm_profile_ensure_adapter` 走 Hermes Gateway** — 之前运行时注册的 profile adapter 直连 vendor base_url（旁路 Hermes），跟 lib.rs 启动时的注册不一致。统一用 `cfg.base_url`（Hermes Gateway URL）。
+
+### Fixed
+
+- **AI 脑补 GPT-5 / Claude 3.5 等不存在模型名** — 根因是 chat 走 OpenAI 透传，模型没看到 corey-native 工具 schema。三层 system prompt 架构 + `model="hermes-agent"` 强制 agent loop 后，AI 看到真工具且按 SOUL.md 元操作纪律调用。
+- **多 Pack 启用时 Pack soul 重复声明工具规则** — 新架构下 Pack 作者只写人设，元操作纪律全归 L1 SOUL.md，零 Pack 重复劳动。
+- **`http://localhost:8080/tasks` 这种垃圾 URL** — SOUL.md 加铁律段明示禁止用 host 写 deep-link，必须用 `[文本](/绝对路径)` markdown 语法。
+- **`ChatCompletionRequest` 字段缺失被误诊为根因** — 排查时一度怀疑没传 `tools` 字段，实际 Hermes 自己注入。真凶是 `HERMES_MODEL` env 没设。
+
+### Deferred / Backlog
+
+- **Hermes Agent v0.13.0 升级** — 当前 v0.12.0，最新 v0.13.0（5.7 发布）有 Sessions-survive-restarts / MCP reconnect / transform_llm_output hook 等吸引功能，但带 Provider plugin 架构改造，需要适配 `model.*` 配置写法。1-2 天工期，列入 v0.2.12。
+- **DSML / 非标 tool_call 协议适配** — DeepSeek-V3.1 等模型偶尔以 `<｜｜DSML｜｜>` 标签输出 tool calls，Hermes 不解析。可在 Corey 端 SSE 中间层加协议适配（v0.13 的 `transform_llm_output` hook 是新的实现路径）。
+- **多 Pack `active_pack` 切换** — chat session 加 `active_pack_id` 字段、AGENTS.md 由当前激活 Pack 动态生成、基座工具 `set_active_pack`。架构定下来了（system-prompt-stack.md），实现待 v0.2.12+。
+- **GLM 系列模型 reasoning 流泄漏** — `glm-5.1` 通过 `bigmodel.cn/coding/paas/v4` 端点把 CoT 当 content 返回。需要 `LlmProfile` 加 `tool_call_protocol` 字段 + Picker 给不兼容模型 ⚠️ 标。
+- **动态工具映射** — base SOUL.md 现在静态写死 8 个最常用工具的关键词→工具名映射。后续启动时调 `tools/list` 自动生成完整表。
+
+---
+
 ## 2026-05-07 — v0.2.10 · In-process TTS engine (sherpa-onnx + VITS MeloTTS)
 
 > Talk Mode TTS 从 CLI 子进程迁移到进程内引擎，零 WAV 文件、零子进程、零延迟。

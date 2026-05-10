@@ -251,7 +251,12 @@ function ChatPane({
     <div className="flex min-w-0 flex-1 flex-col">
       <PageHeader
         title={t('chat_page.title')}
-        subtitle={sourceLabel || t('chat_page.subtitle')}
+        subtitle={
+          sourceLabel ||
+          (effectiveModel
+            ? `${t('chat_page.subtitle')} · 🧠 ${effectiveModel}`
+            : t('chat_page.subtitle'))
+        }
         actions={
           <div className="flex items-center gap-2">
             <LearningIndicator />

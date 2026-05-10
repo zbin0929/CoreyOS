@@ -249,24 +249,36 @@ pub async fn llm_profile_ensure_adapter(
         hint: format!("no llm profile with id {id:?}"),
     })?;
 
-    // Resolve the API key value from ~/.hermes/.env if the profile
-    // references one. Missing env entries are NOT fatal — we register
-    // the adapter anyway and let the upstream 401 bubble up at chat
-    // time so the user sees the actual error.
-    let api_key = match profile.api_key_env.as_deref().filter(|k| !k.is_empty()) {
-        Some(env_name) => {
-            crate::hermes_config::read_env_value(env_name).map_err(|e| IpcError::Internal {
-                message: format!("read env for profile adapter: {e}"),
-            })?
-        }
-        None => None,
-    };
+    // **Architectural contract** (must match lib.rs startup-time
+    // profile registration). Profile-backed adapters route to the
+    // LOCAL Hermes Gateway (`cfg.base_url`), NOT to the profile's
+    // own `base_url`. The profile is the user's choice of MODEL —
+    // the execution environment is always Hermes (so we get the
+    // agent loop, MCP tools schema, SOUL.md, skills, …).
+    //
+    // Pre-fix bug: this path used to pass `profile.base_url`
+    // directly, so a profile pin caused chat to bypass Hermes
+    // Gateway entirely and stream straight to the vendor API.
+    // That broke `mcp_corey_native_*` tool calls (the vendor API
+    // never gets the tools schema injected) and produced the
+    // upstream-400 error when chat sends `model="hermes-agent"`
+    // (the vendor doesn't recognise that name). Realigned with
+    // lib.rs:430-475 startup wiring on 2026-05-10.
+    //
+    // The profile's `base_url` and `api_key_env` stay informational
+    // here — Hermes resolves the upstream provider from
+    // `~/.hermes/config.yaml :: model.{provider,base_url}` plus
+    // `~/.hermes/.env :: HERMES_MODEL`, both of which
+    // `corey_set_default_llm` keeps in sync.
+    let gateway_base_url = state
+        .config
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .base_url
+        .clone();
 
-    let adapter = HermesAdapter::new_live(
-        profile.base_url.clone(),
-        api_key,
-        Some(profile.model.clone()),
-    )?;
+    let adapter =
+        HermesAdapter::new_live(gateway_base_url.clone(), None, Some(profile.model.clone()))?;
 
     let adapter_id = profile_adapter_id(&profile.id);
     let label = if profile.label.trim().is_empty() {
@@ -283,8 +295,9 @@ pub async fn llm_profile_ensure_adapter(
     tracing::info!(
         profile_id = %profile.id,
         adapter_id = %adapter_id,
-        base_url = %profile.base_url,
-        "llm profile registered as adapter"
+        gateway_base_url = %gateway_base_url,
+        profile_model = %profile.model,
+        "llm profile registered as adapter (routes via Hermes gateway)"
     );
 
     Ok(LlmProfileAdapterInfo {

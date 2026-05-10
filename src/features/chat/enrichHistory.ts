@@ -5,6 +5,7 @@ import {
   learningReadLearnings,
   packActiveSouls,
 } from '@/lib/ipc';
+import { buildBaseSoul } from '@/app/baseSoul';
 
 // v9: `ragSearch` removed. The Rust-side `rag_search` IPC was a
 // Jaccard-on-`messages` keyword fallback misnamed as RAG; it never
@@ -81,6 +82,20 @@ export async function enrichHistoryWithContext(
   } catch {
     // non-critical — proceed without learnings
   }
+
+  // [L1] Base Soul — Corey 基座层。LAST unshift = FIRST in array =
+  // highest priority for the model. Carries:
+  //   - Corey assistant identity
+  //   - Meta-operation discipline (must call corey-native tools)
+  //   - Forbid fabricated tool results / hallucinated model names
+  //   - Decision-handback 3-segment format + deep-link syntax
+  // This layer is independent of which Pack(s) are active — without it
+  // a bare-base install or a non-cross_border_ecom Pack would lose all
+  // conversational product control. See docs/spec/system-prompt-stack.md.
+  enriched.unshift({
+    role: 'system',
+    content: buildBaseSoul(),
+  });
 
   return enriched;
 }

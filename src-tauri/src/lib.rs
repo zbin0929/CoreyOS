@@ -609,6 +609,51 @@ pub fn run() {
                     }
                 }
 
+                // Reconcile enabled packs: ensure each enabled pack's
+                // workflows / skills / schedules are actually installed
+                // into ~/.hermes/. Without this, a freshly-seeded pack
+                // is marked enabled in pack-state.json but its workflow
+                // YAMLs are never written to ~/.hermes/workflows/, so
+                // workflow_run reports "not found" when the user clicks
+                // a Pack action button. This is idempotent — running
+                // every boot is a no-op when files already match.
+                for entry in &registry.packs {
+                    if !entry.enabled {
+                        continue;
+                    }
+                    let Some(manifest) = entry.manifest.as_ref() else {
+                        continue;
+                    };
+                    if !manifest.workflows.is_empty() {
+                        match pack::install_workflows(manifest, &entry.dir_path) {
+                            Ok(n) => {
+                                if n > 0 {
+                                    info!(pack_id = %manifest.id, installed = n, "reconcile: pack workflows installed");
+                                }
+                            }
+                            Err(e) => tracing::warn!(pack_id = %manifest.id, error = %e, "reconcile: install_workflows failed"),
+                        }
+                    }
+                    if !manifest.skills.is_empty() {
+                        match pack::install_skills(manifest, &entry.dir_path, &hermes_dir) {
+                            Ok(n) => {
+                                if n > 0 {
+                                    info!(pack_id = %manifest.id, installed = n, "reconcile: pack skills installed");
+                                }
+                            }
+                            Err(e) => tracing::warn!(pack_id = %manifest.id, error = %e, "reconcile: install_skills failed"),
+                        }
+                    }
+                    match pack::install_schedules(manifest) {
+                        Ok((added, removed)) => {
+                            if added > 0 || removed > 0 {
+                                info!(pack_id = %manifest.id, added, removed, "reconcile: pack schedules synced");
+                            }
+                        }
+                        Err(e) => tracing::warn!(pack_id = %manifest.id, error = %e, "reconcile: install_schedules failed"),
+                    }
+                }
+
                 app_state.set_packs(registry);
             }
 

@@ -20,8 +20,8 @@ use crate::hermes_config;
 use crate::license::{self, Verdict};
 use crate::pack::{
     disable_updates, enable_updates, install_schedules, install_skills, install_workflows,
-    uninstall_schedules, uninstall_skills, uninstall_workflows, PackManifest, RegistryEntry,
-    TemplateContext,
+    prefix_workflow_id, uninstall_schedules, uninstall_skills, uninstall_workflows, PackManifest,
+    RegistryEntry, TemplateContext,
 };
 use crate::state::AppState;
 
@@ -216,7 +216,11 @@ pub async fn pack_views_list(state: State<'_, AppState>) -> IpcResult<Vec<PackVi
                     .iter()
                     .map(|a| PackActionDto {
                         label: a.label.clone(),
-                        workflow: a.workflow.clone(),
+                        workflow: if a.workflow.is_empty() || a.workflow.starts_with("pack__") {
+                            a.workflow.clone()
+                        } else {
+                            prefix_workflow_id(&manifest.id, &a.workflow)
+                        },
                         skill: a.skill.clone(),
                         confirm: a.confirm,
                     })

@@ -12,6 +12,7 @@ import { CommandPalette } from '@/components/command-palette/Palette';
 import { ShortcutsDialog } from '@/components/shortcuts/ShortcutsDialog';
 import { useShortcutsHotkey } from '@/components/shortcuts/useShortcuts';
 import { Button } from '@/components/ui/button';
+import { useDeepLinkListener } from '../useDeepLinkListener';
 import { useMenuEvents } from '../useMenuEvents';
 import { useNavShortcuts } from '../useNavShortcuts';
 import { useWorkflowNotifications } from '../useWorkflowNotifications';
@@ -22,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useShortcutsHotkey();
   useMenuEvents();
   useWorkflowNotifications();
+  useDeepLinkListener();
   const talkModeOpen = useUIStore((s) => s.talkModeOpen);
   const setTalkModeOpen = useUIStore((s) => s.setTalkModeOpen);
   return (

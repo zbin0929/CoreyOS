@@ -17,6 +17,7 @@ import {
   type ChatStreamHandle,
   type ChatApprovalRequest,
 } from '@/lib/ipc';
+import { llmProfileEnsureAdapter, llmProfileList } from '@/lib/ipc/hermes-instances';
 import {
   newMessageId,
   useChatStore,
@@ -269,9 +270,38 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     // stores so the verdict is scoped to THIS send (a subsequent
     // switcher change must NOT re-route the in-flight stream).
     const sendSess = useChatStore.getState().sessions[sessionId];
+
+    // Auto-pin LLM profile when the effective model matches one and
+    // the session has no explicit pin yet. Without this the request
+    // goes out as `adapter=hermes` + bare model id, and Hermes routes
+    // through `~/.hermes/config.yaml :: providers:` — which is empty
+    // when the user manages models via Corey's LlmProfile system. The
+    // result is a successful HTTP connection that streams 0 tokens.
+    // We do this fetch+ensure best-effort: any failure falls back to
+    // the original tier resolution (so an offline profiles file or
+    // ensureAdapter outage doesn't break sending).
+    let resolvedProfilePin: string | null = sendSess?.llmProfileId ?? null;
+    if (!resolvedProfilePin && effectiveModel) {
+      try {
+        const list = await llmProfileList();
+        const match = list.profiles.find((p) => p.model === effectiveModel);
+        if (match) {
+          await llmProfileEnsureAdapter(match.id);
+          resolvedProfilePin = match.id;
+          // Persist on the session so subsequent turns short-circuit
+          // the lookup AND the LLM picker reflects the pin in its UI.
+          useChatStore
+            .getState()
+            .setSessionLlmProfile(sessionId, match.id, match.model);
+        }
+      } catch {
+        /* fall through to tier resolution */
+      }
+    }
+
     const matched = resolveRoutedRule(useRoutingStore.getState().rules, trimmed);
     const { activeAdapterId, routedAdapterId } = pickTurnAdapter({
-      profilePin: sendSess?.llmProfileId ?? null,
+      profilePin: resolvedProfilePin,
       agentsActiveId: useAgentsStore.getState().activeId,
       registeredAdapterIds: new Set(
         useAgentsStore.getState().adapters?.map((a) => a.id) ?? [],
