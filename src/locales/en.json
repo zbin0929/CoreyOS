@@ -463,6 +463,8 @@
     "preset_install": "Install",
     "preset_installing": "Installing…",
     "preset_done_title": "Starter content installed ({{n}} items)",
+    "preset_outdated_title": "{{n}} new skill(s) ready to add",
+    "preset_refresh": "Update",
     "install_title": "Hermes is not installed",
     "install_desc": "Corey talks to a local Hermes gateway. Run the install command below, then click \"I've installed it\".",
     "install_copy": "Copy",

@@ -540,6 +540,8 @@
     "preset_install": "安装",
     "preset_installing": "安装中…",
     "preset_done_title": "起始内容已安装（{{n}} 项）",
+    "preset_outdated_title": "有 {{n}} 个新的 skill 可一键加入",
+    "preset_refresh": "更新",
     "install_title": "尚未安装 Hermes",
     "install_desc": "Corey 需要本地 Hermes 网关。运行下方命令，然后点击「我已安装」。",
     "install_copy": "复制",
