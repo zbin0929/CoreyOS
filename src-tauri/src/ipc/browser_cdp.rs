@@ -897,9 +897,25 @@ pub(crate) fn apply_cdp_post_launch(minimize: bool) -> Result<(), String> {
         // (4) Optional: minimize the window. Best-effort — any failure
         //     here is logged warn and swallowed so it never blocks
         //     launch.
+        //
+        // CDP `Browser.setWindowBounds` has a long-standing macOS bug
+        // for HEADED Chrome where `Browser.getWindowForTarget` returns
+        // `{"code":-32000,"message":"Browser window not found"}` even
+        // though the window clearly exists (Chromium issue 1140655 et
+        // al.). When that happens we fall back to OS-level window
+        // hiding via `os_minimize_chrome_window`, which is reliable
+        // (uses Accessibility AXMinimized on macOS, ShowWindow SW_HIDE
+        // on Windows).
         if minimize {
             if let Err(e) = cdp_minimize_window(&mut ws).await {
                 tracing::warn!("CDP minimize window failed (non-fatal): {e}");
+                let _ = ws.close(None).await;
+                if let Err(e2) = os_minimize_chrome_window() {
+                    tracing::warn!("OS minimize fallback failed (non-fatal): {e2}");
+                } else {
+                    tracing::info!("OS-level fallback minimized background Chrome window");
+                }
+                return Ok::<(), String>(());
             } else {
                 tracing::info!("CDP background Chrome window minimized");
             }
@@ -1011,6 +1027,83 @@ where
     .await?;
 
     Ok(())
+}
+
+/// Synchronous OS-level fallback for hiding the background Chrome
+/// window when CDP `Browser.setWindowBounds` is unavailable (it has a
+/// well-known macOS bug for headed Chromes — see Chromium issue
+/// 1140655). We read our own Chrome PID from the file
+/// `spawn_chrome` writes and ask the OS window manager to hide
+/// **that specific PID** — never the customer's daily-driver Chrome.
+///
+/// Each platform uses its native primitive:
+///   - **macOS**: AppleScript `set visible of (process whose unix id …) to false`
+///     (Cmd+H equivalent; no Accessibility permission needed, just
+///     a one-time Automation prompt for "System Events").
+///   - **Windows**: PowerShell `ShowWindow(MainWindowHandle, SW_HIDE)`.
+///   - **Linux**: no-op — `--window-position` is honored reliably
+///     across mutter/kwin/X11, so we don't need a fallback here.
+///
+/// Best-effort: failure is logged warn by the caller and never
+/// propagates; the customer just sees a stray Chrome window which is
+/// annoying but doesn't break CDP / scraping.
+fn os_minimize_chrome_window() -> Result<(), String> {
+    let pid = read_chrome_pid()?;
+    os_minimize_chrome_window_for_pid(pid)
+}
+
+#[cfg(target_os = "macos")]
+fn os_minimize_chrome_window_for_pid(pid: u32) -> Result<(), String> {
+    let script = format!(
+        "tell application \"System Events\" to set visible of (first process whose unix id is {pid}) to false"
+    );
+    let out = Command::new("/usr/bin/osascript")
+        .args(["-e", &script])
+        .output()
+        .map_err(|e| format!("osascript exec: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "osascript: status={:?} stderr={}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn os_minimize_chrome_window_for_pid(pid: u32) -> Result<(), String> {
+    let script = format!(
+        "Add-Type -Name W -Namespace S -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr h, int n);'; \
+         $p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; \
+         if ($p -and $p.MainWindowHandle -ne 0) {{ [S.W]::ShowWindow($p.MainWindowHandle, 0) | Out-Null }} else {{ Write-Error 'no main window handle' }}"
+    );
+    let out = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .output()
+        .map_err(|e| format!("powershell exec: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "powershell: status={:?} stderr={}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn os_minimize_chrome_window_for_pid(_pid: u32) -> Result<(), String> {
+    Ok(())
+}
+
+fn read_chrome_pid() -> Result<u32, String> {
+    let path = pid_file();
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| format!("read pid file {}: {e}", path.display()))?;
+    raw.trim()
+        .parse::<u32>()
+        .map_err(|e| format!("parse pid {:?}: {e}", raw.trim()))
 }
 
 /// OS-specific Chrome spawn. The key invariants — same across all
