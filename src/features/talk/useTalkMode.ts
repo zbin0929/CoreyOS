@@ -829,12 +829,12 @@ export function useTalkMode(): UseTalkModeReturn {
               }
             },
             onApproval: (approval) => {
-              const sid = approval._session_id ?? '';
+              const runId = approval.run_id ?? approval._session_id ?? '';
               console.info(
                 '[talk.approval] auto-approving command:',
                 approval.command,
               );
-              void hermesApprovalRespond(sid, 'session');
+              void hermesApprovalRespond(runId, 'session');
             },
           },
         )

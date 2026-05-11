@@ -1,12 +1,23 @@
 # System Prompt Stack — 三层 Soul 架构
 
-> 版本：v1.1（2026-05-11）
-> 适用：v0.2.11+
+> 版本：v1.2（2026-05-11 晚）
+> 适用：v0.2.12+
 > 维护：动这个文件前先读完整篇，分层契约不可单边违反。
 >
-> v1.1 修订（2026-05-11）：把 L1 base soul 的 source of truth 钉死为
-> `src/app/baseSoul.ts`，**Corey 永不写入** `~/.hermes/SOUL.md`（那是
-> 客户主权区域）。详见下方 "L1 注入路径与 Hermes SOUL.md 的关系" 段。
+> v1.1 修订（2026-05-11 早）：把 L1 base soul 的 source of truth 钉死为
+> `src/app/baseSoul.ts`，Corey 永不写入 `~/.hermes/SOUL.md`。
+>
+> **v1.2 修订（2026-05-11 晚）：新增 L0 元铁律层，通过 marker-delimited
+> block 写入 `~/.hermes/SOUL.md`**。触发原因：客户越来越多通过 WhatsApp /
+> 微信 / 钉钉 / Slack / cron 等**非 Corey UI 渠道**让 Hermes Agent 工作，
+> 这些渠道绕过前端 `enrichHistoryWithContext`，只能通过 SOUL.md 拿到
+> 全局指令。Corey 对 SOUL.md 的写入恢复，但通过 **marker 分界块**保证
+> 不覆盖客户自己在 SOUL.md 里写的任何内容（详见 L0 段）。
+>
+> v1.1 担心的"升级覆盖风险"在实际 Hermes 源码中不成立：Hermes 的
+> `hermes_cli/config.py::_ensure_default_soul_md` **只在文件缺失时**写入，
+> 已有文件永不触碰。Corey 的 marker 策略 + Hermes 的尊重既有文件策略
+> 叠加 = 零覆盖风险。
 
 ## 为什么要分层
 
@@ -23,11 +34,47 @@
 每次 chat 发送，前端通过 `enrichHistoryWithContext` 拼接 system messages，**unshift 顺序决定优先级**（最后 unshift 的最靠前，对模型权重最高）。
 
 ```
-[L1] 基座 Base Soul          ← 最高优先级，永远第一
+[L0] 元铁律 Meta Iron Rules   ← 注入路径：~/.hermes/SOUL.md（跨渠道）
+[L1] 基座 Base Soul          ← 最高优先级，永远第一（注入路径：baseSoul.ts）
 [L2] Pack Soul（active pack） ← 行业人设，可选 0 或 1 个主导
 [L3] 检索上下文              ← Knowledge / 相似对话 / 用户偏好
 [user/assistant 历史…]
 ```
+
+L0 通过 Hermes Gateway 加载 `~/.hermes/SOUL.md` 进入 system prompt，
+对**所有渠道**（Corey UI / WhatsApp / 微信 / 钉钉 / Slack / cron / MCP
+客户端）都生效。L1-L3 只进入 Corey UI 前端路径。
+
+### L0 · 元铁律（跨渠道层，v1.2+）
+
+**唯一 source of truth**：`src-tauri/assets/soul/corey_iron_rules.md`（`include_str!` 编进 binary）。
+
+**注入路径**：Corey 启动时 `soul_md::sync_corey_block(hermes_dir)` 把
+铁律内容写进 `~/.hermes/SOUL.md` 的 **Corey 独占分界块**：
+
+```
+<!-- COREY:BEGIN iron-rules v1 -->
+...(Corey-managed content)...
+<!-- COREY:END iron-rules v1 -->
+```
+
+**客户主权不变**：marker 以外的内容 = 客户自己写的 persona / 偏好，
+Corey **绝对不触碰**，升级也不会改。客户想覆盖 Corey 的 marker 块？
+把它删掉就行 —— 下次启动 Corey 会重新 append，仍然尊重 marker 外的
+其他内容。
+
+**内容契约**（必须包含）：
+
+1. **只做用户明确要求的事**：不多做、不少做、不顺手优化别的
+2. **不自己决定方案**：多选项时先问用户
+3. **没有就是没有**：用户问某功能存不存在，不主动提议"那我帮你建"
+4. **有疑问先提问，等回答**：模糊指代时必须先澄清
+5. **未被明确要求不执行**："想知道 X 在哪" = 只回位置，不执行 X
+
+**特征**：
+- 极短：< 1500 token，不挤占下层 Pack soul 额度
+- 通用：跟渠道无关、跟行业无关、跟 Pack 无关
+- 强约束：用 "🔴 元铁律" / "凌驾一切" / "任何一题不通过 → 不动手" 这种最高强度词汇
 
 ### L1 · Base Soul（基座层）
 

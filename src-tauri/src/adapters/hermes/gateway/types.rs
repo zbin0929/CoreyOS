@@ -144,8 +144,14 @@ pub enum ChatStreamEvent {
     Approval(HermesApprovalRequest),
 }
 
-/// Payload of a `hermes.approval` SSE event. Hermes emits this when a
+/// Payload of a Hermes approval-required event. Hermes emits this when a
 /// dangerous command is detected and needs explicit user approval.
+///
+/// Hermes 0.13.0 native shape (from `/v1/runs/{run_id}/events`) carries
+/// `run_id` + `choices` directly; the legacy `_session_id` field came
+/// from our retired `patch_approval_sse` patch and is no longer
+/// populated, but we keep the serde-rename so historical fixtures still
+/// parse cleanly.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HermesApprovalRequest {
     #[serde(default)]
@@ -156,8 +162,125 @@ pub struct HermesApprovalRequest {
     pub pattern_keys: Vec<String>,
     #[serde(default)]
     pub description: String,
-    #[serde(rename = "_session_id", default)]
+    /// Run id from `/v1/runs`. Frontend echoes this back when responding
+    /// via `POST /v1/runs/{run_id}/approval`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    /// Allowed choices Hermes accepts for this approval.
+    /// Native emits `["once", "session", "always", "deny"]`.
+    #[serde(default)]
+    pub choices: Vec<String>,
+    #[serde(
+        rename = "_session_id",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub session_id: Option<String>,
+}
+
+// ───────────────────────── /v1/runs DTOs (Hermes 0.13.0) ─────────────────────────
+
+/// Body for `POST /v1/runs`. `input` is either a string (single user
+/// message) or an array of `{role, content}` messages — we always send
+/// the array form so multi-turn history is preserved.
+#[derive(Debug, Serialize)]
+pub(super) struct RunStartRequest {
+    pub(super) input: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) instructions: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) conversation_history: Option<Vec<ChatMessage>>,
+}
+
+/// Response from `POST /v1/runs` — only `run_id` is required by the
+/// caller. Other fields (`status`, `created_at`) are ignored.
+#[derive(Debug, Deserialize)]
+pub(super) struct RunStartResponse {
+    pub(super) run_id: String,
+}
+
+/// Token usage shape on `run.completed`. Hermes-native names
+/// (`input_tokens` / `output_tokens`) — different from OpenAI's
+/// `prompt_tokens` / `completion_tokens` shape we use elsewhere; we
+/// translate at the call site.
+#[derive(Debug, Deserialize)]
+pub(super) struct RunUsage {
+    #[serde(default)]
+    pub(super) input_tokens: u32,
+    #[serde(default)]
+    pub(super) output_tokens: u32,
+    /// Hermes also emits `total_tokens` but we recompute from
+    /// input+output downstream (matches the OpenAI shape we hand back
+    /// to the IPC). Kept on the struct so a contract test can assert
+    /// upstream still includes it.
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub(super) total_tokens: u32,
+}
+
+/// Discriminated union of every event the `/v1/runs/{run_id}/events`
+/// SSE stream emits. Tagged on the `event` field; unknown events
+/// surface as a deserialize error and are skipped at the call site.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "event")]
+pub(super) enum RunEvent {
+    #[serde(rename = "message.delta")]
+    MessageDelta {
+        #[serde(default)]
+        delta: String,
+    },
+    #[serde(rename = "tool.started")]
+    ToolStarted {
+        #[serde(default)]
+        tool: String,
+        #[serde(default)]
+        emoji: Option<String>,
+        #[serde(default)]
+        label: Option<String>,
+    },
+    #[serde(rename = "tool.completed")]
+    ToolCompleted {
+        #[serde(default)]
+        #[allow(dead_code)]
+        tool: String,
+    },
+    #[serde(rename = "reasoning.available")]
+    ReasoningAvailable {
+        #[serde(default)]
+        reasoning: String,
+    },
+    #[serde(rename = "approval.request")]
+    ApprovalRequest {
+        #[serde(default)]
+        command: String,
+        #[serde(default)]
+        description: String,
+        #[serde(default)]
+        pattern_key: Option<String>,
+        #[serde(default)]
+        pattern_keys: Vec<String>,
+        #[serde(default)]
+        choices: Vec<String>,
+        run_id: String,
+    },
+    #[serde(rename = "approval.responded")]
+    ApprovalResponded {
+        #[serde(default)]
+        #[allow(dead_code)]
+        choice: String,
+    },
+    #[serde(rename = "run.completed")]
+    RunCompleted {
+        #[serde(default)]
+        usage: Option<RunUsage>,
+    },
+    #[serde(rename = "run.failed")]
+    RunFailed {
+        #[serde(default)]
+        error: String,
+    },
+    #[serde(rename = "run.cancelled")]
+    RunCancelled {},
 }
 
 /// Payload of a `hermes.tool.progress` SSE event. Hermes emits the agent's
@@ -186,34 +309,9 @@ pub struct ChatStreamDone {
     pub completion_tokens: Option<u32>,
 }
 
-#[derive(Debug, Deserialize)]
-pub(super) struct StreamChunk {
-    #[serde(default)]
-    pub(super) model: String,
-    #[serde(default)]
-    pub(super) choices: Vec<StreamChoice>,
-    #[serde(default)]
-    pub(super) usage: Option<ChatUsage>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct StreamChoice {
-    #[serde(default)]
-    pub(super) delta: StreamDelta,
-    pub(super) finish_reason: Option<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub(super) struct StreamDelta {
-    #[serde(default)]
-    pub(super) content: Option<String>,
-    /// DeepSeek-reasoner + OpenAI o1 ship the chain-of-thought as a
-    /// sibling `reasoning_content` field alongside `content`. Plain
-    /// chat models don't emit this, so it stays `None` and we never
-    /// surface it. Surfacing it on reasoning-capable models is
-    /// T6.x.
-    #[serde(default)]
-    pub(super) reasoning_content: Option<String>,
-}
+// `StreamChunk` / `StreamChoice` / `StreamDelta` (the OpenAI-compat
+// `/v1/chat/completions` streaming chunk shapes) were removed in the
+// Hermes 0.13.0 `/v1/runs` migration — see `RunEvent` above for the
+// new event union.
 
 // ───────────────────────── Tests ─────────────────────────

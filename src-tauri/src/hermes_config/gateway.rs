@@ -54,6 +54,9 @@ pub enum HermesCompatibility {
     Unknown,
 }
 
+/// **RETIRED 2026-05-11** — kept for ad-hoc debugging; not called
+/// on any default path. See `gateway_start` comment block.
+#[allow(dead_code)]
 pub fn patch_qqbot_sandbox() {
     let hermes_dir = match crate::paths::hermes_data_dir() {
         Ok(d) => d,
@@ -462,6 +465,9 @@ mod compat_tests {
 /// The patch is a pure string replacement (no regex, no AST). It is
 /// idempotent: if either replacement pattern is already absent (i.e. the
 /// patch was applied or Hermes upstream fixed the gap), it becomes a no-op.
+/// **RETIRED 2026-05-11** — kept for ad-hoc debugging; not called
+/// on any default path. See `gateway_start` comment block.
+#[allow(dead_code)]
 pub fn patch_approval_sse() {
     let hermes_dir = match crate::paths::hermes_data_dir() {
         Ok(d) => d,
@@ -618,6 +624,9 @@ pub fn patch_approval_sse() {
     }
 }
 
+/// **RETIRED 2026-05-11** — kept for ad-hoc debugging; not called
+/// on any default path. See `gateway_start` comment block.
+#[allow(dead_code)]
 pub fn patch_dangerous_patterns() {
     let hermes_dir = match crate::paths::hermes_data_dir() {
         Ok(d) => d,
@@ -633,19 +642,57 @@ pub fn patch_dangerous_patterns() {
         Err(_) => return,
     };
 
-    if content.contains("corey_rm_any_file") {
+    // Marker used to detect "already patched" state. Anchored on a
+    // phrase that only our patch ever inserts (the Chinese description
+    // of `rm`). Don't change this without updating the check below —
+    // if it ever no-op-matches, the patch runs twice and bricks
+    // Hermes' regex compile.
+    //
+    // v2 (2026-05-11): old marker was the identifier string
+    // "corey_rm_any_file" which showed up verbatim in approval
+    // prompts on messaging channels. Replaced with human-readable
+    // Chinese descriptions so end users understand what they're
+    // being asked to approve.
+    const PATCH_MARKER: &str = "要删除文件";
+
+    if content.contains(PATCH_MARKER) {
         tracing::debug!("patch_dangerous_patterns: already patched, skipping");
         return;
     }
 
+    // If old (v1) patch markers are present, strip the old block so
+    // we can re-apply with v2 descriptions. Otherwise the regex
+    // remains but with the ugly identifier descriptions.
+    if content.contains("corey_rm_any_file") {
+        let old_block_start = content
+            .find("    # --- Corey additions: require approval for any rm / file write ---")
+            .unwrap_or(usize::MAX);
+        let old_block_end = content[old_block_start..]
+            .find(r#""corey_sed_inplace"),"#)
+            .map(|rel| old_block_start + rel)
+            .and_then(|end| content[end..].find('\n').map(|nl| end + nl + 1));
+        if let (start, Some(end)) = (old_block_start, old_block_end) {
+            if start != usize::MAX {
+                content.replace_range(start..end, "");
+                tracing::info!("patch_dangerous_patterns: stripped v1 identifier block");
+            }
+        }
+    }
+
     let needle =
         r#"    (r'\bgit\s+push\b.*-f\b', "git force push short flag (rewrites remote history)"),"#;
+    // Descriptions are shown verbatim to end users in the approval
+    // prompt on messaging channels (WeChat / Slack / Telegram etc.).
+    // Keep them in natural Chinese with an emoji hint so non-dev
+    // users can decide without googling. The agent's internal tool
+    // matching still fires on the regex — only the description
+    // field is user-facing.
     let extra = r#"
     # --- Corey additions: require approval for any rm / file write ---
-    (r'\brm\s+(?!(-h$|--help\b))\S', "corey_rm_any_file"),
-    (r'\bmv\s+\S+\s+\S+', "corey_mv_file"),
-    (r'\bcp\s+\S+\s+\S+', "corey_cp_overwrite"),
-    (r'\bsed\s+-[^\s]*i', "corey_sed_inplace"),
+    (r'\brm\s+(?!(-h$|--help\b))\S', "🗑️ 要删除文件（rm，删了恢复不了）"),
+    (r'\bmv\s+\S+\s+\S+', "📦 要移动或重命名文件（mv）"),
+    (r'\bcp\s+\S+\s+\S+', "📋 要复制文件（cp，可能会覆盖已有文件）"),
+    (r'\bsed\s+-[^\s]*i', "✏️ 要原地修改文件内容（sed -i）"),
 "#;
 
     if content.contains(needle) {
@@ -656,6 +703,107 @@ pub fn patch_dangerous_patterns() {
         }
     } else {
         tracing::warn!("patch_dangerous_patterns: anchor pattern not found");
+    }
+}
+
+/// Patch Hermes' approval prompt template in `gateway/run.py` so the
+/// message customers see on WeChat / Slack / Telegram etc. is in
+/// natural Chinese instead of cryptic `/approve session` / `/approve
+/// always` CLI jargon.
+///
+/// The original (hermes-agent v0.12.x) template reads (verbatim,
+/// not a Rust doctest):
+///
+/// ```text
+/// [warn] Dangerous command requires approval:
+///     rm ~/Desktop/1.txt
+/// Reason: corey_rm_any_file
+///
+/// Reply /approve to execute, /approve session to approve
+/// this pattern for the session, /approve always to approve
+/// permanently, or /deny to cancel.
+/// ```
+///
+/// Non-dev users have no idea what `/approve session` means. We
+/// rewrite the whole block to friendly Chinese while preserving the
+/// exact chat commands Hermes parses — `/approve`, `/approve
+/// session`, `/approve always`, `/deny` — so the back-end still
+/// works.
+///
+/// Caveats:
+/// - Hermes upstream updates to `gateway/run.py` that change this
+///   anchor text will silently skip patching; we log a warning.
+/// - The patch is idempotent via a Chinese phrase marker.
+/// **RETIRED 2026-05-11** (never landed in production — call sites
+/// removed same day it was added). Kept for reference. See
+/// `gateway_start` comment block.
+#[allow(dead_code)]
+pub fn patch_approval_prompt_template() {
+    let hermes_dir = match crate::paths::hermes_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let candidate = hermes_dir
+        .join("hermes-agent")
+        .join("gateway")
+        .join("run.py");
+
+    let content = match std::fs::read_to_string(&candidate) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    const PATCH_MARKER: &str = "请确认这个操作";
+    if content.contains(PATCH_MARKER) {
+        tracing::debug!("patch_approval_prompt_template: already patched, skipping");
+        return;
+    }
+
+    // Exact multi-line block to replace. Anchored on both the leading
+    // bold header and the trailing sentence so a partial match
+    // doesn't accidentally mangle something unrelated. Uses raw
+    // string so the inner backticks / braces stay literal.
+    let needle = r#"                msg = (
+                    f"⚠️ **Dangerous command requires approval:**\n"
+                    f"```\n{cmd_preview}\n```\n"
+                    f"Reason: {desc}\n\n"
+                    f"Reply `/approve` to execute, `/approve session` to approve this pattern "
+                    f"for the session, `/approve always` to approve permanently, or `/deny` to cancel."
+                )"#;
+
+    // Replacement: Chinese guidance that the end user (non-dev on
+    // WeChat / Slack / Telegram) can act on directly. Preserves the
+    // `/approve` / `/approve session` / `/approve always` / `/deny`
+    // literal commands so Hermes' back-end parser still matches —
+    // Hermes only looks for those exact tokens at message start.
+    let replacement = r#"                msg = (
+                    f"⚠️ **请确认这个操作**\n"
+                    f"\n"
+                    f"我想执行：\n"
+                    f"```\n{cmd_preview}\n```\n"
+                    f"\n"
+                    f"为什么要你确认：{desc}\n"
+                    f"\n"
+                    f"回复 `/approve` → 允许这一次\n"
+                    f"回复 `/approve session` → 允许这种命令直到下次重启\n"
+                    f"回复 `/approve always` → 永久允许（请慎重）\n"
+                    f"回复 `/deny` → 拒绝"
+                )"#;
+
+    if content.contains(needle) {
+        let new_content = content.replace(needle, replacement);
+        match std::fs::write(&candidate, new_content) {
+            Ok(()) => tracing::info!("patch_approval_prompt_template: applied"),
+            Err(e) => {
+                tracing::warn!(error = %e, "patch_approval_prompt_template: write failed")
+            }
+        }
+    } else {
+        tracing::warn!(
+            "patch_approval_prompt_template: anchor block not found; Hermes upstream may have \
+             reworded the prompt. Customers will see the English default until we update the \
+             patch anchor."
+        );
     }
 }
 
@@ -875,9 +1023,38 @@ pub fn gateway_start() -> io::Result<String> {
     } else {
         stdout
     };
-    patch_approval_sse();
-    patch_dangerous_patterns();
-    patch_qqbot_sandbox();
+    // 2026-05-11 retirement: patch_* functions are intentionally NOT
+    // called here anymore. See the module-level "Hermes source
+    // patching policy" note for context.
+    //
+    //     patch_approval_sse();
+    //     patch_dangerous_patterns();
+    //     patch_approval_prompt_template();
+    //     patch_qqbot_sandbox();
+    //
+    // Each of these historically rewrote files under
+    // `~/.hermes/hermes-agent/`, which puts Corey at the mercy of
+    // Hermes upstream diffs (pattern anchors shift, `git pull`
+    // re-applies clean files, customer upgrades silently undo our
+    // injections, etc). The replacement strategy is:
+    //
+    //   - patch_approval_sse       → use Hermes' native plugin hook
+    //     mechanism (`pre_approval_request` /
+    //     `post_approval_response` in VALID_HOOKS) instead of
+    //     string-rewriting api_server.py.
+    //   - patch_dangerous_patterns → add the rm/mv/cp/sed coverage
+    //     to `corey-guards/file-ops-guard.py` (which is already a
+    //     Hermes shell hook — Corey-owned file, not Hermes source).
+    //   - patch_qqbot_sandbox      → land upstream as a config-
+    //     driven toggle in Hermes, not a Corey-side file rewrite.
+    //   - patch_approval_prompt_template → rely on Hermes v0.13+
+    //     i18n support (upstream commit c39168453 landed 16 locales
+    //     including zh-CN) set via `locale: zh-CN` in config.yaml.
+    //
+    // The function bodies are kept below so we can still call them
+    // manually for ad-hoc debugging, but the default-path no longer
+    // fires them. Remove the function definitions entirely once
+    // each replacement is in place.
     Ok(result)
 }
 
@@ -918,9 +1095,8 @@ pub fn gateway_restart() -> io::Result<String> {
     } else {
         stdout
     };
-    patch_approval_sse();
-    patch_dangerous_patterns();
-    patch_qqbot_sandbox();
+    // 2026-05-11 retirement — see gateway_start() for rationale. No
+    // longer patches Hermes source on restart.
     Ok(result)
 }
 
@@ -1374,9 +1550,8 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
 
     let listening = check_port_8642();
 
-    patch_approval_sse();
-    patch_dangerous_patterns();
-    patch_qqbot_sandbox();
+    // 2026-05-11 retirement — see gateway_start() for rationale. Health
+    // check no longer triggers Hermes-source patching.
 
     if listening {
         tracing::info!("gateway API server confirmed listening on 127.0.0.1:8642");

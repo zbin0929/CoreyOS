@@ -239,48 +239,15 @@ pub async fn chat_stream_cancel(args: ChatStreamCancelArgs) -> IpcResult<()> {
     Ok(())
 }
 
+/// Args for `hermes_approval_respond`. The Hermes 0.13.0 `/v1/runs`
+/// migration replaced the per-session approval queue with a per-run
+/// endpoint, so the frontend now echoes back the `run_id` it received
+/// on the `chat:approval` event payload.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApprovalRespondArgs {
-    session_id: String,
+    run_id: String,
     choice: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApprovalPendingArgs {
-    session_id: String,
-}
-
-#[tauri::command]
-pub async fn hermes_approval_pending(
-    state: State<'_, AppState>,
-    args: ApprovalPendingArgs,
-) -> IpcResult<serde_json::Value> {
-    use crate::paths::hermes_data_dir;
-
-    let base_url = {
-        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
-        cfg.base_url.clone()
-    };
-    let client = reqwest::Client::new();
-    let url = format!(
-        "{}/api/approval/pending",
-        base_url.trim_end_matches("/v1").trim_end_matches('/'),
-    );
-    let mut req = client
-        .post(&url)
-        .query(&[("session_id", args.session_id.as_str())]);
-    if let Ok(dir) = hermes_data_dir() {
-        req = req.header("HERMES_HOME", dir.to_string_lossy().as_ref());
-    }
-    let resp = req.send().await.map_err(|e| IpcError::Internal {
-        message: format!("approval pending: {e}"),
-    })?;
-    let body: serde_json::Value = resp.json().await.map_err(|e| IpcError::Internal {
-        message: format!("approval pending parse: {e}"),
-    })?;
-    Ok(body)
 }
 
 #[tauri::command]
@@ -289,29 +256,37 @@ pub async fn hermes_approval_respond(
     state: State<'_, AppState>,
     args: ApprovalRespondArgs,
 ) -> IpcResult<serde_json::Value> {
-    use crate::paths::hermes_data_dir;
-
     let base_url = {
         let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
         cfg.base_url.clone()
     };
+    // `base_url` is whatever the gateway adapter is pointing at — could
+    // be `http://127.0.0.1:8642` or `http://127.0.0.1:8642/v1`. Strip
+    // a trailing `/v1` so we can append the canonical path uniformly.
+    let trimmed = base_url
+        .trim_end_matches('/')
+        .trim_end_matches("/v1")
+        .trim_end_matches('/');
+    let url = format!("{trimmed}/v1/runs/{}/approval", args.run_id);
     let client = reqwest::Client::new();
-    let url = format!(
-        "{}/api/approval/respond",
-        base_url.trim_end_matches("/v1").trim_end_matches('/')
-    );
-    let mut req = client.post(&url).json(&serde_json::json!({
-        "session_id": args.session_id,
-        "choice": args.choice,
-    }));
-    if let Ok(dir) = hermes_data_dir() {
-        req = req.header("HERMES_HOME", dir.to_string_lossy().as_ref());
+    let resp = client
+        .post(&url)
+        .json(&serde_json::json!({"choice": args.choice}))
+        .send()
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("approval respond: {e}"),
+        })?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(IpcError::Internal {
+            message: format!("approval respond {}: {}", status.as_u16(), body),
+        });
     }
-    let resp = req.send().await.map_err(|e| IpcError::Internal {
-        message: format!("approval respond: {e}"),
-    })?;
-    let body: serde_json::Value = resp.json().await.map_err(|e| IpcError::Internal {
-        message: format!("approval parse: {e}"),
-    })?;
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .unwrap_or_else(|_| serde_json::json!({"ok": true}));
     Ok(body)
 }

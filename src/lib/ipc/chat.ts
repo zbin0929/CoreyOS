@@ -76,6 +76,15 @@ export interface ChatApprovalRequest {
   pattern_key?: string | null;
   pattern_keys?: string[];
   description: string;
+  /** Run id from Hermes 0.13.0 `/v1/runs`. Echo back via
+   *  `hermesApprovalRespond` to resolve the approval. */
+  run_id?: string;
+  /** Allowed choices the gateway accepts. Native emits
+   *  `["once", "session", "always", "deny"]`. */
+  choices?: string[];
+  /** Legacy field (pre-2026-05-11 patched-Hermes path). Kept on the
+   *  type so old recorded fixtures still type-check, but no longer
+   *  populated by the backend. */
   _session_id?: string;
 }
 
@@ -162,31 +171,22 @@ async function disposeAll(unlistens: UnlistenFn[]): Promise<void> {
   unlistens.length = 0;
 }
 
+/**
+ * Forward the user's approval choice to Hermes 0.13.0
+ * `POST /v1/runs/{runId}/approval`. `runId` comes from the
+ * `chat:approval` event payload (`approval.run_id`). Choices: `'once'`,
+ * `'session'`, `'always'`, `'deny'`.
+ *
+ * The pre-2026-05-11 patched-Hermes path used `/api/approval/respond`
+ * keyed by Hermes session id; that endpoint was removed when we
+ * stopped patching Hermes source.
+ */
 export async function hermesApprovalRespond(
-  sessionId: string,
+  runId: string,
   choice: string,
 ): Promise<unknown> {
   return invoke('hermes_approval_respond', {
-    args: { sessionId, choice },
-  });
-}
-
-export interface HermesApprovalPending {
-  pending?: {
-    command?: string;
-    pattern_key?: string;
-    pattern_keys?: string[];
-    approval_id?: string;
-    _session_id?: string;
-  } | null;
-  pending_count?: number;
-}
-
-export async function hermesApprovalPending(
-  sessionId: string,
-): Promise<HermesApprovalPending> {
-  return invoke<HermesApprovalPending>('hermes_approval_pending', {
-    args: { sessionId },
+    args: { runId, choice },
   });
 }
 

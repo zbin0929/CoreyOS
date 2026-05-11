@@ -1,12 +1,13 @@
 # Hermes Agent 依赖地图
 
-> 版本：v3.0 · 2026-05-07
+> 版本：v5.0 · 2026-05-12
 > 当前 Hermes 最低支持版本：0.10
-> Hermes 最新版本：0.12.0（2026-04-30）
+> Hermes 最新版本：**0.13.0（2026-05-07）— "The Tenacity Release"**
 > Hermes 官方文档：https://hermes-agent.nousresearch.com/docs/
 > Hermes GitHub：https://github.com/NousResearch/hermes-agent
 > 用途：Hermes 每次更新时，对照此文档快速定位影响范围
-> 核对基准：2026-05-07 逐模块对比 Corey 代码 vs Hermes 官方文档（Configuration / Messaging / Skills / Memory / MCP / Security / Architecture / Voice / Tools / FAQ）
+> 核对基准：2026-05-12 基于 Hermes 0.13.0 源码（`~/.hermes/hermes-agent/`）逐模块核对，含 `/v1/runs` 迁移落地后的真实端到端依赖
+> 关键决策：**永不 patch Hermes 源码**（2026-05-11 拍板）。原 4 个 `patch_*` 函数全部 retire，改用 SOUL.md marker-delimited 注入 + corey-guards 物理拦截层 + `/v1/runs` 原生事件流。
 
 ---
 
@@ -105,37 +106,74 @@ Gateway API Server 配置（Hermes 官方）：
 - `API_SERVER_CORS_ORIGINS` CORS 白名单
 - `API_SERVER_MODEL_NAME=hermes-agent` 模型名
 
-| 端点 | 方法 | 调用位置 | 用途 | 风险 |
+### 2.1 Corey 当前在用的端点（Hermes 0.13.0）
+
+| 端点 | 方法 | Corey 调用位置 | 用途 | 风险 |
 |------|------|---------|------|------|
-| `/health` | GET | `adapters/hermes/gateway/mod.rs` | Gateway 存活检测 | 响应格式变更 → 状态判断错误 |
-| `/v1/chat/completions` | POST (stream) | `adapters/hermes/gateway/mod.rs` | 流式聊天 | SSE 格式变更 → 聊天中断 |
-| `/v1/chat/completions` | POST (non-stream) | `adapters/hermes/gateway/mod.rs` | 单轮聊天 | 响应 JSON 变更 → 解析失败 |
-| `/v1/models` | GET | `adapters/hermes/probe.rs`, `ipc/hermes_instances.rs` | 模型列表探测 | 响应格式变更 → 模型列表为空 |
-| `/api/approval/respond` | POST | `ipc/chat.rs` | 审批响应（Corey patch 注入到 `api_server.py`） | 路径/格式变更 → 审批流中断 |
-| `/api/approval/pending` | GET | `hermes_config/gateway.rs` (patch 注入) | 查询待审批项（Corey patch 注入到 `api_server.py`） | 路径/格式变更 → 审批恢复/轮询失败 |
+| `/health` | GET | `adapters/hermes/gateway/mod.rs::health` | Gateway 存活检测 + `latency_ms` 度量 | 响应格式变更 → 状态判断错误 |
+| `/v1/models` | GET | `adapters/hermes/probe.rs`, `ipc/hermes_instances.rs` | 模型列表探测（OpenAI 兼容） | 响应格式变更 → 模型列表为空 |
+| `/v1/chat/completions` | POST (non-stream) | `adapters/hermes/gateway/mod.rs::chat_once` | 一次性聊天（非流式）— 单轮 / title 生成 | 响应 JSON 变更 → 解析失败 |
+| **`/v1/runs`** | **POST** | **`adapters/hermes/gateway/mod.rs::start_run` (2026-05-12 上线)** | **启动一次 agent run，返回 `run_id` (202)** | **请求/响应字段变更 → 流式聊天中断** |
+| **`/v1/runs/{run_id}/events`** | **GET (SSE)** | **`adapters/hermes/gateway/mod.rs::connect_run_events`** | **结构化事件流（含 `approval.request`）** | **事件名/字段变更 → UI 显示异常** |
+| **`/v1/runs/{run_id}/approval`** | **POST** | **`ipc/chat.rs::hermes_approval_respond`** | **响应审批 (`{choice}`)** | **payload 变更 → 审批失败** |
 
-**⚠️ 审批端点是 Corey 自己 patch 到 Hermes 的 `api_server.py` 的，不是 Hermes 原生端点。**
-- `patch_approval_sse()` 在每次 gateway start/restart 后执行
-- 注入 `_on_approval` callback → 将审批事件推入 SSE 队列
-- 注入 `_handle_approval_respond` + `_handle_approval_pending` HTTP handler
-- 如果 Hermes 重构 `api_server.py`，patch 可能失效需重新适配
+> **2026-05-12 迁移落地**：流式聊天主路径已从 `/v1/chat/completions` 迁移到 `/v1/runs`，因为 OpenAI-compat 端点无 `approval.request` 事件，审批卡片在 0.12 之后不再触发。`chat_once` 仍走 `/v1/chat/completions`（单轮场景不需要 run 状态机）。
 
-**SSE 事件类型依赖（`/v1/chat/completions` stream）：**
+### 2.2 Hermes 0.13.0 已暴露但 Corey 未调用的端点
 
-| 事件类型 | 用途 | Corey 处理位置 |
-|---------|------|---------------|
-| `ChatStreamEvent::Delta` | 增量文本 | `ipc/chat.rs` → 前端渲染 |
-| `ChatStreamEvent::Tool` | 工具调用进度 | `ipc/chat.rs` → 前端工具卡片 |
-| `ChatStreamEvent::Approval` | 审批请求 | `ipc/chat.rs` → 前端审批卡片 |
-| `ChatStreamEvent::Reasoning` | 思考过程 | `ipc/chat.rs` → 前端推理展示 |
+| 端点 | 方法 | 用途 | Corey 未来可能用途 |
+|------|------|------|-------------------|
+| `/v1/runs/{run_id}` | GET | 查询 run 当前状态（status / last_event / model / created_at） | 进度监控、断线后恢复 UI 状态 |
+| `/v1/runs/{run_id}/stop` | POST | 中断运行（向 in-flight agent 发 cancel） | Stop 按钮升级为服务端中止（当前 `chat_stream_cancel` 仅 abort tokio 任务） |
+| `/v1/responses` | POST | OpenAI Responses API（stateful via `previous_response_id`） | Background Sessions / 多 turn 续接 |
+| `/v1/responses/{id}` | GET | 查询历史 response | 历史回放 |
+| `/messages` (Anthropic 兼容层) | POST | Anthropic Messages 协议 | Claude 客户端兼容 |
+
+### 2.3 v0.13.0 SSE 事件依赖（`/v1/runs/{run_id}/events`）
+
+源码位置：`~/.hermes/hermes-agent/gateway/platforms/api_server.py:2735-3260`
+
+| 事件名 | Payload（核心字段） | Corey 映射 |
+|--------|---------------------|------------|
+| `message.delta` | `{event, run_id, timestamp, delta}` | `RunEvent::MessageDelta` → `ChatStreamEvent::Delta` |
+| `tool.started` | `{event, run_id, timestamp, tool, args?, emoji?, label?}` | `RunEvent::ToolStarted` → `ChatStreamEvent::Tool(HermesToolProgress)` |
+| `tool.completed` | `{event, run_id, timestamp, tool, result?}` | `RunEvent::ToolCompleted` (吸收掉，UI 不显示) |
+| `reasoning.available` | `{event, run_id, timestamp, reasoning}` | `RunEvent::ReasoningAvailable` → `ChatStreamEvent::Reasoning` |
+| `approval.request` | `{event, run_id, timestamp, choices: ["once","session","always","deny"], command, description, pattern_key, pattern_keys}` | `RunEvent::ApprovalRequest` → `ChatStreamEvent::Approval(HermesApprovalRequest)` 含 `run_id` |
+| `approval.responded` | `{event, run_id, timestamp, choice}` | 吸收掉（仅 telemetry） |
+| `run.completed` | `{event, run_id, timestamp, output, usage: {input_tokens, output_tokens, total_tokens}}` | 终止流；映射 `usage.input_tokens → prompt_tokens` |
+| `run.failed` | `{event, run_id, timestamp, error}` | `RunEvent::RunFailed` → `AdapterError::Upstream` |
+| `run.cancelled` | `{event, run_id, timestamp}` | 终止流，`finish_reason="cancelled"` |
+
+**注意**：流不发 `[DONE]` sentinel；以 `run.completed/failed/cancelled` 为终结信号，连接随后关闭。
+
+### 2.4 关键 HTTP 头
+
+Hermes 0.13.0 在 `/v1/chat/completions`、`/v1/runs`、`/v1/responses` 上识别这两个头（双向 — 请求传入、响应回显）：
+
+| 头 | 用途 | Corey 是否使用 |
+|----|------|----------------|
+| `X-Hermes-Session-Id` | 会话延续标识（之前主要用于 `/v1/chat/completions`），可通过 body `session_id` 字段替代（`/v1/runs`） | ⬜ Corey 当前未传；DB 自身有 session_id，可考虑透传以提升压缩窗 |
+| `X-Hermes-Session-Key` | **新增** — 长期记忆作用域键（绑定记忆 Provider 的稳定 ID，需 API key 鉴权） | ⬜ Corey 未传；启用时记忆隔离会按 channel/session 自动 scoped |
+
+### 2.5 已 retire 的 Corey patch 端点（不再使用）
+
+| 原 Corey patch 端点 | 撤销原因 |
+|---|---|
+| ~~`/api/approval/respond` POST~~ | 2026-05-11：永不 patch Hermes 源码；改走 `/v1/runs/{run_id}/approval` |
+| ~~`/api/approval/pending` GET~~ | 同上；native Hermes 无等价端点（run 是有状态的，不需要轮询 pending） |
+
+**消息渠道（WeChat / Slack / Telegram / 钉钉 / cron）仍走 Hermes 原生 channel 审批流**（`gateway/run.py` plain-text fallback，文案默认英文 + 7 个新 locale 翻译，但 `gateway/run.py:15066` 的关键 fallback 仍是英文硬编码 — upstream gap，已记录）。
 
 **⚠️ Hermes 更新时重点检查：**
-- SSE 事件格式是否新增/删除字段
-- `tool` 事件的 progress 结构是否变化
-- `approval` 事件的交互协议是否变化
+- `/v1/runs` 请求字段：`input` / `instructions` / `conversation_history` / `previous_response_id` / `session_id` 是否变更
+- `/v1/runs` 响应字段：`run_id` / `status` / `created_at` 是否变更
+- `RunEvent` 9 个变体的事件名 + 字段是否变更（`message.delta` / `tool.started` / `tool.completed` / `reasoning.available` / `approval.request` / `approval.responded` / `run.completed` / `run.failed` / `run.cancelled`）
+- `approval.request` 的 `choices` 集合是否扩展（Corey UI 4 个固定按钮）
+- `/v1/runs/{run_id}/approval` POST body：`{choice}` 是否新增字段（如 `all` 已存在）
+- `usage` 字段名（`input_tokens`/`output_tokens`/`total_tokens`，**与 OpenAI `prompt_tokens`/`completion_tokens` 不同**）
 - `/health` 响应是否新增必要字段
-- `/api/approval/respond` 路径是否变更
-- `/api/approval/pending` 路径是否变更
+- `X-Hermes-Session-Key` 鉴权要求是否变更（需 API key 才生效）
 - `API_SERVER_*` 环境变量是否变更默认值
 
 ---
@@ -531,14 +569,19 @@ Corey 频道 Token 探测（`ipc/channels/probe.rs`）：仅支持单 GET 探测
 | Hermes 版本 | Corey 兼容性 | 说明 |
 |------------|-------------|------|
 | < 0.10 | ❌ 不支持 | `HERMES_MIN_SUPPORTED = (0, 10)` |
-| 0.10 | ✅ 完全兼容 | 当前基准版本 |
+| 0.10 | ✅ 完全兼容 | 历史基准 |
 | 0.11 | ✅ 兼容 | 新增 provider/transport，已有字段不变；新增 sessions 自动清理 |
-| 0.12 | ✅ 已完成适配 | 大版本更新（1096 commits），核心 API/配置保持兼容；8 项增强已落地（Teams/元宝频道、Cron workdir/context_from、hermes update --check、hermes -z、trigram 搜索、Skill reload hint、Chat hard stop、MAX_TESTED 提升） |
+| 0.12 | ✅ 已完成适配 | 1096 commits；核心 API/配置兼容；8 项增强落地（Teams/元宝频道、Cron workdir/context_from、`hermes update --check`、`hermes -z`、trigram 搜索、Skill reload hint、Chat hard stop、MAX_TESTED 提升）|
+| **0.13** | **✅ 已升级 + 关键迁移完成** | **1296 commits（"The Tenacity Release"，2026-05-07）；2026-05-11 弃 patch 路线 + 升级；2026-05-12 完成 `/v1/runs` 迁移 → 审批 UI 恢复**。Corey 当前在 0.13 上跑。 |
 
-**版本检测代码位置：** `hermes_config/gateway.rs` → `HERMES_MIN_SUPPORTED`
+**版本检测代码位置：** `hermes_config/gateway.rs` → `HERMES_MIN_SUPPORTED` / `HERMES_MAX_TESTED`
 
 **Hermes config version 历史：**
-- config version 17: `compression.summary_*` → `auxiliary.compression.*` 自动迁移
+- v17: `compression.summary_*` → `auxiliary.compression.*` 自动迁移
+- v18-v20: 仅版本号递增，无 schema 变更
+- v21: `plugins.enabled` 引入 opt-in 白名单（已安装的插件自动 grandfather；新插件需手工 enable）
+- **v22-v23（0.13 引入）**：增加 `curator.*`（top-level）+ `auxiliary.curator.*`（aux 任务槽），自动迁移；创建 `~/.hermes/logs/curator/`。**纯 additive，对 Corey 无破坏性影响**。
+- Hermes 用户首次启动 0.13 自动从 v21 升到 v23。Corey 不要写 `_config_version` 字段（Hermes 自管）。
 
 ### v0.12.0 影响分析（2026-04-30 发布）
 
@@ -598,6 +641,71 @@ Corey 频道 Token 探测（`ipc/channels/probe.rs`）：仅支持单 GET 探测
 - [x] 本地 CI 复测通过：`npx tsc --noEmit` + `npx eslint src/` + `pnpm build` + `cargo check` + `cargo test --lib`（391/0）+ `cargo fmt --check`
 - [ ] Windows 最终实机验收（需 `v0.1.13` 包）：安装后自动 recheck、Gateway 启动不弹空白 cmd、`gateway-stdout.log/gateway-stderr.log` 诊断链路、聊天/搜索/定时任务回归
 
+### v0.13.0 影响分析（2026-05-07 发布 · "The Tenacity Release"）
+
+**核心变化：**1296 commits since 0.12，295 contributors in one week。Hermes 从"OpenAI-compat 套壳"演进到一个有完整 run 状态机 + 多 agent 编排（Kanban）+ checkpoints v2 + sessions auto-resume 的运行时。Corey 与之集成的几个面都受影响。
+
+**🔴 对 Corey 有影响的 breaking change（必须处理）：**
+
+| 变更 | 影响 | Corey 已做 / 待办 |
+|------|------|-------------------|
+| **`secret redaction` 默认从 OFF 翻为 ON**（PR #21193） | Hermes 启动后会主动脱敏 stdout / log / SSE delta 中的密钥模式（OpenAI key、AWS key 等）。Corey 读取 `~/.hermes/logs/agent.log` 做压缩统计 / 频道状态推断时，可能遇到 `[REDACTED]` 占位 | ⬜ 验证 `ipc/learning/`、`ipc/channels/probe.rs` 对 `[REDACTED]` 字符串容错（不应被当作错误特征） |
+| **`/v1/chat/completions` 不再发 `approval.request` 事件**（实际从 0.12 末就如此，0.13 明确） | Corey 0.12 时审批卡片实际已断（patch_approval_sse 是补丁手段），0.13 弃 patch 后必须迁 `/v1/runs` | ✅ 2026-05-12 完成迁移；详见 §2.1 |
+| **`run.completed.usage` 字段名为 `input_tokens` / `output_tokens` / `total_tokens`**（非 OpenAI 的 `prompt_tokens` / `completion_tokens`） | Corey 在 `chat_stream` 终止处需做名字翻译（`input → prompt`） | ✅ `gateway/mod.rs` 中已映射 |
+| **`config_version` 21 → 23**（v22/v23 自动加 `curator.*` 段） | Hermes 启动时自动 migrate；新增字段全 additive | ✅ Corey 未写 `_config_version`（Hermes 自管），无影响 |
+
+**🟡 对 Corey 有潜在影响（建议验证或加测试）：**
+
+| 变更 | 影响 | Corey 建议 |
+|------|------|-----------|
+| **Sessions auto-resume after restart**（PR #21192） | Gateway bounce / `/update` 后会话自动恢复 | 验证 Corey UI 在 gateway 重启时不会重复创建新 session |
+| **Atomic restart markers + Windows runtime-lock offset**（PR #18179） | Windows 上 Hermes 启动锁机制改了 | 验证 `gateway run` 在 Windows 上仍正常拉起；尤其 `gateway-stdout.log` 行为 |
+| **Provider 插件化**（`ProviderProfile` ABC + `plugins/model-providers/`） | 自定义 provider 走插件目录 | Corey 的 `model_list` 调用 `/v1/models` 不受影响（Hermes 内部聚合）；可 future-proof Models 页面识别 plugin provider |
+| **Platform allowlists 新字段**（`allowed_channels` / `allowed_chats` / `allowed_rooms`，覆盖 Slack/Telegram/Mattermost/Matrix/钉钉） | `config.yaml` 频道段新增可选字段 | Corey 当前不写这些字段，Hermes 缺省允许所有 → 行为不变。可选：UI 暴露这 3 个允许列表 |
+| **`transform_llm_output` 插件 hook**（PR #21235） | 插件可在 LLM 输出落到对话之前改写 | Corey 不直接受影响，但若用户装了内容过滤插件，输出可能被改写 → 不可信任 raw output 校验 |
+| **MCP SSE transport + OAuth forwarding**（PR #21227） | MCP 服务器现支持 SSE 传输 + 代理 OAuth | Corey 写 `mcp_servers.<id>.transport` 时可设 `sse`；对现有 stdio/http 配置无影响 |
+| **`X-Hermes-Session-Key` 头**（PR #20199） | 长期记忆作用域绑定 | ⬜ 当 Corey 接入记忆 Provider（Honcho / Mem0 等）时，传 `X-Hermes-Session-Key=<channel|session>` 启用 scoped 记忆 |
+| **QQBot 原生审批键盘**（PR #21342） | QQ 渠道审批 UI 与 Telegram/Discord 一致 | 撤销原 `patch_qqbot_sandbox` 后，QQ 审批应自动走原生键盘 |
+| **7 个新 locale**（中/日/德/西/法/乌/土） | Hermes 静态 gateway/CLI 文案多语言 | 部分文案（如 `gateway/run.py:15066` plain-text approval prompt fallback）仍是英文硬编码 — upstream gap，已记录 |
+
+**🟢 v0.13 新增、Corey 当前未利用但值得追的能力：**
+
+| 能力 | 价值 | 优先级 |
+|------|------|--------|
+| **Multi-Agent Kanban (durable)** + worker lifecycle | 多 agent 任务编排板（heartbeat / reclaim / zombie 检测 / per-task max_retries） | 中（Pack 级编排可借力） |
+| **`/goal` Ralph loop**（持久目标，跨 turn 锁定） | 长任务跑偏检测 + Recovery | 中（影响 workflow 设计） |
+| **Checkpoints v2** | 状态持久化重写，真 pruning + disk guardrails | 低（Corey 不依赖） |
+| **`no_agent` cron 模式** | Cron 任务跳过 agent，纯脚本 watchdog | 中（Corey scheduler 可暴露这个开关） |
+| **Curator subcommands**（`hermes curator archive/prune/list-archived`） | 后台 skill 维护 | 低（Skill Hub 页可加入口） |
+| **Google Chat（第 20 个平台）** | 新 IM 渠道 | 低 |
+| **SearXNG search backend** + per-capability backend selection | 自托管搜索 | 低（Corey 不直接控制 web 工具） |
+| **`hermes -z` one-shot + `[[as_document]]` 媒体路由** | One-shot 已被 Corey workflow 使用；`as_document` 是新指令 | 低（Skill 作者关心，Corey 不写 skill） |
+| **API server `X-Hermes-Session-Key`** | 见上 | 中（接入长期记忆时再做） |
+| **TUI `/model` 选择器对齐 `hermes model`** | TUI 端体验改善，Corey 桌面端不依赖 | 低 |
+
+**❌ v0.13 移除/重命名（确认 Corey 不依赖）：**
+
+- `flush_memories`（0.12 已移除，0.13 持续）— Corey 未使用 ✅
+- `/provider` + `/plan` slash 命令（0.12 删，0.13 持续）— Corey 未使用 ✅
+- `BOOT.md` 内置 hook（0.12 删，0.13 持续）— Corey 未使用 ✅
+- 4 个 Hermes patch 函数（Corey 主动 retire）— `gateway.rs` 标 `#[allow(dead_code)]` 保留备查，已不在调用链 ✅
+
+### v0.13.0 升级验证结果（2026-05-12）
+
+- [x] Hermes 升级到 0.13.0，`pip install -e .` 完成，依赖 `ruamel.yaml` / `psutil` / `tzdata` 装好
+- [x] Hermes source 3 个被 patch 文件 `git checkout` 还原，working tree clean
+- [x] 4 个 `patch_*` 函数全部从启动路径移除（`gateway.rs`），doctest 编译失败已修
+- [x] `/v1/runs` + `/v1/runs/{run_id}/events` + `/v1/runs/{run_id}/approval` 三端点接入 (`adapters/hermes/gateway/{mod,types,tests}.rs`)
+- [x] `RunEvent` 9 变体全部覆盖单元测试（`run_event_parses_each_variant` + `run_event_tolerates_unknown_extra_fields`）
+- [x] `hermes_approval_pending` IPC 删除；`hermes_approval_respond` 改走 `/v1/runs/{run_id}/approval`
+- [x] 前端：`ChatApprovalRequest.run_id` + `choices`；`ApprovalCard.tsx` + `useTalkMode.ts` 透传 `run_id`
+- [x] CI gate 全绿：`cargo fmt --check` + `cargo test`（546/546）+ `clippy unwrap baseline`（546=546）+ `tsc --noEmit` + `eslint` + `vitest`（112/112）
+- [x] SOUL.md L0 元铁律 + corey-guards 物理拦截层落地（`src-tauri/src/{soul_md,hermes_hooks}.rs` + `src-tauri/assets/corey-guards/file-ops-guard.py`）
+- [x] Settings → 安全防护 卡片接入 (`SecuritySection.tsx`)
+- [ ] **UI 端到端实机验证**（用户手动）：boot 日志 / Settings 卡片 / guard 拦 rm + Python / 普通聊天走 `/v1/runs` 通 / 触发 dangerous command 看到审批卡片
+- [ ] Windows 实机验收：Hermes 0.13 在 Windows 上 `gateway run` + `CREATE_NO_WINDOW` 行为是否仍稳定（Atomic restart markers PR #18179 改了 Windows runtime-lock offset）
+- [ ] **`HERMES_MAX_TESTED` 升到 `(0, 13)`**（升级完毕后再 bump，避免预提升导致虚假"已测试"标记）
+
 ---
 
 ## 11. 跨平台注意事项
@@ -639,11 +747,13 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 
 ### Step 2：Gateway API 兼容性
 - [ ] `/health` 响应格式是否变更
-- [ ] `/v1/chat/completions` SSE 事件格式是否变更
+- [ ] `/v1/chat/completions` SSE 事件格式是否变更（`hermes.tool.progress` 结构、[DONE] 哨兵、reasoning_content / delta 字段）
 - [ ] `/v1/models` 响应格式是否变更
-- [ ] `/api/approval/respond` 路径/格式是否变更
+- [ ] `/v1/runs` + `/v1/runs/{run_id}/events` SSE 事件格式是否变更（`message.delta` / `tool.started` / `tool.completed` / `reasoning.available` / `approval.request` / `approval.responded` / `run.completed` / `run.failed` / `run.cancelled`）
+- [ ] `/v1/runs/{run_id}/approval` POST payload 是否变更（`choice` 取值集 / 别名 / `all` 标志）
 - [ ] 是否新增 Corey 可利用的新端点
 - [ ] `API_SERVER_*` 环境变量是否变更
+- [ ] `~~/api/approval/respond~~` / `~~/api/approval/pending~~` 2026-05-11 已 retire，不再检查
 
 ### Step 3：文件系统兼容性
 - [ ] `config.yaml` 是否新增必填字段
@@ -724,3 +834,5 @@ Corey 同时支持 Windows 和 macOS，Hermes 集成的平台差异：
 | 2026-05-01 | v2.5 | 0.12 | 完成全部 v0.12 适配：Teams + 元宝频道（19 个）、Cron workdir/context_from 显式建模、`hermes_update_check` IPC + Settings UI、`hermes_oneshot` IPC（`hermes -z`）、Session search trigram 检测 + 查询适配、Skill Hub reload hint。CI 模拟通过（tsc + eslint + build + cargo check + cargo test 391/0 + cargo fmt）。 | `channels/mod.rs`, `hermes_cron.rs`, `ipc/scheduler.rs`, `ipc/hermes_config.rs`, `ipc/workflow/mod.rs`, `ipc/session_search.rs`, `features/settings/`, `locales/` |
 | 2026-05-01 | v2.6 | 0.12 | Windows 启动链路修复：`hermes_data_dir()` 新增 `HERMES_HOME` 兼容读取；`windows_gateway_spawn` 改为 stdout/stderr 文件日志（`gateway-stdout.log` / `gateway-stderr.log`）、移除 `DETACHED_PROCESS`，增强 `gateway-start.log` 诊断；安装完成后 Home 安装卡自动 `recheck`。本地 CI 复测全绿；Windows 最终实机验收待 `v0.1.13` 包。 | `paths.rs`, `hermes_config/gateway.rs`, `features/home/HermesInstallCard.tsx` |
 | 2026-05-07 | v3.0 | 0.12 | 基于 Hermes 官方文档全面核对（逐模块对比代码 vs 文档）：§1 修正 `gateway run` 描述（不限于 Windows，是前台运行模式）；补充 `hermes model/tools/setup/pairing` 等未列出命令；补充 Hermes 不支持原生 Windows 说明。§2 补充审批端点是 Corey patch 注入而非 Hermes 原生。§3 目录结构扩充（pairing/hooks/gateway.json/whatsapp/session/sandboxes/modal_snapshots.json 等）；修正 `error.log` → `errors.log`。§4 修正 config.yaml 字段名为代码实际值（`model.default` 非 `model.name`、`approvals.timeout`/`cron_mode` 等）；§4.3 新增 30+ 个 Hermes 官方支持的字段（terminal.*/stt.*/tts.*/voice.*/display.*/mcp_servers 子字段等）；标注 `config.yaml ${VAR}` 替换语法和 `approvals.mode` 值差异。§5.3 新增 Terminal Backend/STT/TTS/Tools 相关环境变量。§9 频道表拆分 WeCom Callback 为独立行、标注 DingTalk QR。 | 全文档 |
+| 2026-05-11 | v4.0 | **0.13** | 升级 Hermes 0.12.0 → 0.13.0 (2026.5.7)，+1296 commits。重大架构决策：**永不 patch Hermes 源码**。§2 retire 4 个 `patch_*` 函数（`patch_approval_sse` / `patch_dangerous_patterns` / `patch_qqbot_sandbox` / `patch_approval_prompt_template`），`/api/approval/*` 端点标为 retired。Hermes 0.13.0 原生在 `/v1/runs` / `/v1/runs/{run_id}/events` / `/v1/runs/{run_id}/approval` 提供审批 SSE，待下次 session 迁移。新增 `corey-guards` 物理拦截层 + `SOUL.md` marker-delimited 铁律注入替代一部分原 patch 行为。详见 `docs/session-handoff-2026-05-11-pm.md` + `docs/migrations/hermes-v0.13-runs-endpoint.md`。 | Hermes source 3 个文件 `git checkout` 还原；`gateway.rs` patch 调用点注释；Python venv `pip install -e .`（新依赖 ruamel.yaml/psutil/tzdata）；新增 `src-tauri/src/{soul_md,hermes_hooks}.rs` + `src/features/settings/sections/SecuritySection.tsx` |
+| 2026-05-12 | v5.0 | **0.13** | **完成 `/v1/runs` 迁移 + 全文档基于 0.13.0 源码核对**。§2 完整重写：拆分 Corey 在用 / 未用 / 已 retire 三类端点；列出 9 个 `RunEvent` SSE 变体的精确字段；记录 `X-Hermes-Session-Id` / `X-Hermes-Session-Key` 双头；`run.completed.usage` 字段名 `input_tokens`/`output_tokens` 与 OpenAI 不同。§10 新增 v0.13.0 影响分析（4 个 breaking + 9 个潜在影响 + 10 个未利用能力）+ v0.13.0 升级验证清单。Config version 从 17 → 23 变更说明（v22/v23 加 `curator.*`，纯 additive）。`secret redaction` 默认 ON（0.12 是 OFF）— Corey 读 log 需容错 `[REDACTED]`。 | `adapters/hermes/gateway/{mod,types,tests}.rs`、`ipc/chat.rs`、`lib.rs`、`hermes_config/gateway.rs`（doctest fix）、`src/lib/ipc/chat.ts`、`src/features/chat/ApprovalCard.tsx`、`src/features/talk/useTalkMode.ts` |

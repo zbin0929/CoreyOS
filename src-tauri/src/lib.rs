@@ -20,6 +20,7 @@ mod error;
 mod fs_atomic;
 mod hermes_config;
 mod hermes_cron;
+mod hermes_hooks;
 mod hermes_instances;
 mod hermes_logs;
 mod hermes_profiles;
@@ -43,6 +44,7 @@ mod pty;
 mod routing_rules;
 mod sandbox;
 mod skills;
+mod soul_md;
 mod state;
 mod talk;
 mod tfidf;
@@ -118,6 +120,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ipc::agents::adapter_list,
             ipc::health::health_check,
+            ipc::security::security_status_get,
+            ipc::security::security_reconcile,
             ipc::file_export::save_text_file,
             ipc::artifacts::artifact_list,
             ipc::artifacts::artifact_path,
@@ -135,7 +139,6 @@ pub fn run() {
             ipc::chat::chat_send,
             ipc::chat::chat_stream_start,
             ipc::chat::chat_stream_cancel,
-            ipc::chat::hermes_approval_pending,
             ipc::chat::hermes_approval_respond,
             ipc::config::config_get,
             ipc::config::config_set,
@@ -553,6 +556,51 @@ pub fn run() {
                 },
                 Err(e) => {
                     tracing::warn!(error = %e, "could not resolve hermes data dir; skipping customer.yaml");
+                }
+            }
+
+            // Sync Corey's meta iron-rules block into ~/.hermes/SOUL.md.
+            // This is the Corey → Hermes cross-channel rule injection
+            // path: SOUL.md is read by Hermes Gateway for *every*
+            // channel (Corey UI, WhatsApp, Slack, cron, MCP clients),
+            // so our highest-priority discipline applies everywhere.
+            // Marker-delimited write preserves whatever the customer
+            // wrote in their own SOUL.md slot. See `soul_md` module
+            // docs for the full contract.
+            if let Ok(hermes_dir) = paths::hermes_data_dir() {
+                match soul_md::sync_corey_block(&hermes_dir) {
+                    Ok(outcome) => {
+                        info!(?outcome, "SOUL.md: Corey iron-rules block synced");
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "SOUL.md: iron-rules sync failed (non-fatal)");
+                    }
+                }
+            }
+
+            // Install + register the corey-guards hard-stop hook. This
+            // is the L3 defence layer — if the LLM decides to bypass
+            // the SOUL.md iron rules (soft layer), Hermes invokes this
+            // script before every tool call and the script physically
+            // vetoes destructive ops against protected paths. See
+            // `hermes_hooks` module docs for the 2026-05-11 incident
+            // this fix targets.
+            if let Ok(hermes_dir) = paths::hermes_data_dir() {
+                match hermes_hooks::seed_guards_script(&hermes_dir) {
+                    Ok(outcome) => {
+                        info!(?outcome, "corey-guards: file-ops-guard.py seeded");
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "corey-guards: seed failed (hook may not fire)");
+                    }
+                }
+                match hermes_hooks::ensure_hook_registered(&hermes_dir) {
+                    Ok(outcome) => {
+                        info!(?outcome, "corey-guards: pre_tool_call hook registered");
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "corey-guards: hook registration failed (guard is installed but DORMANT)");
+                    }
                 }
             }
 

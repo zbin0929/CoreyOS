@@ -46,3 +46,4 @@ export * from './ipc/pack';
 export * from './ipc/vision-proxy';
 export * from './ipc/artifacts';
 export * from './ipc/browser-cdp';
+export * from './ipc/security';

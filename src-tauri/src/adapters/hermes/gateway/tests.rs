@@ -105,6 +105,133 @@ async fn t18_chat_stream_retries_connect_on_transport_error() {
     );
 }
 
+/// Hermes 0.13.0 `/v1/runs/{run_id}/events` SSE stream emits a tagged
+/// JSON union; the Rust client parses each line into a `RunEvent`
+/// variant. This locks in the exact shapes Corey relies on so a
+/// future Hermes rename surfaces as a single failing test rather than
+/// silently dropping deltas / approvals.
+#[test]
+fn run_event_parses_each_variant() {
+    use serde_json::json;
+    let cases = vec![
+        (
+            json!({"event": "message.delta", "delta": "hello"}),
+            "message",
+        ),
+        (
+            json!({"event": "tool.started", "tool": "terminal", "label": "ls", "emoji": "📂"}),
+            "tool_started",
+        ),
+        (
+            json!({"event": "tool.completed", "tool": "terminal"}),
+            "tool_completed",
+        ),
+        (
+            json!({"event": "reasoning.available", "reasoning": "thinking..."}),
+            "reasoning",
+        ),
+        (
+            json!({
+                "event": "approval.request",
+                "command": "rm -rf /",
+                "description": "fork bomb",
+                "pattern_key": "rm_rf_root",
+                "pattern_keys": ["rm_rf_root"],
+                "choices": ["once", "session", "always", "deny"],
+                "run_id": "run_abc123"
+            }),
+            "approval_request",
+        ),
+        (
+            json!({"event": "approval.responded", "choice": "once"}),
+            "approval_responded",
+        ),
+        (
+            json!({"event": "run.completed", "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150}}),
+            "run_completed",
+        ),
+        (
+            json!({"event": "run.failed", "error": "model timeout"}),
+            "run_failed",
+        ),
+        (json!({"event": "run.cancelled"}), "run_cancelled"),
+    ];
+    for (raw, label) in cases {
+        let parsed: RunEvent = serde_json::from_value(raw.clone())
+            .unwrap_or_else(|e| panic!("{label} failed to parse: {e} from {raw}"));
+        match (label, parsed) {
+            ("message", RunEvent::MessageDelta { delta }) => assert_eq!(delta, "hello"),
+            ("tool_started", RunEvent::ToolStarted { tool, label, emoji }) => {
+                assert_eq!(tool, "terminal");
+                assert_eq!(label.as_deref(), Some("ls"));
+                assert_eq!(emoji.as_deref(), Some("📂"));
+            }
+            ("tool_completed", RunEvent::ToolCompleted { .. }) => {}
+            ("reasoning", RunEvent::ReasoningAvailable { reasoning }) => {
+                assert_eq!(reasoning, "thinking...")
+            }
+            (
+                "approval_request",
+                RunEvent::ApprovalRequest {
+                    command,
+                    run_id,
+                    choices,
+                    ..
+                },
+            ) => {
+                assert_eq!(command, "rm -rf /");
+                assert_eq!(run_id, "run_abc123");
+                assert_eq!(choices.len(), 4);
+            }
+            ("approval_responded", RunEvent::ApprovalResponded { choice }) => {
+                assert_eq!(choice, "once")
+            }
+            ("run_completed", RunEvent::RunCompleted { usage }) => {
+                let u = usage.expect("usage missing");
+                assert_eq!(u.input_tokens, 100);
+                assert_eq!(u.output_tokens, 50);
+                assert_eq!(u.total_tokens, 150);
+            }
+            ("run_failed", RunEvent::RunFailed { error }) => assert_eq!(error, "model timeout"),
+            ("run_cancelled", RunEvent::RunCancelled {}) => {}
+            (other, got) => panic!("variant mismatch for {other}: {got:?}"),
+        }
+    }
+}
+
+/// Hermes 0.13.0 sends `tool.completed` with a result payload that we
+/// don't surface. Verify it still parses (non-fatal) when the
+/// `result` field shows up in unexpected shapes.
+#[test]
+fn run_event_tolerates_unknown_extra_fields() {
+    let raw = serde_json::json!({
+        "event": "tool.completed",
+        "tool": "web_search",
+        "result": {"hits": 3, "elapsed_ms": 42},
+        "future_field": [1, 2, 3]
+    });
+    let parsed: RunEvent =
+        serde_json::from_value(raw).expect("tool.completed with extras should parse");
+    assert!(matches!(parsed, RunEvent::ToolCompleted { .. }));
+}
+
+/// Approval URL is composed from `api_url("runs/{id}/approval")` so it
+/// follows the same `/v1` prefix convention as `chat/completions`.
+#[test]
+fn approval_url_uses_v1_runs_path() {
+    let gw = HermesGateway::new("http://127.0.0.1:8642", None)
+        .expect("HermesGateway construction with a valid URL never fails");
+    assert_eq!(
+        gw.api_url("runs/run_abc/approval"),
+        "http://127.0.0.1:8642/v1/runs/run_abc/approval"
+    );
+    assert_eq!(
+        gw.api_url("runs/run_abc/events"),
+        "http://127.0.0.1:8642/v1/runs/run_abc/events"
+    );
+    assert_eq!(gw.api_url("runs"), "http://127.0.0.1:8642/v1/runs");
+}
+
 #[test]
 fn contract_chat_stream_done_serializes_expected_fields() {
     let done = ChatStreamDone {

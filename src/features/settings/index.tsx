@@ -26,6 +26,7 @@ import { RoutingRulesSection } from './sections/RoutingRulesSection';
 import { HermesToolPermissionsSection } from './sections/HermesToolPermissionsSection';
 import { HermesUpdateSection } from './sections/HermesUpdateSection';
 import { SandboxScopesSection } from './sections/SandboxScopesSection';
+import { SecuritySection } from './sections/SecuritySection';
 import { StorageSection } from './sections/StorageSection';
 import { WorkspaceSection } from './sections/WorkspaceSection';
 
@@ -148,6 +149,16 @@ export function SettingsRoute() {
               default-scope workspace section so users see the "global
               roots" and "named scopes" as adjacent affordances. */}
           <SandboxScopesSection />
+
+          {/* Security — Corey Guard visibility. Put right next to
+              sandbox scopes since they're the two halves of the
+              physical-defence story: sandbox scopes govern WHAT paths
+              are writable; the guard verifies the pre_tool_call hook
+              is actually wired up so destructive ops get intercepted
+              BEFORE they touch those paths. The 2026-05-11 incident
+              showed we had no UI signal for the "installed but
+              unregistered" failure mode — this card fixes that. */}
+          <SecuritySection />
 
           {/* The OTHER half of the permission story: Hermes' own
               command-pattern + approval gate. Lives next to the

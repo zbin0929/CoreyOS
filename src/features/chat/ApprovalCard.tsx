@@ -1,11 +1,14 @@
-import { invoke } from '@tauri-apps/api/core';
 import { ShieldAlert, X, Check, Clock, Infinity as InfinityIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ChatApprovalRequest } from '@/lib/ipc';
+import { hermesApprovalRespond, type ChatApprovalRequest } from '@/lib/ipc';
 
 type Props = {
   approval: ChatApprovalRequest;
+  /** Chat session id — kept on the type for legacy callers and as a
+   *  fallback when, in some recorded older fixture, the approval
+   *  event had no `run_id`. The Hermes 0.13.0 `/v1/runs` path always
+   *  populates `approval.run_id`. */
   sessionId: string;
   onResolved: () => void;
 };
@@ -17,9 +20,8 @@ export function ApprovalCard({ approval, sessionId, onResolved }: Props) {
   const respond = async (choice: string) => {
     setLoading(choice);
     try {
-      await invoke('hermes_approval_respond', {
-        args: { sessionId: approval._session_id || sessionId, choice },
-      });
+      const runId = approval.run_id || approval._session_id || sessionId;
+      await hermesApprovalRespond(runId, choice);
       onResolved();
     } catch {
       setLoading(null);

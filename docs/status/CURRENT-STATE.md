@@ -1,7 +1,7 @@
 # CURRENT-STATE · 当下事实
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-10 -->
+<!-- last-verified: 2026-05-11 -->
 <!-- 校验规则：每 30 天至少一次。过期后由下一个接触者重新校验或标记为 stale。 -->
 
 > 本文件描述 CoreyOS **当下**是什么样子，不描述计划。
@@ -15,9 +15,9 @@
 ## 当前版本
 
 - 产品版本：**v0.2.10**（以 `package.json` / `CHANGELOG.md` 为准）
-- 上游 Hermes 版本：参见 [`hermes-deps.md`](./hermes-deps.md)
-- 代码规模：Rust 137 文件 ~40K 行 / TS 295 文件 ~44K 行
-- 测试：Rust 419 + Vitest 112 + Playwright 77（全绿）
+- 上游 Hermes 版本：**v0.13.0 (2026.5.7)** — 2026-05-11 从 0.12.0 升级；参见 [`hermes-deps.md`](./hermes-deps.md)
+- 代码规模：Rust ~140 文件 ~42K 行 / TS ~297 文件 ~44K 行（2026-05-11 晚新增 `soul_md.rs` / `hermes_hooks.rs` / `ipc/security.rs` / `SecuritySection.tsx` 等）
+- 测试：Rust 543 + Vitest 112 + Playwright 77（全绿）
 
 > 🔁 校验提醒：数字随代码变动，至少每月核对一次。
 
@@ -36,6 +36,7 @@
 | MCP 管理 | 子进程生命周期 + 工具列表 | ✅ 可用 |  |
 | Memory | holographic 后端 | ✅ 可用 | 见 `../spec/memory-strategy.md` |
 | License | ed25519 离线签名 + features 联动 | ✅ 已落地 | 签发脚手架待完善 |
+| 安全防护（L0-L3）| SOUL.md 铁律 + corey-guards 物理拦截 + Hermes DANGEROUS_PATTERNS | ✅ 已落地 2026-05-11 | Corey UI 审批卡片暂失效，待 `/v1/runs` 迁移；详见 `known-issues.md` |
 
 ## 已知关键缺陷（简表）
 

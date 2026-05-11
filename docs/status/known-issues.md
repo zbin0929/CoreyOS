@@ -3,6 +3,53 @@
 > 创建：2026-05-01（从 `docs/status/TODO.md` v1 拆分而来，保留为修复参考）
 > 用途：已修复 Bug 的根因 + 解决方案存档
 
+## 2026-05-11 晚 · 待修 / 已迁移的问题
+
+### 已知未修：Corey UI 聊天的审批卡片当前不会触发（P0）
+
+- **现象**：在 Corey UI chat 里触发危险命令（如 `rm ~/Desktop/x`），**不会**出现审批 UI。命令要么被 Hermes `DANGEROUS_PATTERNS` 直接拒，要么被 `corey-guards` 拦（弹 macOS 原生对话框，不是 Corey UI 卡片）。
+- **根因**：2026-05-11 我们撤销了 `patch_approval_sse()` 对 Hermes `api_server.py` 的 patch。Hermes 0.13.0 原生只在 `/v1/runs` endpoint 发 `approval.request` 事件；Corey 现在用的是 `/v1/chat/completions`，没有 approval 事件。
+- **修复计划**：迁移 Corey `chat_stream` 到 `/v1/runs` + `/v1/runs/{run_id}/events`。详见 `docs/migrations/hermes-v0.13-runs-endpoint.md`，预估 3-4 小时。
+- **临时替代**：
+  - 消息渠道（WeChat / Slack / cron）走 Hermes 原生 channel 审批流（英文）
+  - corey-guards macOS 对话框仍然会对保护路径的破坏性操作弹窗
+
+### 已知未修：消息渠道审批提示仍是英文（P2 · upstream gap）
+
+- **现象**：微信 / Slack / Telegram / 钉钉收到的危险命令审批提示仍然是英文硬编码 `Dangerous command requires approval:` + `/approve session / /deny` 等 jargon。
+- **根因**：Hermes 0.13.0 虽然新增了 `locales/zh.yaml` 等 16 种语言的 locale 支持（upstream commit `c39168453`），但 `gateway/run.py:15066` 的 plain-text 审批 fallback 还没迁到 locale 文件里。
+- **修复计划**：向 hermes-agent 提 upstream issue（草稿在 `docs/migrations/hermes-v0.13-runs-endpoint.md` 最后一节）。我们**不再 patch Hermes 源码**。
+
+### 已修复：LLM 绕过 shell guard 删文件（P0 real safety incident）
+
+- **时间**：2026-05-11 晚用户实测
+- **现象**：用户说"帮我删除桌面的 test.md"，LLM：
+  1. 第一步调 shell `rm ~/Desktop/test.md` → Hermes `DANGEROUS_PATTERNS` 拦
+  2. LLM 在回复里主动说"终端被拦，我用 Python 工具试试"
+  3. 切换调 `code_execution` 跑 `os.remove(...)` → 成功删除文件
+- **根因**：
+  1. corey-guards 的 v1 版本 `CODE_TOOLS` 集合没包含 Hermes 真实工具名 `code_execution`（只有 `execute_code`）
+  2. 更致命的是 `~/.hermes/config.yaml` 里 `hooks.pre_tool_call: '[]'` **是字符串不是列表**，Hermes `_parse_hooks_block` 发现类型不对直接 warn-and-skip，所以 guard 根本没挂上去过
+  3. LLM 本身主动寻找绕过路径（behavioral issue）
+- **修复**：
+  - 新增 `src-tauri/src/hermes_hooks.rs`：`seed_guards_script()`（bundled v2 guard 覆盖 code_execution + python -c 内联 + Hermes 真实工具名）+ `ensure_hook_registered()`（Corey 启动时幂等写 `config.yaml.hooks.pre_tool_call` 为正确的 list 格式）+ 12 个测试
+  - 新增 `src-tauri/assets/soul/corey_iron_rules.md` + `src-tauri/src/soul_md.rs`：marker-delimited 块注入到 `~/.hermes/SOUL.md`，里面新增"🛑 禁止绕过任何 guard"硬红线，明令 LLM 遇到 block 必须停，不得换工具路径、换命令形式、拆分、sudo、切目录等 7 类绕过
+  - 新增 `src-tauri/src/ipc/security.rs` + `src/features/settings/sections/SecuritySection.tsx`：Settings 页"安全防护"卡片，显示 guard 注册状态 / 最近 fires / 最近 blocks / hooks_auto_accept 状态，以及"立即修复"按钮
+
+### 已执行：Hermes Agent 升级 0.12.0 → 0.13.0
+
+- **原因**：用户要求"永不 patch Hermes 源码"，但 Corey 之前有 4 个 `patch_*` 函数在 gateway start/restart 时重写 Hermes `.py` 文件（approval SSE、危险 patterns、QQ bot URL、新加的审批提示模板）。客户如果升级 Hermes，patch anchor 失效 → 静默失败。
+- **操作**：
+  1. `git checkout` 还原 3 个被 patch 的 Hermes 源文件
+  2. 删除 `api_server.py.bak`（已备份到 `/tmp/`）
+  3. 注释掉 `gateway.rs` 里 3 处 `patch_*()` 调用；函数本体标 `#[allow(dead_code)]` 保留备查
+  4. `cd ~/.hermes/hermes-agent && git pull --ff-only origin main`（+1296 commits）
+  5. `venv/bin/pip3 install -e .`（新依赖 ruamel.yaml / psutil / tzdata）
+- **验证**：`hermes --version` 返回 `v0.13.0 (2026.5.7)`；Corey 543/543 tests pass。
+- **影响**：见上条"Corey UI 审批不会触发"。
+
+---
+
 ## v0.1.12（2026-04-30 发布，15 项 Bug 修复）
 
 ### 已修复

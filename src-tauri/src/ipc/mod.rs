@@ -39,6 +39,7 @@ pub mod routing_rules;
 pub mod runbooks;
 pub mod sandbox;
 pub mod scheduler;
+pub mod security;
 pub mod session;
 pub mod session_search;
 pub mod skill_curator;

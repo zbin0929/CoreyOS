@@ -8,12 +8,14 @@
 
 ```
 docs/
-├── spec/       规格 —— 描述"应该是什么"，很少改动
-├── status/     现状 —— 描述"当下实际是什么"，每月校验
-├── log/        日志 —— 只追加不修改
-├── plans/      按版本的实施计划
-├── user/       面向终端用户
-└── archive/    历史快照（只读，不代表当下事实）
+├── spec/                  规格 —— 描述"应该是什么"，很少改动
+├── status/                现状 —— 描述"当下实际是什么"，每月校验
+├── migrations/            跨 Hermes 版本的迁移计划 + 未完成迁移
+├── upstream-proposals/    给 hermes-agent 的 PR/issue 建议草稿
+├── log/                   日志 —— 只追加不修改
+├── plans/                 按版本的实施计划
+├── user/                  面向终端用户
+└── archive/               历史快照（只读，不代表当下事实）
 ```
 
 ## 我想快速定位……
@@ -44,6 +46,10 @@ docs/
 | **Memory 后端决策** | [`spec/memory-strategy.md`](./spec/memory-strategy.md) |
 | **会话存储边界决策** | [`spec/session-storage.md`](./spec/session-storage.md) |
 | **MCP 工具步骤测试** | [`spec/testing-mcp-tool-step.md`](./spec/testing-mcp-tool-step.md) |
+| **Agent 安全约束 4 层架构** | [`spec/defense-in-depth.md`](./spec/defense-in-depth.md) |
+| **system prompt 分层（L0/L1/L2/L3）**| [`spec/system-prompt-stack.md`](./spec/system-prompt-stack.md) |
+| **Hermes 升级迁移计划** | [`migrations/`](./migrations/) |
+| **上游 PR 建议草稿** | [`upstream-proposals/`](./upstream-proposals/) |
 | **历代 AI 代理操作日志** | [`log/operations.md`](./log/operations.md) |
 | **按版本的实施计划** | [`plans/`](./plans/) |
 | **历史快照（审计 / phase 归档 / 旧方案）** | [`archive/`](./archive/) |
@@ -72,3 +78,4 @@ docs/
 ## 整理历史
 
 - **2026-05-09**：docs 大整理。根目录从 33 个 .md 缩到 1 个；建立 spec/status/log/archive 四分法；17 个 phase 文档、15+ 审计 / 旧方案类文档全部归档；删除冗余的 `document-index.md`。详见 [`archive/README.md`](./archive/README.md)。
+- **2026-05-11 晚**：新增 `migrations/`（跨版本迁移计划）+ `upstream-proposals/`（给 Hermes 的 PR 草稿）两个子目录。新增 `spec/defense-in-depth.md`（4 层安全约束架构）、`session-handoff-2026-05-11-pm.md`（当晚工作接力）、`migrations/hermes-v0.13-runs-endpoint.md`（`/v1/runs` 迁移方案）、`upstream-proposals/hermes-hook-granularity.md`（细分 hook 事件）。`status/hermes-deps.md` v4.0 + `status/CURRENT-STATE.md` + `status/known-issues.md` 同步 Hermes 0.13.0 升级 + 4 个 patch_* 函数 retire 状态。

@@ -304,41 +304,40 @@ impl HermesGateway {
         })
     }
 
-    /// Streaming variant of `chat_once`. Forwards assistant content deltas
-    /// AND Hermes-specific tool progress events over `tx` as they arrive from
-    /// the gateway's SSE stream (`/v1/chat/completions` with `stream=true`).
-    /// Resolves with the final metadata (finish_reason, usage) once the
-    /// `[DONE]` marker arrives or the server closes the stream.
+    /// Streaming chat via Hermes 0.13.0's `/v1/runs` endpoint.
+    ///
+    /// Two-step flow:
+    /// 1. `POST /v1/runs` with `{input: messages[]}` → returns `run_id`.
+    /// 2. `GET /v1/runs/{run_id}/events` SSE → forward `RunEvent`
+    ///    variants over `tx` as they arrive.
+    ///
+    /// This replaces the OpenAI-compat `/v1/chat/completions` streaming
+    /// path Corey used pre-2026-05-11. We migrated because Hermes only
+    /// emits `approval.request` events on `/v1/runs`, and Corey's
+    /// approval UI was the casualty after we retired source-patching.
+    /// See `docs/migrations/hermes-v0.13-runs-endpoint.md`.
     pub async fn chat_stream(
         &self,
         model: &str,
         messages: Vec<ChatMessage>,
         tx: mpsc::Sender<ChatStreamEvent>,
     ) -> AdapterResult<ChatStreamDone> {
-        let body = ChatCompletionRequest {
-            model: model.to_string(),
-            messages,
-            stream: true,
-        };
-
-        // T1.8 — retry the initial connect on `Unreachable` errors
-        // (gateway just restarted / transient network blip). Once bytes
-        // start flowing we NEVER retry: resending the prompt mid-stream
-        // would re-charge tokens and duplicate output. Deterministic
-        // failures (401/429/5xx with body) skip the retry loop — they'd
-        // just fail the same way on the next attempt.
         let started = Instant::now();
-        let resp = self.connect_chat_stream(&body).await?;
-        // T-coldstart: split the stream lifecycle into measurable
-        // stages so we can finally answer "where does the 3-minute
-        // first-message latency go?". Without this every reasoning-
-        // model request looked like a single opaque blob.
+
+        // Step 1: start the run. start_run handles the same retry
+        // semantics chat_stream had on /v1/chat/completions: bounded
+        // retries on transport errors, deterministic-error short-circuit.
+        let run_id = self.start_run(model, &messages).await?;
         let connect_ms = started.elapsed().as_millis() as u64;
         tracing::info!(
             model = %model,
+            run_id = %run_id,
             connect_ms = connect_ms,
-            "hermes chat_stream: connection established (HTTP head received)"
+            "hermes /v1/runs: run started"
         );
+
+        // Step 2: open the events SSE stream.
+        let resp = self.connect_run_events(&run_id).await?;
 
         let status = resp.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -361,29 +360,20 @@ impl HermesGateway {
 
         let mut byte_stream = resp.bytes_stream().eventsource();
         let mut finish_reason: Option<String> = None;
-        let mut resolved_model: String = model.to_string();
         let mut prompt_tokens: Option<u32> = None;
         let mut completion_tokens: Option<u32> = None;
-        // Tracks whether at least one content delta has reached the UI.
-        // Used to decide whether a mid-stream transport error is a real
-        // failure or just the server closing an otherwise-successful stream
-        // (e.g. reasoning models that idle before emitting, or any upstream
-        // that forgets to send a proper `[DONE]` sentinel).
-        let mut received_any_delta = false;
-        // T-coldstart timing markers. We log the first occurrence of
-        // each event class once, so chat_stream_done can summarize the
-        // whole lifetime as connect / first-byte / first-reasoning /
-        // first-delta / done. None of these allocate beyond a u64 each.
+        let mut received_any: bool = false;
         let mut first_event_at: Option<u64> = None;
         let mut first_reasoning_at: Option<u64> = None;
         let mut first_delta_at: Option<u64> = None;
         let mut first_tool_at: Option<u64> = None;
+        let mut run_error: Option<String> = None;
 
         while let Some(event) = byte_stream.next().await {
             let event = match event {
                 Ok(e) => e,
                 Err(e) => {
-                    if received_any_delta {
+                    if received_any {
                         tracing::warn!(error = %e, "SSE stream dropped mid-flight; closing gracefully");
                         finish_reason.get_or_insert_with(|| "interrupted".into());
                         break;
@@ -393,183 +383,185 @@ impl HermesGateway {
                     });
                 }
             };
+
             let data = event.data;
-            // Stamp first-event-from-server time once. This is "TTFB"
-            // for the SSE stream — the gap between connect_ms and this
-            // is the model's pre-stream thinking time (reasoning
-            // models idle here for the bulk of cold-start latency).
+            if data.is_empty() {
+                continue;
+            }
             if first_event_at.is_none() {
                 let ms = started.elapsed().as_millis() as u64;
                 first_event_at = Some(ms);
                 tracing::info!(
                     model = %model,
+                    run_id = %run_id,
                     elapsed_ms = ms,
                     since_connect_ms = ms.saturating_sub(connect_ms),
-                    "hermes chat_stream: first SSE event received"
+                    "hermes /v1/runs: first SSE event received"
                 );
             }
-            if data == "[DONE]" {
-                break;
-            }
-            if data.is_empty() {
-                continue;
-            }
 
-            // Branch on the SSE `event:` name. Default (empty) is standard
-            // OpenAI-style completion chunks. Named events like
-            // `hermes.tool.progress` carry agent-specific annotations.
-            match event.event.as_str() {
-                "hermes.tool.progress" => {
-                    let progress: HermesToolProgress = match serde_json::from_str(&data) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            tracing::debug!(error = %e, raw = %data, "bad hermes.tool.progress");
-                            continue;
-                        }
-                    };
-                    if tx.send(ChatStreamEvent::Tool(progress)).await.is_err() {
-                        return Ok(ChatStreamDone {
-                            finish_reason: Some("cancelled".into()),
-                            model: resolved_model,
-                            latency_ms: started.elapsed().as_millis() as u32,
-                            first_token_latency_ms: first_delta_at.map(|v| v as u32),
+            let parsed: RunEvent = match serde_json::from_str(&data) {
+                Ok(p) => p,
+                Err(e) => {
+                    // Unknown / malformed events are non-fatal — Hermes
+                    // can introduce new event types and we don't want
+                    // a dev-console error per chunk.
+                    tracing::debug!(error = %e, raw = %data, "skip unparseable run event");
+                    continue;
+                }
+            };
+
+            match parsed {
+                RunEvent::MessageDelta { delta } => {
+                    if delta.is_empty() {
+                        continue;
+                    }
+                    if first_delta_at.is_none() {
+                        let ms = started.elapsed().as_millis() as u64;
+                        first_delta_at = Some(ms);
+                        tracing::info!(
+                            model = %model,
+                            elapsed_ms = ms,
+                            "hermes /v1/runs: first content delta (TTFT)"
+                        );
+                    }
+                    if tx.send(ChatStreamEvent::Delta(delta)).await.is_err() {
+                        return Ok(make_done(
+                            "cancelled",
+                            model,
+                            &started,
+                            first_delta_at,
                             prompt_tokens,
                             completion_tokens,
-                        });
+                        ));
                     }
+                    received_any = true;
+                }
+                RunEvent::ReasoningAvailable { reasoning } => {
+                    if reasoning.is_empty() {
+                        continue;
+                    }
+                    if first_reasoning_at.is_none() {
+                        let ms = started.elapsed().as_millis() as u64;
+                        first_reasoning_at = Some(ms);
+                        tracing::info!(
+                            model = %model,
+                            elapsed_ms = ms,
+                            "hermes /v1/runs: first reasoning chunk"
+                        );
+                    }
+                    if tx
+                        .send(ChatStreamEvent::Reasoning(reasoning))
+                        .await
+                        .is_err()
+                    {
+                        return Ok(make_done(
+                            "cancelled",
+                            model,
+                            &started,
+                            first_delta_at,
+                            prompt_tokens,
+                            completion_tokens,
+                        ));
+                    }
+                    received_any = true;
+                }
+                RunEvent::ToolStarted { tool, emoji, label } => {
                     if first_tool_at.is_none() {
                         let ms = started.elapsed().as_millis() as u64;
                         first_tool_at = Some(ms);
                         tracing::info!(
                             model = %model,
                             elapsed_ms = ms,
-                            "hermes chat_stream: first tool progress event"
+                            "hermes /v1/runs: first tool progress event"
                         );
                     }
-                    // A tool event is proof the upstream is alive enough to
-                    // count the session as partial-success if it drops now.
-                    received_any_delta = true;
+                    let progress = HermesToolProgress { tool, emoji, label };
+                    if tx.send(ChatStreamEvent::Tool(progress)).await.is_err() {
+                        return Ok(make_done(
+                            "cancelled",
+                            model,
+                            &started,
+                            first_delta_at,
+                            prompt_tokens,
+                            completion_tokens,
+                        ));
+                    }
+                    received_any = true;
                 }
-                "hermes.approval" => {
-                    let approval: HermesApprovalRequest = match serde_json::from_str(&data) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            tracing::debug!(error = %e, raw = %data, "bad hermes.approval");
-                            continue;
-                        }
+                RunEvent::ToolCompleted { .. } => {
+                    // We don't expose tool.completed in the UI today; the
+                    // tool's textual output is baked into the subsequent
+                    // message.delta chunks anyway.
+                }
+                RunEvent::ApprovalRequest {
+                    command,
+                    description,
+                    pattern_key,
+                    pattern_keys,
+                    choices,
+                    run_id: ev_run_id,
+                } => {
+                    let approval = HermesApprovalRequest {
+                        command,
+                        pattern_key,
+                        pattern_keys,
+                        description,
+                        run_id: Some(ev_run_id),
+                        choices,
+                        session_id: None,
                     };
                     tracing::warn!(
                         command = %approval.command,
                         desc = %approval.description,
-                        "hermes chat_stream: approval required"
+                        "hermes /v1/runs: approval required"
                     );
                     if tx.send(ChatStreamEvent::Approval(approval)).await.is_err() {
-                        return Ok(ChatStreamDone {
-                            finish_reason: Some("cancelled".into()),
-                            model: resolved_model,
-                            latency_ms: started.elapsed().as_millis() as u32,
-                            first_token_latency_ms: first_delta_at.map(|v| v as u32),
+                        return Ok(make_done(
+                            "cancelled",
+                            model,
+                            &started,
+                            first_delta_at,
                             prompt_tokens,
                             completion_tokens,
-                        });
+                        ));
                     }
-                    received_any_delta = true;
+                    received_any = true;
                 }
-                // Default event: OpenAI-compatible chat.completion.chunk.
-                "" | "message" => {
-                    let chunk: StreamChunk = match serde_json::from_str(&data) {
-                        Ok(c) => c,
-                        Err(e) => {
-                            tracing::debug!(error = %e, raw = %data, "skipping unparseable SSE chunk");
-                            continue;
-                        }
-                    };
-                    if !chunk.model.is_empty() {
-                        resolved_model = chunk.model;
-                    }
-                    if let Some(usage) = chunk.usage {
-                        prompt_tokens = Some(usage.prompt_tokens);
-                        completion_tokens = Some(usage.completion_tokens);
-                    }
-                    for choice in chunk.choices {
-                        if let Some(reason) = choice.finish_reason {
-                            finish_reason = Some(reason);
-                        }
-                        // Reasoning chunks are emitted BEFORE content
-                        // chunks so the UI can render the "thinking"
-                        // panel in arrival order even when a single
-                        // SSE chunk carries both fields.
-                        if let Some(reasoning) = choice.delta.reasoning_content {
-                            if !reasoning.is_empty() {
-                                if first_reasoning_at.is_none() {
-                                    let ms = started.elapsed().as_millis() as u64;
-                                    first_reasoning_at = Some(ms);
-                                    tracing::info!(
-                                        model = %model,
-                                        elapsed_ms = ms,
-                                        "hermes chat_stream: first reasoning chunk"
-                                    );
-                                }
-                                if tx
-                                    .send(ChatStreamEvent::Reasoning(reasoning))
-                                    .await
-                                    .is_err()
-                                {
-                                    return Ok(ChatStreamDone {
-                                        finish_reason: Some("cancelled".into()),
-                                        model: resolved_model,
-                                        latency_ms: started.elapsed().as_millis() as u32,
-                                        first_token_latency_ms: first_delta_at.map(|v| v as u32),
-                                        prompt_tokens,
-                                        completion_tokens,
-                                    });
-                                }
-                                received_any_delta = true;
-                            }
-                        }
-                        if let Some(delta_content) = choice.delta.content {
-                            if !delta_content.is_empty() {
-                                if first_delta_at.is_none() {
-                                    let ms = started.elapsed().as_millis() as u64;
-                                    first_delta_at = Some(ms);
-                                    tracing::info!(
-                                        model = %model,
-                                        elapsed_ms = ms,
-                                        "hermes chat_stream: first content delta (TTFT)"
-                                    );
-                                }
-                                if tx
-                                    .send(ChatStreamEvent::Delta(delta_content))
-                                    .await
-                                    .is_err()
-                                {
-                                    return Ok(ChatStreamDone {
-                                        finish_reason: Some("cancelled".into()),
-                                        model: resolved_model,
-                                        latency_ms: started.elapsed().as_millis() as u32,
-                                        first_token_latency_ms: first_delta_at.map(|v| v as u32),
-                                        prompt_tokens,
-                                        completion_tokens,
-                                    });
-                                }
-                                received_any_delta = true;
-                            }
-                        }
-                    }
+                RunEvent::ApprovalResponded { .. } => {
+                    // Hermes echoes the user's choice back on the stream
+                    // for telemetry; no UI surface needed.
                 }
-                other => {
-                    tracing::debug!(event = other, raw = %data, "ignoring unknown SSE event");
+                RunEvent::RunCompleted { usage } => {
+                    if let Some(u) = usage {
+                        prompt_tokens = Some(u.input_tokens);
+                        completion_tokens = Some(u.output_tokens);
+                    }
+                    finish_reason.get_or_insert_with(|| "stop".into());
+                    break;
+                }
+                RunEvent::RunFailed { error } => {
+                    run_error = Some(error);
+                    break;
+                }
+                RunEvent::RunCancelled {} => {
+                    finish_reason = Some("cancelled".into());
+                    break;
                 }
             }
         }
 
+        if let Some(err) = run_error {
+            return Err(AdapterError::Upstream {
+                status: 500,
+                body: err,
+            });
+        }
+
         let total_ms = started.elapsed().as_millis() as u64;
-        // Single-line breakdown so one grep on the dev console can
-        // tell you exactly which stage owned the cold-start latency.
-        // All stage values are millis since the request was issued;
-        // subtract the previous stage to see the gap.
         tracing::info!(
-            model = %resolved_model,
+            model = %model,
+            run_id = %run_id,
             connect_ms = connect_ms,
             first_event_ms = ?first_event_at,
             first_reasoning_ms = ?first_reasoning_at,
@@ -578,11 +570,11 @@ impl HermesGateway {
             total_ms = total_ms,
             prompt_tokens = ?prompt_tokens,
             completion_tokens = ?completion_tokens,
-            "hermes chat_stream: lifecycle"
+            "hermes /v1/runs: lifecycle"
         );
         Ok(ChatStreamDone {
             finish_reason,
-            model: resolved_model,
+            model: model.to_string(),
             latency_ms: total_ms as u32,
             first_token_latency_ms: first_delta_at.map(|v| v as u32),
             prompt_tokens,
@@ -590,65 +582,145 @@ impl HermesGateway {
         })
     }
 
-    /// T1.8 — open the SSE stream with bounded retry.
-    ///
-    /// Retries only on `reqwest::Error`s raised by `send()` — i.e. the
-    /// TCP connect / TLS handshake / HTTP-head phase failed before the
-    /// server produced a status line. Anything that comes back with a
-    /// status (even 5xx) is surfaced to the caller unchanged: we don't
-    /// want to hammer a `502` 3× in a row, and we never re-send a
-    /// prompt after the server acknowledged it.
-    ///
-    /// Backoff is exponential (500 / 1000 / 2000 ms) so total worst-case
-    /// latency stays under ~4 s. Jitter isn't worth it at this scale
-    /// (single-tenant desktop app; no thundering herd).
-    async fn connect_chat_stream(
-        &self,
-        body: &ChatCompletionRequest,
-    ) -> AdapterResult<reqwest::Response> {
+    /// `POST /v1/runs` with bounded retry on transport errors.
+    /// Returns the new `run_id`. Mirrors the retry envelope the old
+    /// `/v1/chat/completions` SSE connect had.
+    async fn start_run(&self, _model: &str, messages: &[ChatMessage]) -> AdapterResult<String> {
+        let url = self.api_url("runs");
+        // We always send the array form so multi-turn history is
+        // preserved. Hermes accepts string-or-array; array stays
+        // closest to the OpenAI shape we use elsewhere.
+        let input = serde_json::to_value(messages).map_err(|e| AdapterError::Internal {
+            source: anyhow::anyhow!("serialize /v1/runs input: {e}"),
+        })?;
+        let body = RunStartRequest {
+            input,
+            instructions: None,
+            conversation_history: None,
+        };
+
         let mut last_err: Option<reqwest::Error> = None;
         for attempt in 0..STREAM_CONNECT_ATTEMPTS {
-            let mut req = self
-                .http
-                .post(self.api_url("chat/completions"))
-                // Override the client-wide 120 s timeout — reasoning
-                // models can idle for minutes before emitting a token,
-                // and we don't want reqwest to reset the TCP connection
-                // mid-stream.
-                .timeout(Duration::from_secs(STREAM_TIMEOUT_S))
-                .json(body);
+            let mut req = self.http.post(&url).json(&body);
             if let Some(key) = &self.api_key {
                 req = req.bearer_auth(key);
             }
-            match req.send().await {
-                Ok(resp) => {
-                    if attempt > 0 {
-                        tracing::info!(attempts = attempt + 1, "chat stream connected after retry");
-                    }
-                    return Ok(resp);
-                }
+            let resp = match req.send().await {
+                Ok(r) => r,
                 Err(e) => {
                     last_err = Some(e);
-                    // Don't sleep after the final attempt — we're about
-                    // to surface the error to the caller anyway.
                     if attempt + 1 < STREAM_CONNECT_ATTEMPTS {
                         let backoff = STREAM_CONNECT_BACKOFF_MS << attempt;
                         tracing::warn!(
                             attempt = attempt + 1,
                             backoff_ms = backoff,
                             error = %last_err.as_ref().expect("just set"),
-                            "chat stream connect failed; retrying"
+                            "/v1/runs connect failed; retrying"
                         );
                         tokio::time::sleep(Duration::from_millis(backoff)).await;
                     }
+                    continue;
                 }
+            };
+
+            let status = resp.status();
+            if status == reqwest::StatusCode::UNAUTHORIZED {
+                return Err(AdapterError::Unauthorized {
+                    detail: "gateway rejected credentials — check API_SERVER_KEY".into(),
+                });
             }
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                return Err(AdapterError::RateLimited {
+                    retry_after_s: None,
+                });
+            }
+            if !status.is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(AdapterError::Upstream {
+                    status: status.as_u16(),
+                    body,
+                });
+            }
+            let parsed: RunStartResponse =
+                resp.json().await.map_err(|e| AdapterError::Protocol {
+                    detail: format!("parse /v1/runs response: {e}"),
+                })?;
+            if attempt > 0 {
+                tracing::info!(attempts = attempt + 1, "/v1/runs connected after retry");
+            }
+            return Ok(parsed.run_id);
         }
         let err = last_err.expect("STREAM_CONNECT_ATTEMPTS > 0");
         Err(AdapterError::Unreachable {
             endpoint: self.base_url.clone(),
             source: anyhow::anyhow!(err),
         })
+    }
+
+    /// `GET /v1/runs/{run_id}/events` with bounded retry on transport
+    /// errors. Caller checks the response status before parsing.
+    async fn connect_run_events(&self, run_id: &str) -> AdapterResult<reqwest::Response> {
+        let url = self.api_url(&format!("runs/{run_id}/events"));
+        let mut last_err: Option<reqwest::Error> = None;
+        for attempt in 0..STREAM_CONNECT_ATTEMPTS {
+            let mut req = self
+                .http
+                .get(&url)
+                // Long timeout for the SSE channel — reasoning models
+                // can idle minutes between events.
+                .timeout(Duration::from_secs(STREAM_TIMEOUT_S))
+                .header(reqwest::header::ACCEPT, "text/event-stream");
+            if let Some(key) = &self.api_key {
+                req = req.bearer_auth(key);
+            }
+            match req.send().await {
+                Ok(resp) => {
+                    if attempt > 0 {
+                        tracing::info!(
+                            attempts = attempt + 1,
+                            "/v1/runs events connected after retry"
+                        );
+                    }
+                    return Ok(resp);
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    if attempt + 1 < STREAM_CONNECT_ATTEMPTS {
+                        let backoff = STREAM_CONNECT_BACKOFF_MS << attempt;
+                        tokio::time::sleep(Duration::from_millis(backoff)).await;
+                    }
+                }
+            }
+        }
+        Err(AdapterError::Unreachable {
+            endpoint: self.base_url.clone(),
+            source: anyhow::anyhow!(last_err.expect("STREAM_CONNECT_ATTEMPTS > 0")),
+        })
+    }
+
+    // Approval responses are POSTed by the `hermes_approval_respond`
+    // IPC directly (it has its own reqwest client + the gateway base
+    // URL from `AppState.config`), so we don't need a method here.
+}
+
+/// Build a `cancelled` `ChatStreamDone` from the partial timing state.
+/// Only used when the frontend dropped the receiver mid-stream — at
+/// that point we just want to close out the bookkeeping.
+fn make_done(
+    finish_reason: &str,
+    model: &str,
+    started: &Instant,
+    first_delta_at: Option<u64>,
+    prompt_tokens: Option<u32>,
+    completion_tokens: Option<u32>,
+) -> ChatStreamDone {
+    ChatStreamDone {
+        finish_reason: Some(finish_reason.to_string()),
+        model: model.to_string(),
+        latency_ms: started.elapsed().as_millis() as u32,
+        first_token_latency_ms: first_delta_at.map(|v| v as u32),
+        prompt_tokens,
+        completion_tokens,
     }
 }
 
