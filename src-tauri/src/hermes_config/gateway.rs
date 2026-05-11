@@ -763,6 +763,85 @@ fn ensure_agent_max_turns() {
     }
 }
 
+#[cfg(test)]
+mod ensure_agent_max_turns_tests {
+    use super::*;
+
+    /// Floor semantics: missing key → MIN; existing < MIN → MIN;
+    /// existing ≥ MIN → untouched. Single test orchestrates all three
+    /// against a shared tempdir to amortize the `COREY_HERMES_DIR`
+    /// dance (and so the assertions read top-to-bottom like a story).
+    #[test]
+    fn floors_and_preserves_user_override() {
+        let _lock = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let tmp = std::env::temp_dir().join(format!(
+            "caduceus-max-turns-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&tmp).expect("create tempdir");
+        let orig = std::env::var_os("COREY_HERMES_DIR");
+        std::env::set_var("COREY_HERMES_DIR", &tmp);
+
+        // (a) Missing config.yaml → ensure writes MIN.
+        ensure_agent_max_turns();
+        let raw = std::fs::read_to_string(tmp.join("config.yaml")).expect("read config");
+        let v: serde_yaml::Value = serde_yaml::from_str(&raw).expect("parse yaml");
+        let n = v["agent"]["max_turns"].as_u64();
+        assert_eq!(n, Some(MIN_AGENT_MAX_TURNS), "missing → MIN");
+
+        // (b) Existing value below floor → bumped to MIN.
+        std::fs::write(
+            tmp.join("config.yaml"),
+            "agent:\n  max_turns: 50\nother: keep\n",
+        )
+        .expect("seed low value");
+        ensure_agent_max_turns();
+        let v2: serde_yaml::Value = serde_yaml::from_str(
+            &std::fs::read_to_string(tmp.join("config.yaml")).expect("re-read"),
+        )
+        .expect("re-parse");
+        assert_eq!(
+            v2["agent"]["max_turns"].as_u64(),
+            Some(MIN_AGENT_MAX_TURNS),
+            "low → MIN"
+        );
+        assert_eq!(
+            v2["other"].as_str(),
+            Some("keep"),
+            "unrelated keys preserved"
+        );
+
+        // (c) Existing value above floor → left alone (user's manual
+        //     bump must survive).
+        std::fs::write(tmp.join("config.yaml"), "agent:\n  max_turns: 999\n")
+            .expect("seed high value");
+        ensure_agent_max_turns();
+        let v3: serde_yaml::Value = serde_yaml::from_str(
+            &std::fs::read_to_string(tmp.join("config.yaml")).expect("re-read"),
+        )
+        .expect("re-parse");
+        assert_eq!(
+            v3["agent"]["max_turns"].as_u64(),
+            Some(999),
+            "user override preserved"
+        );
+
+        // Cleanup.
+        if let Some(v) = orig {
+            std::env::set_var("COREY_HERMES_DIR", v);
+        } else {
+            std::env::remove_var("COREY_HERMES_DIR");
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+}
+
 /// gateway" affordance when the binary is present but no process is
 /// listening on 127.0.0.1:8642 yet.
 pub fn gateway_start() -> io::Result<String> {

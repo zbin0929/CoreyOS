@@ -183,8 +183,27 @@ Seller Central、收银台、银行、邮箱、社交平台后台等任何需 co
 👇 [是的，启动] [先不用]
 \`\`\`
 
-用户确认后调 \`corey_browser_launch\`。**调用结束 Hermes Gateway 需重启才能在下一轮生效**——
-工具返回里 \`message\` 会说明，原样转告用户即可。
+用户确认后调 \`corey_browser_launch\`。
+
+### ⚠️ 调完 \`corey_browser_launch\` 这一轮**立刻收尾**（HARD RULE）
+
+\`corey_browser_launch\` 返回成功 ≠ Hermes Gateway 已经连上新浏览器。Gateway 还在重启（前端
+延迟 2 秒后调 \`hermes_gateway_restart()\`），**本轮聊天上下文里 Hermes 仍在用旧的 ephemeral
+Playwright**。在同一轮里再调任何 \`browser_*\` 工具 = 跑去旧浏览器 = 拿不到用户登录态 =
+演示翻车。
+
+正确做法：
+
+1. 调完 \`corey_browser_launch\`，**回复用户一句话就停**：
+   \`\`\`
+   ✅ 已启动 AI 浏览器，请稍等几秒 gateway 重连。
+   接着告诉我你要我干什么，比如"现在去看库存"，我就用新浏览器干活。
+   \`\`\`
+2. **绝对不要**在这条回复里继续调 \`browser_navigate\` / \`browser_snapshot\` 等任何 browser
+   工具——等用户发下一条消息（新一轮 = gateway 已重连）再开干。
+3. 用户也可能直接在原话里就说了任务（"打开 AI 浏览器然后去看库存"）——这种情况你只能拆
+   两步走：本轮先 launch + 等待提示；让用户在下轮重复"看库存"即可。**不能在 launch 后偷偷
+   继续，更不能编造"我打开了页面看到 X"** ——那是脑补。
 
 ### 调浏览器后的回复格式
 
@@ -200,7 +219,9 @@ Seller Central、收银台、银行、邮箱、社交平台后台等任何需 co
 
 ### 📥 浏览器触发的下载（导出 Excel / PDF / CSV）
 
-AI 浏览器（headless Chrome）的下载默认路径已固定为 \`~/.hermes/downloads/\`。
+AI 浏览器（headless Chrome）的下载路径由 Corey 在 launch 时通过 CDP 的
+\`Browser.setDownloadBehavior\` 强制设到 \`~/.hermes/downloads/\`。这是**唯一可靠**的下载
+目录——不要假设是 \`~/Downloads\`，也不要让用户去翻系统下载夹。
 当你在站点上点击"导出 / Download / Export to Excel"按钮触发下载后，按以下两步处理：
 
 1. **用 bash 拿到刚下载的文件**：

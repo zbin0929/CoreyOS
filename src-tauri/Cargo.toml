@@ -63,6 +63,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "gzip", "multipart"] }
 eventsource-stream = "0.2"
 
+# Minimal plain `ws://` client for the CDP setDownloadBehavior call on
+# `localhost:9222` (`ipc/browser_cdp.rs::apply_cdp_download_behavior`).
+# We deliberately stay on plain WebSocket — Chrome's CDP endpoint is
+# loopback-only and never TLS — so we disable the TLS feature surface
+# to keep compile-time cost minimal. `connect` + `handshake` are the
+# only features needed for `connect_async` on a `ws://` URL.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "handshake"] }
+
 # HTTP server for the MCP-over-HTTP bridge (`src/mcp_server`). Hermes
 # Agent connects to this endpoint as an MCP client (registered via
 # `hermes mcp add corey-native --url http://127.0.0.1:<port>/`) and gains

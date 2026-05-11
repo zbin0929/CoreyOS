@@ -276,6 +276,25 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
     // Sign-in" from Settings the rare times they need a visible
     // window (and that path kills this one first).
     spawn_chrome(&chrome, &dir, true).map_err(|e| format!("spawn chrome: {e:?}"))?;
+    // Mirror the post-launch wait + CDP download-routing the explicit
+    // `launch_sync` path does. Without this, headless boot-launched
+    // Chromes never get `Browser.setDownloadBehavior`, defaulting all
+    // downloads back to `~/Downloads` (system default) — which is
+    // exactly the v0.2.12 demo-day bug we're fixing.
+    let deadline = Instant::now() + Duration::from_secs(8);
+    while Instant::now() < deadline {
+        if port_is_listening(CDP_PORT) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    if port_is_listening(CDP_PORT) {
+        if let Err(e) = apply_cdp_download_behavior() {
+            tracing::warn!(
+                "auto_start: apply_cdp_download_behavior failed (will fall back to system Downloads): {e}"
+            );
+        }
+    }
     Ok(true)
 }
 
@@ -433,6 +452,22 @@ pub(crate) fn launch_sync(
                 ),
             });
         }
+    }
+
+    // Route downloads to `~/.hermes/downloads/` via CDP. This is the
+    // authoritative path (vs the Preferences-file seed in `spawn_chrome`,
+    // which Chromium frequently ignores due to its signed-MAC scheme).
+    // Best-effort: a failure here doesn't fail launch — the user can
+    // still browse, they just lose the auto-pick-up-downloads UX.
+    if let Err(e) = apply_cdp_download_behavior() {
+        tracing::warn!(
+            "apply_cdp_download_behavior failed (downloads will land in default location): {e}"
+        );
+        message.push_str(
+            "(note: couldn't auto-route downloads — files will land in your system Downloads folder.) ",
+        );
+    } else {
+        message.push_str("Downloads will land in ~/.hermes/downloads/. ");
     }
 
     let cdp_url = format!("http://localhost:{CDP_PORT}");
@@ -596,38 +631,14 @@ pub(crate) fn clear_cookies_sync() -> IpcResult<BrowserCdpStatus> {
     Ok(build_status())
 }
 
-/// OS-specific Chrome spawn. The key invariants — same across all
-/// three platforms — are:
-///
-/// - The process is **detached**: Corey shouldn't keep Chrome alive
-///   when Corey quits, and Chrome shouldn't have its stdio plumbed to
-///   Corey (we'd accumulate file handles).
-/// - On Windows we add `CREATE_NO_WINDOW` so a stray console doesn't
-///   pop up next to Chrome.
-/// `headless=true` skips opening a visible Chrome window — used by the
-/// boot-time auto-start so the customer doesn't see a Chrome appear
-/// every time they launch Corey. CDP still works fine in headless
-/// mode; the agent navigates / clicks / types without a window
-/// drawn. We use `--headless=new` (the post-Chrome-109 implementation,
-/// not the legacy --headless) because it shares the same Chromium
-/// rendering path as the GUI and avoids the legacy mode's quirks
-/// (broken on some auth flows, missing service workers).
-///
-/// `headless=false` is what the Settings panel calls when the user
-/// explicitly wants a window — typically to sign into a new system.
-/// Same profile dir as the headless variant, so cookies set in the
-/// visible window survive the next headless boot.
-///
-/// One profile = one Chrome process. If a headless Chrome is already
-/// listening on 9222, the caller must `kill_chrome_by_port` first
-/// before spawning a headed one (and vice versa) — Chrome refuses
-/// to open a second process against a locked user-data-dir.
 /// Resolve the directory where AI-Browser downloads (Export-to-Excel,
 /// "Download CSV", invoice PDFs, etc.) land. Co-located under
 /// `~/.hermes/downloads/` so the agent can `save_artifact(source_path=...)`
 /// from a stable, well-known location regardless of the user's
-/// system download folder. Created lazily.
-fn downloads_dir() -> IpcResult<PathBuf> {
+/// system download folder. Created lazily by callers that actually
+/// touch downloads (`apply_cdp_download_behavior` /
+/// `seed_chrome_download_prefs`); pure resolution here never hits disk.
+pub(crate) fn downloads_dir() -> IpcResult<PathBuf> {
     crate::paths::hermes_data_dir()
         .map(|d| d.join("downloads"))
         .map_err(|e| IpcError::Internal {
@@ -637,17 +648,18 @@ fn downloads_dir() -> IpcResult<PathBuf> {
 
 /// Seed Chrome's per-profile `Preferences` JSON with a sane download
 /// configuration (default location = `~/.hermes/downloads/`, no
-/// "Save As" prompt, auto-upgrade legacy path values). Required for
-/// **headless** Chrome because in headless=new mode Chrome refuses
-/// downloads outright unless `prompt_for_download` is `false` AND a
-/// concrete `default_directory` is set — exactly the failure mode
-/// the v0.2.12 demo session hit on 美正OS "Export to Excel".
+/// "Save As" prompt, auto-upgrade legacy path values). Acts as
+/// **fallback** for the canonical CDP-based path
+/// (`apply_cdp_download_behavior`) — Chromium signs its own Preferences
+/// file with a per-install MAC, so a manually-written prefs file is
+/// frequently silently dropped or rewritten on next launch. We still
+/// seed it because (a) Chromium honors unsigned `download.*` keys on
+/// the very first launch (before the MAC scheme kicks in) and (b) it
+/// gives users a sensible default if the runtime CDP call fails.
 ///
 /// Idempotent and conservative: if `Preferences` already exists we
-/// leave it alone (user may have customized things via Chrome's UI;
-/// stomping their prefs would be surprising). First-launch is the
-/// only path that writes — and that's the only path that matters
-/// since after Chrome writes its own Preferences our value sticks.
+/// leave it alone. The runtime CDP path is the authoritative source
+/// of truth.
 fn seed_chrome_download_prefs(profile: &Path) {
     let default_dir = profile.join("Default");
     if let Err(e) = std::fs::create_dir_all(&default_dir) {
@@ -699,6 +711,180 @@ fn seed_chrome_download_prefs(profile: &Path) {
     }
 }
 
+/// Tell Chrome via CDP to (a) accept downloads silently, (b) auto-name
+/// them on filename collision, and (c) drop every file into our
+/// well-known `~/.hermes/downloads/` so `save_artifact(source_path=...)`
+/// can pick them up.
+///
+/// **This is the authoritative download-routing path** — see the doc
+/// on `seed_chrome_download_prefs` for why writing the Preferences JSON
+/// alone is unreliable on Chromium. Concretely we open a one-shot
+/// WebSocket to the Chrome browser-level CDP endpoint and send
+/// `Browser.setDownloadBehavior` (Chromium ≥ 73; the previous
+/// `Page.setDownloadBehavior` was per-target which doesn't help when
+/// the agent navigates across tabs).
+///
+/// Three failure modes worth understanding:
+///
+/// 1. We're called BEFORE Chrome has finished writing its
+///    `DevToolsActivePort` — `/json/version` returns 404 or empties.
+///    The caller (`launch_sync`) already waits for the port to LISTEN
+///    via `port_is_listening`; that's typically enough but we add a
+///    short retry loop here as belt-and-braces.
+/// 2. WebSocket handshake succeeds but `Browser.setDownloadBehavior`
+///    returns an `error` (e.g. on an older Chromium that doesn't have
+///    it yet). We log + return Ok — the Preferences-file fallback will
+///    keep the default user-friendly even if the dynamic write fails.
+/// 3. Chrome dies mid-call. The WS read times out at 2 s, we log warn,
+///    return Ok. Same fallback applies.
+///
+/// Best-effort by design: a download-routing failure should NEVER
+/// block AI Browser launch. The customer can still navigate / click /
+/// snapshot — they just lose the auto-pull-into-artifact convenience.
+pub(crate) fn apply_cdp_download_behavior() -> Result<(), String> {
+    let dl_dir = downloads_dir().map_err(|e| format!("resolve downloads dir: {e:?}"))?;
+    std::fs::create_dir_all(&dl_dir).map_err(|e| format!("create downloads dir: {e}"))?;
+
+    // Build a tiny current-thread tokio runtime so we don't touch
+    // (or require) an ambient runtime. `apply_cdp_download_behavior`
+    // is called from `spawn_blocking` contexts where there's no
+    // surrounding runtime handle to inherit.
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(e) => return Err(format!("build runtime: {e}")),
+    };
+
+    rt.block_on(async move {
+        // (1) Resolve the browser-level WS URL via the JSON HTTP API.
+        //     Chrome exposes `/json/version` once `DevToolsActivePort`
+        //     has been written; the TCP listen probe in `launch_sync`
+        //     doesn't guarantee that, so retry briefly here.
+        let mut ws_url: Option<String> = None;
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_millis(800))
+            .build()
+            .map_err(|e| format!("build http client: {e}"))?;
+        while Instant::now() < deadline {
+            match client
+                .get(format!("http://localhost:{CDP_PORT}/json/version"))
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(v) = resp.json::<serde_json::Value>().await {
+                        if let Some(s) = v
+                            .get("webSocketDebuggerUrl")
+                            .and_then(|x| x.as_str())
+                            .map(|s| s.to_string())
+                        {
+                            ws_url = Some(s);
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+        let ws_url = ws_url.ok_or_else(|| {
+            "Chrome /json/version never returned a webSocketDebuggerUrl".to_string()
+        })?;
+
+        // (2) Open the WS and send setDownloadBehavior. We do NOT
+        //     `eventsEnabled=true` because Corey doesn't subscribe to
+        //     download progress events (the agent polls the filesystem
+        //     via bash). Enabling them would just churn CDP messages.
+        use futures::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let (mut ws, _resp) = tokio_tungstenite::connect_async(&ws_url)
+            .await
+            .map_err(|e| format!("cdp ws connect {ws_url}: {e}"))?;
+
+        let payload = serde_json::json!({
+            "id": 1,
+            "method": "Browser.setDownloadBehavior",
+            "params": {
+                "behavior": "allowAndName",
+                "downloadPath": dl_dir.to_string_lossy(),
+                "eventsEnabled": false,
+            }
+        });
+        ws.send(Message::Text(payload.to_string()))
+            .await
+            .map_err(|e| format!("cdp ws send: {e}"))?;
+
+        // (3) Wait for the matching response or 2 s timeout, whichever
+        //     comes first. Chrome can interleave events on the
+        //     browser-level WS, so we read until we see `"id":1` or
+        //     hit timeout. Errors get logged but not propagated.
+        let read_deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if Instant::now() > read_deadline {
+                return Err("cdp ws response timeout".to_string());
+            }
+            let next = tokio::time::timeout(Duration::from_millis(500), ws.next()).await;
+            let Ok(Some(msg)) = next else {
+                continue;
+            };
+            let msg = match msg {
+                Ok(m) => m,
+                Err(e) => return Err(format!("cdp ws recv: {e}")),
+            };
+            let Message::Text(text) = msg else {
+                continue;
+            };
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+                continue;
+            };
+            if v.get("id").and_then(|x| x.as_u64()) == Some(1) {
+                if let Some(err) = v.get("error") {
+                    return Err(format!("Browser.setDownloadBehavior error: {err}"));
+                }
+                break;
+            }
+        }
+
+        let _ = ws.close(None).await;
+        tracing::info!(
+            "CDP Browser.setDownloadBehavior applied: downloadPath={}",
+            dl_dir.display()
+        );
+        Ok::<(), String>(())
+    })
+}
+
+/// OS-specific Chrome spawn. The key invariants — same across all
+/// three platforms — are:
+///
+/// - The process is **detached**: Corey shouldn't keep Chrome alive
+///   when Corey quits, and Chrome shouldn't have its stdio plumbed to
+///   Corey (we'd accumulate file handles).
+/// - On Windows we add `CREATE_NO_WINDOW` so a stray console doesn't
+///   pop up next to Chrome.
+///
+/// `headless=true` skips opening a visible Chrome window — used by the
+/// boot-time auto-start so the customer doesn't see a Chrome appear
+/// every time they launch Corey. CDP still works fine in headless
+/// mode; the agent navigates / clicks / types without a window
+/// drawn. We use `--headless=new` (the post-Chrome-109 implementation,
+/// not the legacy --headless) because it shares the same Chromium
+/// rendering path as the GUI and avoids the legacy mode's quirks
+/// (broken on some auth flows, missing service workers).
+///
+/// `headless=false` is what the Settings panel calls when the user
+/// explicitly wants a window — typically to sign into a new system.
+/// Same profile dir as the headless variant, so cookies set in the
+/// visible window survive the next headless boot.
+///
+/// One profile = one Chrome process. If a headless Chrome is already
+/// listening on 9222, the caller must `kill_chrome_by_port` first
+/// before spawning a headed one (and vice versa) — Chrome refuses
+/// to open a second process against a locked user-data-dir.
 fn spawn_chrome(chrome: &Path, profile: &Path, headless: bool) -> IpcResult<()> {
     seed_chrome_download_prefs(profile);
     let port_arg = format!("--remote-debugging-port={CDP_PORT}");
@@ -856,5 +1042,129 @@ mod tests {
         // 1 is privileged and never listens; if it does, something
         // is fundamentally broken on this machine.
         assert!(!port_is_listening(1));
+    }
+
+    #[test]
+    fn downloads_dir_resolves_under_hermes_home() {
+        // Drive `COREY_HERMES_DIR` to a tempdir and verify
+        // `downloads_dir` points at `<that>/downloads`. Doesn't
+        // require Chrome — purely path math. Note: the function
+        // intentionally does NOT create the directory (lazy
+        // creation by callers that actually need it).
+        let _lock = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let tmp = std::env::temp_dir().join(format!(
+            "caduceus-dl-dir-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&tmp).expect("tmp");
+        let orig = std::env::var_os("COREY_HERMES_DIR");
+        std::env::set_var("COREY_HERMES_DIR", &tmp);
+
+        let resolved = downloads_dir().expect("resolve downloads_dir");
+        assert_eq!(resolved, tmp.join("downloads"));
+        assert!(
+            !resolved.exists(),
+            "downloads_dir is lazy — should NOT pre-create"
+        );
+
+        if let Some(v) = orig {
+            std::env::set_var("COREY_HERMES_DIR", v);
+        } else {
+            std::env::remove_var("COREY_HERMES_DIR");
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn apply_cdp_download_behavior_errs_quickly_without_chrome() {
+        // When nothing is listening on CDP_PORT, the function should
+        // give up within its `/json/version` retry deadline (~3 s) and
+        // return Err — never block launch indefinitely. This guards
+        // against a regression where someone removes the deadline
+        // and the IPC turns into a 30-s hang.
+        //
+        // Skip if SOMETHING is already on 9222 (the developer's own
+        // dev session, or a real AI Browser running locally); the
+        // test would race against real CDP and be flaky.
+        if port_is_listening(CDP_PORT) {
+            eprintln!("skipping: port {CDP_PORT} is in use locally");
+            return;
+        }
+        let start = Instant::now();
+        let res = apply_cdp_download_behavior();
+        let elapsed = start.elapsed();
+        assert!(
+            res.is_err(),
+            "expected Err when nothing listens on CDP_PORT"
+        );
+        assert!(
+            elapsed < Duration::from_secs(6),
+            "apply_cdp_download_behavior took {elapsed:?} — should bail in ≤6 s"
+        );
+    }
+
+    /// Live-Chrome smoke: explicitly call `apply_cdp_download_behavior`
+    /// against whatever Chrome is currently listening on `CDP_PORT`.
+    /// `#[ignore]`d by default so CI without Chrome stays green; run
+    /// locally via
+    /// `cargo test apply_cdp_live -- --ignored --nocapture` after
+    /// `corey_browser_launch` has put a Chrome on 9222.
+    #[test]
+    #[ignore]
+    fn apply_cdp_live_smoke() {
+        assert!(
+            port_is_listening(CDP_PORT),
+            "live smoke needs a Chrome listening on :{CDP_PORT}"
+        );
+        apply_cdp_download_behavior()
+            .expect("live Chrome should accept Browser.setDownloadBehavior");
+    }
+
+    #[test]
+    fn seed_chrome_download_prefs_is_idempotent_and_skips_existing() {
+        let tmp = std::env::temp_dir().join(format!(
+            "caduceus-prefs-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(tmp.join("Default")).expect("Default/");
+
+        // First call with no existing Preferences → file is created.
+        seed_chrome_download_prefs(&tmp);
+        let prefs_path = tmp.join("Default").join("Preferences");
+        assert!(prefs_path.exists(), "first call should seed Preferences");
+        let original = std::fs::read_to_string(&prefs_path).expect("read prefs");
+        let v: serde_json::Value = serde_json::from_str(&original).expect("valid JSON");
+        assert_eq!(
+            v["download"]["prompt_for_download"].as_bool(),
+            Some(false),
+            "headless requires prompt_for_download:false"
+        );
+        assert!(
+            v["download"]["default_directory"]
+                .as_str()
+                .unwrap_or("")
+                .ends_with("downloads"),
+            "default_directory must point at hermes downloads dir"
+        );
+
+        // Second call with `Preferences` already present → must NOT
+        // overwrite. Conservative behaviour: user's customizations
+        // (post-first-launch from Chrome's UI) survive.
+        std::fs::write(&prefs_path, "sentinel-do-not-touch").expect("overwrite");
+        seed_chrome_download_prefs(&tmp);
+        let kept = std::fs::read_to_string(&prefs_path).expect("re-read");
+        assert_eq!(kept, "sentinel-do-not-touch", "existing prefs must survive");
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
