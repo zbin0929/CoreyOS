@@ -73,7 +73,7 @@ jobs:
         with:
           tagName: ${{ inputs.release_tag }}
           releaseName: 'Corey ${{ inputs.release_tag }}'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
 
       - name: Upload Windows artifacts to COS
