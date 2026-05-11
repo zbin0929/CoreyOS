@@ -276,9 +276,9 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
         // we don't touch — they might have their own download routing
         // and we'd surprise the user.
         if pid_file().exists() {
-            if let Err(e) = apply_cdp_download_behavior() {
+            if let Err(e) = apply_cdp_post_launch(true) {
                 tracing::warn!(
-                    "auto_start: re-applying setDownloadBehavior to existing AI Browser failed: {e}"
+                    "auto_start: re-applying post-launch CDP setup to existing AI Browser failed: {e}"
                 );
             }
         }
@@ -307,9 +307,9 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
         std::thread::sleep(Duration::from_millis(250));
     }
     if port_is_listening(CDP_PORT) {
-        if let Err(e) = apply_cdp_download_behavior() {
+        if let Err(e) = apply_cdp_post_launch(true) {
             tracing::warn!(
-                "auto_start: apply_cdp_download_behavior failed (will fall back to system Downloads): {e}"
+                "auto_start: apply_cdp_post_launch failed (will fall back to system Downloads + visible window): {e}"
             );
         }
     }
@@ -760,6 +760,28 @@ fn seed_chrome_download_prefs(profile: &Path) {
 /// block AI Browser launch. The customer can still navigate / click /
 /// snapshot — they just lose the auto-pull-into-artifact convenience.
 pub(crate) fn apply_cdp_download_behavior() -> Result<(), String> {
+    apply_cdp_post_launch(false)
+}
+
+/// Same as `apply_cdp_download_behavior` but additionally minimizes
+/// the Chrome window to the dock when `minimize=true`. We use this for
+/// background (boot-time) launches because:
+///
+/// - `--window-position=-2400,-2400` is **silently ignored** when the
+///   user-data-dir already contains a `Local State` / `Preferences`
+///   file with a saved window placement — Chrome restores the last
+///   position. After the very first launch this is always the case.
+/// - The macOS `osascript "set visible to false"` fallback requires
+///   the user to grant System Events automation permission, and races
+///   against Chrome registering with the Apple Event system.
+///
+/// `Browser.setWindowBounds` with `windowState: "minimized"` is
+/// Chrome's official window-management API. It works regardless of
+/// saved state, has no permission prompt, and the agent can still
+/// navigate / click / snapshot the minimized window via CDP — Chrome
+/// keeps the renderer running, only the OS window is hidden to the
+/// dock.
+pub(crate) fn apply_cdp_post_launch(minimize: bool) -> Result<(), String> {
     let dl_dir = downloads_dir().map_err(|e| format!("resolve downloads dir: {e:?}"))?;
     std::fs::create_dir_all(&dl_dir).map_err(|e| format!("create downloads dir: {e}"))?;
 
@@ -867,13 +889,128 @@ pub(crate) fn apply_cdp_download_behavior() -> Result<(), String> {
             }
         }
 
-        let _ = ws.close(None).await;
         tracing::info!(
             "CDP Browser.setDownloadBehavior applied: downloadPath={}",
             dl_dir.display()
         );
+
+        // (4) Optional: minimize the window. Best-effort — any failure
+        //     here is logged warn and swallowed so it never blocks
+        //     launch.
+        if minimize {
+            if let Err(e) = cdp_minimize_window(&mut ws).await {
+                tracing::warn!("CDP minimize window failed (non-fatal): {e}");
+            } else {
+                tracing::info!("CDP background Chrome window minimized");
+            }
+        }
+
+        let _ = ws.close(None).await;
         Ok::<(), String>(())
     })
+}
+
+/// Drive the minimize sequence on an already-open browser-level WS:
+/// 1. `Target.getTargets` → pick a `page` target
+/// 2. `Browser.getWindowForTarget {targetId}` → resolve windowId
+/// 3. `Browser.setWindowBounds {windowId, bounds:{windowState:"minimized"}}`
+///
+/// We use the existing connection to keep this cheap (no second
+/// WS handshake) and to make the request IDs sequential / debuggable.
+async fn cdp_minimize_window<S>(
+    ws: &mut tokio_tungstenite::WebSocketStream<S>,
+) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    use futures::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+
+    async fn rpc<S>(
+        ws: &mut tokio_tungstenite::WebSocketStream<S>,
+        id: u64,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, String>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
+        let payload = serde_json::json!({"id": id, "method": method, "params": params});
+        ws.send(Message::Text(payload.to_string()))
+            .await
+            .map_err(|e| format!("ws send {method}: {e}"))?;
+        let read_deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if Instant::now() > read_deadline {
+                return Err(format!("ws response timeout for {method}"));
+            }
+            let next = tokio::time::timeout(Duration::from_millis(500), ws.next()).await;
+            let Ok(Some(msg)) = next else {
+                continue;
+            };
+            let msg = match msg {
+                Ok(m) => m,
+                Err(e) => return Err(format!("ws recv {method}: {e}")),
+            };
+            let Message::Text(text) = msg else {
+                continue;
+            };
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+                continue;
+            };
+            if v.get("id").and_then(|x| x.as_u64()) == Some(id) {
+                if let Some(err) = v.get("error") {
+                    return Err(format!("{method} error: {err}"));
+                }
+                return Ok(v.get("result").cloned().unwrap_or(serde_json::Value::Null));
+            }
+        }
+    }
+
+    // (1) Find any page target. Browser-level WS isn't bound to a
+    //     specific target so we must resolve one explicitly before
+    //     getWindowForTarget will work.
+    let targets = rpc(ws, 10, "Target.getTargets", serde_json::json!({})).await?;
+    let target_id = targets
+        .get("targetInfos")
+        .and_then(|t| t.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|t| t.get("type").and_then(|x| x.as_str()) == Some("page"))
+                .and_then(|t| t.get("targetId").and_then(|x| x.as_str()))
+                .map(|s| s.to_string())
+        })
+        .ok_or_else(|| "no page target found via Target.getTargets".to_string())?;
+
+    // (2) Resolve windowId for that target.
+    let win = rpc(
+        ws,
+        11,
+        "Browser.getWindowForTarget",
+        serde_json::json!({"targetId": target_id}),
+    )
+    .await?;
+    let window_id = win
+        .get("windowId")
+        .and_then(|x| x.as_i64())
+        .ok_or_else(|| "Browser.getWindowForTarget returned no windowId".to_string())?;
+
+    // (3) Minimize. NOTE: when setting `windowState`, the bounds object
+    //     must NOT contain left/top/width/height — Chrome rejects the
+    //     call with `Cannot specify bounds when state is not normal`
+    //     otherwise.
+    rpc(
+        ws,
+        12,
+        "Browser.setWindowBounds",
+        serde_json::json!({
+            "windowId": window_id,
+            "bounds": {"windowState": "minimized"},
+        }),
+    )
+    .await?;
+
+    Ok(())
 }
 
 /// OS-specific Chrome spawn. The key invariants — same across all
