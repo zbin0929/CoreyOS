@@ -1005,18 +1005,114 @@ fn spawn_chrome(chrome: &Path, profile: &Path, background: bool) -> IpcResult<()
     let child = cmd.spawn().map_err(|e| IpcError::Internal {
         message: format!("spawn chrome at {}: {e}", chrome.display()),
     })?;
+    let chrome_pid = child.id();
     // Persist PID so we can kill this specific Chrome later when
-    // switching headless<->headed. `lsof -i:9222` would also work
+    // switching background<->headed. `lsof -i:9222` would also work
     // on Unix but we'd need a Windows equivalent; a PID file is
     // boring and cross-platform.
     let pid_path = pid_file();
     if let Some(parent) = pid_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Err(e) = std::fs::write(&pid_path, child.id().to_string()) {
+    if let Err(e) = std::fs::write(&pid_path, chrome_pid.to_string()) {
         tracing::warn!(error = %e, path = %pid_path.display(), "write chrome.pid failed");
     }
+
+    // === Hide the window in background mode ===
+    //
+    // `--window-position=-2400,-2400` *should* keep the window
+    // off-screen, but macOS' WindowServer is allowed to override that
+    // and yank the window back onto the main monitor (a usability
+    // safeguard against apps "losing" their window). On real machines
+    // we observed the Chrome window briefly flash on screen at boot.
+    //
+    // The cross-platform fix below uses each OS's native "hide
+    // application" primitive scoped to the SPECIFIC Chrome PID we
+    // just spawned — never the user's daily-driver Chrome:
+    //
+    //   - macOS: AppleScript via `osascript`, targeting `unix id`
+    //   - Linux: nothing extra (positioning + GPU works reliably)
+    //   - Windows: `powershell` ShowWindow(SW_HIDE = 0)
+    //
+    // Failure of the hide step is non-fatal: the customer just sees
+    // a stray Chrome window, which is annoying but doesn't break
+    // CDP / scraping. We log a warn and move on.
+    if background {
+        hide_chrome_window(chrome_pid);
+    }
+
     Ok(())
+}
+
+/// Best-effort post-spawn "hide this PID's window" for background
+/// mode. Implementation per OS:
+#[cfg(target_os = "macos")]
+fn hide_chrome_window(pid: u32) {
+    // Give Chrome a beat to actually create its window — AppleScript
+    // querying `unix id` of a process that hasn't registered with
+    // System Events yet just no-ops silently.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(800));
+        let script = format!(
+            "tell application \"System Events\" to set visible of (first process whose unix id is {pid}) to false"
+        );
+        let res = Command::new("/usr/bin/osascript")
+            .args(["-e", &script])
+            .output();
+        match res {
+            Ok(o) if o.status.success() => {
+                tracing::info!(pid, "background Chrome window hidden via AppleScript");
+            }
+            Ok(o) => {
+                tracing::warn!(
+                    pid,
+                    stderr = %String::from_utf8_lossy(&o.stderr),
+                    "osascript hide failed (non-fatal)"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(pid, error = %e, "osascript exec failed (non-fatal)");
+            }
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn hide_chrome_window(pid: u32) {
+    // PowerShell ShowWindow(handle, SW_HIDE = 0) for the main window
+    // of this PID. Same fire-and-forget pattern as macOS.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(800));
+        let script = format!(
+            "Add-Type -Name W -Namespace S -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr h, int n);'; \
+             $p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; \
+             if ($p -and $p.MainWindowHandle -ne 0) {{ [S.W]::ShowWindow($p.MainWindowHandle, 0) | Out-Null }}"
+        );
+        let res = Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .output();
+        match res {
+            Ok(o) if o.status.success() => {
+                tracing::info!(pid, "background Chrome window hidden via PowerShell");
+            }
+            Ok(o) => {
+                tracing::warn!(
+                    pid,
+                    stderr = %String::from_utf8_lossy(&o.stderr),
+                    "powershell hide failed (non-fatal)"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(pid, error = %e, "powershell exec failed (non-fatal)");
+            }
+        }
+    });
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn hide_chrome_window(_pid: u32) {
+    // Linux: --window-position is honored reliably across all the
+    // common WMs (mutter, kwin, X11). No-op.
 }
 
 fn pid_file() -> PathBuf {
