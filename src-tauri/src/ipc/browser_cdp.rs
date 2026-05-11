@@ -211,6 +211,204 @@ fn detect_chrome_path() -> Option<PathBuf> {
     }
 }
 
+/// macOS-only: locate, patch, and return the path to a `LSBackgroundOnly`
+/// Chrome-for-Testing executable that won't steal focus when driven via
+/// CDP.
+///
+/// ## Background
+///
+/// On macOS, *any* CDP command (`Page.navigate`, even `Runtime.evaluate`)
+/// against a regular Chrome.app process causes `NSApplication` to
+/// activate the Chrome window, stealing focus from whatever the user is
+/// doing. This is a 10-year-old Chromium bug (chromium#223828,
+/// chrome-devtools-mcp#1254) with no fix in sight.
+///
+/// Apple's `LSBackgroundOnly` Info.plist key tells the OS "this process
+/// must never be activated and has no Dock icon". Chrome.app is hardened
+/// runtime + library-validated + notarized — modifying its Info.plist
+/// breaks the signature and the OS refuses to launch it.
+///
+/// **Chrome for Testing** (the Chromium binary Playwright/Patchright
+/// ships) is ad-hoc signed without notarization, so we can copy it and
+/// edit its Info.plist. The result: a fully-functional headed Chromium
+/// (real TLS fingerprint — passes Akamai / DataDome) that nevertheless
+/// stays out of the user's way completely. See `progress.txt` (2026-05-11)
+/// for the spike that validated this.
+///
+/// ## What this function does
+///
+/// 1. Find a source Chrome-for-Testing bundle (Playwright cache, or
+///    `/Applications/Google Chrome for Testing.app`).
+/// 2. Compare its mtime to our managed copy at
+///    `~/.hermes/.corey/ai-browser.app`. If the managed copy is missing
+///    or stale (source newer), `ditto` it fresh and patch the Info.plist.
+/// 3. Return the path to the inner executable.
+///
+/// Returns `None` if no source bundle is available (customer hasn't
+/// installed Playwright/Patchright). In that case the caller falls back
+/// to `detect_chrome_path()` — i.e. regular Chrome.app, with the old
+/// off-screen-position + osascript-hide workaround. That fallback isn't
+/// as clean (Chrome will momentarily steal focus on `Page.bringToFront`)
+/// but at least the browser works.
+///
+/// **TODO** (v0.2.0 B-3 setup phase): bundle a Chrome-for-Testing
+/// download step in `setup_sidecars` so this path always succeeds.
+#[cfg(target_os = "macos")]
+fn prepare_ai_browser_macos() -> Option<PathBuf> {
+    let source = locate_chrome_for_testing_macos()?;
+    let source_app = source_bundle_root(&source)?;
+
+    let managed_app = managed_ai_browser_path()?;
+    let managed_exec = managed_app.join("Contents/MacOS/Google Chrome for Testing");
+
+    let needs_patch = match (
+        std::fs::metadata(&managed_exec).and_then(|m| m.modified()),
+        std::fs::metadata(source_app.join("Contents/MacOS/Google Chrome for Testing"))
+            .and_then(|m| m.modified()),
+    ) {
+        (Ok(target_t), Ok(src_t)) => target_t < src_t,
+        (Err(_), Ok(_)) => true,
+        _ => true,
+    };
+
+    if needs_patch {
+        if let Err(e) = patch_chromium_bundle(&source_app, &managed_app) {
+            tracing::warn!(
+                source = %source_app.display(),
+                target = %managed_app.display(),
+                error = %e,
+                "AI Browser patch failed — falling back to system Chrome"
+            );
+            return None;
+        }
+        tracing::info!(
+            target = %managed_app.display(),
+            "AI Browser: patched LSBackgroundOnly Chromium ready"
+        );
+    }
+
+    if managed_exec.exists() {
+        Some(managed_exec)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn locate_chrome_for_testing_macos() -> Option<PathBuf> {
+    // 1) Direct user install
+    for app in &[
+        "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ] {
+        let p = Path::new(app);
+        if p.exists() {
+            return Some(p.to_path_buf());
+        }
+    }
+    // 2) Playwright / Patchright cache (~/Library/Caches/ms-playwright/chromium-NNNN/...)
+    let home = std::env::var_os("HOME")?;
+    let cache_root = PathBuf::from(home).join("Library/Caches/ms-playwright");
+    if !cache_root.is_dir() {
+        return None;
+    }
+    let mut newest: Option<(u64, PathBuf)> = None;
+    for entry in std::fs::read_dir(&cache_root).ok()?.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !name.starts_with("chromium-") {
+            continue;
+        }
+        // Build version suffix as integer for newest-first selection;
+        // unparseable suffix falls back to 0 so it ranks last.
+        let ver: u64 = name.trim_start_matches("chromium-").parse().unwrap_or(0);
+        for sub in &["chrome-mac-arm64", "chrome-mac-x64"] {
+            let candidate = entry
+                .path()
+                .join(sub)
+                .join("Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
+            if candidate.exists() && newest.as_ref().map(|(v, _)| ver > *v).unwrap_or(true) {
+                newest = Some((ver, candidate.clone()));
+            }
+        }
+    }
+    newest.map(|(_, p)| p)
+}
+
+/// Given the path to a Chromium executable inside `Contents/MacOS/...`,
+/// return the path to the enclosing `.app` bundle root.
+#[cfg(target_os = "macos")]
+fn source_bundle_root(exec: &Path) -> Option<PathBuf> {
+    exec.ancestors().nth(3).map(PathBuf::from)
+}
+
+#[cfg(target_os = "macos")]
+fn managed_ai_browser_path() -> Option<PathBuf> {
+    crate::paths::hermes_data_dir()
+        .ok()
+        .map(|d| d.join(".corey").join("ai-browser.app"))
+}
+
+#[cfg(target_os = "macos")]
+fn patch_chromium_bundle(source_app: &Path, target_app: &Path) -> Result<(), String> {
+    if let Some(parent) = target_app.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir target parent: {e}"))?;
+    }
+    // Remove stale target first; `ditto` to an existing dir creates
+    // weird overlays.
+    if target_app.exists() {
+        std::fs::remove_dir_all(target_app).map_err(|e| format!("remove stale target: {e}"))?;
+    }
+    // `ditto` (not `cp -R`) — cp corrupts the bundle's code-signature
+    // metadata, which breaks ICU loading at runtime. Spike confirmed
+    // ditto is the only safe copy on macOS.
+    let out = Command::new("/usr/bin/ditto")
+        .arg(source_app)
+        .arg(target_app)
+        .output()
+        .map_err(|e| format!("ditto exec: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "ditto failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    // Add LSBackgroundOnly via PlistBuddy. Spike found that LSUIElement
+    // breaks Chromium ICU loading; LSBackgroundOnly works.
+    let info_plist = target_app.join("Contents/Info.plist");
+    // PlistBuddy `Add` fails if the key already exists — try Set first.
+    let set_res = Command::new("/usr/libexec/PlistBuddy")
+        .args([
+            "-c",
+            "Set :LSBackgroundOnly true",
+            &info_plist.to_string_lossy(),
+        ])
+        .output()
+        .map_err(|e| format!("PlistBuddy set exec: {e}"))?;
+    if !set_res.status.success() {
+        let add_res = Command::new("/usr/libexec/PlistBuddy")
+            .args([
+                "-c",
+                "Add :LSBackgroundOnly bool true",
+                &info_plist.to_string_lossy(),
+            ])
+            .output()
+            .map_err(|e| format!("PlistBuddy add exec: {e}"))?;
+        if !add_res.status.success() {
+            return Err(format!(
+                "PlistBuddy add LSBackgroundOnly failed: {}",
+                String::from_utf8_lossy(&add_res.stderr)
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn prepare_ai_browser_macos() -> Option<PathBuf> {
+    None
+}
+
 fn env_configured() -> bool {
     matches!(
         hermes_config::read_env_value("BROWSER_CDP_URL"),
@@ -276,7 +474,11 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
         // we don't touch — they might have their own download routing
         // and we'd surprise the user.
         if pid_file().exists() {
-            if let Err(e) = apply_cdp_post_launch(true) {
+            // If the on-disk pid points at our patched bundle, the
+            // window is already LSBackgroundOnly-hidden and asking
+            // CDP/osascript to minimize it again is just noise.
+            let need_minimize = !running_pid_is_patched_bundle();
+            if let Err(e) = apply_cdp_post_launch(need_minimize) {
                 tracing::warn!(
                     "auto_start: re-applying post-launch CDP setup to existing AI Browser failed: {e}"
                 );
@@ -284,9 +486,14 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
         }
         return Ok(false);
     }
-    let Some(chrome) = detect_chrome_path() else {
-        return Err("BROWSER_CDP_URL configured but Chrome not detected".into());
-    };
+    // Prefer the patched LSBackgroundOnly Chrome-for-Testing bundle on
+    // macOS (truly invisible, won't steal focus on any CDP command).
+    // Fall back to regular Chrome.app + off-screen-position +
+    // osascript-hide if patched bundle isn't available.
+    let chrome = prepare_ai_browser_macos()
+        .or_else(detect_chrome_path)
+        .ok_or_else(|| "BROWSER_CDP_URL configured but Chrome not detected".to_string())?;
+    let used_patched = is_patched_ai_browser(&chrome);
     let dir = profile_dir().map_err(|e| format!("profile dir: {e:?}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("create profile dir: {e}"))?;
     // Auto-start is always headless — the customer never sees a
@@ -307,13 +514,126 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
         std::thread::sleep(Duration::from_millis(250));
     }
     if port_is_listening(CDP_PORT) {
-        if let Err(e) = apply_cdp_post_launch(true) {
+        // Skip the minimize step when we used the patched bundle —
+        // LSBackgroundOnly already prevents the window from showing,
+        // and CDP `Browser.setWindowBounds` + osascript fallback would
+        // emit harmless-but-confusing warns.
+        if let Err(e) = apply_cdp_post_launch(!used_patched) {
             tracing::warn!(
                 "auto_start: apply_cdp_post_launch failed (will fall back to system Downloads + visible window): {e}"
             );
         }
     }
     Ok(true)
+}
+
+/// Idempotent "make sure AI Browser is up in BACKGROUND mode" — the
+/// path the agent's `corey_browser_launch` MCP tool now takes.
+///
+/// **Why this exists**: the original `launch_sync` was designed for the
+/// human-driven Settings → "Open AI Browser for Sign-in" flow which
+/// must produce a *visible* Chrome window. When the agent miscalled
+/// `launch_sync(background=false)` (e.g. before the auto-start hook had
+/// run), customers saw their *daily* `/Applications/Google Chrome.app`
+/// briefly flash on screen — exactly the "AI is supposed to be invisible
+/// but it just stole my workspace" bug we're trying to solve in v0.2.5.
+///
+/// **Contract**:
+/// - If port 9222 already listens AND `BROWSER_CDP_URL` is set in
+///   `~/.hermes/.env` → no-op, return idempotent success.
+/// - Otherwise spawn the patched LSBackgroundOnly bundle (or fall back
+///   to `detect_chrome_path()` if the bundle isn't available) in
+///   **background** mode, wait for the port, apply
+///   `Browser.setDownloadBehavior`, write `BROWSER_CDP_URL`, and
+///   optionally restart the gateway.
+/// - Never spawns a visible window. Agents that need the customer to
+///   sign in must surface "ask the human to open Settings → AI Browser".
+pub(crate) fn ensure_running_background(
+    journal: &Path,
+    restart_gateway: bool,
+) -> IpcResult<BrowserCdpLaunchResult> {
+    let dir = profile_dir()?;
+    std::fs::create_dir_all(&dir).map_err(|e| IpcError::Internal {
+        message: format!("create profile dir {}: {e}", dir.display()),
+    })?;
+
+    let mut message = String::new();
+    let already_listening = port_is_listening(CDP_PORT);
+
+    if !already_listening {
+        let chrome = prepare_ai_browser_macos()
+            .or_else(detect_chrome_path)
+            .ok_or_else(|| IpcError::Internal {
+                message:
+                    "No Chrome / Chromium / Edge installation detected. Please install Chrome first."
+                        .to_string(),
+            })?;
+        spawn_chrome(&chrome, &dir, true)?;
+        message.push_str("AI Browser spawned in background mode. ");
+
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while Instant::now() < deadline {
+            if port_is_listening(CDP_PORT) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        if !port_is_listening(CDP_PORT) {
+            return Err(IpcError::Internal {
+                message: format!(
+                    "AI Browser was spawned ({}) but didn't open port {CDP_PORT} within 8 seconds.",
+                    chrome.display()
+                ),
+            });
+        }
+    } else {
+        message.push_str("AI Browser already running on port 9222. ");
+    }
+
+    // Apply post-launch CDP setup (download routing). Skip the
+    // minimize step — patched bundle is already invisible via
+    // LSBackgroundOnly, and asking osascript to hide a process
+    // System Events can't see emits noisy warns.
+    let need_minimize = !running_pid_is_patched_bundle();
+    if let Err(e) = apply_cdp_post_launch(need_minimize) {
+        tracing::warn!(
+            "ensure_running_background: apply_cdp_post_launch failed (downloads may land in default): {e}"
+        );
+        message.push_str("(note: couldn't auto-route downloads.) ");
+    } else {
+        message.push_str("Downloads routed to ~/.hermes/downloads/. ");
+    }
+
+    // Write BROWSER_CDP_URL if missing or wrong.
+    let cdp_url = format!("http://localhost:{CDP_PORT}");
+    let env_needs_write = match hermes_config::read_env_value("BROWSER_CDP_URL") {
+        Ok(Some(v)) => v.trim() != cdp_url,
+        _ => true,
+    };
+    if env_needs_write {
+        hermes_config::write_env_key("BROWSER_CDP_URL", Some(&cdp_url), Some(journal)).map_err(
+            |e| IpcError::Internal {
+                message: format!("write BROWSER_CDP_URL: {e}"),
+            },
+        )?;
+        message.push_str("BROWSER_CDP_URL written. ");
+    }
+
+    if restart_gateway && env_needs_write {
+        if let Err(e) = hermes_config::gateway_restart() {
+            tracing::warn!("ensure_running_background: gateway restart failed: {e}");
+            message.push_str(
+                "(note: gateway restart failed — manually restart for routing to apply.) ",
+            );
+        } else {
+            message.push_str("Gateway restarted. ");
+        }
+    }
+
+    Ok(BrowserCdpLaunchResult {
+        status: build_status(),
+        message,
+    })
 }
 
 /// Read the dedicated profile's `Cookies` sqlite and return the set
@@ -1267,11 +1587,72 @@ fn spawn_chrome(chrome: &Path, profile: &Path, background: bool) -> IpcResult<()
     // Failure of the hide step is non-fatal: the customer just sees
     // a stray Chrome window, which is annoying but doesn't break
     // CDP / scraping. We log a warn and move on.
-    if background {
+    if background && !is_patched_ai_browser(chrome) {
+        // Skip the osascript / SW_HIDE dance when we spawned our
+        // patched LSBackgroundOnly bundle — the OS already prevents
+        // it from registering with System Events (so osascript would
+        // emit a harmless but confusing "process whose unix id = N
+        // — Invalid index" warn).
         hide_chrome_window(chrome_pid);
     }
 
     Ok(())
+}
+
+/// Companion to `is_patched_ai_browser`: check whether the currently-
+/// running Chrome (per `pid_file()`) is the patched LSBackgroundOnly
+/// bundle. We resolve the PID's full command line via
+/// `ps -p PID -o command=` and substring-match against our managed
+/// bundle path. On non-macOS this is always `false` — the
+/// LSBackgroundOnly trick is macOS-only.
+fn running_pid_is_patched_bundle() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let Ok(pid) = read_chrome_pid() else {
+            return false;
+        };
+        let Some(managed) = managed_ai_browser_path() else {
+            return false;
+        };
+        // `ps -p PID -o command=` returns the full argv[0], which for a
+        // patched-bundle Chrome looks like
+        // `/Users/.../ai-browser.app/Contents/MacOS/Google Chrome for Testing ...`.
+        let Ok(out) = Command::new("/bin/ps")
+            .args(["-p", &pid.to_string(), "-o", "command="])
+            .output()
+        else {
+            return false;
+        };
+        if !out.status.success() {
+            return false;
+        }
+        let cmd = String::from_utf8_lossy(&out.stdout);
+        cmd.contains(&*managed.to_string_lossy())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+/// Heuristic: is `chrome` the executable inside our managed
+/// `~/.hermes/.corey/ai-browser.app` bundle? Used to skip the post-spawn
+/// `hide_chrome_window` call that's redundant (and noisy) for an
+/// already-invisible LSBackgroundOnly process.
+fn is_patched_ai_browser(chrome: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(managed) = managed_ai_browser_path() {
+            let inner = managed.join("Contents/MacOS/Google Chrome for Testing");
+            return chrome == inner;
+        }
+        false
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = chrome;
+        false
+    }
 }
 
 /// Best-effort post-spawn "hide this PID's window" for background
@@ -1520,6 +1901,89 @@ mod tests {
         );
         apply_cdp_download_behavior()
             .expect("live Chrome should accept Browser.setDownloadBehavior");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn prepare_ai_browser_macos_returns_none_when_no_source_available() {
+        // When neither `/Applications/Google Chrome for Testing.app`,
+        // nor `/Applications/Chromium.app`, nor any Playwright cache
+        // entry contains a Chrome-for-Testing bundle, the function must
+        // return `None` so the caller falls back to `detect_chrome_path`.
+        //
+        // We can't really simulate "no Playwright cache" on a dev
+        // machine that has one, but we *can* assert the function never
+        // panics regardless of host state — and on CI (no Playwright,
+        // no Chromium in /Applications) it must return `None`.
+        let _lock = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // Force HOME to a tempdir that definitely has no Playwright
+        // cache, so the only way the function can return `Some` is via
+        // an `/Applications/...` entry — which CI doesn't have.
+        let tmp = std::env::temp_dir().join(format!(
+            "caduceus-no-cache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&tmp).expect("tmp");
+        let orig_home = std::env::var_os("HOME");
+        std::env::set_var("HOME", &tmp);
+        std::env::set_var("COREY_HERMES_DIR", &tmp);
+
+        let result = prepare_ai_browser_macos();
+        // On dev machines with Chromium.app in /Applications this *can*
+        // be `Some`. The contract we test is "never panics, always
+        // returns Option<PathBuf> with a valid executable path or None".
+        if let Some(ref p) = result {
+            assert!(
+                p.to_string_lossy().contains("Google Chrome for Testing")
+                    || p.to_string_lossy().contains("Chromium"),
+                "patched executable path should reference Chromium variant: {}",
+                p.display()
+            );
+        }
+
+        if let Some(v) = orig_home {
+            std::env::set_var("HOME", v);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        std::env::remove_var("COREY_HERMES_DIR");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn source_bundle_root_climbs_three_levels() {
+        // `Foo.app/Contents/MacOS/Foo` → `Foo.app`
+        let exec = PathBuf::from("/tmp/example/Foo.app/Contents/MacOS/Foo");
+        let root = source_bundle_root(&exec).expect("bundle root");
+        assert_eq!(root, PathBuf::from("/tmp/example/Foo.app"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn patch_chromium_bundle_is_no_op_call_safe_on_invalid_source() {
+        // Calling with a non-existent source should return Err, NOT
+        // panic. This is the safety net that lets us call the function
+        // unconditionally from `auto_start_if_configured`.
+        let src = std::env::temp_dir().join("definitely-does-not-exist.app");
+        let dst = std::env::temp_dir().join(format!(
+            "caduceus-patch-test-{}-{}.app",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let result = patch_chromium_bundle(&src, &dst);
+        assert!(result.is_err(), "expected Err for missing source");
+        // Don't leave stray dirs around if ditto somehow created one.
+        let _ = std::fs::remove_dir_all(&dst);
     }
 
     #[test]

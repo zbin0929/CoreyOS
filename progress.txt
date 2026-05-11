@@ -102,6 +102,153 @@ spike 步骤：
 ## 下一步动作（新对话开局做）
 
 1. **读这份 progress.txt**
-2. **跑 LSUIElement spike**（详细步骤见上面"用户当前指令"小节）
-3. **结果写回这份 progress.txt 底部**
-4. 跟用户确认下一步走"全量集成"还是"切 headless Chrome + screencast"
+2. ~~跑 LSUIElement spike~~ ✅ 已完成
+3. ~~结果写回这份 progress.txt 底部~~ ✅ 已写
+4. ~~跟用户确认走"全量集成"~~ ✅ 用户拍板，已集成完
+5. **接下来 — 等真实业务路径验证**：用 AI Browser 跑一次 Akamai 风控页面（UPS 分区下载 / Amazon 商品页 / Sellercentral 登录），确认 TLS 指纹仍能通过。如果通过 → 删掉旧 Chrome.app 回落路径的 osascript hide / setWindowBounds minimize 代码（v0.2.0 清理项）。
+6. **v0.2.0 B-3 setup_sidecars**：加 Chrome-for-Testing 下载步骤，让没装 Patchright 的客户机器也能用补丁包路径。当前 fallback 是回落到 `/Applications/Google Chrome.app`，再回落到 v0.2.11 的 off-screen-position + osascript hide。
+
+## 全量集成结果（2026-05-11 19:46，PASS）
+
+### 落地代码
+
+改了 `@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/browser_cdp.rs`：
+
+新增（~270 行）：
+- `prepare_ai_browser_macos()` — 主入口
+- `locate_chrome_for_testing_macos()` — 源 Chromium 探测（/Applications/Google Chrome for Testing.app → /Applications/Chromium.app → ~/Library/Caches/ms-playwright/chromium-NNNN/，按版本号取最新）
+- `source_bundle_root()` — 从 exec 回溯到 .app 根
+- `managed_ai_browser_path()` — `~/.hermes/.corey/ai-browser.app`
+- `patch_chromium_bundle()` — ditto + PlistBuddy Set/Add :LSBackgroundOnly bool true（idempotent）
+- `is_patched_ai_browser(chrome)` — 路径匹配判断
+- `running_pid_is_patched_bundle()` — 通过 `ps -p PID -o command=` 判断当前在跑的 Chrome 是不是补丁包
+
+改了 3 处调用：
+1. `spawn_chrome` 末尾：`if background && !is_patched_ai_browser(chrome) { hide_chrome_window() }` —— 补丁包不需要 osascript 隐藏
+2. `auto_start_if_configured` 端口已开分支：`apply_cdp_post_launch(!running_pid_is_patched_bundle())`
+3. `auto_start_if_configured` 新生成分支：先 `let used_patched = is_patched_ai_browser(&chrome);`，再 `apply_cdp_post_launch(!used_patched)`
+
+加了 3 个 #[test]：source_bundle_root_climbs_three_levels / prepare_ai_browser_macos_returns_none_when_no_source_available / patch_chromium_bundle_is_no_op_call_safe_on_invalid_source
+
+### 系统级验证
+
+```
+$ stat -f "%z bytes mtime=%Sm" ~/.hermes/.corey/ai-browser.app/Contents/Info.plist
+18223 bytes mtime=May 11 19:40:00 2026
+
+$ /usr/libexec/PlistBuddy -c "Print :LSBackgroundOnly" ~/.hermes/.corey/ai-browser.app/Contents/Info.plist
+true
+
+$ du -sh ~/.hermes/.corey/ai-browser.app
+336M
+
+$ ps -p $(cat ~/.hermes/.corey/chrome.pid) -o command=
+/Users/zbin/.hermes/.corey/ai-browser.app/Contents/MacOS/Google Chrome for Testing --remote-debugging-port=9222 --user-data-dir=/Users/zbin/.hermes/chrome-debug ...
+```
+
+### CDP 端到端验证（生产 AI Browser 9222 端口）
+
+`@/tmp/cdp-focus-test-prod2.mjs`：
+
+```
+initial front: Windsurf
+[Page.navigate(example.com)]   before=Windsurf after=Windsurf ok
+[Runtime.evaluate]             before=Windsurf after=Windsurf ok
+[Page.captureScreenshot]       before=Windsurf after=Windsurf ok (51KB)
+[Page.bringToFront]            before=Windsurf after=Windsurf ok
+final front: Windsurf
+```
+
+**`Page.bringToFront` 在生产 AI Browser 上不抢焦点** —— spike 结论在真实集成路径上同样成立。
+
+### 日志确认
+
+Corey 启动日志（2026-05-11 19:44）干净，无 osascript warn 也无 Browser.setWindowBounds 失败 warn —— 说明 `running_pid_is_patched_bundle()` 正确检测到补丁包并跳过了 minimize 链。
+
+### Spike 结果（保留参考）
+
+## Spike 结果（2026-05-11 19:30，PASS）
+
+### 关键纠错
+
+- 不能用 `LSUIElement=true`：Chrome for Testing 设上后 ICU 加载失败（`icudtl.dat not found in bundle` / `Invalid file descriptor to ICU data received`），进程直接退出
+- **必须用 `LSBackgroundOnly=true`**：Chromium 启动正常，CDP 工作，且语义更强（永远不会被激活）
+- 不能用 `cp -R` 复制 .app：会破坏 bundle 的代码签名 metadata，同样导致 ICU 加载失败
+- **必须用 `ditto`** 复制：保留 xattr + 签名元信息
+- 不需要重签名：`ditto` + 只改 Info.plist，连 `codesign` 都不用跑，bundle 仍能启动（ad-hoc 签名容忍 Info.plist 修改）
+
+### 验证步骤
+
+```bash
+# 1. ditto 复制
+rm -rf /tmp/test-chromium.app
+ditto "$HOME/Library/Caches/ms-playwright/chromium-1217/chrome-mac-arm64/Google Chrome for Testing.app" /tmp/test-chromium.app
+
+# 2. 改 Info.plist（PlistBuddy）
+/usr/libexec/PlistBuddy -c "Add :LSBackgroundOnly bool true" /tmp/test-chromium.app/Contents/Info.plist
+
+# 3. 启动（不重签）
+/tmp/test-chromium.app/Contents/MacOS/Google\ Chrome\ for\ Testing \
+  --remote-debugging-port=9333 --user-data-dir=/tmp/test-profile \
+  --no-first-run --no-default-browser-check about:blank &
+
+# 4. 焦点测试
+node /tmp/cdp-focus-test.mjs
+```
+
+### 焦点测试结果（Windsurf 在前台，CDP 命令循环）
+
+```
+initial front: Windsurf
+[navigate to https://example.com]  before=Windsurf after=Windsurf stolen=false
+[Runtime.evaluate document.title]   before=Windsurf after=Windsurf stolen=false
+[Page.captureScreenshot 39KB png]   before=Windsurf after=Windsurf stolen=false
+[Page.bringToFront ← 杀手命令]      before=Windsurf after=Windsurf stolen=false
+final front: Windsurf
+```
+
+**`Page.bringToFront` 都没抢到焦点** —— 之前 Chrome.app 上的 Chromium 10y bug 在 Chrome for Testing + LSBackgroundOnly 下完全绕过。
+
+### 系统级状态确认
+
+`osascript "background only" / "visible"` 查询结果：
+- `Google Chrome for Testing` → `background only=true, visible=false`
+- 无 Dock 图标、无菜单栏、无 ⌘Tab 切换列表
+
+### 截图功能验证
+
+Page.captureScreenshot 返回 39961 bytes PNG，渲染正确（example.com 完整页面，文字清晰），见 `/tmp/cdp-shot.png`。说明窗口虽然不在屏上但合成器仍正常工作。
+
+### 跨平台对齐
+
+| 平台 | 隐藏方法 | 状态 |
+| --- | --- | --- |
+| macOS | `Info.plist :LSBackgroundOnly = true`（Chrome for Testing） | ✅ 本 spike 验证 |
+| Windows | `SW_HIDE`（已有 `hide_chrome_window`） | ✅ 已实现 |
+| Linux | `--window-position=-2400,-2400`（headless 兜底） | ✅ 设计中 |
+
+### 工程量重估
+
+之前估"1-2 天"，现在因为不用重签 + 不用 codesign --deep，简化为：
+
+1. setup_sidecars 阶段：检测 `chrome-mac-arm64/Google Chrome for Testing.app`，如已存在跳过；否则用 `patchright` 已经下载好的拷贝（其实就是 Playwright Chromium，已经在 `~/Library/Caches/ms-playwright/chromium-1217/` 自动下载）
+2. 首次启动：`ditto` 拷贝到 `~/.hermes/.corey/test-chromium.app` + `PlistBuddy Add :LSBackgroundOnly bool true`
+3. spawn_chrome 改成传 `--user-data-dir=~/.hermes/chrome-debug` + 用 patched bundle 路径
+4. `corey_browser_launch` MCP 和 Settings 路径都改走新路径
+
+实际工程量：**半天**（主要是 setup_sidecars 的检测/补丁逻辑 + spawn_chrome 改路径）
+
+### 落地点
+
+- 改 `@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/browser_cdp.rs:1141` `spawn_chrome`
+- 加 `ensure_patched_chromium()` helper：检测 `~/.hermes/.corey/test-chromium.app/Contents/Info.plist` 是否有 LSBackgroundOnly；没有就 `ditto` + `PlistBuddy`
+- 删除 `apply_cdp_post_launch` 的 osascript hide 兜底（commit `512c3a5`）—— 不再需要
+- 删除 `Browser.setWindowBounds minimize` 尝试（commit `d70659b`）—— 不再需要
+- 用户首次启动时给个进度提示："首次准备 AI Browser 隐身模式…"（拷贝 ~400MB 大概 5-10 秒）
+
+### 风险点（待集成时验证）
+
+- Patchright `npx patchright install chromium` 在用户机器上是否会自动跑（CoreyOS 现在到底有没有跑过这步？需要 grep 项目内 sidecar/setup 代码）
+- Chrome for Testing 版本随 patchright 升级会变（145 → 147 → ...），ditto + Info.plist 修改要在每次升级后重新执行 —— 用 "源 bundle mtime / 目标 mtime" 比对判断是否需要重补丁
+- TLS 指纹：Chrome for Testing ≈ Chrome 主线，但还是要找一个 Akamai 风控的页面跑一次（UPS 那个 prefix 下载 + Amazon /products?）确认不被拦
+- ms-playwright cache 路径是否所有客户都一致？需要走 patchright/playwright 的 API 查（不要硬编码路径）

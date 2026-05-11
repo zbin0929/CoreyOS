@@ -444,21 +444,23 @@ pub fn manifest() -> Vec<Value> {
         }),
         json!({
             "name": "corey_browser_launch",
-            "description": "Open the dedicated Chrome that the agent \
-                drives, write BROWSER_CDP_URL to ~/.hermes/.env, and \
-                tell the user a Hermes Gateway restart is needed for \
-                the wiring to take effect on the NEXT chat turn (we \
-                deliberately do NOT restart inside this tool — it \
-                would kill the in-flight SSE stream).\n\n\
-                Idempotent: if Chrome is already on port 9222 we \
-                only (re)write the env var. After the call returns, \
-                the user logs into each backend in the Chrome window \
-                ONCE, then closes the Settings panel and continues \
-                chatting; the agent will use the logged-in browser \
-                from the next chat turn forward.\n\n\
+            "description": "Ensure the dedicated AI Browser is running \
+                in the BACKGROUND (invisible to the user). Spawns the \
+                LSBackgroundOnly Chrome-for-Testing bundle if not \
+                already up, writes BROWSER_CDP_URL to ~/.hermes/.env, \
+                and tells the user a Hermes Gateway restart is needed \
+                for the wiring to take effect on the NEXT chat turn \
+                (we deliberately do NOT restart inside this tool — \
+                it would kill the in-flight SSE stream).\n\n\
+                Fully idempotent: if Chrome is already on port 9222 \
+                we only (re)write the env var. The user NEVER sees a \
+                browser window pop up — the AI Browser is always \
+                hidden. If a backend requires sign-in, ask the user \
+                to open Settings → AI Browser → 'Open for Sign-in' \
+                (a separate IPC, not this tool).\n\n\
                 Trigger phrases — EN: \"open the AI browser\", \
-                \"start the dedicated browser\", \"let me sign in\". \
-                ZH: \"打开 AI 浏览器\", \"启动专属浏览器\", \"我要登录\".",
+                \"start the dedicated browser\". \
+                ZH: \"打开 AI 浏览器\", \"启动专属浏览器\".",
             "inputSchema": { "type": "object", "properties": {} }
         }),
         json!({
@@ -1519,50 +1521,26 @@ async fn browser_launch(app: AppHandle) -> Result<String, (i32, String)> {
     let state = app.state::<crate::state::AppState>();
     let journal = state.changelog_path.clone();
 
-    // Defensive short-circuit: if our background AI Browser is already
-    // running and BROWSER_CDP_URL is wired, do NOT call `launch_sync`.
+    // Agent path goes through the BACKGROUND-only helper. The visible
+    // Sign-in flow (`launch_sync(background=false)`) is reserved for
+    // the Settings UI; routing the agent there caused the v0.2.11 bug
+    // where `/Applications/Google Chrome.app` briefly flashed on
+    // screen because (a) the short-circuit hadn't fired yet (env not
+    // written, or patched bundle not running), and (b) `launch_sync`
+    // unconditionally kills any existing background Chrome before
+    // spawning a visible one. `ensure_running_background` is fully
+    // idempotent and only ever spawns the patched LSBackgroundOnly
+    // bundle (or invisible Chrome.app fallback) — the customer never
+    // sees a window pop up.
     //
-    // `launch_sync` is designed for the Settings → "Open for Sign-in"
-    // path where the customer wants to flip a hidden Chrome into a
-    // visible one — it unconditionally `kill_previous_chrome()` then
-    // respawns headed. When the agent miscalls this tool from chat
-    // (it sometimes mis-reads status, or the soul rule fails), that
-    // kill+spawn cycle visibly tears the hidden Chrome window onto
-    // screen and drops every signed-in tab — the "open / close /
-    // open / close" UX bug the customer hit on UPS scraping.
-    //
-    // Idempotent success here is what the agent actually wants:
-    // "browser is up, please proceed to use it". The Settings panel
-    // path still uses `launch_sync` directly (different IPC command,
-    // not `corey_browser_launch`), so the explicit human flow is
-    // unaffected.
-    let pre_status = tokio::task::spawn_blocking(crate::ipc::browser_cdp::build_status)
-        .await
-        .map_err(|e| (-32603, format!("pre-status join: {e}")))?;
-    if pre_status.running && pre_status.env_configured {
-        tracing::info!(
-            "browser_launch: AI Browser already running on port {} — short-circuiting (no kill/respawn)",
-            pre_status.port
-        );
-        return Ok(json!({
-            "ok": true,
-            "running": true,
-            "env_configured": true,
-            "logged_in_domains": pre_status.logged_in_domains,
-            "message": "AI Browser is already running. No action taken — \
-                        proceed to use browser_navigate / browser_evaluate \
-                        directly. Hermes Gateway already has the wiring; \
-                        no restart needed.",
-            "next_step": "Proceed with the user's task using browser tools directly.",
-        })
-        .to_string());
-    }
-
-    let result =
-        tokio::task::spawn_blocking(move || crate::ipc::browser_cdp::launch_sync(&journal, false))
-            .await
-            .map_err(|e| (-32603, format!("launch join: {e}")))?
-            .map_err(ipc_err_to_mcp)?;
+    // `restart_gateway=false` because we're inside an in-flight agent
+    // loop; the GUI surfaces the restart prompt after this turn.
+    let result = tokio::task::spawn_blocking(move || {
+        crate::ipc::browser_cdp::ensure_running_background(&journal, false)
+    })
+    .await
+    .map_err(|e| (-32603, format!("launch join: {e}")))?
+    .map_err(ipc_err_to_mcp)?;
 
     let _ = app.emit(
         "corey_native:browser_changed",
@@ -1575,11 +1553,11 @@ async fn browser_launch(app: AppHandle) -> Result<String, (i32, String)> {
         "env_configured": result.status.env_configured,
         "logged_in_domains": result.status.logged_in_domains,
         "message": result.message,
-        "next_step": "User should sign into each backend in the Chrome \
-                      window that just opened. Hermes Gateway needs a \
-                      restart for the wiring to take effect on the \
-                      NEXT chat turn — the GUI will surface a prompt \
-                      after this turn finishes.",
+        "next_step": "AI Browser is running in the background (invisible). \
+                      Proceed with the user's task using browser_navigate / \
+                      browser_evaluate / browser_snapshot. If a backend \
+                      requires sign-in, ask the user to open Settings → AI \
+                      Browser → 'Open for Sign-in'.",
     })
     .to_string())
 }
