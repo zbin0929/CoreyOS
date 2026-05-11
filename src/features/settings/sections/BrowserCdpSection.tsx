@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Chrome, Loader2, LogIn, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, Chrome, Loader2, LogIn, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -47,6 +47,10 @@ export function BrowserCdpSection() {
   const [aliases, setAliases] = useState<BrowserAlias[]>([]);
   const [newAlias, setNewAlias] = useState('');
   const [newUrl, setNewUrl] = useState('');
+  // Brief "✓ 已保存" pulse on the save button after a successful
+  // add. The customer's complaint was "I don't know if it saved" —
+  // showing the row is helpful but a button state change is louder.
+  const [justSaved, setJustSaved] = useState<string | null>(null);
 
   async function refresh() {
     try {
@@ -138,6 +142,13 @@ export function BrowserCdpSection() {
       setNewAlias('');
       setNewUrl('');
       setAliases(await browserAliasesList());
+      // Button-local success flash. The toast below is still set
+      // for screen-readers / consistency with other actions, but the
+      // button-state change is what the customer's eye actually catches.
+      setJustSaved(alias);
+      window.setTimeout(() => {
+        setJustSaved((cur) => (cur === alias ? null : cur));
+      }, 2000);
       setMessage(t('settings.browser_cdp.alias_saved_msg', { alias }));
     } catch (e) {
       setError(ipcErrorMessage(e));
@@ -380,6 +391,12 @@ export function BrowserCdpSection() {
               type="text"
               value={newAlias}
               onChange={(e) => setNewAlias(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newAlias.trim() && newUrl.trim()) {
+                  e.preventDefault();
+                  void onAliasAdd();
+                }
+              }}
               placeholder={t('settings.browser_cdp.alias_name_ph')}
               className="min-w-[6rem] flex-1 rounded-md border border-border bg-bg-elev-1 px-2 py-1 text-xs text-fg outline-none focus:border-gold-500"
               maxLength={64}
@@ -389,18 +406,37 @@ export function BrowserCdpSection() {
               type="url"
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newAlias.trim() && newUrl.trim()) {
+                  e.preventDefault();
+                  void onAliasAdd();
+                }
+              }}
               placeholder="https://..."
               className="min-w-[10rem] flex-[2] rounded-md border border-border bg-bg-elev-1 px-2 py-1 font-mono text-xs text-fg outline-none focus:border-gold-500"
               data-testid="browser-cdp-alias-url"
             />
             <Button
-              variant="ghost"
+              variant={justSaved ? 'primary' : 'ghost'}
               onClick={onAliasAdd}
               disabled={busy !== null || !newAlias.trim() || !newUrl.trim()}
               data-testid="browser-cdp-alias-add"
+              className={
+                justSaved
+                  ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
+                  : undefined
+              }
             >
-              <Icon icon={Plus} size="xs" />
-              {t('settings.browser_cdp.alias_add')}
+              {busy === 'alias' ? (
+                <Icon icon={Loader2} size="xs" className="animate-spin" />
+              ) : justSaved ? (
+                <Icon icon={Check} size="xs" />
+              ) : (
+                <Icon icon={Plus} size="xs" />
+              )}
+              {justSaved
+                ? t('settings.browser_cdp.alias_just_saved')
+                : t('settings.browser_cdp.alias_save')}
             </Button>
           </div>
         </div>
