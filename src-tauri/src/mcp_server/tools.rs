@@ -1519,6 +1519,45 @@ async fn browser_launch(app: AppHandle) -> Result<String, (i32, String)> {
     let state = app.state::<crate::state::AppState>();
     let journal = state.changelog_path.clone();
 
+    // Defensive short-circuit: if our background AI Browser is already
+    // running and BROWSER_CDP_URL is wired, do NOT call `launch_sync`.
+    //
+    // `launch_sync` is designed for the Settings → "Open for Sign-in"
+    // path where the customer wants to flip a hidden Chrome into a
+    // visible one — it unconditionally `kill_previous_chrome()` then
+    // respawns headed. When the agent miscalls this tool from chat
+    // (it sometimes mis-reads status, or the soul rule fails), that
+    // kill+spawn cycle visibly tears the hidden Chrome window onto
+    // screen and drops every signed-in tab — the "open / close /
+    // open / close" UX bug the customer hit on UPS scraping.
+    //
+    // Idempotent success here is what the agent actually wants:
+    // "browser is up, please proceed to use it". The Settings panel
+    // path still uses `launch_sync` directly (different IPC command,
+    // not `corey_browser_launch`), so the explicit human flow is
+    // unaffected.
+    let pre_status = tokio::task::spawn_blocking(crate::ipc::browser_cdp::build_status)
+        .await
+        .map_err(|e| (-32603, format!("pre-status join: {e}")))?;
+    if pre_status.running && pre_status.env_configured {
+        tracing::info!(
+            "browser_launch: AI Browser already running on port {} — short-circuiting (no kill/respawn)",
+            pre_status.port
+        );
+        return Ok(json!({
+            "ok": true,
+            "running": true,
+            "env_configured": true,
+            "logged_in_domains": pre_status.logged_in_domains,
+            "message": "AI Browser is already running. No action taken — \
+                        proceed to use browser_navigate / browser_evaluate \
+                        directly. Hermes Gateway already has the wiring; \
+                        no restart needed.",
+            "next_step": "Proceed with the user's task using browser tools directly.",
+        })
+        .to_string());
+    }
+
     let result =
         tokio::task::spawn_blocking(move || crate::ipc::browser_cdp::launch_sync(&journal, false))
             .await
