@@ -706,11 +706,69 @@ fn ensure_api_server_env() {
     }
 }
 
+/// Minimum `agent.max_turns` Corey writes into `~/.hermes/config.yaml`
+/// on every gateway start/restart. Hermes' upstream default is 90 — for
+/// "scrape every page, then export" style sessions Corey users routinely
+/// drive (Seller Central pagination, AI-Browser shop-back-end audits), 90
+/// gets exhausted around iteration 95 and the agent is force-summarized
+/// mid-task. 200 is empirically enough for the workflows we ship in the
+/// default Pack catalog; if a user manually sets a HIGHER value we keep
+/// it (the ensure function only floors, never ceilings).
+const MIN_AGENT_MAX_TURNS: u64 = 200;
+
+/// Idempotently floor `agent.max_turns` in `~/.hermes/config.yaml` to at
+/// least `MIN_AGENT_MAX_TURNS`. Called from gateway start/restart so the
+/// bump is picked up on the very next process boot via
+/// `gateway/run.py`'s `os.environ["HERMES_MAX_ITERATIONS"]` injection.
+///
+/// Best-effort: errors are logged but never propagated — the gateway
+/// will still start with the old value if we fail to write (which
+/// degrades gracefully to the prior demo bug, not a crash).
+///
+/// Why floor instead of overwrite: power users who set 500 / 1000 in
+/// the YAML by hand shouldn't have Corey silently revert their bump.
+fn ensure_agent_max_turns() {
+    let cfg_path = match crate::paths::hermes_data_dir() {
+        Ok(d) => d.join("config.yaml"),
+        Err(_) => return,
+    };
+
+    let raw = std::fs::read_to_string(&cfg_path).unwrap_or_default();
+    let current = serde_yaml::from_str::<serde_yaml::Value>(&raw)
+        .ok()
+        .as_ref()
+        .and_then(|v| v.as_mapping())
+        .and_then(|m| m.get(serde_yaml::Value::String("agent".into())))
+        .and_then(|v| v.as_mapping())
+        .and_then(|m| m.get(serde_yaml::Value::String("max_turns".into())))
+        .and_then(|v| v.as_u64());
+
+    if current.is_some_and(|n| n >= MIN_AGENT_MAX_TURNS) {
+        return;
+    }
+
+    use std::collections::HashMap;
+    let mut updates: HashMap<String, serde_json::Value> = HashMap::new();
+    updates.insert(
+        "max_turns".into(),
+        serde_json::Value::from(MIN_AGENT_MAX_TURNS),
+    );
+    match crate::hermes_config::write_channel_yaml_fields("agent", &updates, None) {
+        Ok(()) => tracing::info!(
+            "ensured agent.max_turns >= {} in {}",
+            MIN_AGENT_MAX_TURNS,
+            cfg_path.display()
+        ),
+        Err(e) => tracing::warn!(error = %e, "ensure_agent_max_turns: write failed"),
+    }
+}
+
 /// gateway" affordance when the binary is present but no process is
 /// listening on 127.0.0.1:8642 yet.
 pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
+    ensure_agent_max_turns();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);
@@ -751,6 +809,7 @@ pub fn gateway_start() -> io::Result<String> {
 pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
+    ensure_agent_max_turns();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);

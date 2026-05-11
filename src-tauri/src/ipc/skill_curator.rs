@@ -47,8 +47,9 @@ use crate::error::{IpcError, IpcResult};
 /// - `pin <name>` / `unpin <name>` — fence a skill from any
 ///   automated change (and the agent's `skill_manage` writes too)
 /// - `restore <name>` — pull an archived skill back to active
-const ALLOWED_SUBCOMMANDS: &[&str] =
-    &["status", "run", "pause", "resume", "pin", "unpin", "restore"];
+const ALLOWED_SUBCOMMANDS: &[&str] = &[
+    "status", "run", "pause", "resume", "pin", "unpin", "restore",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CuratorCommandResult {

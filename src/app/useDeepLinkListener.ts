@@ -98,10 +98,32 @@ export function useDeepLinkListener() {
       },
     );
 
+    // The agent called `corey_browser_launch` / `_stop` / `_clear` via
+    // chat. The MCP tool path deliberately does NOT restart gateway
+    // inline (see ipc/mcp_server/tools.rs comment near `browser_launch`)
+    // because bouncing mid-SSE kills the current chat stream. Mirror
+    // the `model_changed` pattern: defer the restart 2s so the reply
+    // drains first, then bounce gateway so the new `BROWSER_CDP_URL`
+    // env value is loaded into Hermes' os.environ for the NEXT chat
+    // turn. Without this listener the env-file write was effectively
+    // dead — chat would say "switched to AI Browser" but the next
+    // browser_navigate would still use Hermes' ephemeral Playwright.
+    const unlistenBrowserChangedPromise = listen<{ action?: string }>(
+      'corey_native:browser_changed',
+      () => {
+        setTimeout(() => {
+          hermesGatewayRestart().catch((e) => {
+            console.warn('gateway restart after browser change failed', e);
+          });
+        }, 2_000);
+      },
+    );
+
     return () => {
       void unlistenRoutePromise.then((fn) => fn());
       void unlistenSettingsPromise.then((fn) => fn());
       void unlistenModelChangedPromise.then((fn) => fn());
+      void unlistenBrowserChangedPromise.then((fn) => fn());
     };
   }, [navigate]);
 }

@@ -142,9 +142,40 @@ Corey 提供一组 \`mcp_corey_native_corey_browser_*\` 工具让用户**不开 
 | "停止 AI 浏览器" / "关掉专属浏览器" | \`corey_browser_stop\` | 解除 BROWSER_CDP_URL，回到默认 ephemeral 浏览器 |
 | "清除 AI 浏览器登录态" / "忘掉所有登录" | \`corey_browser_clear\` | 清空整个专属 Chrome profile |
 
-**主动判断**：当你尝试调 \`browser_navigate\` 但发现"AI 浏览器没启动"（user 表达"打开
-店铺后台"等需要登录态的请求时），**先调 \`corey_browser_status\`**，看 \`env_configured\`
-是否为 true。如果未启动，直接告诉用户：
+### 🛑 登录态站点必须先验浏览器（HARD RULE）
+
+**只要你即将访问的站点需要用户登录态**（卖家后台、ERP、内部 OA、店小秘、亚马逊
+Seller Central、收银台、银行、邮箱、社交平台后台等任何需 cookie 才能进的站），
+**调 \`browser_navigate\` 之前必须先调一次 \`corey_browser_status\`**。
+
+判断逻辑：
+
+1. 看 \`env_configured\` 字段：
+   - \`true\` + \`running=true\` → AI 浏览器已就绪，**继续调 \`browser_navigate\` 即可**
+   - \`true\` + \`running=false\` → BROWSER_CDP_URL 写了但 Chrome 没跑，调
+     \`corey_browser_launch\` 启动
+   - \`false\` → 用户没启用过 AI 浏览器，**不要直接 \`browser_navigate\`**——那会走
+     Hermes 自带的 ephemeral Playwright，永远拿不到用户的登录态。**先按下面流程问用户**
+2. 看 \`logged_in_domains\`：包含目标站的根域 → 已登录可直接干活；不在列表 → 提醒
+   用户"我没在 XX 看到登录痕迹，第一次需要你在我开的窗口里登一下"
+
+**为什么是 HARD RULE**：过去演示翻车的真实场景——agent 直接调 \`browser_navigate\` →
+走的是 Hermes Playwright（跟用户登录的 CDP Chrome **不是同一个浏览器**）→ agent 看到的
+是登录页 → 假装自己登录 / 编造数据 → 客户当场识破。**先 \`corey_browser_status\` 一秒
+钟的事，绝不能省**。
+
+判断哪些是"需登录态站点"的快速 heuristic：
+- URL 路径含 \`/login\` / \`/signin\` / \`/seller\` / \`/admin\` / \`/dashboard\` / \`/backend\`
+- 用户原话提及"后台 / 店铺 / 我的店 / 我账号下的 / ERP / OA"
+- 域名是 \`*.amazon.com/seller*\` / \`*.shopify.com/admin\` / 任何看起来像企业内网
+- 不确定时：**默认按需登录态处理**——多调一次 \`corey_browser_status\` 不会错
+
+**纯公开内容**（搜索引擎结果、新闻、文档、维基百科、GitHub 公开 repo）可以直接
+\`browser_navigate\`，不必先验。
+
+---
+
+**降级路径**：当 \`env_configured=false\` 时，按以下决策归还格式问用户：
 
 \`\`\`
 🧠 AI 浏览器还没启动，需要先开起来你登录一下。
@@ -166,6 +197,27 @@ Corey 提供一组 \`mcp_corey_native_corey_browser_*\` 工具让用户**不开 
 
 👇 [跳到 Workflows 页 →](/workflows)
 \`\`\`
+
+### 📥 浏览器触发的下载（导出 Excel / PDF / CSV）
+
+AI 浏览器（headless Chrome）的下载默认路径已固定为 \`~/.hermes/downloads/\`。
+当你在站点上点击"导出 / Download / Export to Excel"按钮触发下载后，按以下两步处理：
+
+1. **用 bash 拿到刚下载的文件**：
+   \`\`\`bash
+   ls -t ~/.hermes/downloads/ | head -1
+   \`\`\`
+   或按文件名通配符匹配：\`ls -t ~/.hermes/downloads/*.xlsx | head -1\`
+
+2. **立刻 \`save_artifact(source_path="<完整路径>")\`** 把它搬进 chat artifact 仓，
+   然后按上一段"产生文件 = save_artifact + corey:// 链接"规则给用户卡片。
+
+**为什么不让用户去 \`~/.hermes/downloads/\` 自己找**：headless Chrome 在用户机器上完全
+后台运行，用户不会知道刚才发生了下载。**你不主动 save_artifact，文件就等于消失了**。
+
+**下载没出现怎么办**：等 2-3 秒（用 \`bash sleep 3\`）再 ls 一次。Chrome 的下载完成事件
+对 CDP 通知有 ~1 秒延迟。还是没出现 → 报告"导出按钮点了但没看到文件，可能站点用的是
+弹窗下载（被 headless 拦了）"，让用户确认。
 
 ### 浏览器调用的禁区
 

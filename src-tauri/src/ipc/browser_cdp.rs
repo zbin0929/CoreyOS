@@ -622,7 +622,85 @@ pub(crate) fn clear_cookies_sync() -> IpcResult<BrowserCdpStatus> {
 /// listening on 9222, the caller must `kill_chrome_by_port` first
 /// before spawning a headed one (and vice versa) — Chrome refuses
 /// to open a second process against a locked user-data-dir.
+/// Resolve the directory where AI-Browser downloads (Export-to-Excel,
+/// "Download CSV", invoice PDFs, etc.) land. Co-located under
+/// `~/.hermes/downloads/` so the agent can `save_artifact(source_path=...)`
+/// from a stable, well-known location regardless of the user's
+/// system download folder. Created lazily.
+fn downloads_dir() -> IpcResult<PathBuf> {
+    crate::paths::hermes_data_dir()
+        .map(|d| d.join("downloads"))
+        .map_err(|e| IpcError::Internal {
+            message: format!("downloads dir: {e}"),
+        })
+}
+
+/// Seed Chrome's per-profile `Preferences` JSON with a sane download
+/// configuration (default location = `~/.hermes/downloads/`, no
+/// "Save As" prompt, auto-upgrade legacy path values). Required for
+/// **headless** Chrome because in headless=new mode Chrome refuses
+/// downloads outright unless `prompt_for_download` is `false` AND a
+/// concrete `default_directory` is set — exactly the failure mode
+/// the v0.2.12 demo session hit on 美正OS "Export to Excel".
+///
+/// Idempotent and conservative: if `Preferences` already exists we
+/// leave it alone (user may have customized things via Chrome's UI;
+/// stomping their prefs would be surprising). First-launch is the
+/// only path that writes — and that's the only path that matters
+/// since after Chrome writes its own Preferences our value sticks.
+fn seed_chrome_download_prefs(profile: &Path) {
+    let default_dir = profile.join("Default");
+    if let Err(e) = std::fs::create_dir_all(&default_dir) {
+        tracing::warn!(error = %e, "seed_chrome_download_prefs: create Default/ failed");
+        return;
+    }
+    let prefs_path = default_dir.join("Preferences");
+    if prefs_path.exists() {
+        return;
+    }
+    let dl_dir = match downloads_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error = ?e, "seed_chrome_download_prefs: downloads_dir resolve failed");
+            return;
+        }
+    };
+    if let Err(e) = std::fs::create_dir_all(&dl_dir) {
+        tracing::warn!(error = %e, "seed_chrome_download_prefs: create downloads dir failed");
+        return;
+    }
+    let prefs = serde_json::json!({
+        "download": {
+            "default_directory": dl_dir.to_string_lossy().to_string(),
+            "directory_upgrade": true,
+            "prompt_for_download": false,
+        },
+        "profile": {
+            "default_content_setting_values": {
+                "automatic_downloads": 1,
+            },
+        },
+    });
+    let body = match serde_json::to_string(&prefs) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "seed_chrome_download_prefs: serialize failed");
+            return;
+        }
+    };
+    if let Err(e) = std::fs::write(&prefs_path, body) {
+        tracing::warn!(error = %e, path = %prefs_path.display(), "seed_chrome_download_prefs: write failed");
+    } else {
+        tracing::info!(
+            "seeded Chrome download prefs at {} -> {}",
+            prefs_path.display(),
+            dl_dir.display()
+        );
+    }
+}
+
 fn spawn_chrome(chrome: &Path, profile: &Path, headless: bool) -> IpcResult<()> {
+    seed_chrome_download_prefs(profile);
     let port_arg = format!("--remote-debugging-port={CDP_PORT}");
     let profile_arg = format!("--user-data-dir={}", profile.display());
     let mut args = vec![
