@@ -885,25 +885,30 @@ pub(crate) fn apply_cdp_download_behavior() -> Result<(), String> {
 /// - On Windows we add `CREATE_NO_WINDOW` so a stray console doesn't
 ///   pop up next to Chrome.
 ///
-/// `headless=true` skips opening a visible Chrome window — used by the
-/// boot-time auto-start so the customer doesn't see a Chrome appear
-/// every time they launch Corey. CDP still works fine in headless
-/// mode; the agent navigates / clicks / types without a window
-/// drawn. We use `--headless=new` (the post-Chrome-109 implementation,
-/// not the legacy --headless) because it shares the same Chromium
-/// rendering path as the GUI and avoids the legacy mode's quirks
-/// (broken on some auth flows, missing service workers).
+/// `background=true` is what the boot-time auto-start uses: Chrome is
+/// launched **headed** (the only way to defeat Akamai/DataDome TLS
+/// fingerprinting — see the inline comment in `spawn_chrome`) but the
+/// window is positioned far off-screen so the customer doesn't see it
+/// pop up. The agent navigates / clicks / types in CDP without the
+/// customer ever knowing a Chrome process is running.
 ///
-/// `headless=false` is what the Settings panel calls when the user
-/// explicitly wants a window — typically to sign into a new system.
-/// Same profile dir as the headless variant, so cookies set in the
-/// visible window survive the next headless boot.
+/// We deliberately do NOT use `--headless=new`. Headless Chrome's
+/// ClientHello differs subtly from real Chrome in the JA3/JA4 hash,
+/// and enterprise WAFs (UPS / FedEx / Amazon Seller Central) reject
+/// it at the TLS layer with `ERR_HTTP2_PROTOCOL_ERROR` before any JS
+/// runs. Free open-source stealth flags (`AutomationControlled` etc.)
+/// can't fix this — the only fix is using a real GPU/window context.
 ///
-/// One profile = one Chrome process. If a headless Chrome is already
-/// listening on 9222, the caller must `kill_chrome_by_port` first
-/// before spawning a headed one (and vice versa) — Chrome refuses
-/// to open a second process against a locked user-data-dir.
-fn spawn_chrome(chrome: &Path, profile: &Path, headless: bool) -> IpcResult<()> {
+/// `background=false` is what the Settings panel calls when the user
+/// explicitly wants a visible window — typically to sign into a new
+/// system. Same profile dir, so cookies set in the visible window
+/// survive the next background boot.
+///
+/// One profile = one Chrome process. If a Chrome is already listening
+/// on 9222, the caller must `kill_chrome_by_port` first before
+/// spawning a different mode — Chrome refuses to open a second
+/// process against a locked user-data-dir.
+fn spawn_chrome(chrome: &Path, profile: &Path, background: bool) -> IpcResult<()> {
     seed_chrome_download_prefs(profile);
     let port_arg = format!("--remote-debugging-port={CDP_PORT}");
     let profile_arg = format!("--user-data-dir={}", profile.display());
@@ -915,18 +920,65 @@ fn spawn_chrome(chrome: &Path, profile: &Path, headless: bool) -> IpcResult<()> 
         // Suppress the "Restore session?" prompt — annoying for an
         // automation-facing profile.
         "--hide-crash-restore-bubble",
+        // === Anti-detection flags (free / open-source standard set) ===
+        //
+        // Why we DON'T use `--headless=new`:
+        //   Akamai / DataDome / PerimeterX detect headless Chrome at
+        //   the TLS / HTTP-2 layer (ClientHello fingerprint differs
+        //   subtly from headed Chrome) and reject the connection
+        //   before our JS even runs. We measured this against
+        //   ups.com — headless got `ERR_HTTP2_PROTOCOL_ERROR`,
+        //   the same Chrome binary in headed mode loaded the page
+        //   normally. Cost of going headed: a real GPU/window
+        //   context (we hide the window off-screen, see below).
+        //
+        // The flag below removes the `navigator.webdriver=true`
+        // signal that's set whenever `--remote-debugging-port` is
+        // present. This single flag passes ~80% of low-effort bot
+        // detectors (basic Cloudflare, npm package detection tests).
+        "--disable-blink-features=AutomationControlled",
+        // Drop the "Chrome is being controlled by automated test
+        // software" infobar AND the corresponding `webdriver`
+        // capability advertisement.
+        "--exclude-switches=enable-automation",
+        // Akamai sometimes inspects the `sec-ch-ua` Client Hints
+        // for headless quirks. Disabling Client Hints forces the
+        // request to the classic `User-Agent`-only path which our
+        // override below sets to a real Chrome string.
+        "--disable-features=UserAgentClientHint,IsolateOrigins,site-per-process",
     ];
-    if headless {
-        // `--headless=new` (Chrome 109+) is the modern, GUI-equivalent
-        // headless runtime. Older `--headless` is legacy and breaks
-        // some auth flows. We rely on "new" being available because
-        // detect_chrome_path only picks up Chrome / Chromium / Edge
-        // installs that ship Chromium >= 109 in practice (anything
-        // older has bigger problems).
-        args.push("--headless=new");
-        // Headless Chrome doesn't need GPU and complains in logs if
-        // it can't find one on some Linux setups. Cheap to disable.
-        args.push("--disable-gpu");
+
+    let position_arg;
+    let size_arg;
+    if background {
+        // "Background mode" = headed Chrome with the window dragged
+        // off-screen. Customer never sees the window pop up at boot
+        // (preserves the original UX intent), but Chrome runs with a
+        // real GPU/JS rendering context — TLS fingerprint matches a
+        // real user's Chrome, so Akamai-class WAFs let us through.
+        //
+        // -2400,-2400 is well outside any conceivable monitor layout
+        // (even a 4K external on the left of a MacBook tops out
+        // around -3840 width-wise; vertically nothing goes that far
+        // negative). 1280×800 is large enough that responsive sites
+        // serve their desktop layout, not the mobile one — UPS /
+        // FedEx / Amazon Seller Central all gate "the real UI"
+        // behind a desktop viewport check.
+        position_arg = "--window-position=-2400,-2400".to_string();
+        size_arg = "--window-size=1280,800".to_string();
+        args.push(&position_arg);
+        args.push(&size_arg);
+        // `--silent-launch` keeps Chrome from focus-stealing or
+        // bouncing in the macOS Dock when we spawn it at boot.
+        args.push("--silent-launch");
+    } else {
+        // Visible mode (Settings → "Open AI Browser for sign-in"):
+        // size the window slightly smaller than full-screen so the
+        // user can see Corey's main window behind it.
+        position_arg = "--window-position=120,80".to_string();
+        size_arg = "--window-size=1280,820".to_string();
+        args.push(&position_arg);
+        args.push(&size_arg);
     }
 
     let mut cmd = Command::new(chrome);
