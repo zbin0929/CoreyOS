@@ -1,18 +1,12 @@
 ---
 name: inventory_sentinel
-description: 亚马逊 FBA 库存哨兵。读取库存报表 CSV，按可售天数分级（🔴 断货倒计时 / 🟡 告警 / 🟢 健康 / ⚫ 冗余），给出"今天就动"的补货 / 降销 / 清库行动项。
-triggers:
-  - "库存"
-  - "断货"
-  - "补货"
-  - "可售天数"
-  - "days of supply"
-  - "发货计划"
-  - "库存警报"
-  - "冗余库存"
-required_inputs:
-  - name: csv
-    description: FBA 库存报表（纯文本）。列必须包含 ASIN,Title,FBA_Available,Inbound,Daily_Sales,Days_Of_Supply。可选列 Days_Until_Stockout,Age_Days,Storage_Fee_Monthly。
+description: "亚马逊 FBA 库存哨兵 (Amazon FBA inventory sentinel). 读取库存报表 CSV，按可售天数 DOS 分级（🔴 断货倒计时 / 🟡 告警 / 🟢 健康 / ⚫ 冗余），给出今天就动的补货 / 降销 / 清库行动项。触发词：库存/断货/补货/可售天数/days of supply/发货计划/库存警报/冗余库存/inventory alert/FBA inventory/out of stock。Required input: FBA 库存报表 CSV（列含 ASIN, Title, FBA_Available, Inbound, Daily_Sales, Days_Of_Supply）。"
+version: 1.0.0
+author: Corey / cross_border_ecom pack
+license: Proprietary
+metadata:
+  hermes:
+    tags: [Amazon, FBA, Inventory, 库存, 断货, DOS, 补货, days-of-supply, 跨境电商]
 ---
 
 # 库存哨兵 · FBA 断货倒计时

@@ -1,20 +1,12 @@
 ---
 name: review_monitor
-description: 亚马逊差评监控与分类。读取差评列表 CSV，按根因分桶（质量 / 物流 / 描述不符 / 功能缺陷 / 尺码），挑出必须今天回应的 top-N，并判断是否触发下架阈值。
-triggers:
-  - "差评"
-  - "review"
-  - "1星"
-  - "2星"
-  - "3星"
-  - "投诉"
-  - "退货原因"
-  - "差评分析"
-  - "客户反馈"
-  - "negative review"
-required_inputs:
-  - name: csv
-    description: 差评列表 CSV。列必须包含 ASIN,Title,Rating,Review_Title,Review_Body,Review_Date,Verified_Purchase。可选列 Helpful_Votes,Reviewer_Name。
+description: "亚马逊差评监控与分类 (Amazon negative review triage). 读取差评列表 CSV，按根因分桶（质量 Q / 物流 L / 描述不符 D / 功能缺陷 F / 尺码 S / 恶意 X），挑必须今天回应的 top-N，判断是否触发下架阈值。触发词：差评/review/1星/2星/3星/投诉/退货原因/差评分析/客户反馈/negative review/bad review/1-star/Amazon review。Required input: 差评列表 CSV（列含 ASIN, Title, Rating, Review_Title, Review_Body, Review_Date, Verified_Purchase）。"
+version: 1.0.0
+author: Corey / cross_border_ecom pack
+license: Proprietary
+metadata:
+  hermes:
+    tags: [Amazon, Review, 差评, 客户反馈, negative-review, triage, Listing, 跨境电商]
 ---
 
 # 差评监控 · Amazon Review Triage

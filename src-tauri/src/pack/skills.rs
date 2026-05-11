@@ -76,6 +76,22 @@ pub fn install_skills(
         return Ok(0);
     }
     let dest_root = pack_skills_dir(hermes_dir, &manifest.id);
+
+    // Wipe stale content from previous installs. This handles the
+    // v0.2.11 → v0.2.12+ migration where pack skills switched from
+    // flat `<dest>/foo.md` files to Hermes-compatible subdir layout
+    // `<dest>/foo/SKILL.md`. Without this wipe, old flat `.md` files
+    // would linger in customers' Hermes data dirs after upgrade —
+    // harmless (Hermes only scans `SKILL.md` so they'd never load)
+    // but confusing in the Corey Skills tree and wasteful on disk.
+    // The pack dir is Corey-managed exclusively; customer-authored
+    // skills live elsewhere in `~/.hermes/skills/`, so it's safe to
+    // nuke the whole subdirectory.
+    match fs::remove_dir_all(&dest_root) {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
     fs::create_dir_all(&dest_root)?;
 
     let mut copied = 0usize;
@@ -270,6 +286,49 @@ skills:
         let hermes = temp_dir("uninstall-idempotent");
         // Never installed; uninstall still succeeds.
         uninstall_skills("ghost", &hermes).expect("idempotent uninstall");
+        let _ = fs::remove_dir_all(&hermes);
+    }
+
+    #[test]
+    fn install_wipes_stale_content_from_previous_install() {
+        // Migration guard: pack was previously installed with flat
+        // `foo.md` files (v0.2.11 and earlier layout). New install
+        // declares subdir layout `foo/SKILL.md`. The old flat files
+        // must be removed so `~/.hermes/skills/pack__<id>/` doesn't
+        // carry dead weight after upgrade.
+        let pack_dir = temp_dir("install-wipe-pack");
+        fs::create_dir_all(pack_dir.join("skills/new_skill")).expect("new-skill src");
+        fs::write(pack_dir.join("skills/new_skill/SKILL.md"), "# new").expect("SKILL.md src");
+
+        let hermes = temp_dir("install-wipe-hermes");
+        let dest_dir = pack_skills_dir(&hermes, "migrated_pack");
+        fs::create_dir_all(&dest_dir).expect("stale dest");
+        fs::write(dest_dir.join("old_flat.md"), "previous-version stale").expect("stale flat");
+        fs::write(dest_dir.join("another_stale.md"), "more stale").expect("more stale");
+        assert!(dest_dir.join("old_flat.md").exists());
+
+        let manifest = parse_manifest(
+            r#"
+schema_version: 1
+id: migrated_pack
+version: "1.0.0"
+skills:
+  - skills/new_skill/SKILL.md
+"#,
+        );
+        install_skills(&manifest, &pack_dir, &hermes).expect("install");
+
+        // New layout is in place.
+        assert!(dest_dir.join("new_skill/SKILL.md").exists());
+        // Stale flat files are gone.
+        assert!(
+            !dest_dir.join("old_flat.md").exists(),
+            "stale flat .md from prior layout must be wiped — Hermes scanner \
+             ignores it but it clutters the pack dir"
+        );
+        assert!(!dest_dir.join("another_stale.md").exists());
+
+        let _ = fs::remove_dir_all(&pack_dir);
         let _ = fs::remove_dir_all(&hermes);
     }
 

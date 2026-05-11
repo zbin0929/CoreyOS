@@ -16,12 +16,18 @@ requires:
 soul_inject:
   - prompts/soul.md
 
-# 直接以 Hermes skill .md 格式分发；Pack 启用时拷贝到
-# ~/.hermes/skills/pack__cross_border_ecom/ 下。
+# Hermes-compatible skill layout: each skill lives in its own
+# subdirectory under `skills/`, with the content in `SKILL.md`.
+# On pack enable they copy to
+# `~/.hermes/skills/pack__cross_border_ecom/<skill_name>/SKILL.md`,
+# which Hermes' skill scanner (prompt_builder.build_skills_system_prompt)
+# picks up on its next gateway cycle. Frontmatter uses the Hermes
+# schema (description / version / metadata.hermes.tags), NOT the
+# legacy `triggers:` array which Hermes silently ignores.
 skills:
-  - skills/ad_analyst.md
-  - skills/inventory_sentinel.md
-  - skills/review_monitor.md
+  - skills/ad_analyst/SKILL.md
+  - skills/inventory_sentinel/SKILL.md
+  - skills/review_monitor/SKILL.md
 
 # 手动 / 按钮 / cron 触发的工作流。
 workflows:

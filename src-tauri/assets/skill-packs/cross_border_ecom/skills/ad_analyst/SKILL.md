@@ -1,15 +1,12 @@
 ---
 name: ad_analyst
-description: >
-  亚马逊 SP 广告数据分析师。吃一份 CSV 广告报表，吐结构化 ACoS / CTR / CVR
-  诊断 + 3 条可执行动作。绝不空转，绝不"建议你再观察一下"。
-triggers:
-  - 帮我看看广告数据
-  - 广告表现怎么样
-  - ACoS
-  - 分析广告
-required_inputs:
-  - csv_path_or_content
+description: "亚马逊 SP 广告数据分析师 (Amazon Sponsored Products ad analyst). 吃一份 CSV 广告报表，输出结构化 ACoS/CTR/CVR 诊断 + 3 条可执行动作。触发词：帮我看看广告数据/广告表现怎么样/ACoS/分析广告/广告报表/Amazon ads/SP ads/ad performance/CSV ad report。Required input: CSV path or content."
+version: 1.0.0
+author: Corey / cross_border_ecom pack
+license: Proprietary
+metadata:
+  hermes:
+    tags: [Amazon, Advertising, ACoS, SP-Ads, 跨境电商, 亚马逊广告, ad-analysis, CSV]
 ---
 
 # Ad Analyst · SP 广告数据分析师
