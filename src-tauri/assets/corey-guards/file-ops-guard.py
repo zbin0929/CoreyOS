@@ -44,7 +44,7 @@ so ``hermes_hooks::seed_guards_script`` knows when to overwrite the
 installed copy.
 """
 
-GUARD_VERSION = "2"  # Bump on any behavioural change.
+GUARD_VERSION = "3"  # Bump on any behavioural change.
 
 import hashlib
 import json
@@ -97,38 +97,51 @@ CODE_TOOLS = {
 }
 
 HOME = os.path.expanduser("~")
+IS_WINDOWS = sys.platform == "win32"
+
+
+def _norm(p: str) -> str:
+    return os.path.normpath(p) + os.sep
+
 
 # Order matters loosely — most-specific first reads better in logs.
-# Each prefix MUST end with a ``/`` (or be a single absolute directory)
-# so substring matching is sound.
+# Each prefix is normalised via os.path.normpath so that Windows
+# back-slash paths match against similarly-normalised candidates.
+# ``_norm`` appends the platform separator so ``startswith`` is sound.
 PROTECTED_PREFIXES = [
-    f"{HOME}/Desktop/",
-    f"{HOME}/Documents/",
-    f"{HOME}/Downloads/",
-    # Hermes already covers most of these, but cheap to double up —
-    # the shell-tool path is exactly where we want belt + suspenders.
-    "/etc/",
-    "/usr/",
-    "/var/",
-    "/System/",
-    "/Library/",
+    _norm(f"{HOME}/Desktop"),
+    _norm(f"{HOME}/Documents"),
+    _norm(f"{HOME}/Downloads"),
 ]
+if not IS_WINDOWS:
+    PROTECTED_PREFIXES += [
+        "/etc/",
+        "/usr/",
+        "/var/",
+        "/System/",
+        "/Library/",
+    ]
 
 # Equivalent prefixes the SHELL command might use even though they
 # resolve to a protected zone. We can't exhaustively cover every
 # shell quirk, but ``~/Desktop/...`` and ``$HOME/Desktop/...`` are by
-# far the most common.
+# far the most common.  Keys are normalised to match ``hits_protected``
+# logic; alias lists are kept as-is (forward-slash) because they are
+# matched against raw command strings.
 TILDE_EQUIV = {
-    f"{HOME}/Desktop/": ["~/Desktop/", "$HOME/Desktop/", "${HOME}/Desktop/"],
-    f"{HOME}/Documents/": ["~/Documents/", "$HOME/Documents/", "${HOME}/Documents/"],
-    f"{HOME}/Downloads/": ["~/Downloads/", "$HOME/Downloads/", "${HOME}/Downloads/"],
+    _norm(f"{HOME}/Desktop"): ["~/Desktop/", "$HOME/Desktop/", "${HOME}/Desktop/"],
+    _norm(f"{HOME}/Documents"): ["~/Documents/", "$HOME/Documents/", "${HOME}/Documents/"],
+    _norm(f"{HOME}/Downloads"): ["~/Downloads/", "$HOME/Downloads/", "${HOME}/Downloads/"],
 }
 
 
 DIALOG_SCRIPT = os.path.expanduser("~/.hermes/scripts/confirm_reliable.sh")
 
 # ── Lock & debounce for dialog anti-spam ──
-DIALOG_LOCK = "/tmp/hermes-guard-dialog.lock"
+if IS_WINDOWS:
+    DIALOG_LOCK = os.path.join(os.environ.get("TEMP", os.path.expanduser("~")), "hermes-guard-dialog.lock")
+else:
+    DIALOG_LOCK = "/tmp/hermes-guard-dialog.lock"
 DIALOG_DEBOUNCE_SECS = 3  # Same reason within 3s → auto-deny
 _last_reasons: dict = {}  # {reason_hash: timestamp}
 
@@ -179,13 +192,39 @@ def _dialog_debounced(reason: str) -> bool:
     return False
 
 
-def ask_user(reason: str) -> bool:
-    """Show a native macOS confirm dialog. Returns True if user
-    confirmed, False if rejected/timed out/locked/debounced.
+def _ask_user_windows(reason: str) -> bool:
+    title = "Hermes \u6587\u4ef6\u64cd\u4f5c\u786e\u8ba4"
+    msg = f"Hermes \u60f3\u8981\u6267\u884c\u4ee5\u4e0b\u64cd\u4f5c:\n\n{reason}\n\n\u662f\u5426\u5141\u8bb8\uff1f"
+    escaped_msg = msg.replace("'", "''")
+    escaped_title = title.replace("'", "''")
+    ps_script = (
+        "Add-Type -AssemblyName PresentationFramework; "
+        f"$msg = '{escaped_msg}'; "
+        f"$title = '{escaped_title}'; "
+        "$result = [System.Windows.MessageBox]::Show("
+        "$msg, $title, 'OKCancel', 'Warning'); "
+        "if ($result -eq 'OK') { exit 0 } else { exit 1 }"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", ps_script],
+            capture_output=True, timeout=130,
+        )
+        return result.returncode == 0
+    except Exception as e:
+        _log(f"_ask_user_windows exception: {e}")
+        return False
 
-    On non-macOS platforms or if the dialog script is missing, we
-    **default to deny** — better to block a legit op and have the
-    user retry than to silently allow a destructive one.
+
+def ask_user(reason: str) -> bool:
+    """Show a native confirm dialog. Returns True if user confirmed,
+    False if rejected/timed out/locked/debounced.
+
+    On Windows we use PowerShell WPF MessageBox. On macOS we use the
+    confirm_reliable.sh script. On other platforms or if the dialog
+    method is unavailable, we **default to deny** — better to block a
+    legit op and have the user retry than to silently allow a
+    destructive one.
     """
     if _dialog_debounced(reason):
         _log("DIALOG DEBOUNCED (repeated reason)")
@@ -195,13 +234,20 @@ def ask_user(reason: str) -> bool:
         _log("DIALOG LOCKED (another guard process holds the lock)")
         return False
 
+    if IS_WINDOWS:
+        try:
+            ok = _ask_user_windows(reason)
+            return ok
+        finally:
+            _release_lock()
+
     if not os.path.exists(DIALOG_SCRIPT):
-        _log(f"DIALOG SCRIPT MISSING at {DIALOG_SCRIPT} — defaulting to deny")
+        _log(f"DIALOG SCRIPT MISSING at {DIALOG_SCRIPT} -- defaulting to deny")
         _release_lock()
         return False
 
-    title = "Hermes 文件操作确认"
-    msg = f"Hermes 想要执行以下操作:\n\n{reason}\n\n是否允许？"
+    title = "Hermes \u6587\u4ef6\u64cd\u4f5c\u786e\u8ba4"
+    msg = f"Hermes \u60f3\u8981\u6267\u884c\u4ee5\u4e0b\u64cd\u4f5c:\n\n{reason}\n\n\u662f\u5426\u5141\u8bb8\uff1f"
     try:
         result = subprocess.run(
             [DIALOG_SCRIPT, msg, title],
@@ -249,13 +295,14 @@ def candidates_from_structured_input(tool_input: dict) -> list:
 def expand(p: str, cwd: str) -> str:
     p = os.path.expandvars(os.path.expanduser(p))
     if not os.path.isabs(p):
-        p = os.path.normpath(os.path.join(cwd or os.getcwd(), p))
-    return p
+        p = os.path.join(cwd or os.getcwd(), p)
+    return os.path.normpath(p)
 
 
 def hits_protected(absolute_path: str) -> str | None:
+    normed = os.path.normpath(absolute_path) + os.sep
     for prefix in PROTECTED_PREFIXES:
-        if absolute_path.startswith(prefix):
+        if normed.startswith(prefix):
             return prefix
     return None
 
@@ -266,6 +313,10 @@ def scan_shell_command(command: str) -> str | None:
     for prefix in PROTECTED_PREFIXES:
         if prefix in command:
             return prefix
+        if IS_WINDOWS:
+            fwd = prefix.replace("\\", "/")
+            if fwd in command:
+                return prefix
     for resolved, aliases in TILDE_EQUIV.items():
         for alias in aliases:
             if alias in command:
