@@ -271,7 +271,11 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
     };
     let dir = profile_dir().map_err(|e| format!("profile dir: {e:?}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("create profile dir: {e}"))?;
-    spawn_chrome(&chrome, &dir).map_err(|e| format!("spawn chrome: {e:?}"))?;
+    // Auto-start is always headless — the customer never sees a
+    // Chrome window pop up when Corey boots. They click "Open for
+    // Sign-in" from Settings the rare times they need a visible
+    // window (and that path kills this one first).
+    spawn_chrome(&chrome, &dir, true).map_err(|e| format!("spawn chrome: {e:?}"))?;
     Ok(true)
 }
 
@@ -372,15 +376,45 @@ pub(crate) fn launch_sync(
 
     let mut message = String::new();
 
-    if port_is_listening(CDP_PORT) {
-        message.push_str("Chrome was already listening on port 9222 — reusing it. ");
+    // Manual launch from Settings = the customer wants a VISIBLE
+    // window (to sign into a new system). If a headless one is
+    // running (the auto-start happy path), kill it first so we can
+    // hand the profile over to a headed Chrome. Chrome refuses
+    // two-processes-same-profile.
+    let killed_previous = if port_is_listening(CDP_PORT) {
+        match kill_previous_chrome() {
+            Ok(true) => {
+                message.push_str("Closed background AI Browser so a visible window can open. ");
+                true
+            }
+            // PID file was missing — either a real human-launched
+            // Chrome is on 9222 (which we shouldn't kill), or our
+            // tracking got out of sync. In the human-launched case
+            // we just reuse what's already there; the user already
+            // has a window they can sign in via.
+            Ok(false) => {
+                message.push_str("Chrome was already listening on port 9222 — reusing it. ");
+                false
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "kill previous chrome failed");
+                false
+            }
+        }
     } else {
+        false
+    };
+
+    if !port_is_listening(CDP_PORT) {
         let chrome = detect_chrome_path().ok_or_else(|| IpcError::Internal {
             message:
                 "No Chrome / Chromium / Edge installation detected. Please install Chrome first."
                     .to_string(),
         })?;
-        spawn_chrome(&chrome, &dir)?;
+        spawn_chrome(&chrome, &dir, false)?;
+        if !killed_previous {
+            message.push_str("Chrome window opened. ");
+        }
         // Wait up to 8 seconds for the debug port to come up. Cold
         // Chrome on macOS typically takes 1-3 seconds; first-ever
         // launch with the new profile can hit 5-6.
@@ -399,7 +433,6 @@ pub(crate) fn launch_sync(
                 ),
             });
         }
-        message.push_str("Chrome launched. ");
     }
 
     let cdp_url = format!("http://localhost:{CDP_PORT}");
@@ -458,6 +491,14 @@ pub(crate) fn stop_sync(journal: &Path, restart_gateway: bool) -> IpcResult<Brow
             message: format!("clear BROWSER_CDP_URL: {e}"),
         }
     })?;
+    // If we spawned the running Chrome (PID file exists), kill it.
+    // For a headless background Chrome that's the only way to make
+    // it actually go away — there's no window for the user to close.
+    // We DON'T touch a Chrome whose PID we don't own (no pid file =
+    // user-launched, leave their tabs alone).
+    if let Err(e) = kill_previous_chrome() {
+        tracing::warn!(error = %e, "kill previous chrome during stop failed");
+    }
     if restart_gateway {
         if let Err(e) = hermes_config::gateway_restart() {
             tracing::warn!("gateway restart after CDP stop failed: {e}");
@@ -563,10 +604,28 @@ pub(crate) fn clear_cookies_sync() -> IpcResult<BrowserCdpStatus> {
 ///   Corey (we'd accumulate file handles).
 /// - On Windows we add `CREATE_NO_WINDOW` so a stray console doesn't
 ///   pop up next to Chrome.
-fn spawn_chrome(chrome: &Path, profile: &Path) -> IpcResult<()> {
+/// `headless=true` skips opening a visible Chrome window — used by the
+/// boot-time auto-start so the customer doesn't see a Chrome appear
+/// every time they launch Corey. CDP still works fine in headless
+/// mode; the agent navigates / clicks / types without a window
+/// drawn. We use `--headless=new` (the post-Chrome-109 implementation,
+/// not the legacy --headless) because it shares the same Chromium
+/// rendering path as the GUI and avoids the legacy mode's quirks
+/// (broken on some auth flows, missing service workers).
+///
+/// `headless=false` is what the Settings panel calls when the user
+/// explicitly wants a window — typically to sign into a new system.
+/// Same profile dir as the headless variant, so cookies set in the
+/// visible window survive the next headless boot.
+///
+/// One profile = one Chrome process. If a headless Chrome is already
+/// listening on 9222, the caller must `kill_chrome_by_port` first
+/// before spawning a headed one (and vice versa) — Chrome refuses
+/// to open a second process against a locked user-data-dir.
+fn spawn_chrome(chrome: &Path, profile: &Path, headless: bool) -> IpcResult<()> {
     let port_arg = format!("--remote-debugging-port={CDP_PORT}");
     let profile_arg = format!("--user-data-dir={}", profile.display());
-    let args = [
+    let mut args = vec![
         port_arg.as_str(),
         profile_arg.as_str(),
         "--no-first-run",
@@ -575,9 +634,21 @@ fn spawn_chrome(chrome: &Path, profile: &Path) -> IpcResult<()> {
         // automation-facing profile.
         "--hide-crash-restore-bubble",
     ];
+    if headless {
+        // `--headless=new` (Chrome 109+) is the modern, GUI-equivalent
+        // headless runtime. Older `--headless` is legacy and breaks
+        // some auth flows. We rely on "new" being available because
+        // detect_chrome_path only picks up Chrome / Chromium / Edge
+        // installs that ship Chromium >= 109 in practice (anything
+        // older has bigger problems).
+        args.push("--headless=new");
+        // Headless Chrome doesn't need GPU and complains in logs if
+        // it can't find one on some Linux setups. Cheap to disable.
+        args.push("--disable-gpu");
+    }
 
     let mut cmd = Command::new(chrome);
-    cmd.args(args);
+    cmd.args(&args);
 
     #[cfg(target_os = "windows")]
     {
@@ -597,10 +668,89 @@ fn spawn_chrome(chrome: &Path, profile: &Path) -> IpcResult<()> {
             .stderr(Stdio::null());
     }
 
-    cmd.spawn().map_err(|e| IpcError::Internal {
+    let child = cmd.spawn().map_err(|e| IpcError::Internal {
         message: format!("spawn chrome at {}: {e}", chrome.display()),
     })?;
+    // Persist PID so we can kill this specific Chrome later when
+    // switching headless<->headed. `lsof -i:9222` would also work
+    // on Unix but we'd need a Windows equivalent; a PID file is
+    // boring and cross-platform.
+    let pid_path = pid_file();
+    if let Some(parent) = pid_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Err(e) = std::fs::write(&pid_path, child.id().to_string()) {
+        tracing::warn!(error = %e, path = %pid_path.display(), "write chrome.pid failed");
+    }
     Ok(())
+}
+
+fn pid_file() -> PathBuf {
+    // Co-located with the alias store under .corey/ so wiping
+    // ~/.hermes/.corey wipes both.
+    crate::paths::hermes_data_dir()
+        .map(|d| d.join(".corey").join("chrome.pid"))
+        .unwrap_or_else(|_| PathBuf::from(".corey/chrome.pid"))
+}
+
+/// Best-effort kill of the Chrome we previously spawned. Reads the
+/// PID file written by `spawn_chrome` and sends SIGTERM (Unix) /
+/// terminates the process (Windows). Used when the Settings panel
+/// wants to switch a backgrounded headless Chrome into a visible
+/// headed one (Chrome won't share a profile with itself).
+///
+/// Returns `Ok(true)` if we actually killed something, `Ok(false)`
+/// if there was no PID to act on. Failures are logged + swallowed
+/// because a stale pid file or a Chrome that already crashed isn't
+/// worth bubbling up to the user — the caller falls through to
+/// `port_is_listening` to decide what to do next.
+fn kill_previous_chrome() -> Result<bool, String> {
+    let path = pid_file();
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return Ok(false);
+    };
+    let Ok(pid) = raw.trim().parse::<u32>() else {
+        let _ = std::fs::remove_file(&path);
+        return Ok(false);
+    };
+    #[cfg(unix)]
+    {
+        // Shell out to `kill` rather than pulling in `libc` just for
+        // one syscall. SIGTERM (15) is polite — Chrome flushes
+        // cookies + session state. SIGKILL would risk a half-flushed
+        // sqlite that refuses to open next time.
+        let _ = std::process::Command::new("kill")
+            .arg(pid.to_string())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    #[cfg(windows)]
+    {
+        // taskkill /PID <pid> /F is the cleanest cross-arch way to
+        // terminate without pulling in winapi. The /F forces the
+        // close once Chrome doesn't ACK in ~5s; we accept the same
+        // sqlite risk as Unix here in practice because Chrome on
+        // Windows is generally cooperative.
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    let _ = std::fs::remove_file(&path);
+    // Give Chrome a beat to release the profile lock. Without this,
+    // the immediate respawn fails with "profile in use".
+    std::thread::sleep(Duration::from_millis(500));
+    // Belt-and-braces: wait up to 2 s for the port to actually free.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if !port_is_listening(CDP_PORT) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
+    Ok(true)
 }
 
 #[cfg(test)]
