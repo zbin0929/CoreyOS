@@ -218,7 +218,7 @@ fn env_configured() -> bool {
     )
 }
 
-fn build_status() -> BrowserCdpStatus {
+pub(crate) fn build_status() -> BrowserCdpStatus {
     let running = port_is_listening(CDP_PORT);
     BrowserCdpStatus {
         running,
@@ -237,6 +237,42 @@ fn build_status() -> BrowserCdpStatus {
             list_logged_in_domains()
         },
     }
+}
+
+/// Boot-time auto-launch hook. Spawns the dedicated Chrome silently
+/// when, **and only when**, the customer has previously opted in (env
+/// var present in `~/.hermes/.env`) AND nothing is currently listening
+/// on the CDP port. This is the answer to "I shouldn't have to click
+/// 'Open AI Browser' every time I start Corey": once the customer has
+/// signed in once via Settings, the dedicated Chrome quietly comes up
+/// on every subsequent launch.
+///
+/// **Why we DON'T auto-launch when env is missing**: that would mean a
+/// foreground Chrome window appears the first time someone opens Corey
+/// after install, which is jarring (the panel hasn't had a chance to
+/// explain what's happening). The Settings panel is the explicit
+/// opt-in; this hook is the implicit reactivation.
+///
+/// **Cheap side-effects only**: no env writes, no gateway restart,
+/// no `IpcResult` plumbing. Returns `Ok(true)` on a successful spawn,
+/// `Ok(false)` for "intentionally skipped" (env not configured or port
+/// already taken), `Err(...)` for a real failure (Chrome detected but
+/// spawn refused, etc.) so the caller can log a `warn!` without
+/// crashing app boot.
+pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
+    if !env_configured() {
+        return Ok(false);
+    }
+    if port_is_listening(CDP_PORT) {
+        return Ok(false);
+    }
+    let Some(chrome) = detect_chrome_path() else {
+        return Err("BROWSER_CDP_URL configured but Chrome not detected".into());
+    };
+    let dir = profile_dir().map_err(|e| format!("profile dir: {e:?}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create profile dir: {e}"))?;
+    spawn_chrome(&chrome, &dir).map_err(|e| format!("spawn chrome: {e:?}"))?;
+    Ok(true)
 }
 
 /// Read the dedicated profile's `Cookies` sqlite and return the set
@@ -311,14 +347,24 @@ pub async fn browser_cdp_status() -> IpcResult<BrowserCdpStatus> {
 #[tauri::command]
 pub async fn browser_cdp_launch(state: State<'_, AppState>) -> IpcResult<BrowserCdpLaunchResult> {
     let journal = state.changelog_path.clone();
-    tokio::task::spawn_blocking(move || launch_sync(&journal))
+    tokio::task::spawn_blocking(move || launch_sync(&journal, true))
         .await
         .map_err(|e| IpcError::Internal {
             message: format!("launch join: {e}"),
         })?
 }
 
-fn launch_sync(journal: &Path) -> IpcResult<BrowserCdpLaunchResult> {
+/// `restart_gateway=false` is used by the MCP tool wrapper — restarting
+/// Hermes Gateway from inside an in-flight agent tool call kills the
+/// SSE stream the user is reading from. The MCP path emits a frontend
+/// event instead and lets the GUI prompt for a restart after the chat
+/// turn closes. Direct IPC calls (Settings panel button) are safe to
+/// pass `restart_gateway=true`: they're not running inside the
+/// agent loop.
+pub(crate) fn launch_sync(
+    journal: &Path,
+    restart_gateway: bool,
+) -> IpcResult<BrowserCdpLaunchResult> {
     let dir = profile_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| IpcError::Internal {
         message: format!("create profile dir {}: {e}", dir.display()),
@@ -364,17 +410,24 @@ fn launch_sync(journal: &Path) -> IpcResult<BrowserCdpLaunchResult> {
     )?;
     message.push_str("BROWSER_CDP_URL written. ");
 
-    match hermes_config::gateway_restart() {
-        Ok(_) => message.push_str("Hermes Gateway restarted."),
-        Err(e) => {
-            // Don't fail the whole IPC — Chrome is up + env is
-            // written, the customer just needs to bounce gateway
-            // manually (or it'll pick up on next natural restart).
-            tracing::warn!("gateway restart after CDP launch failed: {e}");
-            message.push_str(
-                "Hermes Gateway restart skipped (will pick up the change on next launch).",
-            );
+    if restart_gateway {
+        match hermes_config::gateway_restart() {
+            Ok(_) => message.push_str("Hermes Gateway restarted."),
+            Err(e) => {
+                // Don't fail the whole IPC — Chrome is up + env is
+                // written, the customer just needs to bounce gateway
+                // manually (or it'll pick up on next natural restart).
+                tracing::warn!("gateway restart after CDP launch failed: {e}");
+                message.push_str(
+                    "Hermes Gateway restart skipped (will pick up the change on next launch).",
+                );
+            }
         }
+    } else {
+        message.push_str(
+            "Hermes Gateway will pick up BROWSER_CDP_URL on its next restart \
+             (the GUI will prompt after this chat turn finishes).",
+        );
     }
 
     Ok(BrowserCdpLaunchResult {
@@ -392,21 +445,23 @@ fn launch_sync(journal: &Path) -> IpcResult<BrowserCdpLaunchResult> {
 #[tauri::command]
 pub async fn browser_cdp_stop(state: State<'_, AppState>) -> IpcResult<BrowserCdpStatus> {
     let journal = state.changelog_path.clone();
-    tokio::task::spawn_blocking(move || stop_sync(&journal))
+    tokio::task::spawn_blocking(move || stop_sync(&journal, true))
         .await
         .map_err(|e| IpcError::Internal {
             message: format!("stop join: {e}"),
         })?
 }
 
-fn stop_sync(journal: &Path) -> IpcResult<BrowserCdpStatus> {
+pub(crate) fn stop_sync(journal: &Path, restart_gateway: bool) -> IpcResult<BrowserCdpStatus> {
     hermes_config::write_env_key("BROWSER_CDP_URL", None, Some(journal)).map_err(|e| {
         IpcError::Internal {
             message: format!("clear BROWSER_CDP_URL: {e}"),
         }
     })?;
-    if let Err(e) = hermes_config::gateway_restart() {
-        tracing::warn!("gateway restart after CDP stop failed: {e}");
+    if restart_gateway {
+        if let Err(e) = hermes_config::gateway_restart() {
+            tracing::warn!("gateway restart after CDP stop failed: {e}");
+        }
     }
     Ok(build_status())
 }
@@ -425,7 +480,67 @@ pub async fn browser_cdp_clear_cookies() -> IpcResult<BrowserCdpStatus> {
         })?
 }
 
-fn clear_cookies_sync() -> IpcResult<BrowserCdpStatus> {
+/// Wipe cookies for a single domain only. The Settings UI surfaces
+/// this as a "✕" next to each chip in the "Sites the AI remembers"
+/// list — useful when a customer's session for one backend has
+/// expired or they want to re-authenticate as a different user
+/// without nuking every other login. Refuses to run while Chrome is
+/// alive (sqlite is locked exclusively, same as the full clear).
+///
+/// Match logic mirrors what `list_logged_in_domains` does on read:
+/// we strip a leading dot, then match exact or `.<domain>`. So
+/// passing `"amazon.com"` clears both `amazon.com` and
+/// `.amazon.com` rows but NOT `sellercentral.amazon.com`. That's
+/// deliberate — subdomains often carry separate session cookies and
+/// the user should clear them independently if they want to.
+#[tauri::command]
+pub async fn browser_cdp_clear_domain(domain: String) -> IpcResult<BrowserCdpStatus> {
+    tokio::task::spawn_blocking(move || clear_domain_sync(&domain))
+        .await
+        .map_err(|e| IpcError::Internal {
+            message: format!("clear_domain join: {e}"),
+        })?
+}
+
+pub(crate) fn clear_domain_sync(domain: &str) -> IpcResult<BrowserCdpStatus> {
+    if port_is_listening(CDP_PORT) {
+        return Err(IpcError::Internal {
+            message: "Please quit the AI Browser window first (Chrome locks the cookies database \
+                      while running)."
+                .to_string(),
+        });
+    }
+    let target = domain.trim().trim_start_matches('.').to_string();
+    if target.is_empty() {
+        return Err(IpcError::Internal {
+            message: "domain is empty".to_string(),
+        });
+    }
+    let dir = profile_dir()?;
+    let cookies_db = dir.join("Default").join("Cookies");
+    if !cookies_db.exists() {
+        // Nothing to clear; return current snapshot rather than a
+        // confusing "no profile" error.
+        return Ok(build_status());
+    }
+    use rusqlite::{params, Connection};
+    let conn = Connection::open(&cookies_db).map_err(|e| IpcError::Internal {
+        message: format!("open cookies db: {e}"),
+    })?;
+    let dotted = format!(".{target}");
+    let affected = conn
+        .execute(
+            "DELETE FROM cookies WHERE host_key = ?1 OR host_key = ?2",
+            params![target, dotted],
+        )
+        .map_err(|e| IpcError::Internal {
+            message: format!("delete cookies for {target}: {e}"),
+        })?;
+    tracing::info!(domain = %target, rows = affected, "cleared per-domain cookies");
+    Ok(build_status())
+}
+
+pub(crate) fn clear_cookies_sync() -> IpcResult<BrowserCdpStatus> {
     if port_is_listening(CDP_PORT) {
         return Err(IpcError::Internal {
             message: "Please quit the AI Browser window first (Chrome must be closed before its profile can be wiped).".to_string(),

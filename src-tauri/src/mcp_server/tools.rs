@@ -402,6 +402,171 @@ pub fn manifest() -> Vec<Value> {
                 "required": ["profile_id"]
             }
         }),
+        // ─── AI Browser (CDP) management ─────────────────────────
+        // Lets the agent manage its own dedicated Chrome from chat:
+        //   "AI 浏览器没启动，要我帮你开吗？" → corey_browser_launch
+        //   "我登录了哪些网站？"             → corey_browser_status
+        //   "清除 AI 浏览器登录态"           → corey_browser_clear
+        // Mirrors the four IPC commands behind the Settings panel,
+        // but skips the gateway-restart step (we're inside an
+        // in-flight agent loop — restart would kill the chat stream).
+        // The reply text always tells the user a restart is needed
+        // before the *next* turn can drive the new browser.
+        json!({
+            "name": "corey_browser_status",
+            "description": "Report the AI Browser's current state: \
+                whether the dedicated Chrome is running, whether \
+                BROWSER_CDP_URL is configured, which Chrome binary was \
+                detected, and the list of domains the agent has \
+                persistent cookies for (i.e. sites it's 'logged in to'). \
+                Cheap — call this whenever the user asks about the \
+                browser without explicit verbs.\n\n\
+                Trigger phrases — EN: \"is the browser running\", \
+                \"what sites am I logged into\", \"check the AI \
+                browser\". ZH: \"AI 浏览器开着吗\", \"我登录了哪些 \
+                网站\", \"看下浏览器状态\".",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "corey_browser_launch",
+            "description": "Open the dedicated Chrome that the agent \
+                drives, write BROWSER_CDP_URL to ~/.hermes/.env, and \
+                tell the user a Hermes Gateway restart is needed for \
+                the wiring to take effect on the NEXT chat turn (we \
+                deliberately do NOT restart inside this tool — it \
+                would kill the in-flight SSE stream).\n\n\
+                Idempotent: if Chrome is already on port 9222 we \
+                only (re)write the env var. After the call returns, \
+                the user logs into each backend in the Chrome window \
+                ONCE, then closes the Settings panel and continues \
+                chatting; the agent will use the logged-in browser \
+                from the next chat turn forward.\n\n\
+                Trigger phrases — EN: \"open the AI browser\", \
+                \"start the dedicated browser\", \"let me sign in\". \
+                ZH: \"打开 AI 浏览器\", \"启动专属浏览器\", \"我要登录\".",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "corey_browser_stop",
+            "description": "Disable the AI Browser by clearing \
+                BROWSER_CDP_URL from ~/.hermes/.env. This does NOT \
+                kill the Chrome window itself — the user might still \
+                want their tabs. From the next chat turn onward, the \
+                agent falls back to its built-in ephemeral browser. \
+                Skips gateway restart (same reason as launch).\n\n\
+                Trigger phrases — EN: \"stop the AI browser\", \
+                \"disable the dedicated browser\". ZH: \"停止 AI 浏览器\", \
+                \"关掉专属浏览器\".",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "corey_browser_clear",
+            "description": "Wipe the dedicated Chrome profile — \
+                cookies, history, saved passwords, the lot. Use ONLY \
+                after explicit user request (\"forget all my logins\" \
+                / \"清除登录态\"); we don't want the agent doing this \
+                proactively. Refuses to run while Chrome is still \
+                alive — ask the user to quit the AI Browser window \
+                first if needed.\n\n\
+                Trigger phrases — EN: \"clear the AI browser\", \
+                \"wipe AI browser logins\", \"forget all my sign-ins\". \
+                ZH: \"清除 AI 浏览器登录态\", \"清空浏览器\", \
+                \"忘掉我登录过的所有网站\".",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        // ─── AI Browser site aliases ─────────────────────────────
+        // The agent uses these to translate "去店铺后台" / "看广告"
+        // into a real URL without the customer ever pasting one.
+        // Mirrors the Settings → AI Browser → Site Aliases table.
+        json!({
+            "name": "corey_browser_aliases_list",
+            "description": "List the user's saved AI Browser site \
+                aliases — `[{alias, url, updated_at}, ...]`. ALWAYS \
+                call this BEFORE `browser_navigate` when the user \
+                refers to a site by NAME instead of URL (\"打开店铺\", \
+                \"去广告中心\", \"open the dashboard\"): match the \
+                phrase against `alias` (case-insensitive substring \
+                works fine), pick the best hit, navigate to its `url`. \
+                Only fall back to asking for a URL when no alias \
+                matches.\n\n\
+                The list is small (capped at 200) and cheap; calling \
+                this on every chat turn that mentions a non-URL site \
+                phrase is fine.",
+            "inputSchema": { "type": "object", "properties": {} }
+        }),
+        json!({
+            "name": "corey_browser_aliases_set",
+            "description": "Save (or update) a user-friendly name → \
+                URL mapping for the AI Browser. Use when the user \
+                says something like \"以后我说 X 就帮我打开 Y\" / \
+                \"记一下，店铺指 https://...\" / \"give X a shortcut\". \
+                If the alias already exists, this REPLACES the URL — \
+                the customer's last statement wins.\n\n\
+                URL must be http:// or https://; aliases up to 64 \
+                chars. We persist to a separate file from MEMORY.md \
+                so `corey_browser_clear` (cookie wipe) does NOT \
+                delete shortcuts.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "alias": {
+                        "type": "string",
+                        "description": "The friendly name the user will \
+                            say. Trim before saving. Example: \"店铺后台\" \
+                            or \"weekly report\"."
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "Full URL with scheme. Example: \
+                            \"https://sellercentral.amazon.com/\"."
+                    }
+                },
+                "required": ["alias", "url"]
+            }
+        }),
+        json!({
+            "name": "corey_browser_aliases_remove",
+            "description": "Delete one alias by name. Use when the user \
+                says \"忘掉 X 这个快捷方式\" / \"remove the shortcut \
+                for Y\". Matches case-insensitively. Returns whether a \
+                row was actually removed (false = no such alias).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "alias": {
+                        "type": "string",
+                        "description": "The exact alias the user wants \
+                            removed (case-insensitive)."
+                    }
+                },
+                "required": ["alias"]
+            }
+        }),
+        json!({
+            "name": "corey_browser_clear_domain",
+            "description": "Wipe sign-in state for ONE domain only \
+                (e.g. \"forget my Amazon login but keep the rest\"). \
+                Refuses while the AI Browser is running — ask the user \
+                to quit the Chrome window first if needed. Strips a \
+                leading dot before matching; subdomains are NOT \
+                included (clearing 'amazon.com' leaves \
+                'sellercentral.amazon.com' alone).\n\n\
+                Trigger phrases — EN: \"forget my login on X\", \
+                \"clear cookies for Y\". ZH: \"清掉 X 的登录\", \
+                \"忘掉 Y 网站\".",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "description": "Bare domain (no scheme, no \
+                            path). Example: \"amazon.com\" or \
+                            \"sellercentral.amazon.com\"."
+                    }
+                },
+                "required": ["domain"]
+            }
+        }),
         json!({
             "name": "corey_open_route",
             "description": "Deep-link the Corey desktop GUI to ANY \
@@ -466,6 +631,14 @@ pub async fn call(app: AppHandle, params: &Value) -> Result<Value, (i32, String)
         "cancel_run" => cancel_run(app, args).await?,
         "corey_list_llms" => list_llms(app).await?,
         "corey_set_default_llm" => set_default_llm(app, args).await?,
+        "corey_browser_status" => browser_status(app).await?,
+        "corey_browser_launch" => browser_launch(app).await?,
+        "corey_browser_stop" => browser_stop(app).await?,
+        "corey_browser_clear" => browser_clear(app).await?,
+        "corey_browser_aliases_list" => browser_aliases_list().await?,
+        "corey_browser_aliases_set" => browser_aliases_set(args).await?,
+        "corey_browser_aliases_remove" => browser_aliases_remove(args).await?,
+        "corey_browser_clear_domain" => browser_clear_domain(app, args).await?,
         "corey_open_route" => open_route(app, args).await?,
         _ => return Err((-32601, format!("unknown tool: {name}"))),
     };
@@ -1234,4 +1407,257 @@ async fn open_route(app: AppHandle, args: Value) -> Result<String, (i32, String)
         .map_err(|e| (-32603, format!("emit open_route: {e}")))?;
 
     Ok(format!("Asked Corey GUI to navigate to {}.", path))
+}
+
+// ─── AI Browser handlers ────────────────────────────────────────────
+//
+// All four wrap the same `browser_cdp::*_sync` helpers used by the
+// `#[tauri::command]` IPC entry points, but pass `restart_gateway=false`
+// because we're inside an in-flight agent loop. Restarting Hermes
+// Gateway from here would tear down the SSE socket the user is reading
+// from and the chat reply would hang — exactly the bug we already fixed
+// in `set_default_llm`. Instead we emit `corey_native:browser_changed`
+// so the frontend can prompt for a restart after the chat turn closes,
+// and the reply text always tells the user "next turn picks it up".
+//
+// The handlers all share the same shape: pull `AppState` for the
+// changelog journal path, run the blocking sync function on the
+// blocking pool, format a chat-friendly response. Errors are mapped
+// from `IpcError` to MCP's `(code, message)` tuple verbatim — Hermes
+// puts the message back into the chat, so the user sees actionable
+// strings like "Please quit the AI Browser window first".
+
+fn ipc_err_to_mcp(e: crate::error::IpcError) -> (i32, String) {
+    // Pick code -32603 (internal) for everything; the *message* is
+    // what reaches the user. Splitting validation vs internal here
+    // would gain nothing since the agent never branches on the code.
+    // `IpcError` doesn't implement `Display` (it's serde-serialized
+    // for the IPC envelope), so we serialize to JSON for a stable
+    // chat-readable form. The variants we hit here are dominated by
+    // `Internal { message }`, which serializes to a short blob the
+    // user can act on (e.g. "Please quit the AI Browser window first").
+    let msg = serde_json::to_string(&e).unwrap_or_else(|_| format!("{e:?}"));
+    (-32603, msg)
+}
+
+async fn browser_status(_app: AppHandle) -> Result<String, (i32, String)> {
+    let status = tokio::task::spawn_blocking(crate::ipc::browser_cdp::build_status)
+        .await
+        .map_err(|e| (-32603, format!("status join: {e}")))?;
+
+    Ok(json!({
+        "running": status.running,
+        "port": status.port,
+        "env_configured": status.env_configured,
+        "chrome_path": status.chrome_path,
+        "logged_in_domains": status.logged_in_domains,
+        "summary": if status.running && status.env_configured {
+            format!(
+                "AI Browser is running on localhost:{} and wired to Hermes. \
+                 Logged in to {} site(s).",
+                status.port,
+                status.logged_in_domains.len()
+            )
+        } else if status.env_configured {
+            "BROWSER_CDP_URL is configured but Chrome isn't currently \
+             listening — call corey_browser_launch to start it.".to_string()
+        } else {
+            "AI Browser is not configured. Call corey_browser_launch to \
+             open a dedicated Chrome and have the user sign in."
+                .to_string()
+        }
+    })
+    .to_string())
+}
+
+async fn browser_launch(app: AppHandle) -> Result<String, (i32, String)> {
+    use tauri::{Emitter, Manager};
+    let state = app.state::<crate::state::AppState>();
+    let journal = state.changelog_path.clone();
+
+    let result =
+        tokio::task::spawn_blocking(move || crate::ipc::browser_cdp::launch_sync(&journal, false))
+            .await
+            .map_err(|e| (-32603, format!("launch join: {e}")))?
+            .map_err(ipc_err_to_mcp)?;
+
+    let _ = app.emit(
+        "corey_native:browser_changed",
+        json!({ "action": "launch" }),
+    );
+
+    Ok(json!({
+        "ok": true,
+        "running": result.status.running,
+        "env_configured": result.status.env_configured,
+        "logged_in_domains": result.status.logged_in_domains,
+        "message": result.message,
+        "next_step": "User should sign into each backend in the Chrome \
+                      window that just opened. Hermes Gateway needs a \
+                      restart for the wiring to take effect on the \
+                      NEXT chat turn — the GUI will surface a prompt \
+                      after this turn finishes.",
+    })
+    .to_string())
+}
+
+async fn browser_stop(app: AppHandle) -> Result<String, (i32, String)> {
+    use tauri::{Emitter, Manager};
+    let state = app.state::<crate::state::AppState>();
+    let journal = state.changelog_path.clone();
+
+    let status =
+        tokio::task::spawn_blocking(move || crate::ipc::browser_cdp::stop_sync(&journal, false))
+            .await
+            .map_err(|e| (-32603, format!("stop join: {e}")))?
+            .map_err(ipc_err_to_mcp)?;
+
+    let _ = app.emit("corey_native:browser_changed", json!({ "action": "stop" }));
+
+    Ok(json!({
+        "ok": true,
+        "env_configured": status.env_configured,
+        "message": "BROWSER_CDP_URL cleared. The Chrome window is left \
+                    open (the user may still want their tabs); from \
+                    the next chat turn onward the agent will use its \
+                    built-in ephemeral browser. Hermes Gateway will \
+                    pick up the change on its next restart.",
+    })
+    .to_string())
+}
+
+async fn browser_clear(app: AppHandle) -> Result<String, (i32, String)> {
+    use tauri::Emitter;
+    let status = tokio::task::spawn_blocking(crate::ipc::browser_cdp::clear_cookies_sync)
+        .await
+        .map_err(|e| (-32603, format!("clear join: {e}")))?
+        .map_err(ipc_err_to_mcp)?;
+
+    let _ = app.emit("corey_native:browser_changed", json!({ "action": "clear" }));
+
+    Ok(json!({
+        "ok": true,
+        "running": status.running,
+        "logged_in_domains": status.logged_in_domains,
+        "message": "AI Browser profile wiped. All cookies and saved \
+                    sign-ins are gone; the user will need to sign in \
+                    again next time the AI Browser is used.",
+    })
+    .to_string())
+}
+
+async fn browser_clear_domain(app: AppHandle, args: Value) -> Result<String, (i32, String)> {
+    use tauri::Emitter;
+    #[derive(Deserialize)]
+    struct Args {
+        domain: String,
+    }
+    let args: Args = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid clear_domain args: {e}")))?;
+    let domain = args.domain.clone();
+    let status =
+        tokio::task::spawn_blocking(move || crate::ipc::browser_cdp::clear_domain_sync(&domain))
+            .await
+            .map_err(|e| (-32603, format!("clear_domain join: {e}")))?
+            .map_err(ipc_err_to_mcp)?;
+
+    let _ = app.emit(
+        "corey_native:browser_changed",
+        json!({ "action": "clear_domain", "domain": args.domain }),
+    );
+
+    Ok(json!({
+        "ok": true,
+        "domain": args.domain,
+        "logged_in_domains": status.logged_in_domains,
+        "message": format!(
+            "Cleared sign-in cookies for {}. Other domains untouched.",
+            args.domain
+        ),
+    })
+    .to_string())
+}
+
+async fn browser_aliases_list() -> Result<String, (i32, String)> {
+    let entries = tokio::task::spawn_blocking(crate::ipc::browser_aliases::list_sync)
+        .await
+        .map_err(|e| (-32603, format!("aliases list join: {e}")))?
+        .map_err(ipc_err_to_mcp)?;
+
+    // Return as a structured list — the agent matches against `alias`
+    // and uses `url`. We include `updated_at` so the agent can prefer
+    // the freshest match when two aliases overlap.
+    let items: Vec<Value> = entries
+        .into_iter()
+        .map(|e| {
+            json!({
+                "alias": e.alias,
+                "url": e.url,
+                "updated_at": e.updated_at,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "count": items.len(),
+        "aliases": items,
+    })
+    .to_string())
+}
+
+async fn browser_aliases_set(args: Value) -> Result<String, (i32, String)> {
+    #[derive(Deserialize)]
+    struct Args {
+        alias: String,
+        url: String,
+    }
+    let args: Args = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid aliases_set args: {e}")))?;
+
+    let alias_clone = args.alias.clone();
+    let url_clone = args.url.clone();
+    let saved = tokio::task::spawn_blocking(move || {
+        crate::ipc::browser_aliases::upsert_sync(&alias_clone, &url_clone)
+    })
+    .await
+    .map_err(|e| (-32603, format!("aliases set join: {e}")))?
+    .map_err(ipc_err_to_mcp)?;
+
+    Ok(json!({
+        "ok": true,
+        "alias": saved.alias,
+        "url": saved.url,
+        "message": format!(
+            "Saved: \"{}\" → {}. Next time the user mentions this name, \
+             call browser_navigate with that URL.",
+            saved.alias, saved.url
+        ),
+    })
+    .to_string())
+}
+
+async fn browser_aliases_remove(args: Value) -> Result<String, (i32, String)> {
+    #[derive(Deserialize)]
+    struct Args {
+        alias: String,
+    }
+    let args: Args = serde_json::from_value(args)
+        .map_err(|e| (-32602, format!("invalid aliases_remove args: {e}")))?;
+    let alias_clone = args.alias.clone();
+    let removed =
+        tokio::task::spawn_blocking(move || crate::ipc::browser_aliases::remove_sync(&alias_clone))
+            .await
+            .map_err(|e| (-32603, format!("aliases remove join: {e}")))?
+            .map_err(ipc_err_to_mcp)?;
+
+    Ok(json!({
+        "ok": true,
+        "alias": args.alias,
+        "removed": removed,
+        "message": if removed {
+            format!("Removed alias \"{}\".", args.alias)
+        } else {
+            format!("No alias named \"{}\" was found.", args.alias)
+        },
+    })
+    .to_string())
 }

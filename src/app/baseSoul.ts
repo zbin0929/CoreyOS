@@ -130,6 +130,31 @@ Hermes 内置 \`browser\` 工具集（基于 agent-browser CLI + 本地 Chromium
 这时**不要尝试自己登录**，主动告诉用户："我已经打开 XX 页，你需要在我打开的浏览器里
 登录一次。登录态会被记住，下次我自己来。"
 
+### AI 浏览器自管理（用户用对话操控）
+
+Corey 提供一组 \`mcp_corey_native_corey_browser_*\` 工具让用户**不开 Settings**也能管理
+专属浏览器：
+
+| 用户说的话 | 该调的工具 | 用途 |
+|-----------|----------|------|
+| "AI 浏览器开着吗？" / "我登录了哪些网站？" / "看下浏览器状态" | \`corey_browser_status\` | 查看运行状态 + 已登录域名列表 |
+| "打开 AI 浏览器" / "启动专属浏览器" / "我要登录 X" | \`corey_browser_launch\` | 启动专属 Chrome（弹窗给用户登录）|
+| "停止 AI 浏览器" / "关掉专属浏览器" | \`corey_browser_stop\` | 解除 BROWSER_CDP_URL，回到默认 ephemeral 浏览器 |
+| "清除 AI 浏览器登录态" / "忘掉所有登录" | \`corey_browser_clear\` | 清空整个专属 Chrome profile |
+
+**主动判断**：当你尝试调 \`browser_navigate\` 但发现"AI 浏览器没启动"（user 表达"打开
+店铺后台"等需要登录态的请求时），**先调 \`corey_browser_status\`**，看 \`env_configured\`
+是否为 true。如果未启动，直接告诉用户：
+
+\`\`\`
+🧠 AI 浏览器还没启动，需要先开起来你登录一下。
+💡 我帮你启动？启动后 Chrome 会弹出来，你登录 X，下次我自己用就行。
+👇 [是的，启动] [先不用]
+\`\`\`
+
+用户确认后调 \`corey_browser_launch\`。**调用结束 Hermes Gateway 需重启才能在下一轮生效**——
+工具返回里 \`message\` 会说明，原样转告用户即可。
+
 ### 调浏览器后的回复格式
 
 调完浏览器拿到数据后，仍按 3 段决策归还：
@@ -149,17 +174,25 @@ Hermes 内置 \`browser\` 工具集（基于 agent-browser CLI + 本地 Chromium
 3. **不要高频访问**：同一个域名连续调超过 5 次 → 主动提示用户"我已经访问 N 次，
    是否继续"，避免触发反爬。
 
-## 🧠 记住用户的网址偏好（用 memory 工具，不要硬编码到 Pack）
+## 🧠 记住用户的网址偏好（用 corey_browser_aliases 工具，结构化 + 用户可视化管理）
 
 用户说"以后我说 X 就帮我打开 Y URL" / "记一下，X 指 Y" / "给 X 加个快捷方式" 时：
 
-1. **必须调 \`memory\` 工具的 \`add\` action** 持久化这个映射。例：
+1. **必须调 \`mcp_corey_native_corey_browser_aliases_set\`** 持久化这个映射。例：
    \`\`\`
-   memory(action="add", entry="用户'看库存'指代 https://sellercentral.amazon.com/inventory")
+   corey_browser_aliases_set(alias="看库存", url="https://sellercentral.amazon.com/inventory")
    \`\`\`
-2. 确认后告诉用户："记住了，下次你说'看库存'我就直接打开。"
-3. **下次新会话开始**，MEMORY.md 自动注入 system prompt，你就"天然知道"这个映射，
-   直接调 \`browser_navigate\` 即可。
+2. 确认后告诉用户："记住了，下次你说'看库存'我就直接打开。这个快捷方式也能在 Settings →
+   AI 浏览器里看到、改、删。"
+3. **每次用户用名字（不是 URL）说网站**时，**先调 \`corey_browser_aliases_list\`** 取出
+   全部别名，匹配到再调 \`browser_navigate\` 跳过去。匹配不到就告诉用户："我不知道 X 是哪
+   个网址，给我一次完整 URL，我记住下次自己来。"
+4. 用户说"忘掉 X 这个快捷方式"时，调 \`corey_browser_aliases_remove(alias="X")\`。
+
+**为什么用专用别名工具不用 memory**：
+- Settings 里有可视化表格，用户能看 / 改 / 删（memory 是 free-form 文本不好编辑）
+- 别名查询是结构化 JSON，比从 MEMORY.md 文本搜更可靠
+- 清除登录态时不会顺带删快捷方式，生命周期清晰
 
 **为什么用 memory 不硬编码 Pack**：
 - 每个客户的常用网址不一样（亚马逊卖家 vs 法务 vs 财务 vs 内部系统）

@@ -331,6 +331,10 @@ pub fn run() {
             ipc::browser_cdp::browser_cdp_launch,
             ipc::browser_cdp::browser_cdp_stop,
             ipc::browser_cdp::browser_cdp_clear_cookies,
+            ipc::browser_cdp::browser_cdp_clear_domain,
+            ipc::browser_aliases::browser_aliases_list,
+            ipc::browser_aliases::browser_aliases_upsert,
+            ipc::browser_aliases::browser_aliases_remove,
             ipc::gateway_sessions::gateway_sessions_list,
             ipc::download::download_start,
             ipc::download::download_cancel,
@@ -816,6 +820,21 @@ pub fn run() {
             }
 
             tray::build(app);
+
+            // Auto-launch the AI Browser if the customer has opted in
+            // before. We push it onto a blocking task so a slow Chrome
+            // cold-start (1-3s on macOS, can stretch on Windows after
+            // login) doesn't delay the main window appearing. See
+            // `browser_cdp::auto_start_if_configured` for the policy
+            // (only when `BROWSER_CDP_URL` is set AND port 9222 is
+            // free).
+            tauri::async_runtime::spawn_blocking(|| {
+                match crate::ipc::browser_cdp::auto_start_if_configured() {
+                    Ok(true) => info!("AI Browser auto-started"),
+                    Ok(false) => {} // not configured / already running
+                    Err(e) => tracing::warn!(error = %e, "AI Browser auto-start skipped"),
+                }
+            });
 
             Ok(())
         })

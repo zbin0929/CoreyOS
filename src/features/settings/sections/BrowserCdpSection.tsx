@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Chrome, Loader2, LogIn, RotateCcw, Trash2 } from 'lucide-react';
+import { Chrome, Loader2, LogIn, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import {
-  browserCdpStatus,
-  browserCdpLaunch,
-  browserCdpStop,
+  browserAliasesList,
+  browserAliasesRemove,
+  browserAliasesUpsert,
   browserCdpClearCookies,
+  browserCdpClearDomain,
+  browserCdpLaunch,
+  browserCdpStatus,
+  browserCdpStop,
   ipcErrorMessage,
+  type BrowserAlias,
   type BrowserCdpStatus,
 } from '@/lib/ipc';
 
@@ -34,13 +39,20 @@ import { Section } from '../shared';
 export function BrowserCdpSection() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<BrowserCdpStatus | null>(null);
-  const [busy, setBusy] = useState<'launch' | 'stop' | 'clear' | null>(null);
+  const [busy, setBusy] = useState<'launch' | 'stop' | 'clear' | 'domain' | 'alias' | null>(
+    null,
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aliases, setAliases] = useState<BrowserAlias[]>([]);
+  const [newAlias, setNewAlias] = useState('');
+  const [newUrl, setNewUrl] = useState('');
 
   async function refresh() {
     try {
-      setStatus(await browserCdpStatus());
+      const [s, a] = await Promise.all([browserCdpStatus(), browserAliasesList()]);
+      setStatus(s);
+      setAliases(a);
     } catch (e) {
       setError(ipcErrorMessage(e));
     }
@@ -93,6 +105,54 @@ export function BrowserCdpSection() {
     try {
       setStatus(await browserCdpClearCookies());
       setMessage(t('settings.browser_cdp.cleared_msg'));
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onClearDomain(domain: string) {
+    setBusy('domain');
+    setError(null);
+    setMessage(null);
+    try {
+      setStatus(await browserCdpClearDomain(domain));
+      setMessage(t('settings.browser_cdp.cleared_domain_msg', { domain }));
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onAliasAdd() {
+    const alias = newAlias.trim();
+    const url = newUrl.trim();
+    if (!alias || !url) return;
+    setBusy('alias');
+    setError(null);
+    setMessage(null);
+    try {
+      await browserAliasesUpsert(alias, url);
+      setNewAlias('');
+      setNewUrl('');
+      setAliases(await browserAliasesList());
+      setMessage(t('settings.browser_cdp.alias_saved_msg', { alias }));
+    } catch (e) {
+      setError(ipcErrorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onAliasRemove(alias: string) {
+    setBusy('alias');
+    setError(null);
+    setMessage(null);
+    try {
+      await browserAliasesRemove(alias);
+      setAliases(await browserAliasesList());
     } catch (e) {
       setError(ipcErrorMessage(e));
     } finally {
@@ -250,15 +310,100 @@ export function BrowserCdpSection() {
                 {status.logged_in_domains.map((d) => (
                   <li
                     key={d}
-                    className="rounded-full border border-border bg-bg-elev-1 px-2 py-0.5 font-mono text-[11px]"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elev-1 py-0.5 pl-2 pr-1 font-mono text-[11px]"
                   >
-                    {d}
+                    <span>{d}</span>
+                    <button
+                      type="button"
+                      onClick={() => void onClearDomain(d)}
+                      disabled={busy !== null}
+                      title={t('settings.browser_cdp.clear_domain_tooltip', { domain: d })}
+                      className="flex h-4 w-4 items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-red-500/15 hover:text-red-500 disabled:opacity-40"
+                      data-testid={`browser-cdp-clear-domain-${d}`}
+                    >
+                      <Icon icon={X} size="xs" />
+                    </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
         )}
+
+        {/* Site aliases — "I'll say '店铺后台', you open <https://...>".
+            Editable table; the same store backs the
+            corey_browser_aliases_* MCP tools so the agent reads
+            customer-set bookmarks at chat time. */}
+        <div className="rounded-md border border-border bg-bg-elev-2 p-3 text-xs">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-medium text-fg">
+              {t('settings.browser_cdp.aliases_label')}
+            </span>
+            <span className="text-fg-subtle">
+              {t('settings.browser_cdp.aliases_count', { n: aliases.length })}
+            </span>
+          </div>
+          <p className="mb-2 text-fg-subtle">
+            {t('settings.browser_cdp.aliases_hint')}
+          </p>
+
+          {aliases.length > 0 && (
+            <ul className="mb-3 flex flex-col gap-1" data-testid="browser-cdp-aliases">
+              {aliases.map((a) => (
+                <li
+                  key={a.alias}
+                  className="flex items-center gap-2 rounded-md border border-border bg-bg-elev-1 px-2 py-1.5"
+                >
+                  <span className="min-w-[5rem] max-w-[10rem] truncate font-medium text-fg">
+                    {a.alias}
+                  </span>
+                  <span className="flex-1 truncate font-mono text-[11px] text-fg-subtle">
+                    {a.url}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void onAliasRemove(a.alias)}
+                    disabled={busy !== null}
+                    className="flex h-5 w-5 items-center justify-center rounded text-fg-muted transition-colors hover:bg-red-500/15 hover:text-red-500 disabled:opacity-40"
+                    title={t('settings.browser_cdp.alias_remove_tooltip')}
+                    data-testid={`browser-cdp-alias-remove-${a.alias}`}
+                  >
+                    <Icon icon={Trash2} size="xs" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={newAlias}
+              onChange={(e) => setNewAlias(e.target.value)}
+              placeholder={t('settings.browser_cdp.alias_name_ph')}
+              className="min-w-[6rem] flex-1 rounded-md border border-border bg-bg-elev-1 px-2 py-1 text-xs text-fg outline-none focus:border-gold-500"
+              maxLength={64}
+              data-testid="browser-cdp-alias-name"
+            />
+            <input
+              type="url"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              placeholder="https://..."
+              className="min-w-[10rem] flex-[2] rounded-md border border-border bg-bg-elev-1 px-2 py-1 font-mono text-xs text-fg outline-none focus:border-gold-500"
+              data-testid="browser-cdp-alias-url"
+            />
+            <Button
+              variant="ghost"
+              onClick={onAliasAdd}
+              disabled={busy !== null || !newAlias.trim() || !newUrl.trim()}
+              data-testid="browser-cdp-alias-add"
+            >
+              <Icon icon={Plus} size="xs" />
+              {t('settings.browser_cdp.alias_add')}
+            </Button>
+          </div>
+        </div>
 
         {/* Power-user disclosure: profile path + detected chrome */}
         {status && (

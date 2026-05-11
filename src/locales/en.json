@@ -747,6 +747,15 @@
       "logged_in_label": "Sites the AI remembers",
       "logged_in_empty": "No sign-in data yet. After you sign in to any system in the AI Browser, the matching domains will appear here.",
       "logged_in_running_hint": "Chrome is running (cookies database locked) — stop it to see the full sign-in list.",
+      "clear_domain_tooltip": "Forget sign-in for {{domain}} only",
+      "cleared_domain_msg": "Cleared sign-in cookies for {{domain}}.",
+      "aliases_label": "Site aliases (shortcut names the AI understands)",
+      "aliases_count": "{{n}} total",
+      "aliases_hint": "Once set, telling the AI \"open X\" jumps to the matching URL — no more pasting.",
+      "alias_name_ph": "Name (e.g. \"dashboard\")",
+      "alias_add": "Add",
+      "alias_remove_tooltip": "Remove this alias",
+      "alias_saved_msg": "Saved alias \"{{alias}}\".",
       "details_label": "Technical details"
     },
     "memory": {
