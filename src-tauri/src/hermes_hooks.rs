@@ -207,7 +207,7 @@ pub(crate) fn ensure_hook_registered_in(
     // we flipped it". A flip mandates a write even if the hook entry
     // itself is already present.
     let auto_accept_was_already_true = mapping
-        .get(&Value::String("hooks_auto_accept".into()))
+        .get(Value::String("hooks_auto_accept".into()))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
@@ -251,8 +251,8 @@ pub(crate) fn ensure_hook_registered_in(
             if has_corey {
                 // Entry present but we had to flip auto_accept;
                 // persist that change.
-                let serialised = serde_yaml::to_string(&root)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let serialised =
+                    serde_yaml::to_string(&root).map_err(io::Error::other)?;
                 fs_atomic::atomic_write(config_path, serialised.as_bytes(), Some(0o600))?;
                 return Ok(ConfigOutcome::AppendedHookSection);
             }
@@ -275,8 +275,7 @@ pub(crate) fn ensure_hook_registered_in(
 
     hooks.insert(event_key, Value::Sequence(new_list));
 
-    let serialised =
-        serde_yaml::to_string(&root).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let serialised = serde_yaml::to_string(&root).map_err(io::Error::other)?;
 
     // Cheap defence: if round-trip produced byte-identical source and
     // we thought we changed something, that's a bug in our diff logic
@@ -311,7 +310,7 @@ fn build_corey_entry(command: &str) -> Value {
 fn entry_matches_command(entry: &Value, command: &str) -> bool {
     entry
         .as_mapping()
-        .and_then(|m| m.get(&Value::String("command".into())))
+        .and_then(|m| m.get(Value::String("command".into())))
         .and_then(|v| v.as_str())
         .map(|c| c == command)
         .unwrap_or(false)
@@ -541,7 +540,7 @@ mod tests {
             list[0]
                 .as_mapping()
                 .expect("test")
-                .get(&Value::String("command".into()))
+                .get(Value::String("command".into()))
                 .expect("test")
                 .as_str()
                 .expect("test"),
@@ -581,7 +580,7 @@ mod tests {
         let commands: Vec<&str> = list
             .iter()
             .filter_map(|e| e.as_mapping())
-            .filter_map(|m| m.get(&Value::String("command".into())))
+            .filter_map(|m| m.get(Value::String("command".into())))
             .filter_map(|v| v.as_str())
             .collect();
         assert!(commands.contains(&"/other/hook.sh"));

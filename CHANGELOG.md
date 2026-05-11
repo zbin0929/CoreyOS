@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-12 — v0.2.12 · Hermes 0.13.0 upgrade + `/v1/runs` migration + anti-hallucination iron rules
+
+> 永不 patch Hermes 源码。把 Corey 的审批 UI / log 读取 / Windows 启动链路全部迁到 0.13 原生路径。补 SOUL.md 反虚构铁律堵 LLM 撒谎漏洞。
+
+### Shipped
+
+- **`/v1/runs` 端点完整迁移** — Corey 的 `chat_stream` 从 OpenAI-compat `/v1/chat/completions` 改走 Hermes-native `POST /v1/runs` + `GET /v1/runs/{run_id}/events` SSE。9 个 `RunEvent` 变体解析（`message.delta` / `tool.started` / `tool.completed` / `reasoning.available` / `approval.request` / `approval.responded` / `run.completed` / `run.failed` / `run.cancelled`），含 6 个单元测试。`chat_once` 保留走 `/v1/chat/completions`（单轮非流式）。前端 `ChatApprovalRequest` 加 `run_id` + `choices`；`ApprovalCard.tsx` + `useTalkMode.ts` 透传 `run_id`。`hermes_approval_respond` IPC 改 POST `/v1/runs/{run_id}/approval`。删除 `hermes_approval_pending`（无原生等价端点）。
+- **SOUL.md L0 元铁律 + corey-guards 物理拦截** — `src-tauri/assets/soul/corey_iron_rules.md`（marker-delimited 注入到 `~/.hermes/SOUL.md`）+ `src-tauri/assets/corey-guards/file-ops-guard.py`（pre_tool_call hook 覆盖 7 个保护路径前缀 + STRUCTURED/SHELL/CODE_TOOLS 三类工具）。Settings → 安全防护卡片显示 guard 状态 + 一键修复按钮。
+- **第二组 C 反虚构铁律** — 补堵 2026-05-11 实证发现的 LLM 长跑虚构漏洞（agent.log: 5 分 18 秒 / 0 工具调用 / 227 字符虚假"备份已完成"叙事）。3 条绝对禁止 + 工具调用 ↔ 陈述 1:1 对应规则 + 反模式表 +2 行 + 自检从 6→7 题。01:08 真人 UI 实测验证：agent 不再虚构，回复内容 100% 与 guard log 对齐。
+- **Hermes 升级 0.12.0 → 0.13.0** — 升级到 "The Tenacity Release" (2026.5.7, +1296 commits)。4 个 `patch_*` 函数从启动路径全部移除（标 `#[allow(dead_code)]` 保留备查）。`HERMES_MAX_TESTED` `(0, 12)` → `(0, 13)`，UI 不再显示 untested 黄条。
+
+### Fixed
+
+- **`errors.log` 文件名错位** — Hermes 0.13 写 `~/.hermes/logs/errors.log`（带 s），Corey 之前死读 `error.log` → Logs UI 错误页空白。改为 canonical-优先-legacy-fallback 路径解析 + 3 个新测试。
+- **Windows `gateway.lock` JSON pid 解析（PR #18179 适配）** — Hermes 0.13 把 `gateway.pid`（整数）改成 `gateway.lock`（JSON `{pid, kind, argv, start_time}`）。Corey Windows 端 `windows_gateway_stop` 之前死读 `gateway.pid` → 总是 fallback 到慢 powershell 端口杀进程。新增跨平台 `read_gateway_pid()` 帮助函数 + 6 个跨平台单元测试。
+- **`patch_approval_prompt_template` doctest 编译失败** — 该退役函数的 doc comment 含 ```` ``` ```` 嵌套被 Rust 当成 doctest 编译报错。改为 `text` 围栏 + 去掉内层反引号。
+- **15 个 clippy 错误** — 主要是从更早 commits 累积的 `needless_borrows_for_generic_args`（`hermes_hooks.rs`）/ `io_other_error`（`hermes_hooks.rs`）/ `doc_list_indentation`（`gateway.rs` + `browser_aliases.rs`）/ `unnecessary_sort_by`（`browser_aliases.rs`）/ `useless_vec`（`skill_curator.rs`）。CI 之前 4 次 push 都因为这堆累积红。
+
+### Bundle / build
+
+- **Bundle-size budget** `345 → 360 KB` gzip per chunk（主 chunk `index-*.js`）。Hermes 0.13 安全 feature surface（SOUL.md iron rules + corey-guards + SecuritySection + `/v1/runs` `RunEvent` IPC types + retired-patch back-compat shims）加了 ~8 KB gzip 到主 bundle。Settings 路由已是 lazy，但新代码经 `lib/ipc` barrel 漏到 chat / talk 热路径所在的 main chunk。下次 v0.3+ 代码裂分 round 再考虑收缩。
+
+### Deferred
+
+- **Windows 实机验收** — 所有 Windows-specific 改动都在 macOS 上跑过逻辑测试（6 个 `gateway_pid_tests` 跨平台），实机验收待下次 session 在真 Windows 上做。
+- **消息渠道审批提示英文硬编码** — Hermes 0.13 出了 7 个新 locale 但 `gateway/run.py:15066` 的 plain-text fallback 没翻。upstream gap，已记录，**不 patch**。
+- **`X-Hermes-Session-Key` 长期记忆 scope 头** — Hermes 0.13 新增。Corey 接入记忆 Provider（Honcho / Mem0 等）时再用。当前未传。
+
+---
+
 ## 2026-05-10 — v0.2.11 · Conversational product control (chat-driven LLM switch + deep-link buttons)
 
 > 把"对话即操控"做成基座能力。任何 Pack 自动继承——chat 里说话就能换模型、跳页面、调真工具。

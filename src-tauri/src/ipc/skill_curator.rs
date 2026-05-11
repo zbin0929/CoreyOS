@@ -149,7 +149,7 @@ mod tests {
         // compromised UI can't escape via this channel.
         // Test the validation logic directly without spawning a
         // tokio runtime.
-        let args = vec!["gateway".to_string(), "start".to_string()];
+        let args = ["gateway".to_string(), "start".to_string()];
         let sub = args[0].as_str();
         assert!(!ALLOWED_SUBCOMMANDS.contains(&sub));
     }

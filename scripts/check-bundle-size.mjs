@@ -34,8 +34,17 @@ import { gzipSync } from 'node:zlib';
  *  resolvable on cold boot for the sidebar.
  *  Budget set 9 KB above current to give the next two-three Pack
  *  features (v0.2.5 workflow hardening, v0.3.0 cross-border Pack
- *  base wiring) headroom before the next code-split round. */
-const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 345);
+ *  base wiring) headroom before the next code-split round.
+ *
+ *  2026-05-12: 345 → 360 KB. Hermes 0.13 security feature surface
+ *  (SOUL.md iron rules + corey-guards + SecuritySection settings
+ *  card + /v1/runs `RunEvent` IPC types + retired-patch back-compat
+ *  shims) added ~8 KB gzip to the main chunk. The Settings route is
+ *  already lazy via `lazyFeature`, but the new code touches the
+ *  `lib/ipc` barrel which is imported by chat / talk hot paths and
+ *  therefore lands in the main bundle. See CHANGELOG.md
+ *  v0.2.12 entry for the offsetting feature. */
+const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 360);
 const DIST_ASSETS = resolve(process.cwd(), 'dist', 'assets');
 
 function gzipKb(buf) {

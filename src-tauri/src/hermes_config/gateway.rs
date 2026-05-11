@@ -826,6 +826,7 @@ pub fn patch_dangerous_patterns() {
 /// - Hermes upstream updates to `gateway/run.py` that change this
 ///   anchor text will silently skip patching; we log a warning.
 /// - The patch is idempotent via a Chinese phrase marker.
+///
 /// **RETIRED 2026-05-11** (never landed in production — call sites
 /// removed same day it was added). Kept for reference. See
 /// `gateway_start` comment block.
