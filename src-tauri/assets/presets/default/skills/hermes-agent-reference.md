@@ -1,3 +1,52 @@
+---
+name: hermes-agent-reference
+description: >
+  Comprehensive reference for Hermes Agent — the AI runtime that
+  powers Corey. Covers architecture (gateway / agent loop / 47 tools
+  / MCP), `~/.hermes/` directory layout, full `config.yaml` and
+  `.env` reference, CLI + slash commands, Telegram/Discord/Slack
+  setup, the Skills system (YAML format + 3 creation paths), Memory
+  system (MEMORY.md / USER.md / SOUL.md / FTS5 / Honcho), MCP
+  integration, cron scheduling, the security model, and the list of
+  200+ supported models. Use this whenever the user asks about
+  Hermes internals, configuration, supported features, or "how does
+  X work" for any Hermes-side capability.
+version: 1.0.0
+author: Corey × Hermes Agent docs
+license: MIT
+triggers:
+  - hermes
+  - hermes agent
+  - hermes 配置
+  - hermes 怎么
+  - hermes 架构
+  - hermes cron
+  - hermes 如何
+  - cron 调度
+  - mcp 配置
+  - mcp server
+  - skills 系统
+  - 自动化 skill
+  - memory.md
+  - user.md
+  - soul.md
+  - .hermes 目录
+  - hermes home
+  - hermes config
+  - config.yaml
+  - hermes-cron
+  - 哪些模型
+  - 支持哪些模型
+  - hermes 模型
+  - hermes 文档
+  - hermes 手册
+  - 系统怎么配
+  - 底层怎么
+metadata:
+  hermes:
+    tags: [hermes, reference, system-docs, config, mcp, cron, memory]
+---
+
 # Hermes Agent Reference
 
 ## Overview
