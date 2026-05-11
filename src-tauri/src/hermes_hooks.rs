@@ -251,8 +251,7 @@ pub(crate) fn ensure_hook_registered_in(
             if has_corey {
                 // Entry present but we had to flip auto_accept;
                 // persist that change.
-                let serialised =
-                    serde_yaml::to_string(&root).map_err(io::Error::other)?;
+                let serialised = serde_yaml::to_string(&root).map_err(io::Error::other)?;
                 fs_atomic::atomic_write(config_path, serialised.as_bytes(), Some(0o600))?;
                 return Ok(ConfigOutcome::AppendedHookSection);
             }

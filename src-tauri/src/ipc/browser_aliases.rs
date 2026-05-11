@@ -224,7 +224,8 @@ pub async fn browser_aliases_list() -> IpcResult<Vec<BrowserAlias>> {
         let mut file = load_file()?;
         // Newest first — matches "what did I just teach the agent" UX
         // expectation in the Settings table.
-        file.entries.sort_by_key(|e| std::cmp::Reverse(e.updated_at));
+        file.entries
+            .sort_by_key(|e| std::cmp::Reverse(e.updated_at));
         Ok(file.entries)
     })
     .await
@@ -308,7 +309,8 @@ pub async fn browser_aliases_remove(args: RemoveArgs) -> IpcResult<bool> {
 /// because the MCP layer is already blocking-pool friendly.
 pub(crate) fn list_sync() -> IpcResult<Vec<BrowserAlias>> {
     let mut file = load_file()?;
-    file.entries.sort_by_key(|e| std::cmp::Reverse(e.updated_at));
+    file.entries
+        .sort_by_key(|e| std::cmp::Reverse(e.updated_at));
     Ok(file.entries)
 }
 

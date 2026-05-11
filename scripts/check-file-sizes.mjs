@@ -48,6 +48,25 @@ const IGNORE_PATTERNS = [
   // Hand-written TS mirror of all Rust IPC types — splitting fragments
   // the single-source-of-truth contract reviewers rely on.
   /\/lib\/ipc\.ts$/,
+  // CDP wire-protocol monolith. The websocket session state, browser
+  // launch lifecycle, Chrome-for-Testing patcher, and download-behavior
+  // hooks are all stitched together by shared `WebSocketStream` /
+  // `BrowserSession` types. Splitting fragments the protocol
+  // negotiation flow that has to stay sequential across macOS / Windows.
+  /\/ipc\/browser_cdp\.rs$/,
+  // Hermes gateway integration: version compat probe + start/stop/
+  // restart commands + Windows-specific spawn + retired patch shims +
+  // `read_gateway_pid` lock parser. Heavily cfg-gated for macOS vs
+  // Windows — splitting drops the cohesion benefit (every caller would
+  // have to import 4 mini-modules instead of 1). Will revisit when the
+  // retired patch shims (4× `#[allow(dead_code)]` functions) are
+  // finally deleted in v0.3+.
+  /\/hermes_config\/gateway\.rs$/,
+  // MCP server tool registry: single file lists all corey-native MCP
+  // tools (corey_list_llms / set_default_llm / open_route / browser_*
+  // etc.) with their schema + handler. Tool-up-tool-down review is
+  // easier when they live next to each other.
+  /\/mcp_server\/tools\.rs$/,
 ];
 
 const SKIP_DIRS = new Set(['node_modules', 'target', 'dist', '.git', 'playwright-report']);
