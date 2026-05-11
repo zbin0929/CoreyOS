@@ -119,7 +119,10 @@ fn profile_dir() -> IpcResult<PathBuf> {
 /// the JSON API is ready; the cheap TCP probe is good enough for "is
 /// something there?".
 fn port_is_listening(port: u16) -> bool {
-    let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
+    // Constructing the address by hand avoids the `parse().unwrap()`
+    // antipattern (clippy::unwrap_used gate) — and is arguably clearer:
+    // we know exactly which loopback we want.
+    let addr = SocketAddr::from((std::net::Ipv4Addr::new(127, 0, 0, 1), port));
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
