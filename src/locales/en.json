@@ -762,6 +762,23 @@
       "alias_saved_msg": "Saved alias \"{{alias}}\".",
       "details_label": "Technical details"
     },
+    "curator": {
+      "title": "Skill Curator",
+      "desc": "Hermes runs a background maintenance pass every 7 days: marks unused skills stale, archives skills idle for 90 days, and asks an aux model to consolidate near-duplicates. From here you can run it on demand, pause / resume, pin a skill so the AI cannot modify it, or restore an archived one.",
+      "cli_missing": "Hermes CLI not detected. Install Hermes to use the Curator.",
+      "status_label": "Current status",
+      "refresh": "Refresh status",
+      "empty": "Curator hasn't run yet, or there are no agent-created skills to maintain.",
+      "run": "Run review now",
+      "pause": "Pause",
+      "resume": "Resume",
+      "pin_label": "Pin a skill",
+      "pin_hint": "Pinned skills are off-limits to skill_manage writes and to the curator's auto-transitions. Use this for skills you authored yourself and don't want the AI to overwrite.",
+      "pin_ph": "skill name (e.g. amazon-weekly-report)",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "restore": "Restore from archive"
+    },
     "memory": {
       "title": "Memory / Learning",
       "description": "Hermes ships with a holographic memory plugin: at every session end it auto-extracts key facts into a local store. Across sessions the agent learns more about you. Below shows what's accumulated and lets you edit your user profile.",

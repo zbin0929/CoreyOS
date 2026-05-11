@@ -21,6 +21,7 @@ import { CustomerSection } from './sections/CustomerSection';
 import { PacksSection } from './sections/PacksSection';
 import { LicenseSection } from './sections/LicenseSection';
 import { MemorySection } from './sections/MemorySection';
+import { SkillCuratorSection } from './sections/SkillCuratorSection';
 import { RoutingRulesSection } from './sections/RoutingRulesSection';
 import { HermesToolPermissionsSection } from './sections/HermesToolPermissionsSection';
 import { HermesUpdateSection } from './sections/HermesUpdateSection';
@@ -126,6 +127,14 @@ export function SettingsRoute() {
               long-term memory across sessions. Both are powered by
               Hermes infrastructure that Corey doesn't own. */}
           <MemorySection />
+
+          {/* Skill Curator (Hermes upstream) — surfaces the
+              background skill-maintenance pass so users can
+              run it on demand, inspect LRU/staleness, and pin
+              skills they don't want auto-edited. Companion to
+              MemorySection above since both expose Hermes
+              long-term state. */}
+          <SkillCuratorSection />
 
           {/* T6.4 — routing rules. Sits next to Hermes instances since
               routing most commonly picks between them. */}

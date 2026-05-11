@@ -761,6 +761,23 @@
       "alias_saved_msg": "别名“{{alias}}”已保存。",
       "details_label": "技术细节"
     },
+    "curator": {
+      "title": "技能维护（Curator）",
+      "desc": "Hermes 后台 7 天一次自动巡检：把不常用的 skill 标记为陈旧、90 天没动归档；用辅助模型审视有重复的可不可以合并。这里能立刻跑一次、暂停 / 恢复、锁定不让 AI 改、把误归档的拉回来。",
+      "cli_missing": "未检测到 hermes 命令。请先安装 Hermes 才能用 Curator。",
+      "status_label": "当前状态",
+      "refresh": "重新拉取状态",
+      "empty": "还没有运行过 curator，或还没有 agent-created skill 需要维护。",
+      "run": "立刻跑一次",
+      "pause": "暂停",
+      "resume": "恢复",
+      "pin_label": "锁定一个 skill",
+      "pin_hint": "锁定后 AI 的 skill_manage 工具改不了它，Curator 也不会自动归档。常用于你自己手写、不想被 AI 覆盖的 skill。",
+      "pin_ph": "skill 名称（如 amazon-weekly-report）",
+      "pin": "锁定",
+      "unpin": "解锁",
+      "restore": "从归档恢复"
+    },
     "memory": {
       "title": "记忆 / 学习",
       "description": "Hermes 自带 holographic 记忆插件：每次对话结束自动抽取关键 fact 入库，跨会话越用越懂你。下方可看积累情况，并直接编辑你的用户画像。",

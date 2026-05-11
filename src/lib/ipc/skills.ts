@@ -157,6 +157,24 @@ export function skillHubExec(args: string[]): Promise<HubCommandResult> {
   return invoke<HubCommandResult>('skill_hub_exec', { args });
 }
 
+// ─── Skill curator (Hermes background maintenance) ──────────────
+// Thin wrapper over `hermes curator <subcmd>`. Same shape as the hub
+// wrapper above; same allowlist enforced server-side.
+
+export interface CuratorCommandResult {
+  stdout: string;
+  stderr: string;
+  status: number;
+  cli_available: boolean;
+}
+
+/** Allowed first-args (server enforces a matching allowlist):
+ *  `status`, `run`, `pause`, `resume`, `pin`, `unpin`, `restore`.
+ *  Pin / unpin / restore take a second arg = skill name. */
+export function skillCuratorExec(args: string[]): Promise<CuratorCommandResult> {
+  return invoke<CuratorCommandResult>('skill_curator_exec', { args });
+}
+
 // ───────────────────────── Memory (T7.3) ─────────────────────────
 
 /** Which of the two Markdown files under `~/.hermes/` is being edited.

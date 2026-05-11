@@ -208,6 +208,7 @@ pub fn run() {
             ipc::skills::skill_version_list,
             ipc::skills::skill_version_get,
             ipc::skill_hub::skill_hub_exec,
+            ipc::skill_curator::skill_curator_exec,
             ipc::attachments::attachment_stage_blob,
             ipc::attachments::attachment_stage_path,
             ipc::attachments::attachment_delete,
