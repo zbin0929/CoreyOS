@@ -1047,6 +1047,8 @@
     "empty_desc": "每个选中的模型都会并行跑同一 prompt。泳道将在下方出现，显示流式输出、单泳道时延与胜者标注。"
   },
   "chat": {
+    "artifact_open": "打开",
+    "artifact_reveal": "在资源管理器中显示",
     "reasoning": {
       "thinking": "推理中…",
       "thought": "推理过程"

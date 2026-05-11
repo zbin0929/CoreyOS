@@ -1048,6 +1048,8 @@
     "empty_desc": "Each selected model runs the same prompt in parallel. Lanes appear here with streaming output, per-lane latency, and winner highlights."
   },
   "chat": {
+    "artifact_open": "Open",
+    "artifact_reveal": "Reveal in Finder",
     "reasoning": {
       "thinking": "Thinking…",
       "thought": "Thought process"

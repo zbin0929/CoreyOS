@@ -11,6 +11,13 @@
 id: default
 name: Default starter
 description: >
-  Generic skills + a filesystem MCP for basic file access. Good enough
-  to start chatting with; swap or extend once you know what you need.
-version: 1
+  Generic chat skills (explain / translate / summarize / commit), four
+  trusted Anthropic document-authoring skills (xlsx, docx, pdf, pptx)
+  so the agent can produce real Excel / Word / PDF / PowerPoint files
+  out of the box, plus a filesystem MCP for basic file access. Good
+  enough to start chatting with; swap or extend once you know what you
+  need.
+# Bump this when adding/removing bundled skills. The frontend uses it
+# to decide whether re-running preset_install is worthwhile for an
+# already-onboarded user (next-skill-bundle freshness vs no-op).
+version: 2

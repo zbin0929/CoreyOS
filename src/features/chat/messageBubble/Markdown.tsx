@@ -8,7 +8,8 @@ import { cn } from '@/lib/cn';
 
 import { highlightCode } from '../highlight';
 import { ArtifactBlock } from './ArtifactBlock';
-import { shouldRenderAsArtifact } from './artifactHelpers';
+import { ArtifactLinkCard } from './ArtifactLinkCard';
+import { parseArtifactUrl, shouldRenderAsArtifact } from './artifactHelpers';
 import { TableArtifact } from './TableArtifact';
 
 /**
@@ -107,6 +108,15 @@ export function Markdown({ children }: { children: string }) {
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
           a: ({ href, children }) => {
+            // `corey://artifact/<run>/<name>` → render an inline file
+            // card with Open / Reveal-in-Finder buttons. The agent is
+            // taught (base soul) to emit this scheme right after a
+            // save_artifact call so the user has a one-click path to
+            // the xlsx / pdf / etc. without leaving chat.
+            const art = parseArtifactUrl(href);
+            if (art) {
+              return <ArtifactLinkCard runId={art.runId} name={art.name} />;
+            }
             // Internal route → render as a deep-link pill that drives
             // the in-app router. The chat agent uses `[label](/route)`
             // syntax to hand control back to the user ("决策归还")

@@ -283,12 +283,23 @@ pub fn manifest() -> Vec<Value> {
         }),
         json!({
             "name": "save_artifact",
-            "description": "Persist a text file under the current run's \
+            "description": "Persist a file under the current run's \
                 artifact directory (`~/.hermes/artifacts/<run_id>/<name>`). \
-                Use when the user asks you to save something — a CSV, a \
-                markdown report, a generated config — instead of dumping \
-                a wall of text into chat. The file is then visible in the \
-                /tasks detail panel with one-click open / reveal in Finder.\n\n\
+                **You MUST call this after every file you produce** — a \
+                CSV, a markdown report, an .xlsx / .pdf / .docx / .pptx \
+                from the document-authoring skills, a generated config. \
+                Without this step the file lives only in the sandbox \
+                and the user has no way to find it. Once saved, the \
+                file shows up in the /tasks detail panel with one-click \
+                open / reveal in Finder, and your chat reply should \
+                include a markdown link the user can click straight to \
+                it (see Soul for the link format).\n\n\
+                **Text vs binary**: provide `content` for plain text \
+                (md/csv/json) — the bytes are written as UTF-8. Provide \
+                `source_path` (absolute path the agent already wrote \
+                to in its sandbox) for binary formats (xlsx/pdf/pptx/\
+                docx/png/jpg). Set exactly one; `source_path` wins if \
+                both are set.\n\n\
                 If you don't have a `run_id` (typical for ad-hoc chats), \
                 pass the literal string `chat` and the file lands under \
                 `artifacts/chat/`. Same name overwrites; pick a different \
@@ -299,18 +310,22 @@ pub fn manifest() -> Vec<Value> {
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Filename (no slashes; we sanitise but don't path-join). Include the extension so previewers know the type — `report-2026-05.md`, `weekly-revenue.csv`, etc."
+                        "description": "Filename (no slashes; we sanitise but don't path-join). Include the extension so previewers know the type — `report-2026-05.md`, `weekly-revenue.csv`, `q3-budget.xlsx`, etc."
                     },
                     "content": {
                         "type": "string",
-                        "description": "Text content. Binary blobs aren't supported here — base64 + a `.b64.txt` extension is the workaround."
+                        "description": "Inline text content (UTF-8). Use for md/csv/json/yaml. Pass `source_path` instead for binary."
+                    },
+                    "source_path": {
+                        "type": "string",
+                        "description": "Absolute path the file already exists at in the sandbox (e.g. `/tmp/report.xlsx` after running an openpyxl script). Bytes are copied verbatim. Use for xlsx / pdf / pptx / docx / images."
                     },
                     "run_id": {
                         "type": "string",
                         "description": "Workflow run id from `run_workflow` / `list_active_runs`. Use the literal `chat` for non-workflow contexts."
                     }
                 },
-                "required": ["name", "content"]
+                "required": ["name"]
             }
         }),
         json!({
@@ -1144,7 +1159,15 @@ enum AppendOutcome {
 #[derive(Debug, Deserialize)]
 struct SaveArtifactArgs {
     name: String,
-    content: String,
+    /// Inline text (utf-8). Either this OR `source_path` must be set.
+    #[serde(default)]
+    content: Option<String>,
+    /// Absolute path the agent already wrote the file to in its
+    /// sandbox. Used for binary formats (xlsx, pdf, pptx, docx, png).
+    /// The bytes are read once and copied into the artifact store;
+    /// the source file is left in place.
+    #[serde(default)]
+    source_path: Option<String>,
     #[serde(default)]
     run_id: Option<String>,
 }
@@ -1160,10 +1183,31 @@ async fn save_artifact(args: Value) -> Result<String, (i32, String)> {
         .unwrap_or("chat")
         .to_string();
     let name = args.name.clone();
-    let content = args.content.clone();
+
+    // Resolve the bytes-to-write up front so the rest of the function
+    // doesn't have to branch on text vs binary. `source_path` wins
+    // when both are set — that's the binary path and the more
+    // common case for the document-authoring skills (xlsx/pdf/...).
+    let bytes: Vec<u8> = match (&args.source_path, &args.content) {
+        (Some(p), _) => {
+            let path = p.clone();
+            tokio::task::spawn_blocking(move || std::fs::read(&path))
+                .await
+                .map_err(|e| (-32603, format!("read source_path join: {e}")))?
+                .map_err(|e| (-32602, format!("read source_path {p}: {e}")))?
+        }
+        (None, Some(text)) => text.clone().into_bytes(),
+        (None, None) => {
+            return Err((
+                -32602,
+                "save_artifact: provide either `content` (text) or `source_path` (binary file)"
+                    .into(),
+            ));
+        }
+    };
 
     let info = tokio::task::spawn_blocking(move || {
-        crate::artifacts::write_artifact(&run_id, &name, content.as_bytes())
+        crate::artifacts::write_artifact(&run_id, &name, &bytes)
     })
     .await
     .map_err(|e| (-32603, format!("save_artifact join: {e}")))?
