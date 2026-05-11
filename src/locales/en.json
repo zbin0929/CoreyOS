@@ -934,15 +934,23 @@
       "save": "Save"
     },
     "hermes_update": {
-      "title": "Hermes updates",
-      "desc": "Check if a newer version of Hermes Agent is available. Run 'hermes update' in a terminal to upgrade.",
+      "title": "Hermes management",
+      "desc": "Check, upgrade, and restart the standalone Hermes Agent on your machine (Corey and Hermes are separate apps, upgraded independently).",
       "check": "Check for updates",
+      "restart": "Restart gateway",
+      "restart_hint": "Restart Hermes Gateway to pick up the latest config (macOS: launchd; Windows: spawn fresh process).",
+      "restart_running": "Restarting… typically 2–5 seconds.",
+      "restart_done": "Gateway restarted.",
+      "upgrade": "Upgrade Hermes",
+      "upgrade_hint": "Re-run the bootstrap installer (git pull + refresh deps; auto-selects macOS / Windows script). May prompt for admin.",
+      "upgrade_running": "Upgrading… an install window has opened — watch the terminal for progress.",
+      "upgrade_done": "Upgrade complete.",
       "idle": "Not checked yet",
       "checking": "Checking…",
       "not_installed": "Hermes CLI not found",
       "up_to_date": "Up to date (v{{version}})",
-      "available": "Update available: v{{current}} → v{{latest}}. Run 'hermes update' in a terminal to upgrade.",
-      "available_unknown_latest": "Update available for v{{current}} (latest version not reported by CLI). Run 'hermes update' in a terminal to upgrade."
+      "available": "Update available: v{{current}} → v{{latest}}. Click 'Upgrade Hermes' below to install.",
+      "available_unknown_latest": "Update available for v{{current}} (latest version not reported by CLI). Click 'Upgrade Hermes' below to install."
     },
     "model": {
       "title": "Default language model",

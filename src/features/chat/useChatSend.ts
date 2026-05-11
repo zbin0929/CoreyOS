@@ -29,6 +29,7 @@ import { useAgentsStore } from '@/stores/agents';
 import { useComposerStore } from '@/stores/composer';
 import { useRoutingStore } from '@/stores/routing';
 
+import { ACTIVE_STREAMS } from './activeStreams';
 import { enrichHistoryWithContext } from './enrichHistory';
 import { canRetryLastAssistant } from './retryGuard';
 import { resolveRoutedRule } from './routing';
@@ -153,14 +154,40 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
   const [draft, setDraft] = useState<string>(
     () => useComposerStore.getState().pendingDraft ?? '',
   );
-  const [sending, setSending] = useState(false);
+  // `sending` is **derived** from messages.some(role==='assistant' && pending),
+  // not a useState. Why: a /chat route unmount (user switches to
+  // /settings mid-stream) tears the component down but the Tauri SSE
+  // task + listener stay alive; the global store keeps receiving
+  // deltas. On remount, useState would reset to `false` and the
+  // Composer would render the "send" button instead of "stop", making
+  // the user think the chat terminated. Deriving from store keeps
+  // the UI source-of-truth one place.
+  const sending = messages.some((m) => m.role === 'assistant' && m.pending);
   const [pendingApproval, setPendingApproval] = useState<ChatApprovalRequest | null>(null);
   const { voiceRecording, onVoiceStart, onVoiceStop } = useVoiceDraft({ setDraft });
 
-  // Live handle for the current stream, so Stop can cancel it.
-  const streamRef = useRef<ChatStreamHandle | null>(null);
+  // Live handle for the current stream, so Stop can cancel it. Mirrors
+  // into the module-level `ACTIVE_STREAMS` map so unmount/remount
+  // doesn't lose the cancel target.
+  const streamRef = useRef<ChatStreamHandle | null>(
+    ACTIVE_STREAMS.get(sessionId) ?? null,
+  );
   // Also track the pending id to null-out the spinner on stop.
-  const pendingRef = useRef<string | null>(null);
+  // Initialise from messages: if there's a trailing pending assistant
+  // bubble, that's our remount target.
+  const trailingPendingId =
+    messages
+      .slice()
+      .reverse()
+      .find((m) => m.role === 'assistant' && m.pending)?.id ?? null;
+  const pendingRef = useRef<string | null>(trailingPendingId);
+
+  // No-op shim that replaces the old `setSending` setState. Stream
+  // callbacks still call `setSending(false)` on done/error/stop —
+  // sending is now derived, so flipping it is the patchMessage call
+  // that already runs in those branches (sets `pending: false`).
+  // We keep the function signature so call sites don't need to change.
+  const setSending = (_v: boolean) => {};
 
   // T4.4b — breaches flagged by the budget gate on the LAST send
   // attempt. Re-populated (or cleared) every time send() runs so the
@@ -348,6 +375,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
         callbacks,
       );
       streamRef.current = handle;
+      ACTIVE_STREAMS.set(sessionId, handle);
     } catch (e) {
       patchMessage(sessionId, pendingId, {
         content: '',
@@ -357,6 +385,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
       setSending(false);
       streamRef.current = null;
       pendingRef.current = null;
+      ACTIVE_STREAMS.delete(sessionId);
     }
   }
 
@@ -427,6 +456,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
         callbacks,
       );
       streamRef.current = handle;
+      ACTIVE_STREAMS.set(sessionId, handle);
     } catch (e) {
       patchMessage(sessionId, targetId, {
         content: '',
@@ -436,14 +466,16 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
       setSending(false);
       streamRef.current = null;
       pendingRef.current = null;
+      ACTIVE_STREAMS.delete(sessionId);
     }
   }
 
   async function stop() {
-    const handle = streamRef.current;
+    const handle = streamRef.current ?? ACTIVE_STREAMS.get(sessionId) ?? null;
     const pendingId = pendingRef.current;
     streamRef.current = null;
     pendingRef.current = null;
+    ACTIVE_STREAMS.delete(sessionId);
     setSending(false);
     if (handle) await handle.cancel();
     // Keep whatever content we got; drop the "thinking" state.

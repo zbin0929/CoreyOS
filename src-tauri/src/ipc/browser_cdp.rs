@@ -409,6 +409,49 @@ fn prepare_ai_browser_macos() -> Option<PathBuf> {
     None
 }
 
+/// Sentinel file path the customer (or Settings → AI Browser → Stop)
+/// writes when they want AI Browser to **stay off**, even at boot.
+/// Without this file, [`auto_start_if_configured`] now defaults to
+/// auto-starting the browser on every Corey boot — see the comment on
+/// that function for rationale (cross-platform UX parity:
+/// agent-driven browsing must "just work" out of the box on Windows
+/// and macOS alike, without requiring the customer to first click
+/// Settings → AI Browser → Launch).
+fn disabled_sentinel_path() -> PathBuf {
+    crate::paths::hermes_data_dir()
+        .map(|d| d.join(".corey").join("ai-browser-disabled"))
+        .unwrap_or_else(|_| PathBuf::from(".corey/ai-browser-disabled"))
+}
+
+/// Returns true if the customer explicitly opted out of AI Browser
+/// auto-start (sentinel file exists from a prior `Stop` action).
+fn is_disabled() -> bool {
+    disabled_sentinel_path().exists()
+}
+
+/// Mark AI Browser as explicitly disabled (called by `stop_sync`).
+/// Writes the sentinel so subsequent boots skip the auto-spawn.
+fn write_disabled_sentinel() {
+    let path = disabled_sentinel_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Err(e) = std::fs::write(&path, b"disabled by Settings -> AI Browser -> Stop\n") {
+        tracing::warn!(error = %e, path = %path.display(), "write ai-browser-disabled sentinel failed");
+    }
+}
+
+/// Clear the disabled sentinel (called by `launch_sync` /
+/// `ensure_running_background`). Re-arms boot auto-start.
+fn clear_disabled_sentinel() {
+    let path = disabled_sentinel_path();
+    if path.exists() {
+        if let Err(e) = std::fs::remove_file(&path) {
+            tracing::warn!(error = %e, path = %path.display(), "clear ai-browser-disabled sentinel failed");
+        }
+    }
+}
+
 fn env_configured() -> bool {
     matches!(
         hermes_config::read_env_value("BROWSER_CDP_URL"),
@@ -438,27 +481,44 @@ pub(crate) fn build_status() -> BrowserCdpStatus {
 }
 
 /// Boot-time auto-launch hook. Spawns the dedicated Chrome silently
-/// when, **and only when**, the customer has previously opted in (env
-/// var present in `~/.hermes/.env`) AND nothing is currently listening
-/// on the CDP port. This is the answer to "I shouldn't have to click
-/// 'Open AI Browser' every time I start Corey": once the customer has
-/// signed in once via Settings, the dedicated Chrome quietly comes up
-/// on every subsequent launch.
+/// on every Corey boot **unless** the customer explicitly opted out
+/// via Settings → AI Browser → Stop (which writes a sentinel file —
+/// see [`disabled_sentinel_path`]).
 ///
-/// **Why we DON'T auto-launch when env is missing**: that would mean a
-/// foreground Chrome window appears the first time someone opens Corey
-/// after install, which is jarring (the panel hasn't had a chance to
-/// explain what's happening). The Settings panel is the explicit
-/// opt-in; this hook is the implicit reactivation.
+/// **Why we now auto-start by default** (changed in v0.2.13):
+/// without `BROWSER_CDP_URL` set, Hermes' `browser_*` tools fall back
+/// to the built-in *headless* Chromium, whose TLS / HTTP-2 fingerprint
+/// gets blocked by Akamai-class WAFs (UPS / FedEx / Amazon Seller
+/// Central) before any JS runs. The agent then "executes shell
+/// commands" or "delegates the task" instead of just browsing — a
+/// surprising behaviour gap between macOS (where the env was
+/// historically auto-written by an opt-in flow) and Windows (where
+/// most users never clicked the explicit opt-in button). Defaulting
+/// to enabled gives parity: AI-driven browsing works on both
+/// platforms out of the box.
 ///
-/// **Cheap side-effects only**: no env writes, no gateway restart,
-/// no `IpcResult` plumbing. Returns `Ok(true)` on a successful spawn,
-/// `Ok(false)` for "intentionally skipped" (env not configured or port
-/// already taken), `Err(...)` for a real failure (Chrome detected but
-/// spawn refused, etc.) so the caller can log a `warn!` without
-/// crashing app boot.
+/// **First-boot UX**: on macOS the patched LSBackgroundOnly Chrome
+/// bundle keeps the window invisible from the start. On Windows the
+/// regular Chrome briefly flashes in the corner before
+/// `ShowWindow(SW_HIDE)` hides it (~800 ms). Acceptable cost for the
+/// "AI can browse" win.
+///
+/// **Auto-write `BROWSER_CDP_URL`**: if the spawn succeeds and the env
+/// var is absent / mismatched, we write it to `~/.hermes/.env`. We do
+/// NOT auto-restart the Hermes Gateway here — at Corey boot the
+/// gateway may not be running yet, and even if it is, restarting
+/// during app boot just to pick up the env adds 2-3s to startup. The
+/// gateway picks up the new value on its next natural restart.
+///
+/// **Cheap side-effects only**: no `IpcResult` plumbing. Returns
+/// `Ok(true)` on a successful spawn, `Ok(false)` for "intentionally
+/// skipped" (sentinel says disabled, or port already taken),
+/// `Err(...)` for a real failure (Chrome detected but spawn refused,
+/// etc.) so the caller can log a `warn!` without crashing app boot.
 pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
-    if !env_configured() {
+    if is_disabled() {
+        // Customer explicitly stopped the AI Browser via Settings.
+        // Respect that across boots until they click Launch again.
         return Ok(false);
     }
     if port_is_listening(CDP_PORT) {
@@ -523,6 +583,26 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
                 "auto_start: apply_cdp_post_launch failed (will fall back to system Downloads + visible window): {e}"
             );
         }
+        // Write BROWSER_CDP_URL into ~/.hermes/.env if missing or
+        // wrong. This is what makes Hermes Gateway's `browser_*`
+        // tools attach to OUR Chrome instead of falling back to the
+        // built-in headless Chromium (which Akamai-class WAFs
+        // fingerprint-block on UPS / FedEx / Amazon Seller Central).
+        // Pre-v0.2.13 the env was only written when the customer
+        // clicked Settings → AI Browser → Launch, which left every
+        // Windows user with the headless fallback by default.
+        let cdp_url = format!("http://localhost:{CDP_PORT}");
+        let needs_write = match hermes_config::read_env_value("BROWSER_CDP_URL") {
+            Ok(Some(v)) => v.trim() != cdp_url,
+            _ => true,
+        };
+        if needs_write {
+            if let Err(e) = hermes_config::write_env_key("BROWSER_CDP_URL", Some(&cdp_url), None) {
+                tracing::warn!(error = %e, "auto_start: write BROWSER_CDP_URL failed");
+            } else {
+                tracing::info!("auto_start: wrote BROWSER_CDP_URL={cdp_url} to ~/.hermes/.env");
+            }
+        }
     }
     Ok(true)
 }
@@ -552,6 +632,11 @@ pub(crate) fn ensure_running_background(
     journal: &Path,
     restart_gateway: bool,
 ) -> IpcResult<BrowserCdpLaunchResult> {
+    // Agent-driven launch (`corey_browser_launch` MCP tool) is also an
+    // explicit "want it on" signal — clear the disable sentinel so the
+    // next Corey boot continues the auto-start.
+    clear_disabled_sentinel();
+
     let dir = profile_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| IpcError::Internal {
         message: format!("create profile dir {}: {e}", dir.display()),
@@ -726,6 +811,10 @@ pub(crate) fn launch_sync(
     journal: &Path,
     restart_gateway: bool,
 ) -> IpcResult<BrowserCdpLaunchResult> {
+    // Explicit Launch click clears any prior "explicitly stopped" sentinel
+    // so future boots auto-start AI Browser again.
+    clear_disabled_sentinel();
+
     let dir = profile_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| IpcError::Internal {
         message: format!("create profile dir {}: {e}", dir.display()),
@@ -859,6 +948,11 @@ pub async fn browser_cdp_stop(state: State<'_, AppState>) -> IpcResult<BrowserCd
 }
 
 pub(crate) fn stop_sync(journal: &Path, restart_gateway: bool) -> IpcResult<BrowserCdpStatus> {
+    // Persist the explicit-disable signal so [`auto_start_if_configured`]
+    // skips the boot-time spawn on next Corey launch. Without this,
+    // v0.2.13's default-on auto-start would respawn AI Browser at every
+    // boot, ignoring the customer's explicit Stop click.
+    write_disabled_sentinel();
     hermes_config::write_env_key("BROWSER_CDP_URL", None, Some(journal)).map_err(|e| {
         IpcError::Internal {
             message: format!("clear BROWSER_CDP_URL: {e}"),

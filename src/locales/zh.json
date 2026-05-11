@@ -933,15 +933,23 @@
       "save": "保存"
     },
     "hermes_update": {
-      "title": "Hermes 更新",
-      "desc": "检查是否有新版本 Hermes Agent。在终端运行 'hermes update' 即可升级。",
+      "title": "Hermes 管理",
+      "desc": "检查、升级并重启你机器上独立运行的 Hermes Agent（Corey 与 Hermes 是两个独立软件，分别升级）。",
       "check": "检查更新",
       "idle": "尚未检查",
       "checking": "检查中…",
       "not_installed": "未找到 Hermes CLI",
       "up_to_date": "已是最新版（v{{version}}）",
-      "available": "有新版本：v{{current}} → v{{latest}}。在终端运行 'hermes update' 升级。",
-      "available_unknown_latest": "当前 v{{current}} 检测到有更新（CLI 未返回最新版本号）。在终端运行 'hermes update' 升级。"
+      "available": "有新版本：v{{current}} → v{{latest}}。点下方「立即升级」一键安装。",
+      "available_unknown_latest": "当前 v{{current}} 检测到有更新（CLI 未返回最新版本号）。点下方「立即升级」一键安装。",
+      "restart": "重启 Gateway",
+      "restart_hint": "重启 Hermes Gateway，让新配置生效（macOS：launchd / Windows：spawn 新进程）。",
+      "restart_running": "重启中… 这通常需要 2–5 秒",
+      "restart_done": "Gateway 已重启。",
+      "upgrade": "立即升级 Hermes",
+      "upgrade_hint": "重新运行 bootstrap 安装脚本，git pull + 刷新依赖（macOS / Windows 自动选脚本）。可能需要管理员权限。",
+      "upgrade_running": "升级中… 安装窗口已弹出，请在终端中观察进度。",
+      "upgrade_done": "升级完成。"
     },
     "model": {
       "title": "默认语言模型",

@@ -6,6 +6,48 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-12 — v0.2.13 · 铁律 + Hermes 管理面板 + Windows AI 浏览器开箱即用 + 切 tab 不断流 + Win guard 真生效
+
+> Pack 永不打包进 release。Hermes 管理走 UI 面板，跨平台（mac launchd / win bootstrap）。AI 浏览器从"opt-in"翻成"opt-out"，让 Windows 跟 macOS 出厂行为对齐。两个 v0.2.12 bug 实测捕获并修复：(1) chat 流中切 tab 切回来感觉"终止"；(2) Win guard 因为 `.py` shebang 不能跑而完全不拦截。
+
+### Shipped
+
+- **🚨 铁律：发布版永不打包 Pack** — `tauri.conf.json` 移除 `assets/skill-packs/**/*` 资源。从此**任何 release（v0.2.13+）的 `.dmg` / `.msi` 不会再含有任何 Pack**。Pack 分发走独立通道（pack store / Hermes skill install / 用户手动 import），跟 app 安装包解耦。源码树 `src-tauri/assets/skill-packs/` 保留供 dev 模式 + 测试使用，但不再进 binary。**老用户**机器上 `~/.hermes/skill-packs/` 里历史版本 copy 进去的 pack（如 `corey_starter` / `cross_border_ecom` / `meizheng`）保持原样，由用户决定是否删除。
+- **Hermes 管理面板 UI**（Settings → "Hermes 管理"）— 三个跨平台按钮：
+  - **「检查更新」** — 调 `hermes update --check`（已存在，仅文案更新）
+  - **「重启 Gateway」** — 调 `hermesGatewayRestart()` IPC，macOS 走 `hermes gateway restart`，Windows 走 `windows_gateway_spawn`（基于今晚 v0.2.12 写的 `gateway.lock` JSON pid 解析）。这是 Corey 第一次提供**独立的、不绑定某项配置变更**的 gateway 重启入口。
+  - **「立即升级 Hermes」** — 调 `hermesInstall()` IPC，macOS 走 `bootstrap-macos.sh`（curl official install + 检测 `~/.hermes/venv/bin/hermes`），Windows 走 `bootstrap-windows.ps1`（git pull existing repo + `uv pip install -e .`）。两个脚本均幂等，升级路径就是重跑 install。
+- **AI 浏览器：opt-in → opt-out（跨平台行为对齐）** — 修复实测发现的 Windows 行为差异（"在 mac 上 AI 会浏览网页查 UPS 燃油费，在 win 上 AI 改去执行 shell 命令然后委派任务"）。
+  - **根因**：`auto_start_if_configured` 之前 gate 在 `BROWSER_CDP_URL` 已写入 `.env` 上。macOS 用户在 v0.2.5 期间引导式点过 Settings → AI Browser → Launch，env 早就写好了；Windows 用户**几乎从未点过**这个按钮 → 每次启动 Corey 都退回 Hermes 内置 ephemeral headless Chromium → UPS 的 Akamai WAF 在 TLS / HTTP-2 指纹层就 reject（`ERR_HTTP2_PROTOCOL_ERROR`，JS 都没机会跑）→ agent 拿到错误 → 退回 shell → "委派"。
+  - **修复**：`auto_start_if_configured` gate 翻成 `is_disabled()`（只在用户**显式**点过 Settings → Stop 后才有 sentinel 文件 `~/.hermes/.corey/ai-browser-disabled`，否则一律启动）。spawn 成功后**自动**写 `BROWSER_CDP_URL=http://localhost:9222` 到 `~/.hermes/.env`。`stop_sync` 写 sentinel；`launch_sync` / `ensure_running_background` 清 sentinel。
+  - **依赖前提（待 v0.3 解决）**：Corey **目前不内置浏览器二进制**——`prepare_ai_browser_macos()` 是从用户机器上已有的 Chrome-for-Testing（Playwright cache / `/Applications/Google Chrome for Testing.app`）"复制 + patch Info.plist 加 LSBackgroundOnly"做出来的；找不到就退到 `detect_chrome_path()` 找系统 Chrome / Edge / Chromium。Windows 上没有等价的"Playwright 自动下载到 cache"路径，所以更依赖用户系统已装 Chrome / Edge（绝大多数 Windows 个人机器有 Edge，企业机器有 Chrome 的居多）。`browser_cdp.rs:254` 的 v0.2.0 B-3 TODO（"bundle a Chrome-for-Testing download step in `setup_sidecars`"）一直没做完——v0.3+ 会真正下 ~150MB Chrome-for-Testing portable 进 `~/.hermes/.corey/`，跟 BGE-M3 走同一种"首次启动下载 + SHA256 + 离线 fallback"模板。
+  - **不打扰原则**：Hermes Gateway 重启**不在** boot path 触发（避免 Corey 启动慢 2-3 秒）。Gateway 在用户第一次 chat 触发的自然 restart 路径中读到新写的 `BROWSER_CDP_URL`。
+
+### Fixed
+
+- **Bug 1 — chat 流中切 tab 切回来"看起来终止"**（mac+win 都触发）— 用户在 chat 等 AI 回答时切到 Settings / Workflows / 等其他 tab，再切回 chat，bubble 变"凝固"，Composer 显示"发送"按钮（不是"停止"），看起来像 AI 已经停了。
+  - **根因**：`useChatSend` 的 `sending` / `streamRef` / `pendingRef` 是组件局部 `useState` / `useRef`。`/chat` 是 `lazyFeature` 路由，切走会 unmount 整个 `ChatPane` → 这些状态全 GC。Tauri 后端 SSE 任务**还在跑**（不绑 webview 生命周期），事件**还在往 webview emit**，listener 也还活着 → store 持续更新（bubble 内容会增长）。但切回来 `useChatSend` 重新初始化成 `sending=false`、`streamRef=null` → Composer 看 `sending` 状态判定"无在飞流"。
+  - **修复**：(a) 把 `sending` 从独立 `useState` 改成**从 `messages` 派生**（`messages.some(m => m.role==='assistant' && m.pending)`），因为 `pending` 标志住在全局 store，能跨 unmount/remount 存活。(b) 新增 module-level `ACTIVE_STREAMS: Map<sessionId, ChatStreamHandle>`（`@/features/chat/activeStreams.ts`），`send()` / `retry()` 写入，`onDone` / `onError` / `stop()` 清理。`useChatSend` 在 mount 时从 Map 重建 `streamRef.current`，让 Stop 按钮在 remount 后照样能 cancel。`pendingRef` 从 `messages` 找尾部 pending bubble 重建。
+- **Bug 2 — Windows 上 corey-guard 不拦截文件删除**（仅 Win）— 用户问 AI"删掉 X 文件"，AI 备份后**直接删了**，没弹审批卡片。SOUL.md 反虚构铁律 + corey-guards 物理拦截在 Win 上**完全失效**。
+  - **根因**：`hermes_hooks::ensure_hook_registered` 把裸 `.py` 路径（`C:\...\corey-guards\file-ops-guard.py`）写到 `~/.hermes/config.yaml :: hooks.pre_tool_call.command`。Hermes 的 `_parse_hooks_block` 用 `subprocess.run(shlex.split(command))` 启动 hook：mac 上 shebang `#!/usr/bin/env python3` + `+x` 让 kernel 自动选解释器；**Windows 上 NTFS 没 +x，CreateProcess 不识别 shebang**，CreateProcess 直接拿 `.py` 路径喂下去 → 失败 → Hermes 把 hook 失败视作"未拦截"放行 tool call。
+  - **修复**：新 `guard_command_for_platform()` 函数。Windows 路径优先用**绝对路径**到 Hermes venv `python.exe`（`%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\python.exe`），找不到 fallback `python`（裸命令），路径用双引号包裹给 `shlex.split`。这样写出来的 `command` 是 `"C:\...\python.exe" "C:\...\file-ops-guard.py"` 形式，CreateProcess 直接拿到 python 解释器和脚本路径。绝对路径优先是为了对抗"用户刚装完 Hermes 没重登 → 新 PATH 没传播到 Corey 子进程"的边界情况。
+
+### Why
+
+实际场景：用户升级到 Corey v0.2.12 后，"Corey 升级 ≠ Hermes 升级"的认知 gap 导致老 Hermes 0.12 跟新 Corey 之间出现协议不匹配的潜在风险。同时 Windows 用户碰到 UPS 类 Akamai 站点会触发"AI 委派任务"的反 PD-1 / PD-2 行为。Bug 1 + Bug 2 是用户实测捕获的 v0.2.12 回归。这次五件事一起治：
+- Pack 不打包 → 安装包从此不带客户业务定制（铁律）
+- Hermes 管理面板 → 升级 / 重启路径都有显式入口
+- AI 浏览器默认开 → Windows 出厂能浏览，跟 macOS 体验对齐
+- Bug 1 → chat 流不再因为切 tab 看起来"终止"
+- Bug 2 → Win 上 guard 真的能拦住 `delete_file` / `os.remove` / `rm` 类操作
+
+### Deferred
+
+- **Win 上 Chrome 800ms 闪窗**：spawn 时窗口先在 (-2400, -2400) off-screen，然后 PowerShell `ShowWindow(SW_HIDE)` 完全隐藏，但中间有 ~800ms 窗口期可能闪一下。功能不受影响。v0.3+ 改用 Chrome-for-Testing portable + LSBackgroundOnly 等价的 Win 隐身手法。
+- **`hermes update --check` 误报"已是最新"**：Hermes CLI 自己的 update check 不识别 v0.13 release。绕路：用户点新加的「立即升级 Hermes」按钮，那个直接跑 bootstrap.ps1 / .sh，不依赖 `hermes update --check`。upstream 的 check 误报留给 Hermes 团队修。
+
+---
+
 ## 2026-05-12 — v0.2.12 · Hermes 0.13.0 upgrade + `/v1/runs` migration + anti-hallucination iron rules
 
 > 永不 patch Hermes 源码。把 Corey 的审批 UI / log 读取 / Windows 启动链路全部迁到 0.13 原生路径。补 SOUL.md 反虚构铁律堵 LLM 撒谎漏洞。

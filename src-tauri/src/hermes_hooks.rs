@@ -113,8 +113,57 @@ pub fn seed_guards_script(hermes_dir: &Path) -> io::Result<ScriptOutcome> {
 pub fn ensure_hook_registered(hermes_dir: &Path) -> io::Result<ConfigOutcome> {
     let config_path = hermes_dir.join("config.yaml");
     let guard_path = hermes_dir.join(GUARD_REL_PATH);
-    let command = guard_path.to_string_lossy().to_string();
+    let command = guard_command_for_platform(&guard_path);
     ensure_hook_registered_in(&config_path, &command)
+}
+
+/// Build the `command:` string the guard registration writes into
+/// `config.yaml`. Hermes runs hooks via `subprocess.run(shlex.split(cmd))`.
+///
+/// - **macOS / Linux**: bare path. The script's `#!/usr/bin/env python3`
+///   shebang + `+x` bit (set in [`seed_guards_script_to`]) make the
+///   kernel pick the right interpreter automatically.
+/// - **Windows**: NTFS has no `+x` bit and `CreateProcess` does **not**
+///   honour Unix shebangs. A bare `.py` path was the v0.2.12 escape
+///   that let the agent delete files while the guard sat dormant on
+///   disk. We prefer the **absolute** path to the Hermes venv
+///   `python.exe` (installed by `bootstrap-windows.ps1` at
+///   `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\python.exe`) —
+///   that's robust against `PATH` propagation lag (user installs
+///   Hermes, hasn't re-logged-in yet, Corey-spawned subprocess
+///   inherits stale PATH that doesn't include venv → bare `python`
+///   would fail and the guard would sit dormant). Fall back to bare
+///   `python` only when the venv binary isn't where we expect.
+pub(crate) fn guard_command_for_platform(guard_path: &Path) -> String {
+    if cfg!(target_os = "windows") {
+        // shlex.split on Windows respects double-quotes for spaces.
+        let python = find_hermes_venv_python()
+            .map(|p| format!("\"{}\"", p.display()))
+            .unwrap_or_else(|| "python".to_string());
+        format!("{python} \"{}\"", guard_path.display())
+    } else {
+        guard_path.to_string_lossy().to_string()
+    }
+}
+
+/// Resolve the Hermes venv `python.exe` so guard hooks don't depend on
+/// PATH propagation timing. Returns `None` outside Windows or when the
+/// venv layout doesn't match what `bootstrap-windows.ps1` installs.
+#[cfg(target_os = "windows")]
+fn find_hermes_venv_python() -> Option<PathBuf> {
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)?;
+    let candidate = base
+        .join("hermes")
+        .join("hermes-agent")
+        .join("venv")
+        .join("Scripts")
+        .join("python.exe");
+    candidate.exists().then_some(candidate)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn find_hermes_venv_python() -> Option<PathBuf> {
+    None
 }
 
 // ---------------------------------------------------------------------

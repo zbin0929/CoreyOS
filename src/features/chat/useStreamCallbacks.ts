@@ -15,6 +15,8 @@ import {
 } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 
+import { ACTIVE_STREAMS } from './activeStreams';
+
 type StreamCallbacks = {
   onDelta: (chunk: string) => void;
   onReasoning: (chunk: string) => void;
@@ -78,6 +80,7 @@ export function buildStreamCallbacks(
       setSending(false);
       streamRef.current = null;
       pendingRef.current = null;
+      ACTIVE_STREAMS.delete(sessionId);
       if (summary.prompt_tokens !== null || summary.completion_tokens !== null) {
         useChatStore.getState().setLastTokenUsage({
           prompt: summary.prompt_tokens ?? 0,
@@ -113,6 +116,7 @@ export function buildStreamCallbacks(
       setSending(false);
       streamRef.current = null;
       pendingRef.current = null;
+      ACTIVE_STREAMS.delete(sessionId);
     },
   };
 }
