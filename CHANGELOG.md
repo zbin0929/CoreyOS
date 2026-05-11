@@ -38,6 +38,8 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 - **多 Pack `active_pack` 切换** — chat session 加 `active_pack_id` 字段、AGENTS.md 由当前激活 Pack 动态生成、基座工具 `set_active_pack`。架构定下来了（system-prompt-stack.md），实现待 v0.2.12+。
 - **GLM 系列模型 reasoning 流泄漏** — `glm-5.1` 通过 `bigmodel.cn/coding/paas/v4` 端点把 CoT 当 content 返回。需要 `LlmProfile` 加 `tool_call_protocol` 字段 + Picker 给不兼容模型 ⚠️ 标。
 - **动态工具映射** — base SOUL.md 现在静态写死 8 个最常用工具的关键词→工具名映射。后续启动时调 `tools/list` 自动生成完整表。
+- **Pack 升级 UX + 数据保护合同** — 当前 `pack/seed.rs` 对已存在的 Pack 目录跳过 seed（保护客户自定义），但也导致新版 Pack 内容永远不会自动落地。需要：(1) 启动时比对 bundled vs installed manifest version，弹"有更新，合并/跳过/看差异"UX；(2) Pack-level migration 机制（schema 改字段时按版本顺序跑 migrator）；(3) 合并前自动备份 `~/.hermes/skill-packs/<id>/` → `.bak-<timestamp>/` 保留 7 天；(4) `docs/spec/data-protection-contract.md` 钉死"哪些用户数据永远不动"的清单。客户问"我升级会丢数据吗"的答案要在文档里写死。
+- **客户机器迁移（备份/恢复）** — Settings → Advanced 加 "导出 / 导入 数据" 按钮：打包 `~/.hermes/` 关键子集 + `caduceus.db` + `customer.yaml` 成单个 `.corey-backup` 文件，客户换电脑/重装系统不丢东西。当前要客户手动复制两个目录。
 
 ---
 

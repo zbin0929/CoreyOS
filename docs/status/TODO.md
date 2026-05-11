@@ -35,7 +35,8 @@
 | 5 | **Workflow 前端 4 态解耦** | 2-3d | `workflow/index.tsx` 拆 List/Editor/Runner/Approval |
 | 6 | **Workflow IPC 分离** | 2d | `ipc/workflow.rs` 拆 service + executors + browser_config |
 | 7 | **首次运行压缩** | 2d | `FirstRunOrchestrator` 自动跑 preflight / install / 配 LLM / 启 Pack，失败给可复制 debug |
-| 8 | **Pack 升级演练** | 1d | 给 `cross_border_ecom` 写一次 v1→v2 migration，验 7 天备份 + 数据保留 |
+| 8 | **Pack 升级 UX + 数据保护合同** | 2-3d | 当前 `pack/seed.rs` "存在即跳过" 保护客户改动但永不升级 Pack。需要：(a) 启动时比对 bundled vs installed manifest version，新版可用就弹 "Pack 有更新（v1.0 → v1.1），合并/跳过/查看差异" UX；(b) Pack-level migration（manifest schema 改字段时按版本顺序跑 migrator）；(c) 合并前自动备份 `~/.hermes/skill-packs/<id>/` → `.bak-<timestamp>/`，保留最近 7 天；(d) 写 `docs/spec/data-protection-contract.md` 钉死"哪些用户数据永远不动"的清单；(e) 给 `cross_border_ecom` 写一次 v1→v2 真实 migration 演练 |
+| 8b | **客户机器迁移（备份/恢复）** | 2d | Settings → Advanced 加 "导出 / 导入 数据" 按钮：打包 `~/.hermes/` 关键子集 + `caduceus.db` + `customer.yaml` 成单个 `.corey-backup` 文件；恢复时反向解包 + 一键校验完整性。客户换电脑 / 重装系统时不丢任何东西。 |
 
 ---
 
