@@ -1,8 +1,12 @@
 # System Prompt Stack — 三层 Soul 架构
 
-> 版本：v1（2026-05-10）
+> 版本：v1.1（2026-05-11）
 > 适用：v0.2.11+
 > 维护：动这个文件前先读完整篇，分层契约不可单边违反。
+>
+> v1.1 修订（2026-05-11）：把 L1 base soul 的 source of truth 钉死为
+> `src/app/baseSoul.ts`，**Corey 永不写入** `~/.hermes/SOUL.md`（那是
+> 客户主权区域）。详见下方 "L1 注入路径与 Hermes SOUL.md 的关系" 段。
 
 ## 为什么要分层
 
@@ -27,7 +31,8 @@
 
 ### L1 · Base Soul（基座层）
 
-**位置**：`src/app/baseSoul.ts`（前端常量）或 `src-tauri/assets/base/system.md`（后端文件，未来动态生成）。
+**唯一 source of truth**：`src/app/baseSoul.ts`（前端常量）。
+编译进 binary，跟着 Corey 安装包到达每个客户机器，无需启动期 seed/reconcile。
 
 **内容契约**（必须包含）：
 
@@ -35,12 +40,40 @@
 2. **元操作纪律**：用户问产品状态 / 切模型 / 跳页面 → 调对应 `mcp_corey_native_*` 工具。
 3. **禁止伪造**：永不输出伪造的 tool 调用结果格式（如 `[{"type":"system",...}]`）。永不脑补模型名 / endpoint。
 4. **决策归还 UX**：调完工具后回复 3 段（`🧠 / 💡 / 👇`）+ 用 `[文本](/路径)` 标准 markdown 链接做 deep-link。
-5. **工具映射表**（动态生成）：列出当前可用 corey-native 工具的完整名 + 触发关键词。
+5. **工具映射表**（v1 静态、v2 动态）：列出当前可用 corey-native 工具的完整名 + 触发关键词。
+6. **浏览器操控**（v0.2.11+）：用户要"去/看/点/填/抓 + 外部网站"时主动调 Hermes browser 工具集。
+7. **Memory 收藏夹**（v0.2.11+）：用户说"以后我说 X 就开 Y URL"时调 `memory(action="add",...)` 持久化，Pack soul 永远不要硬编码 URL 列表。
 
 **特征**：
-- 短：< 1500 token，不抢 Pack soul 的人设份额。
+- 短：< 2000 token，不抢 Pack soul 的人设份额。
 - 通用：跟具体行业无关，只跟"Corey 这个软件"有关。
 - 强约束：用 "🚨 强制规则" / "❌ 禁止" 这种最高强度词汇压住模型。
+
+#### L1 注入路径与 Hermes SOUL.md 的关系（v1.1 钉死）
+
+Hermes Agent 自带一条 system prompt slot：
+`agent/prompt_builder.py::_load_soul_md()` 会读 `~/.hermes/SOUL.md` 并注入。
+但 Corey **永不写入** 这个文件，原因：
+
+1. **客户主权（HD-3）**：Hermes 把 `~/.hermes/SOUL.md` 视为用户级 persona override，
+   Corey 写它就违反了"不动用户主权数据"原则，升级时还可能丢失客户改动。
+2. **避免双重注入**：v0.2.11 早期实验过"前端注入 + Hermes SOUL.md 加载"双轨，结果
+   两边内容容易漂移（一处改了忘了同步另一处）。统一到前端 `baseSoul.ts` 一条路径。
+3. **零客户端配置**：前端注入是 binary 自带，新版 Corey 装上就立即生效，无需启动期
+   seed、无需 reconcile 协议、无需备份机制。
+
+**L1 进入对话的路径只有一条**：
+```
+chat 发送
+  → src/features/chat/enrichHistory.ts::enrichHistoryWithContext
+  → 最末尾 enriched.unshift({ role: 'system', content: buildBaseSoul() })
+  → messages 数组首位 → Hermes Gateway → LLM
+```
+
+**客户机器上的 `~/.hermes/SOUL.md`**：如果客户自己写过这个文件（如自定义 persona），
+Hermes 会照常加载它，叠加在 Corey 注入的 base soul **之上**（Hermes 的 slot 优先级
+通常高于 chat messages 里的 system role）。这是客户的合法 override 路径，Corey 尊重
+并保留。
 
 ### L2 · Pack Soul（行业层）
 
