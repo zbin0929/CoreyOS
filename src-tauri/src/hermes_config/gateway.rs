@@ -1237,6 +1237,13 @@ pub fn gateway_stop() -> io::Result<String> {
 /// we currently call it (the launchd / systemd paths use the CLI
 /// `hermes gateway stop` instead), but keeping it portable means a
 /// future macOS-side `gateway_stop` rewrite can reuse it as-is.
+///
+/// Gated on `windows + test` so non-Windows release builds don't
+/// emit a `dead_code` warning (CI runs `-D warnings` on Rust jobs).
+/// `cfg(test)` keeps the helper visible to the `gateway_pid_tests`
+/// module on every platform so regressions surface in macOS / Linux
+/// CI runs too.
+#[cfg(any(target_os = "windows", test))]
 fn read_gateway_pid(home: &Path) -> Option<u32> {
     // Hermes 0.13+: gateway.lock (JSON).
     if let Ok(raw) = std::fs::read_to_string(home.join("gateway.lock")) {
