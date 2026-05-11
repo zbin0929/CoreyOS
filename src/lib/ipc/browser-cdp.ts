@@ -21,6 +21,10 @@ export interface BrowserCdpStatus {
   chrome_path: string | null;
   /** True when `BROWSER_CDP_URL` is set in `~/.hermes/.env`. */
   env_configured: boolean;
+  /** Domains the dedicated profile has cookies for — i.e. sites the
+   *  agent is "logged into". Empty while Chrome is running (sqlite
+   *  is locked) or before any browsing has happened. */
+  logged_in_domains: string[];
 }
 
 export interface BrowserCdpLaunchResult {

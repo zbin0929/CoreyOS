@@ -228,6 +228,38 @@ export function BrowserCdpSection() {
           </p>
         )}
 
+        {/* Logged-in sites — the answer to "did my login take?".
+            Read from Chrome's Cookies sqlite when stopped. While
+            Chrome is running we can't read the locked db, so the
+            UI explains *why* the list is empty in that case. */}
+        {status && status.env_configured && (
+          <div className="rounded-md border border-border bg-bg-elev-2 p-3 text-xs">
+            <div className="mb-2 font-medium text-fg">
+              {t('settings.browser_cdp.logged_in_label')}
+            </div>
+            {status.running ? (
+              <div className="text-fg-subtle">
+                {t('settings.browser_cdp.logged_in_running_hint')}
+              </div>
+            ) : status.logged_in_domains.length === 0 ? (
+              <div className="text-fg-subtle">
+                {t('settings.browser_cdp.logged_in_empty')}
+              </div>
+            ) : (
+              <ul className="flex flex-wrap gap-1.5" data-testid="browser-cdp-domains">
+                {status.logged_in_domains.map((d) => (
+                  <li
+                    key={d}
+                    className="rounded-full border border-border bg-bg-elev-1 px-2 py-0.5 font-mono text-[11px]"
+                  >
+                    {d}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {/* Power-user disclosure: profile path + detected chrome */}
         {status && (
           <details className="text-xs text-fg-subtle">

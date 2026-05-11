@@ -94,6 +94,18 @@ pub struct BrowserCdpStatus {
     /// Hermes Gateway won't actually route to it — the UI uses this to
     /// nudge them to click "Launch" again.
     pub env_configured: bool,
+    /// Domains that have at least one persistent cookie in the
+    /// dedicated Chrome profile — i.e. the sites the agent is "logged
+    /// into". Read directly from the Chrome `Cookies` sqlite when the
+    /// browser is **not** running (Chrome holds an exclusive lock
+    /// while alive). Empty list when Chrome is running or the profile
+    /// hasn't been initialized yet.
+    ///
+    /// Exposing this in the Settings panel solves the recurring
+    /// customer question "did the agent actually keep my login?" —
+    /// they see e.g. "amazon.com, sellercentral.amazon.com" and know
+    /// the answer is yes.
+    pub logged_in_domains: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -207,15 +219,78 @@ fn env_configured() -> bool {
 }
 
 fn build_status() -> BrowserCdpStatus {
+    let running = port_is_listening(CDP_PORT);
     BrowserCdpStatus {
-        running: port_is_listening(CDP_PORT),
+        running,
         port: CDP_PORT,
         profile_dir: profile_dir()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default(),
         chrome_path: detect_chrome_path().map(|p| p.to_string_lossy().to_string()),
         env_configured: env_configured(),
+        // Cookies sqlite is locked while Chrome is alive — only read
+        // when stopped. The UI handles the empty case gracefully
+        // ("Chrome is running — site list visible after stopping").
+        logged_in_domains: if running {
+            Vec::new()
+        } else {
+            list_logged_in_domains()
+        },
     }
+}
+
+/// Read the dedicated profile's `Cookies` sqlite and return the set
+/// of distinct host keys with persistent cookies. Returns an empty
+/// vec on any failure (no profile yet, sqlite locked, schema
+/// mismatch on a future Chrome version) — the UI treats that as "no
+/// data" rather than an error, which is the right call for a
+/// non-essential informational column.
+fn list_logged_in_domains() -> Vec<String> {
+    let Ok(dir) = profile_dir() else {
+        return Vec::new();
+    };
+    // The default profile's cookie store. Chrome supports multiple
+    // profiles ("Profile 1", "Profile 2", ...) but we never create
+    // them — the dedicated AI Browser only ever has Default.
+    let cookies_db = dir.join("Default").join("Cookies");
+    if !cookies_db.exists() {
+        return Vec::new();
+    }
+    use rusqlite::{Connection, OpenFlags};
+    let Ok(conn) = Connection::open_with_flags(
+        &cookies_db,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) else {
+        return Vec::new();
+    };
+    // Filter `host_key != ''` to drop blank rows; we don't filter on
+    // `expires_utc` because session cookies (expires=0) still imply
+    // the user has visited and Chrome remembers state. Cap at 200
+    // raw rows so the dedupe + sort cost stays bounded if a power
+    // user has been browsing for years.
+    let Ok(mut stmt) =
+        conn.prepare("SELECT DISTINCT host_key FROM cookies WHERE host_key != '' LIMIT 200")
+    else {
+        return Vec::new();
+    };
+    let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) else {
+        return Vec::new();
+    };
+    let mut domains: Vec<String> = rows
+        .filter_map(Result::ok)
+        // Chrome sometimes prefixes with '.' for cross-subdomain
+        // cookies (".example.com"). Normalize so example.com and
+        // .example.com aren't shown as two entries.
+        .map(|d| d.trim_start_matches('.').to_string())
+        .filter(|d| !d.is_empty())
+        .collect();
+    domains.sort();
+    domains.dedup();
+    // 50 is plenty for a panel — power users with hundreds of sites
+    // can still see everything by inspecting the profile path
+    // directly via the "Technical details" disclosure.
+    domains.truncate(50);
+    domains
 }
 
 /// What the Settings panel renders on mount. Cheap (TCP probe + 2 fs

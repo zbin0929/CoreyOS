@@ -744,6 +744,9 @@
       "cleared_msg": "Sign-ins cleared.",
       "first_time_hint": "First time: click the button below → in the Chrome window that opens, sign into each system you use (each only needs to be done once) → close this panel and chat normally. The agent will automatically use the signed-in browser.",
       "no_chrome_hint": "No Chrome / Edge installation detected. Please install Google Chrome (or Microsoft Edge) — the AI Browser needs it.",
+      "logged_in_label": "Sites the AI remembers",
+      "logged_in_empty": "No sign-in data yet. After you sign in to any system in the AI Browser, the matching domains will appear here.",
+      "logged_in_running_hint": "Chrome is running (cookies database locked) — stop it to see the full sign-in list.",
       "details_label": "Technical details"
     },
     "memory": {

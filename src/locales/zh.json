@@ -743,6 +743,9 @@
       "cleared_msg": "登录态已清除",
       "first_time_hint": "首次使用：点击下方按钮 → 在弹出的 Chrome 里登录你的系统（每个系统只需登一次）→ 关掉这个 Settings 面板继续聊天。AI 会自动用你登录过的浏览器。",
       "no_chrome_hint": "未检测到 Chrome 浏览器。请先安装 Google Chrome（或 Microsoft Edge），AI 浏览器功能需要它。",
+      "logged_in_label": "AI 已记住的网站",
+      "logged_in_empty": "暂无登录信息。在 AI 浏览器里登录任意系统后，这里会列出对应域名。",
+      "logged_in_running_hint": "Chrome 运行中（cookie 数据库锁定），停止后再查看完整登录列表。",
       "details_label": "技术细节"
     },
     "memory": {
