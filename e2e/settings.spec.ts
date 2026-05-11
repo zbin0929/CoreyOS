@@ -44,11 +44,14 @@ test.describe('settings', () => {
     await page.getByRole('option', { name: 'English' }).click();
   });
 
-  test('settings page shows Hermes updates section', async ({ page }) => {
+  test('settings page shows Hermes management section', async ({ page }) => {
     await page.goto('/settings');
 
+    // Section title was renamed in v0.2.13 from "Hermes updates" to
+    // "Hermes management" when the restart + upgrade buttons landed
+    // alongside the existing version-check row.
     await expect(
-      page.getByRole('heading', { name: /Hermes updates/i }),
+      page.getByRole('heading', { name: /Hermes management/i }),
     ).toBeVisible();
   });
 
