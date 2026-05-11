@@ -53,7 +53,6 @@
 //!   shouldn't surprise users with a foreground Chrome window on
 //!   first launch after upgrade.
 
-use std::io;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -253,7 +252,9 @@ fn launch_sync(journal: &Path) -> IpcResult<BrowserCdpLaunchResult> {
         message.push_str("Chrome was already listening on port 9222 — reusing it. ");
     } else {
         let chrome = detect_chrome_path().ok_or_else(|| IpcError::Internal {
-            message: "No Chrome / Chromium / Edge installation detected. Please install Chrome first.".to_string(),
+            message:
+                "No Chrome / Chromium / Edge installation detected. Please install Chrome first."
+                    .to_string(),
         })?;
         spawn_chrome(&chrome, &dir)?;
         // Wait up to 8 seconds for the debug port to come up. Cold
@@ -292,7 +293,9 @@ fn launch_sync(journal: &Path) -> IpcResult<BrowserCdpLaunchResult> {
             // written, the customer just needs to bounce gateway
             // manually (or it'll pick up on next natural restart).
             tracing::warn!("gateway restart after CDP launch failed: {e}");
-            message.push_str("Hermes Gateway restart skipped (will pick up the change on next launch).");
+            message.push_str(
+                "Hermes Gateway restart skipped (will pick up the change on next launch).",
+            );
         }
     }
 
