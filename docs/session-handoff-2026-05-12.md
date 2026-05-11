@@ -129,3 +129,25 @@ Hermes 0.13 新增。Corey 接入记忆 Provider（Honcho / Mem0 等）时启用
 > 读 `docs/session-handoff-2026-05-12.md` + `docs/status/hermes-deps.md` § 10 (v0.13 验证清单)。
 >
 > 如果有 Windows 测试机 → 跑 P1 实机验收。否则继续观察 LLM 撒谎复发 (P2)。
+
+---
+
+## v0.2.13 续（01:30-03:00）
+
+3 commits 后发 v0.2.13：
+1. Pack 不打包（移 `tauri.conf.json` 资源）
+2. Hermes 管理面板（Settings 加重启/升级按钮）
+3. AI 浏览器 opt-out（修 Win 不能浏览 UPS 根因；**仍依赖系统 Chrome**，未真内置）
+4. Bug 1 修：chat 切 tab 看似终止 → `sending` 派生 + `ACTIVE_STREAMS` Map（`@/src/features/chat/activeStreams.ts`）
+5. Bug 2 修：Win guard 不拦删除 → `guard_command_for_platform` 写绝对路径 python.exe
+
+E2E selector 红一次，commit `4144272` 修。
+
+## 下次开场
+
+读本文 + 在 Win 机做这 3 测：
+1. 删桌面文件应弹审批（Bug 2）
+2. chat 流中切 Settings 再切回 bubble 继续增长（Bug 1）
+3. 启动后端口 9222 听着 + UPS 浏览成功（AI Browser）
+
+任何一项 fail → v0.2.14 热修。
