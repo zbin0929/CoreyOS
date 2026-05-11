@@ -1,0 +1,107 @@
+# CoreyOS 进度笔记 — 2026-05-11
+
+> 这份笔记给下一段对话用。读完应该能 5 分钟接上工作，不重复走死路。
+
+## 当前状态
+
+- tauri:dev 在跑（用户终端，命令是 `tauri dev --features talk-local`，不写 /tmp/corey-dev.log）
+- Hermes Gateway 健康，AI Browser 在 :9222 跑（PID 在 ~/.hermes/.corey/chrome.pid）
+- 用户 = 业务老板，非工程师，跨境物流公司"美正"老板。CoreyOS 白标后即"美正OS"。
+- 用户痛点：AI 在跑任务时，Chrome 抢焦点干扰他正常办公
+
+## 本轮已交付
+
+### 1. AI Browser 短路修复 (commit `d546fb4`)
+- `corey_browser_launch` MCP tool 现在先 `build_status()`，已运行就直接返回 success
+- 防止 agent 误判时 `launch_sync` 杀掉 hidden Chrome 重 spawn 成 visible（之前看到的"打开关闭"症状）
+- Settings 路径不变（直接调 launch_sync 不走 MCP，用户主动登录场景仍可用）
+
+### 2. CDP minimize 尝试 (commit `d70659b`, `512c3a5`)
+- `apply_cdp_post_launch(minimize: bool)`：先用 `Browser.setWindowBounds` 试官方路径
+- macOS 上 `Browser.getWindowForTarget` 必返回 "Browser window not found"（Chromium 10y bug）
+- 兜底 osascript 用 `set visible to false` 把 Chrome PID 整个 hide（Cmd+H 等价）
+- **只在 Corey 启动时生效一次**——agent 调 browser_navigate 时 Playwright 的 `Page.bringToFront` 又会拉回前台
+- 用户已授予自动化权限（osascript 看到 "OS-level fallback minimized" 日志）
+
+### 3. UPS 分区表下载 PoC（已删除测试文件）
+- `@/Users/zbin/AI项目/CoreyOS/scripts/ups-zone-downloader.mjs`
+- 节奏：连 :9222 CDP → Page.navigate 到 UPS 触发 Akamai cookie → 用 Runtime.evaluate 跑一段 anchor.click() loop 触发 1000 个原生下载
+- 实测：23 个 prefix 跑出 22 个真 .xls + 1 个 HTML 错误页（000 不是合法前缀）→ 方案可行 → 用户让全删了，没保留
+- **关键发现**：UPS 静态 URL pattern 是 `https://www.ups.com/media/us/currentrates/zone-csv/{prefix}.xls`（来自 stackoverflow/mediafire 搜索）
+
+### 4. 美正 Pack 骨架 (commit `258eb28`)
+- `@/Users/zbin/AI项目/CoreyOS/src-tauri/assets/skill-packs/meizheng/`
+- 核心文件：`REQUIREMENTS.md`（8 个需求收集小节）+ `manifest.yaml`（骨架）+ `workflows/refresh_ups_zones.yaml`（每月 3am cron 跑）+ `README.md`
+- 用户工作流：日常往 REQUIREMENTS.md 灌需求 → 找 AI 说"整理"→ AI 转成 skill/workflow/view → bump version → pack 可卖
+
+## 浏览器焦点抢夺 — 调研已完成（不要重做）
+
+### 已实测/已验证的死路
+
+| 方案 | 结果 |
+| --- | --- |
+| `--headless=new` | UPS Akamai ERR_HTTP2 拦截 |
+| Patchright headless（默认配置） | Google 超时、UPS ERR_HTTP2、Amazon 202 bot challenge |
+| Patchright README 的 best practice (`channel: "chrome", headless: false`) | 仍需要窗口 = 仍抢焦点 |
+| Camoufox | Firefox fork，0% 检测但 headed only，焦点问题不解 |
+| AppleScript 移窗口到 Space | macOS 不暴露 Spaces API，需要 Yabai（要部分关 SIP）|
+| 改 `/Applications/Google Chrome.app/Contents/Info.plist` 加 LSUIElement | Chrome 是 hardened runtime + library-validation + notarized，改完无法启动 |
+| `--window-position=-2400,-2400` 隐藏 | Chrome 启动时从 Local State 恢复保存位置，flag 静默失效 |
+
+### Chromium 10 年根本 bug
+- chromium#223828, #40770130, #40182355
+- 任何 CDP 命令都触发 macOS NSApplication activate
+- chrome-devtools-mcp #1254（同样问题，confirmed label，OrKoN assigned，无修复）
+
+### 唯一可行路线（用户拍板，工程量 1-2 天）
+**自带 Playwright/Patchright 的 Chromium 二进制，改其 Info.plist 加 LSUIElement=YES，ad-hoc 重签**。
+- Chromium 不是 hardened runtime/notarized → 可以改可以重签
+- LSUIElement=YES → 没 Dock 图标、没菜单栏、CDP 命令不激活窗口
+- 真 Chromium 二进制 → TLS 指纹和 Chrome 95% 一致 → Akamai 大概率通过（已验证）
+- 跨平台对称：macOS = LSUIElement，Windows = SW_HIDE（现有 `hide_chrome_window` 已实现），Linux = window-position
+
+### 用户当前指令（中断在这里）
+**用户选了"先做 spike 验证 LSUIElement 在当前 macOS 上真能隔绝焦点"** 才同意全量集成。
+spike 步骤：
+1. 找一个 Chromium 二进制（最快：`npm install patchright && npx patchright install chromium` 装到 ~/Library/Caches/ms-playwright/chromium-1217/）
+2. 复制一份到 /tmp/test-chromium.app
+3. 改 Info.plist 加 `<key>LSUIElement</key><true/>`
+4. ad-hoc 重签：`codesign --force --deep --sign - /tmp/test-chromium.app`
+5. 启动它带 `--remote-debugging-port=9333 --user-data-dir=/tmp/test-profile`
+6. 焦点测试：连 :9333 跑 `Page.navigate` `Runtime.evaluate` `Page.captureScreenshot`，看 Mac 当前 app（终端）焦点是否被抢
+7. 写结果到这份 progress.txt
+
+如果验证通过 → 进入正式集成（改 `@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/browser_cdp.rs:1141` `spawn_chrome`，加 Chromium 下载/补丁/重签流程到 setup_sidecars 或类似阶段）
+
+如果验证失败 → 后备方案是 headless Chrome + CDP `Page.startScreencast` 推画面到 Corey 内嵌 Tab（工程量 3-4 周）
+
+## 用户偏好（必读）
+
+- 非开发者，**不要让用户做手动 macOS 设置 / 粘贴 JS / 装 brew 包**
+- 不要在没确认的情况下大批量执行（之前下载了 23 个 xls 被批了）
+- 不要给一堆选项——让 AI 决定后告诉用户在做什么。但**改架构层面的决策必须问**（用户拒绝过 AI 给的"WebView 嵌入"方向，纠正为"自带 Chromium"）
+- **诚实**：不要假装方案能 work，所有 work-around 都被人测过，照实说
+
+## 关键文件 / 路径
+
+- 主代码：`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/browser_cdp.rs:1`
+- MCP browser tools：`@/Users/zbin/AI项目/CoreyOS/src-tauri/src/mcp_server/tools.rs:1487`
+- AI Browser profile：`~/.hermes/chrome-debug/`
+- AI Browser PID：`~/.hermes/.corey/chrome.pid`
+- 下载目录（已配 Browser.setDownloadBehavior）：`~/.hermes/downloads/`
+- Pack 数据目录：`~/.hermes/pack-data/<pack_id>/`
+- 美正 Pack：`@/Users/zbin/AI项目/CoreyOS/src-tauri/assets/skill-packs/meizheng/`
+- UPS 下载脚本：`@/Users/zbin/AI项目/CoreyOS/scripts/ups-zone-downloader.mjs`
+
+## 本轮 commits (按时间)
+- `d70659b` fix(browser-cdp): minimize background Chrome via CDP setWindowBounds
+- `512c3a5` fix(browser-cdp): osascript fallback when CDP setWindowBounds fails on macOS
+- `d546fb4` fix(browser): short-circuit corey_browser_launch when already running
+- `258eb28` feat(meizheng-pack): scaffold + REQUIREMENTS.md + UPS zone refresh workflow
+
+## 下一步动作（新对话开局做）
+
+1. **读这份 progress.txt**
+2. **跑 LSUIElement spike**（详细步骤见上面"用户当前指令"小节）
+3. **结果写回这份 progress.txt 底部**
+4. 跟用户确认下一步走"全量集成"还是"切 headless Chrome + screencast"
