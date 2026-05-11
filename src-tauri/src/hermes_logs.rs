@@ -1,7 +1,14 @@
 //! Tail N lines from one of Hermes's log files. These live under
-//! `~/.hermes/logs/` — `agent.log`, `gateway.log`, `error.log`. Files
+//! `~/.hermes/logs/` — `agent.log`, `gateway.log`, `errors.log`. Files
 //! rotate externally (Hermes manages rotation); we just read the current
 //! file.
+//!
+//! Filename note (2026-05-12): Hermes 0.13 writes the error log as
+//! `errors.log` (with an `s`), not `error.log`. Pre-0.13 writers used
+//! the singular form; the `LogKind::Error` filename therefore tries
+//! the plural first and silently falls back to the singular if the
+//! file doesn't exist on disk. Cross-platform safe — path joins go
+//! through `PathBuf` so Windows backslash handling is identical.
 //!
 //! Phase 2.6 deliberately keeps this simple: read-on-demand, no `notify`
 //! watcher, no streaming, no level parsing. The UI calls
@@ -34,11 +41,24 @@ pub enum LogKind {
 }
 
 impl LogKind {
+    /// Canonical Hermes 0.13+ filename. For the error log this is
+    /// `errors.log` (plural). Pre-0.13 wrote `error.log`; see
+    /// [`Self::legacy_filename`] for the back-compat fallback.
     fn filename(self) -> &'static str {
         match self {
             LogKind::Agent => "agent.log",
             LogKind::Gateway => "gateway.log",
-            LogKind::Error => "error.log",
+            LogKind::Error => "errors.log",
+        }
+    }
+
+    /// Pre-0.13 filename, used as a fallback when the canonical
+    /// filename doesn't exist on disk. Returns `None` for log kinds
+    /// where Hermes never renamed the file (`agent.log`, `gateway.log`).
+    fn legacy_filename(self) -> Option<&'static str> {
+        match self {
+            LogKind::Error => Some("error.log"),
+            _ => None,
         }
     }
 }
@@ -46,11 +66,28 @@ impl LogKind {
 /// Resolved location of a log file. Does NOT guarantee the file exists —
 /// the tail operation handles missing-file as an empty response so a
 /// brand-new Hermes install doesn't look like an error.
+///
+/// For [`LogKind::Error`] this returns the Hermes 0.13+ canonical
+/// `errors.log` if it exists, otherwise the pre-0.13 `error.log`. On
+/// fresh installs neither file may exist yet — in that case we still
+/// return the canonical path so the UI can surface a helpful
+/// "no log yet at …/errors.log" message.
 pub fn log_path(kind: LogKind, home_override: Option<&Path>) -> PathBuf {
     let home = home_override
         .map(Path::to_path_buf)
         .unwrap_or_else(|| crate::paths::hermes_data_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    home.join("logs").join(kind.filename())
+    let logs_dir = home.join("logs");
+    let primary = logs_dir.join(kind.filename());
+    if primary.exists() {
+        return primary;
+    }
+    if let Some(legacy) = kind.legacy_filename() {
+        let legacy_path = logs_dir.join(legacy);
+        if legacy_path.exists() {
+            return legacy_path;
+        }
+    }
+    primary
 }
 
 /// Response shape for the `hermes_log_tail` IPC. Carries the resolved
@@ -186,15 +223,57 @@ mod tests {
     #[test]
     fn log_kind_filenames() {
         // Regression guard against accidental renames leaking into the
-        // Hermes contract.
+        // Hermes contract. Hermes 0.13 uses the plural `errors.log`;
+        // pre-0.13 wrote the singular `error.log` (carried as the
+        // legacy fallback below).
         assert_eq!(LogKind::Agent.filename(), "agent.log");
         assert_eq!(LogKind::Gateway.filename(), "gateway.log");
-        assert_eq!(LogKind::Error.filename(), "error.log");
+        assert_eq!(LogKind::Error.filename(), "errors.log");
+        assert_eq!(LogKind::Error.legacy_filename(), Some("error.log"));
+        assert_eq!(LogKind::Agent.legacy_filename(), None);
+        assert_eq!(LogKind::Gateway.legacy_filename(), None);
     }
 
     #[test]
     fn log_path_honors_home_override() {
+        // Non-existent home directory — both canonical and legacy
+        // names are absent, so we fall back to the canonical path
+        // (so the UI surfaces a "no log yet" message at the right
+        // location instead of silently using a stale name).
         let p = log_path(LogKind::Agent, Some(Path::new("/tmp/fakehome")));
         assert_eq!(p, PathBuf::from("/tmp/fakehome/logs/agent.log"));
+
+        let p = log_path(LogKind::Error, Some(Path::new("/tmp/fakehome")));
+        assert_eq!(p, PathBuf::from("/tmp/fakehome/logs/errors.log"));
+    }
+
+    /// Hermes 0.13 vs pre-0.13 filename: when only the legacy
+    /// `error.log` is present on disk, `log_path` should return that
+    /// path so existing rolled-over logs from older Hermes installs
+    /// stay visible in the Logs UI.
+    #[test]
+    fn log_path_falls_back_to_legacy_error_filename() {
+        let tmp = TempDir::new().expect("tempdir");
+        let logs_dir = tmp.path().join("logs");
+        std::fs::create_dir_all(&logs_dir).expect("mkdir logs");
+        // Only the legacy filename exists.
+        std::fs::write(logs_dir.join("error.log"), "boom\n").expect("write legacy log");
+
+        let p = log_path(LogKind::Error, Some(tmp.path()));
+        assert_eq!(p, logs_dir.join("error.log"));
+    }
+
+    /// When both files exist, the canonical 0.13 `errors.log` wins.
+    /// Avoids surfacing a stale legacy file after Hermes upgrades.
+    #[test]
+    fn log_path_prefers_canonical_when_both_present() {
+        let tmp = TempDir::new().expect("tempdir");
+        let logs_dir = tmp.path().join("logs");
+        std::fs::create_dir_all(&logs_dir).expect("mkdir logs");
+        std::fs::write(logs_dir.join("errors.log"), "fresh\n").expect("write fresh");
+        std::fs::write(logs_dir.join("error.log"), "stale\n").expect("write stale");
+
+        let p = log_path(LogKind::Error, Some(tmp.path()));
+        assert_eq!(p, logs_dir.join("errors.log"));
     }
 }

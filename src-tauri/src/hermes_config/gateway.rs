@@ -32,8 +32,18 @@ use std::path::{Path, PathBuf};
 /// `/v1/chat/completions` SSE, `/v1/models`, `config.yaml` existing
 /// keys, and `.env` names are unchanged. Verified additive-only
 /// upgrades around gateway plugins/providers and cron schema fields.
+///
+/// 2026-05-12: bumped MAX_TESTED to 0.13 after the v0.13 "Tenacity"
+/// release (`/v1/runs` endpoint migration completed end-to-end —
+/// approval card verified live in Corey UI). `secret redaction`
+/// flipped to ON-by-default upstream; `_config_version` auto-migrated
+/// from 21 → 23 (additive curator section). Cross-platform parity
+/// verified on macOS Apple Silicon; Windows / macOS Intel inherit
+/// the same wire protocol so no platform-conditional code is needed
+/// here. See `docs/status/hermes-deps.md` § 10 for the full v0.13
+/// impact table.
 const HERMES_MIN_SUPPORTED: (u32, u32) = (0, 10);
-const HERMES_MAX_TESTED: (u32, u32) = (0, 12);
+const HERMES_MAX_TESTED: (u32, u32) = (0, 13);
 
 /// Compatibility verdict between the running Hermes binary and what
 /// Corey was built/tested against. Drives the Home-page banner.
@@ -449,6 +459,88 @@ mod compat_tests {
         // MAX_TESTED to track an upstream release.
         let (c, _) = evaluate_compat(0, 99);
         assert_eq!(c, HermesCompatibility::Untested);
+    }
+
+    /// Anchor the v0.13 bump so a future reckless `MAX_TESTED` rollback
+    /// (or accidental clobber) trips this test instead of silently
+    /// downgrading users into the "untested" yellow-banner state.
+    #[test]
+    fn supported_at_max_tested_v0_13() {
+        let (c, _) = evaluate_compat(0, 13);
+        assert_eq!(c, HermesCompatibility::Supported);
+    }
+}
+
+#[cfg(test)]
+mod gateway_pid_tests {
+    //! Cross-platform tests for [`read_gateway_pid`]. The function
+    //! itself is platform-agnostic; only the *call site*
+    //! ([`windows_gateway_stop`]) is `#[cfg(target_os = "windows")]`.
+    //! Running these tests on macOS / Linux gives the Windows path
+    //! the same regression coverage in CI.
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn reads_pid_from_hermes_0_13_lock_json() {
+        let tmp = TempDir::new().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("gateway.lock"),
+            r#"{"pid": 12345, "kind": "hermes-gateway", "argv": ["main.py", "gateway", "run"], "start_time": null}"#,
+        )
+        .expect("write lock");
+        assert_eq!(read_gateway_pid(tmp.path()), Some(12345));
+    }
+
+    #[test]
+    fn falls_back_to_legacy_pid_file() {
+        let tmp = TempDir::new().expect("tempdir");
+        std::fs::write(tmp.path().join("gateway.pid"), "67890\n").expect("write pid");
+        assert_eq!(read_gateway_pid(tmp.path()), Some(67890));
+    }
+
+    /// When both files exist (e.g. mid-upgrade Hermes 0.12 → 0.13),
+    /// the JSON lock wins. Avoids killing the wrong process if the
+    /// legacy file is stale.
+    #[test]
+    fn prefers_lock_when_both_present() {
+        let tmp = TempDir::new().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("gateway.lock"),
+            r#"{"pid": 11111, "kind": "hermes-gateway"}"#,
+        )
+        .expect("write lock");
+        std::fs::write(tmp.path().join("gateway.pid"), "22222\n").expect("write stale pid");
+        assert_eq!(read_gateway_pid(tmp.path()), Some(11111));
+    }
+
+    #[test]
+    fn returns_none_when_no_files() {
+        let tmp = TempDir::new().expect("tempdir");
+        assert_eq!(read_gateway_pid(tmp.path()), None);
+    }
+
+    #[test]
+    fn rejects_zero_pid() {
+        let tmp = TempDir::new().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("gateway.lock"),
+            r#"{"pid": 0, "kind": "hermes-gateway"}"#,
+        )
+        .expect("write lock");
+        assert_eq!(read_gateway_pid(tmp.path()), None);
+    }
+
+    /// Malformed JSON in `gateway.lock` shouldn't panic — fall through
+    /// to `gateway.pid`. This is a real concern because Hermes is the
+    /// writer, but mid-write tearing or a corrupted upgrade can leave
+    /// half-baked content on disk.
+    #[test]
+    fn malformed_lock_falls_through_to_legacy() {
+        let tmp = TempDir::new().expect("tempdir");
+        std::fs::write(tmp.path().join("gateway.lock"), "{ not json").expect("write lock");
+        std::fs::write(tmp.path().join("gateway.pid"), "33333").expect("write pid");
+        assert_eq!(read_gateway_pid(tmp.path()), Some(33333));
     }
 }
 
@@ -1124,33 +1216,63 @@ pub fn gateway_stop() -> io::Result<String> {
     })
 }
 
+/// Extract the gateway PID from whichever Hermes runtime file holds it.
+///
+/// Hermes 0.13 (PR #18179, "Atomic restart markers + Windows runtime-
+/// lock offset") replaced the plain-integer `gateway.pid` file with a
+/// JSON-shaped `gateway.lock`:
+///
+/// ```text
+/// {"pid": 50751, "kind": "hermes-gateway",
+///  "argv": ["…/main.py", "gateway", "run", "--replace"],
+///  "start_time": null}
+/// ```
+///
+/// We try the new path first, then fall back to the legacy file so
+/// users still on Hermes ≤ 0.12 keep working. Both files may co-exist
+/// briefly during an upgrade — the JSON wins.
+///
+/// Cross-platform: this helper is platform-agnostic so the fallback
+/// chain stays identical on macOS / Linux. Windows is the only place
+/// we currently call it (the launchd / systemd paths use the CLI
+/// `hermes gateway stop` instead), but keeping it portable means a
+/// future macOS-side `gateway_stop` rewrite can reuse it as-is.
+fn read_gateway_pid(home: &Path) -> Option<u32> {
+    // Hermes 0.13+: gateway.lock (JSON).
+    if let Ok(raw) = std::fs::read_to_string(home.join("gateway.lock")) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if let Some(pid) = v.get("pid").and_then(|p| p.as_u64()) {
+                if pid > 0 && pid <= u32::MAX as u64 {
+                    return Some(pid as u32);
+                }
+            }
+        }
+    }
+    // Pre-0.13: gateway.pid (plain integer, possibly with a trailing
+    // newline; keep the line-split tolerance the old code had).
+    if let Ok(s) = std::fs::read_to_string(home.join("gateway.pid")) {
+        if let Some(line) = s.trim().lines().next() {
+            if let Ok(pid) = line.parse::<u32>() {
+                if pid > 0 {
+                    return Some(pid);
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(target_os = "windows")]
 fn windows_gateway_stop() -> io::Result<String> {
     let home = crate::paths::hermes_data_dir()?;
-    let pid_file = home.join("gateway.pid");
 
-    let pid_str = std::fs::read_to_string(&pid_file)
-        .ok()
-        .and_then(|s| s.trim().lines().next().map(|l| l.to_string()))
-        .and_then(|s| {
-            let parsed: u32 = s.parse().ok()?;
-            if parsed > 0 {
-                Some(parsed.to_string())
-            } else {
-                None
-            }
-        });
-
-    if let Some(ref pid_s) = pid_str {
-        let pid: u32 = pid_s.parse().map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidData, "invalid PID in gateway.pid")
-        })?;
+    if let Some(pid) = read_gateway_pid(&home) {
         let mut kill_cmd = std::process::Command::new("taskkill");
         kill_cmd.args(["/F", "/PID", &pid.to_string()]);
         suppress_window(&mut kill_cmd);
         let output = kill_cmd.output()?;
         if output.status.success() {
-            let _ = std::fs::remove_file(&pid_file);
+            let _ = std::fs::remove_file(home.join("gateway.pid"));
             let _ = std::fs::remove_file(home.join("gateway.lock"));
             return Ok(format!("gateway stopped (pid {pid})"));
         }
@@ -1165,7 +1287,7 @@ fn windows_gateway_stop() -> io::Result<String> {
     suppress_window(&mut fallback);
     let output = fallback.output()?;
     if output.status.success() {
-        let _ = std::fs::remove_file(&pid_file);
+        let _ = std::fs::remove_file(home.join("gateway.pid"));
         let _ = std::fs::remove_file(home.join("gateway.lock"));
         Ok("gateway stopped (by port 8642)".into())
     } else {
