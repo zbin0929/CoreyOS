@@ -14,6 +14,7 @@ import { VisionProxySection } from './sections/VisionProxySection';
 import { WebhookSection } from './sections/WebhookSection';
 import { AppearanceSection } from './AppearanceSection';
 import { HermesInstancesSection } from './HermesInstancesSection';
+import { BrowserCdpSection } from './sections/BrowserCdpSection';
 import { BrowserLLMSection } from './sections/BrowserLLMSection';
 import { ContextSection } from './sections/ContextSection';
 import { CustomerSection } from './sections/CustomerSection';
@@ -39,6 +40,7 @@ const SETTINGS_ANCHORS = [
   { id: 'settings-sandbox', labelKey: 'settings.sandbox.title' },
   { id: 'settings-scopes', labelKey: 'settings.sandbox_scopes.title' },
   { id: 'settings-hermes-tools', labelKey: 'settings.hermes_security.title' },
+  { id: 'settings-browser-cdp', labelKey: 'settings.browser_cdp.title' },
   { id: 'settings-customer', labelKey: 'settings.customer.title' },
   { id: 'settings-packs', labelKey: 'settings.packs.title' },
   { id: 'settings-storage', labelKey: 'settings.storage.title' },
@@ -153,6 +155,13 @@ export function SettingsRoute() {
           <HermesUpdateSection />
 
           <BrowserLLMSection />
+
+          {/* AI Browser (CDP) — v0.2.11+. The customer-facing answer to
+              "how does the agent access sites I'm logged into?". Spawns
+              a dedicated Chrome with remote-debug, persists profile so
+              login is one-time, writes BROWSER_CDP_URL into ~/.hermes/.env
+              and bounces Hermes Gateway. Zero CLI needed. */}
+          <BrowserCdpSection />
 
           {/* Read-only storage info. Lives below the gateway form — it's the
               least-frequently-needed section but important for backup /

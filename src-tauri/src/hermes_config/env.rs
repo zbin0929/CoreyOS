@@ -181,6 +181,14 @@ pub(super) fn is_allowed_env_key(key: &str) -> bool {
     ) {
         return true;
     }
+    // Phase 5: AI Browser CDP. When the user activates the "AI
+    // Browser" panel in Settings, Corey spawns a Chrome instance
+    // with remote-debugging-port and persists the CDP URL here so
+    // Hermes Gateway picks it up on next start. Writable from
+    // `browser_cdp_launch` / `browser_cdp_stop` IPCs only.
+    if key == "BROWSER_CDP_URL" {
+        return true;
+    }
     // Phase 3: any env name declared by a channel spec. Keeps the
     // allowlist tight — we never let the UI write arbitrary env vars.
     crate::channels::allowed_channel_env_keys()
