@@ -264,6 +264,24 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
         return Ok(false);
     }
     if port_is_listening(CDP_PORT) {
+        // A Chrome is already on 9222. If it's the one we spawned in a
+        // previous Corey session (pid file present + process alive),
+        // we still need to re-apply `Browser.setDownloadBehavior` —
+        // download routing is per-process state, NOT persisted across
+        // Chrome restarts via Preferences. Skipping this means the
+        // FIRST download of every new Corey boot lands in the system
+        // Downloads folder, exactly the v0.2.12 demo-day bug.
+        //
+        // For foreign Chromes (someone else's debug session on 9222)
+        // we don't touch — they might have their own download routing
+        // and we'd surprise the user.
+        if pid_file().exists() {
+            if let Err(e) = apply_cdp_download_behavior() {
+                tracing::warn!(
+                    "auto_start: re-applying setDownloadBehavior to existing AI Browser failed: {e}"
+                );
+            }
+        }
         return Ok(false);
     }
     let Some(chrome) = detect_chrome_path() else {
