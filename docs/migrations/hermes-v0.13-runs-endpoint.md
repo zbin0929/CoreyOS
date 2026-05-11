@@ -1,10 +1,20 @@
 # Migration — Hermes 0.13.0 `/v1/runs` endpoint
 
-> **Status**: Planned, not yet executed.
+> **Status**: ✅ **DONE (2026-05-12, commits `5aef48c` + `67631ce`)** — kept for archeology.
+>
+> End-to-end verification:
+> - `cargo test` 555 passed (incl. 9 new `RunEvent` parsing tests + 6 `gateway_pid` tests)
+> - 2026-05-12 01:08 真人 UI 实测：`rm /tmp/foo` → Corey UI 弹审批卡片 ✅
+> - 2026-05-12 01:08 真人 UI 实测：`rm ~/Desktop/1.txt` → 双层防御都拦下（corey-guards + Hermes DANGEROUS_PATTERNS）✅
+> - Hermes 0.13.0 gateway restart 已做，新 `/v1/runs` 端点验证活的
+> - SOUL.md 第二组 C 反虚构铁律加入：agent.log 实证从昨晚 5min/0 工具/虚构 → 今晚 10s/4 工具/如实陈述
+>
+> 接下来 Hermes 升级时无需再迁移；本文件保留作上下文记录。后续修订写入 `docs/status/hermes-deps.md` § 14 changelog（v5.1）。
+>
 > **Trigger**: 2026-05-11 session — Corey stopped patching Hermes source, so we lost `patch_approval_sse` that used to inject approval events into `/v1/chat/completions`. The only native path for approval events in Hermes 0.13.0 is `/v1/runs`.
 > **Scope**: Corey's adapter layer (chat streaming + approval response) migrates from `/v1/chat/completions` to `/v1/runs` + `/v1/runs/{run_id}/events`.
-> **Owner**: Next session.
-> **Estimated effort**: 3-4 hours, including E2E verification.
+> **Owner**: ~~Next session~~ → Done.
+> **Actual effort**: ~3 hours of work spread across two sessions (2026-05-11 PM + 2026-05-12 AM), plus 30 min E2E debugging (the Hermes gateway needed manual restart after `git pull` upgrade).
 
 ## Why this migration
 

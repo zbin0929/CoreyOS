@@ -3,16 +3,43 @@
 > 创建：2026-05-01（从 `docs/status/TODO.md` v1 拆分而来，保留为修复参考）
 > 用途：已修复 Bug 的根因 + 解决方案存档
 
-## 2026-05-11 晚 · 待修 / 已迁移的问题
+## 2026-05-11 ~ 12 · 待修 / 已迁移的问题
 
-### 已知未修：Corey UI 聊天的审批卡片当前不会触发（P0）
+### ✅ 已修复：Corey UI 聊天的审批卡片不触发（P0）
 
-- **现象**：在 Corey UI chat 里触发危险命令（如 `rm ~/Desktop/x`），**不会**出现审批 UI。命令要么被 Hermes `DANGEROUS_PATTERNS` 直接拒，要么被 `corey-guards` 拦（弹 macOS 原生对话框，不是 Corey UI 卡片）。
-- **根因**：2026-05-11 我们撤销了 `patch_approval_sse()` 对 Hermes `api_server.py` 的 patch。Hermes 0.13.0 原生只在 `/v1/runs` endpoint 发 `approval.request` 事件；Corey 现在用的是 `/v1/chat/completions`，没有 approval 事件。
-- **修复计划**：迁移 Corey `chat_stream` 到 `/v1/runs` + `/v1/runs/{run_id}/events`。详见 `docs/migrations/hermes-v0.13-runs-endpoint.md`，预估 3-4 小时。
-- **临时替代**：
-  - 消息渠道（WeChat / Slack / cron）走 Hermes 原生 channel 审批流（英文）
-  - corey-guards macOS 对话框仍然会对保护路径的破坏性操作弹窗
+- **时间**：发现 2026-05-11；修复 2026-05-12（commits `5aef48c` + `67631ce`）
+- **历史现象**：在 Corey UI chat 里触发危险命令（如 `rm ~/Desktop/x`），**不会**出现审批 UI。命令要么被 Hermes `DANGEROUS_PATTERNS` 直接拒，要么被 `corey-guards` 拦（弹 macOS 原生对话框，不是 Corey UI 卡片）。
+- **根因**：2026-05-11 撤销了 `patch_approval_sse()` 对 Hermes `api_server.py` 的 patch。Hermes 0.13.0 原生只在 `/v1/runs` endpoint 发 `approval.request` 事件；Corey 之前用 `/v1/chat/completions`，没有 approval 事件。
+- **修复**：
+  - 迁移 `chat_stream` 到 `POST /v1/runs` + `GET /v1/runs/{run_id}/events` SSE（保留 `chat_once` 走 `/v1/chat/completions`）
+  - 新增 `RunEvent` 9 变体的解析（`message.delta` / `tool.started` / `approval.request` / `run.completed` 等）+ 6 个单元测试
+  - `hermes_approval_respond` IPC 改 POST `/v1/runs/{run_id}/approval`；删除 `hermes_approval_pending`
+  - 前端 `ChatApprovalRequest` 加 `run_id` + `choices`；`ApprovalCard.tsx` 透传 `run_id`
+  - 详见 `docs/migrations/hermes-v0.13-runs-endpoint.md`（已标 Done）+ `docs/status/hermes-deps.md` § 14 v5.0/v5.1
+- **验证**：2026-05-12 01:08 真人 UI 实测 `rm /tmp/foo` → Corey UI 弹审批卡片 4 按钮 ✅
+
+### ✅ 已修复：LLM 在长跑里虚构"备份已完成"幻觉（P0 safety）
+
+- **时间**：发现 2026-05-11 晚（weixin 渠道 5 分钟长跑）；修复 2026-05-12（commit `67631ce`）
+- **现象**：用户在微信问"删了它"，agent 跑 5 分 18 秒，回复 227 字符："操作被 Hermes 安全系统拦截了 / 备份已提前做好"
+- **根因**：`api_calls=2 / 工具调用=0`。agent 整个长跑里**根本没调任何工具**，"备份已完成"和"被拦截"都是 LLM 100% 编造的（agent.log + guard.log 双重实证）。L0 元铁律里"被 guard 拦了 = 停"反而让 LLM 学会用"系统拦截了"作为虚构借口
+- **修复**：`src-tauri/assets/soul/corey_iron_rules.md` 新增"第二组 C · 禁止虚构工具结果 / 禁止假冒拦截"段：3 条绝对禁止 + 工具调用 ↔ 陈述 1:1 对应规则 + 反模式表 +2 行 + 自检从 6→7 题（加"我说的话有没有真实 tool_call 支撑？"）
+- **验证**：2026-05-12 01:08 真人 UI 实测 `rm ~/Desktop/1.txt` → agent 调 search_files + terminal（共 4 次） → guard 真 BLOCK → agent 回复 100% 与 guard log 对齐，**未再虚构** ✅
+- **未来 hardening**：长期可加 post-response validator 检查 tool_call 与回复内容一致性（v0.4.0+ 任务）
+
+### ✅ 已修复：Hermes 0.13 `errors.log` vs Corey `error.log` 文件名不对（P1）
+
+- **时间**：发现 + 修复 2026-05-12（commit `67631ce`）
+- **现象**：Corey 的 Logs UI 错误标签页空白
+- **根因**：Hermes 0.13 写 `~/.hermes/logs/errors.log`（带 s），Corey 的 `hermes_logs.rs` 死读 `error.log`（无 s）
+- **修复**：canonical-first-legacy-fallback 路径解析（`legacy_filename()` 帮助函数），3 个新单元测试
+
+### ✅ 已修复：Windows runtime-lock offset 适配（P1，Hermes PR #18179）
+
+- **时间**：发现 + 修复 2026-05-12（commit `67631ce`）
+- **现象**：Hermes 0.13 把 `gateway.pid`（纯整数）改成 `gateway.lock`（JSON `{pid, kind, argv, start_time}`）。Corey Windows 端 `windows_gateway_stop` 死读 `gateway.pid` → 总是 fallback 到慢速 powershell 端口杀进程
+- **修复**：新增 `read_gateway_pid()` 跨平台帮助函数 — 先读 0.13 JSON lock，fallback 旧 `.pid` 文件，6 个跨平台单元测试
+- **未验证**：Windows 实机验收（macOS 上跑了所有逻辑测试）
 
 ### 已知未修：消息渠道审批提示仍是英文（P2 · upstream gap）
 
