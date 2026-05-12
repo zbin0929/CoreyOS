@@ -608,15 +608,13 @@ pub async fn memory_fact_search(
             return Ok(Vec::new());
         }
 
-        let sql = format!(
-            "SELECT f.fact_id, f.content, f.category, f.trust_score \
+        let sql = "SELECT f.fact_id, f.content, f.category, f.trust_score \
              FROM facts_fts fts \
              JOIN facts f ON f.fact_id = fts.rowid \
              WHERE facts_fts MATCH ? AND f.trust_score >= 0.3 \
              ORDER BY fts.rank, f.trust_score DESC \
-             LIMIT ?"
-        );
-        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
+             LIMIT ?";
+        let mut stmt = conn.prepare(sql).map_err(|e| IpcError::Internal {
             message: format!("prepare fact search: {e}"),
         })?;
         let rows = stmt
@@ -658,15 +656,13 @@ pub async fn memory_entity_list(limit: Option<u32>) -> IpcResult<Vec<MemoryEntit
             message: format!("open memory_store.db: {e}"),
         })?;
 
-        let sql = format!(
-            "SELECT e.entity_id, e.name, e.entity_type, COUNT(fe.fact_id) AS fc \
+        let sql = "SELECT e.entity_id, e.name, e.entity_type, COUNT(fe.fact_id) AS fc \
              FROM entities e \
              LEFT JOIN fact_entities fe ON fe.entity_id = e.entity_id \
              GROUP BY e.entity_id \
              ORDER BY fc DESC \
-             LIMIT ?"
-        );
-        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
+             LIMIT ?";
+        let mut stmt = conn.prepare(sql).map_err(|e| IpcError::Internal {
             message: format!("prepare entity list: {e}"),
         })?;
         let rows = stmt
@@ -711,16 +707,14 @@ pub async fn memory_entity_facts(
             message: format!("open memory_store.db: {e}"),
         })?;
 
-        let sql = format!(
-            "SELECT f.fact_id, f.content, f.category, f.trust_score \
+        let sql = "SELECT f.fact_id, f.content, f.category, f.trust_score \
              FROM facts f \
              JOIN fact_entities fe ON fe.fact_id = f.fact_id \
              JOIN entities e ON e.entity_id = fe.entity_id \
              WHERE e.name LIKE ? AND f.trust_score >= 0.3 \
              ORDER BY f.trust_score DESC \
-             LIMIT ?"
-        );
-        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
+             LIMIT ?";
+        let mut stmt = conn.prepare(sql).map_err(|e| IpcError::Internal {
             message: format!("prepare entity facts: {e}"),
         })?;
         let pattern = format!("%{}%", entity_name);
