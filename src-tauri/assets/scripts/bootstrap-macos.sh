@@ -42,6 +42,15 @@ info "Git $(git --version 2>&1)"
 step "Hermes install"
 if command -v hermes &>/dev/null; then
   info "Hermes already installed: $(command -v hermes)"
+  CURRENT_VER=$(hermes --version 2>&1 | head -1)
+  info "Current: $CURRENT_VER"
+  UPDATE_CHECK=$(hermes update --check 2>&1)
+  if echo "$UPDATE_CHECK" | grep -qi "update available\|commits behind"; then
+    info "New version available, running hermes update --yes..."
+    hermes update --yes 2>&1 || warn "update failed, continuing with current version"
+  else
+    info "Already up to date (or check inconclusive). Skipping upgrade."
+  fi
 else
   info "Running official install script..."
   curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash

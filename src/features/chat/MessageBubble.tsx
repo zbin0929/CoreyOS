@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import {
   AlertCircle,
+  Brain,
   Copy,
   Loader2,
   RefreshCw,
@@ -249,6 +250,15 @@ export function MessageBubble({
             <Markdown>{msg.content}</Markdown>
           ) : null}
         </div>
+        {!isUser && !msg.pending && msg.memoryFactCount && msg.memoryFactCount > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-gold-500/10 px-2 py-0.5 text-[10px] text-gold-600">
+            <Icon icon={Brain} size="xs" />
+            {t('chat_page.memory_recalled', {
+              defaultValue: '已召回 {{n}} 条记忆',
+              n: msg.memoryFactCount,
+            })}
+          </span>
+        )}
         {msg.suggestions && msg.suggestions.length > 0 && (
           <div className="w-full max-w-[85%]">
             {msg.suggestions.map((sug) => (

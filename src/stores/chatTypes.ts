@@ -28,6 +28,10 @@ export interface UiMessage {
   reasoning?: string;
   /** True while waiting on the first delta. */
   pending?: boolean;
+  /** True while the LLM stream is active (first delta received but
+   *  stream has not yet completed). Controls the Composer's
+   *  send/stop button independently from `pending` (spinner). */
+  streaming?: boolean;
   /** Frontend-only error text (shown inline as a red bubble). */
   error?: string;
   /** Tool-progress markers emitted by the agent during this turn. */
@@ -40,6 +44,9 @@ export interface UiMessage {
    *  the feedback buttons below each bubble. `undefined`/`null` =
    *  unrated. */
   feedback?: 'up' | 'down' | null;
+  /** Number of memory facts injected into context for this turn.
+   *  Set on the assistant message by enrichHistory. */
+  memoryFactCount?: number;
   createdAt: number;
 }
 

@@ -4,6 +4,9 @@ import { Mic, MicOff, Square, Volume2, X } from 'lucide-react';
 
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { useChatStore } from '@/stores/chat';
+
+import { ApprovalCard } from '@/features/chat/ApprovalCard';
 
 import { useTalkMode, type TalkState } from './useTalkMode';
 
@@ -44,7 +47,10 @@ export function TalkModeInline({ onExit }: { onExit: () => void }) {
     cancelTurn,
     micPermission,
     openMicSettings,
+    pendingApproval,
+    setPendingApproval,
   } = useTalkMode();
+  const sessionId = useChatStore((s) => s.currentId) ?? '';
 
   // Same ref-based handler trick as the overlay — pressPtt /
   // releasePtt are recreated on every state change, but the
@@ -196,6 +202,13 @@ export function TalkModeInline({ onExit }: { onExit: () => void }) {
 
           Permission + error banners stay because they are
           talk-specific and have nowhere else to surface. */}
+      {pendingApproval && (
+        <ApprovalCard
+          approval={pendingApproval}
+          sessionId={sessionId}
+          onResolved={() => setPendingApproval(null)}
+        />
+      )}
       {micPermission === 'denied' && (
         <div
           className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-left text-xs text-amber-600 dark:text-amber-400"

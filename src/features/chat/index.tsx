@@ -12,6 +12,7 @@ import { ChatHeaderActions, EmptyHero } from './ChatHelpers';
 import { Composer } from './Composer';
 import { GatewayStatusBanner } from './GatewayStatusBanner';
 import { ApprovalCard } from './ApprovalCard';
+import { GuardConfirmModal } from './GuardConfirmModal';
 import { LearningIndicator } from './LearningIndicator';
 import { MessageList } from './MessageList';
 import { SessionsPanel } from './SessionsPanel';
@@ -316,6 +317,7 @@ function ChatPane({
       )}
 
       <GatewayStatusBanner />
+      <GuardConfirmModal />
       {chat.pendingApproval && (
         <ApprovalCard
           approval={chat.pendingApproval}

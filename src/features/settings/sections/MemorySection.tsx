@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Brain,
   CheckCircle2,
+  ChevronRight,
   Loader2,
   Save,
   Sparkles,
@@ -20,9 +21,13 @@ import {
   hermesSessionUsage,
   hermesUserMdWrite,
   ipcErrorMessage,
+  memoryEntityList,
+  memoryEntityFacts,
   type HermesCompressionStats,
   type HermesMemoryStatus,
   type HermesSessionUsage,
+  type MemoryEntity,
+  type MemoryFactHit,
 } from '@/lib/ipc';
 
 import { Section } from '../shared';
@@ -71,6 +76,9 @@ export function MemorySection() {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'idle' });
+  const [entities, setEntities] = useState<MemoryEntity[]>([]);
+  const [selectedEntity, setSelectedEntity] = useState<{ entity: MemoryEntity; facts: MemoryFactHit[] } | null>(null);
+  const [entitiesLoading, setEntitiesLoading] = useState(false);
 
   const refresh = async () => {
     try {
@@ -87,6 +95,9 @@ export function MemorySection() {
       setCompression(c);
       setSessionUsage(u);
       setError(null);
+      memoryEntityList(50)
+        .then(setEntities)
+        .catch(() => {});
     } catch (e) {
       setError(ipcErrorMessage(e));
     }
@@ -339,6 +350,95 @@ export function MemorySection() {
               duplicates). Useful when MEMORY.md has grown noisy
               from repeated auto-extracts on similar turns. */}
           <CompactMemoryButton onComplete={() => void refresh()} />
+        </div>
+      )}
+
+      {/* Entity list */}
+      {entities.length > 0 && (
+        <div className="rounded-lg border border-border bg-bg-elev-1/70 p-3 flex flex-col gap-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Icon icon={Brain} size="sm" className="text-gold-500" />
+            <div className="text-sm font-medium text-fg">
+              {t('settings.memory.entity_title', { defaultValue: '实体列表' })}
+            </div>
+            <span className="text-[11px] text-fg-subtle">
+              {t('settings.memory.entity_count', { defaultValue: '{{n}} 个', n: entities.length })}
+            </span>
+          </div>
+
+          {selectedEntity ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="text-xs text-fg-muted hover:text-fg transition-colors"
+                  onClick={() => setSelectedEntity(null)}
+                >
+                  ← {t('settings.memory.entity_back', { defaultValue: '返回列表' })}
+                </button>
+              </div>
+              <div className="text-sm font-medium text-fg">{selectedEntity.entity.name}</div>
+              <div className="text-xs text-fg-subtle">
+                {t('settings.memory.entity_fact_count', {
+                  defaultValue: '关联 facts: {{n}} 条',
+                  n: selectedEntity.facts.length,
+                })}
+              </div>
+              <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
+                {selectedEntity.facts.map((f) => (
+                  <div
+                    key={f.fact_id}
+                    className="rounded border border-border bg-bg-elev-2/70 px-2.5 py-2 text-xs text-fg"
+                  >
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="inline-flex items-center rounded-full bg-gold-500/15 px-1.5 py-0.5 text-[10px] text-gold-600">
+                        {f.category}
+                      </span>
+                      <span className="text-[10px] text-fg-subtle">
+                        trust {f.trust_score.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="leading-relaxed">{f.content.slice(0, 300)}</div>
+                  </div>
+                ))}
+                {selectedEntity.facts.length === 0 && (
+                  <div className="text-xs text-fg-subtle py-2">
+                    {t('settings.memory.entity_no_facts', { defaultValue: '暂无关联 facts' })}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+              {entities.map((e) => (
+                <button
+                  key={e.entity_id}
+                  type="button"
+                  className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-bg-elev-2 transition-colors group"
+                  onClick={async () => {
+                    if (entitiesLoading) return;
+                    setEntitiesLoading(true);
+                    try {
+                      const facts = await memoryEntityFacts(e.name, 20);
+                      setSelectedEntity({ entity: e, facts });
+                    } catch {
+                      setSelectedEntity({ entity: e, facts: [] });
+                    } finally {
+                      setEntitiesLoading(false);
+                    }
+                  }}
+                >
+                  <span className="flex-1 text-xs text-fg truncate">{e.name}</span>
+                  <span className="text-[10px] text-fg-subtle tabular-nums">{e.fact_count}</span>
+                  <Icon
+                    icon={ChevronRight}
+                    size="xs"
+                    className="text-fg-subtle opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

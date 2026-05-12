@@ -340,6 +340,60 @@ export function hermesUserMdWrite(content: string): Promise<HermesMemoryStatus> 
   return invoke<HermesMemoryStatus>('hermes_user_md_write', { content });
 }
 
+export interface MemoryFactHit {
+  fact_id: number;
+  content: string;
+  category: string;
+  trust_score: number;
+}
+
+export interface MemoryEntity {
+  entity_id: number;
+  name: string;
+  entity_type: string;
+  fact_count: number;
+}
+
+export function memoryFactSearch(query: string, limit?: number): Promise<MemoryFactHit[]> {
+  return invoke<MemoryFactHit[]>('memory_fact_search', { query, limit });
+}
+
+export function memoryEntityList(limit?: number): Promise<MemoryEntity[]> {
+  return invoke<MemoryEntity[]>('memory_entity_list', { limit });
+}
+
+export function memoryEntityFacts(entityName: string, limit?: number): Promise<MemoryFactHit[]> {
+  return invoke<MemoryFactHit[]>('memory_entity_facts', { entityName, limit });
+}
+
+export interface EntityRelation {
+  from_id: number;
+  to_id: number;
+  from_name: string;
+  to_name: string;
+  rel_type: string;
+  confidence: number;
+  source: string;
+}
+
+export interface GraphQueryResult {
+  entities: MemoryEntity[];
+  relations: EntityRelation[];
+}
+
+export function coreyRelationAdd(
+  fromEntityName: string,
+  toEntityName: string,
+  relType: string,
+  source?: string,
+): Promise<void> {
+  return invoke<void>('corey_relation_add', { fromEntityName, toEntityName, relType, source });
+}
+
+export function coreyGraphQuery(entityName: string, depth?: number): Promise<GraphQueryResult> {
+  return invoke<GraphQueryResult>('corey_graph_query', { entityName, depth });
+}
+
 /**
  * Aggregate stats for Hermes' built-in `compression:` subsystem.
  *

@@ -557,3 +557,464 @@ mod tests {
         assert_eq!(extract_tokens_saved("tokens saved without number"), None);
     }
 }
+
+// ───────────────────────── Fact retrieval (P1-1) ─────────────────────────
+//
+// Read-only queries against Hermes' `memory_store.db`.
+// Three operations:
+//   1. `memory_fact_search` — FTS5 + trust-weighted search
+//   2. `memory_entity_list` — all entities sorted by fact count
+//   3. `memory_entity_facts` — facts linked to a specific entity
+//
+// All gracefully degrade: if the DB is missing or the schema has
+// changed under us, the caller gets an empty vec and the chat
+// proceeds without fact enrichment.
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MemoryFactHit {
+    pub fact_id: i64,
+    pub content: String,
+    pub category: String,
+    pub trust_score: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MemoryEntity {
+    pub entity_id: i64,
+    pub name: String,
+    pub entity_type: String,
+    pub fact_count: i64,
+}
+
+#[tauri::command]
+pub async fn memory_fact_search(
+    query: String,
+    limit: Option<u32>,
+) -> IpcResult<Vec<MemoryFactHit>> {
+    let lim = limit.unwrap_or(5).min(20);
+    tokio::task::spawn_blocking(move || {
+        let path = memory_db_path().map_err(|e| IpcError::Internal {
+            message: format!("memory db path: {e}"),
+        })?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let conn = rusqlite::Connection::open(&path).map_err(|e| IpcError::Internal {
+            message: format!("open memory_store.db: {e}"),
+        })?;
+
+        let sanitized = sanitize_fact_query(&query);
+        if sanitized.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let sql = format!(
+            "SELECT f.fact_id, f.content, f.category, f.trust_score \
+             FROM facts_fts fts \
+             JOIN facts f ON f.fact_id = fts.rowid \
+             WHERE facts_fts MATCH ? AND f.trust_score >= 0.3 \
+             ORDER BY fts.rank, f.trust_score DESC \
+             LIMIT ?"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
+            message: format!("prepare fact search: {e}"),
+        })?;
+        let rows = stmt
+            .query_map(rusqlite::params![sanitized, lim], |row| {
+                Ok(MemoryFactHit {
+                    fact_id: row.get::<_, i64>(0)?,
+                    content: row.get::<_, String>(1)?,
+                    category: row.get::<_, String>(2)?,
+                    trust_score: row.get::<_, f64>(3)?,
+                })
+            })
+            .map_err(|e| IpcError::Internal {
+                message: format!("execute fact search: {e}"),
+            })?;
+
+        let mut results = Vec::new();
+        for r in rows.flatten() {
+            results.push(r);
+        }
+        Ok(results)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("memory_fact_search join: {e}"),
+    })?
+}
+
+#[tauri::command]
+pub async fn memory_entity_list(limit: Option<u32>) -> IpcResult<Vec<MemoryEntity>> {
+    let lim = limit.unwrap_or(50).min(200);
+    tokio::task::spawn_blocking(move || {
+        let path = memory_db_path().map_err(|e| IpcError::Internal {
+            message: format!("memory db path: {e}"),
+        })?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let conn = rusqlite::Connection::open(&path).map_err(|e| IpcError::Internal {
+            message: format!("open memory_store.db: {e}"),
+        })?;
+
+        let sql = format!(
+            "SELECT e.entity_id, e.name, e.entity_type, COUNT(fe.fact_id) AS fc \
+             FROM entities e \
+             LEFT JOIN fact_entities fe ON fe.entity_id = e.entity_id \
+             GROUP BY e.entity_id \
+             ORDER BY fc DESC \
+             LIMIT ?"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
+            message: format!("prepare entity list: {e}"),
+        })?;
+        let rows = stmt
+            .query_map(rusqlite::params![lim], |row| {
+                Ok(MemoryEntity {
+                    entity_id: row.get::<_, i64>(0)?,
+                    name: row.get::<_, String>(1)?,
+                    entity_type: row.get::<_, String>(2)?,
+                    fact_count: row.get::<_, i64>(3)?,
+                })
+            })
+            .map_err(|e| IpcError::Internal {
+                message: format!("execute entity list: {e}"),
+            })?;
+
+        let mut results = Vec::new();
+        for r in rows.flatten() {
+            results.push(r);
+        }
+        Ok(results)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("memory_entity_list join: {e}"),
+    })?
+}
+
+#[tauri::command]
+pub async fn memory_entity_facts(
+    entity_name: String,
+    limit: Option<u32>,
+) -> IpcResult<Vec<MemoryFactHit>> {
+    let lim = limit.unwrap_or(10).min(50);
+    tokio::task::spawn_blocking(move || {
+        let path = memory_db_path().map_err(|e| IpcError::Internal {
+            message: format!("memory db path: {e}"),
+        })?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let conn = rusqlite::Connection::open(&path).map_err(|e| IpcError::Internal {
+            message: format!("open memory_store.db: {e}"),
+        })?;
+
+        let sql = format!(
+            "SELECT f.fact_id, f.content, f.category, f.trust_score \
+             FROM facts f \
+             JOIN fact_entities fe ON fe.fact_id = f.fact_id \
+             JOIN entities e ON e.entity_id = fe.entity_id \
+             WHERE e.name LIKE ? AND f.trust_score >= 0.3 \
+             ORDER BY f.trust_score DESC \
+             LIMIT ?"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
+            message: format!("prepare entity facts: {e}"),
+        })?;
+        let pattern = format!("%{}%", entity_name);
+        let rows = stmt
+            .query_map(rusqlite::params![pattern, lim], |row| {
+                Ok(MemoryFactHit {
+                    fact_id: row.get::<_, i64>(0)?,
+                    content: row.get::<_, String>(1)?,
+                    category: row.get::<_, String>(2)?,
+                    trust_score: row.get::<_, f64>(3)?,
+                })
+            })
+            .map_err(|e| IpcError::Internal {
+                message: format!("execute entity facts: {e}"),
+            })?;
+
+        let mut results = Vec::new();
+        for r in rows.flatten() {
+            results.push(r);
+        }
+        Ok(results)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("memory_entity_facts join: {e}"),
+    })?
+}
+
+fn sanitize_fact_query(raw: &str) -> String {
+    let q = raw.trim();
+    if q.is_empty() {
+        return String::new();
+    }
+    let mut out = String::with_capacity(q.len());
+    for token in q.split_whitespace() {
+        let clean: String = token
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect();
+        if clean.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&clean);
+    }
+    if out.is_empty() {
+        return String::new();
+    }
+    out
+}
+
+// ───────────────────────── P2: Corey entity relations ─────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EntityRelation {
+    pub from_id: i64,
+    pub to_id: i64,
+    pub from_name: String,
+    pub to_name: String,
+    pub rel_type: String,
+    pub confidence: f64,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GraphQueryResult {
+    pub entities: Vec<MemoryEntity>,
+    pub relations: Vec<EntityRelation>,
+}
+
+fn ensure_corey_tables(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS corey_entity_relations (
+            from_id    INTEGER,
+            to_id      INTEGER,
+            rel_type   TEXT NOT NULL,
+            confidence REAL DEFAULT 0.5,
+            source     TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (from_id, to_id, rel_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_corey_rel_from ON corey_entity_relations(from_id);
+        CREATE INDEX IF NOT EXISTS idx_corey_rel_to ON corey_entity_relations(to_id);
+        CREATE INDEX IF NOT EXISTS idx_corey_rel_type ON corey_entity_relations(rel_type);
+
+        CREATE TABLE IF NOT EXISTS corey_entity_mentions (
+            entity_id    INTEGER,
+            session_id   TEXT NOT NULL,
+            mentioned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            source       TEXT DEFAULT 'chat',
+            PRIMARY KEY (entity_id, session_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_corey_mention_entity ON corey_entity_mentions(entity_id);",
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn corey_relation_add(
+    from_entity_name: String,
+    to_entity_name: String,
+    rel_type: String,
+    source: Option<String>,
+) -> IpcResult<()> {
+    let src = source.unwrap_or_default();
+    tokio::task::spawn_blocking(move || {
+        let path = memory_db_path().map_err(|e| IpcError::Internal {
+            message: format!("memory db path: {e}"),
+        })?;
+        if !path.exists() {
+            return Err(IpcError::Internal {
+                message: "memory_store.db not found".into(),
+            });
+        }
+        let conn = rusqlite::Connection::open(&path).map_err(|e| IpcError::Internal {
+            message: format!("open memory_store.db: {e}"),
+        })?;
+        ensure_corey_tables(&conn).map_err(|e| IpcError::Internal {
+            message: format!("ensure corey tables: {e}"),
+        })?;
+
+        let from_id: i64 = conn
+            .query_row(
+                "SELECT entity_id FROM entities WHERE name LIKE ? LIMIT 1",
+                rusqlite::params![format!("%{}%", from_entity_name)],
+                |row| row.get(0),
+            )
+            .map_err(|e| IpcError::Internal {
+                message: format!("entity '{}' not found: {e}", from_entity_name),
+            })?;
+        let to_id: i64 = conn
+            .query_row(
+                "SELECT entity_id FROM entities WHERE name LIKE ? LIMIT 1",
+                rusqlite::params![format!("%{}%", to_entity_name)],
+                |row| row.get(0),
+            )
+            .map_err(|e| IpcError::Internal {
+                message: format!("entity '{}' not found: {e}", to_entity_name),
+            })?;
+
+        conn.execute(
+            "INSERT OR IGNORE INTO corey_entity_relations (from_id, to_id, rel_type, source) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![from_id, to_id, rel_type, src],
+        )
+        .map_err(|e| IpcError::Internal {
+            message: format!("insert relation: {e}"),
+        })?;
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("corey_relation_add join: {e}"),
+    })?
+}
+
+#[tauri::command]
+pub async fn corey_graph_query(
+    entity_name: String,
+    depth: Option<u32>,
+) -> IpcResult<GraphQueryResult> {
+    let max_depth = depth.unwrap_or(2).min(4);
+    tokio::task::spawn_blocking(move || {
+        let path = memory_db_path().map_err(|e| IpcError::Internal {
+            message: format!("memory db path: {e}"),
+        })?;
+        if !path.exists() {
+            return Ok(GraphQueryResult {
+                entities: Vec::new(),
+                relations: Vec::new(),
+            });
+        }
+        let conn = rusqlite::Connection::open(&path).map_err(|e| IpcError::Internal {
+            message: format!("open memory_store.db: {e}"),
+        })?;
+        let _ = ensure_corey_tables(&conn);
+
+        let start_id: Option<i64> = conn
+            .query_row(
+                "SELECT entity_id FROM entities WHERE name LIKE ? LIMIT 1",
+                rusqlite::params![format!("%{}%", entity_name)],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let start_id = match start_id {
+            Some(id) => id,
+            None => {
+                return Ok(GraphQueryResult {
+                    entities: Vec::new(),
+                    relations: Vec::new(),
+                });
+            }
+        };
+
+        let mut visited: std::collections::HashSet<i64> = std::collections::HashSet::new();
+        visited.insert(start_id);
+        let mut frontier: Vec<i64> = vec![start_id];
+        let mut all_relations: Vec<EntityRelation> = Vec::new();
+
+        for _ in 0..max_depth {
+            let mut next_frontier: Vec<i64> = Vec::new();
+            for eid in &frontier {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT cr.from_id, cr.to_id, cr.rel_type, cr.confidence, cr.source, \
+                     e1.name, e2.name \
+                     FROM corey_entity_relations cr \
+                     JOIN entities e1 ON e1.entity_id = cr.from_id \
+                     JOIN entities e2 ON e2.entity_id = cr.to_id \
+                     WHERE cr.from_id = ?1 OR cr.to_id = ?1",
+                    )
+                    .map_err(|e| IpcError::Internal {
+                        message: format!("prepare graph: {e}"),
+                    })?;
+
+                let rows = stmt
+                    .query_map(rusqlite::params![eid], |row| {
+                        Ok(EntityRelation {
+                            from_id: row.get::<_, i64>(0)?,
+                            to_id: row.get::<_, i64>(1)?,
+                            from_name: row.get::<_, String>(5)?,
+                            to_name: row.get::<_, String>(6)?,
+                            rel_type: row.get::<_, String>(2)?,
+                            confidence: row.get::<_, f64>(3)?,
+                            source: row.get::<_, String>(4)?,
+                        })
+                    })
+                    .map_err(|e| IpcError::Internal {
+                        message: format!("exec graph: {e}"),
+                    })?;
+
+                for r in rows.flatten() {
+                    all_relations.push(r.clone());
+                    if !visited.contains(&r.from_id) {
+                        visited.insert(r.from_id);
+                        next_frontier.push(r.from_id);
+                    }
+                    if !visited.contains(&r.to_id) {
+                        visited.insert(r.to_id);
+                        next_frontier.push(r.to_id);
+                    }
+                }
+            }
+            if next_frontier.is_empty() {
+                break;
+            }
+            frontier = next_frontier;
+        }
+
+        let id_list: Vec<String> = visited.iter().map(|id| id.to_string()).collect();
+        let placeholders = id_list.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT e.entity_id, e.name, e.entity_type, COUNT(fe.fact_id) AS fc \
+             FROM entities e \
+             LEFT JOIN fact_entities fe ON fe.entity_id = e.entity_id \
+             WHERE e.entity_id IN ({}) \
+             GROUP BY e.entity_id",
+            placeholders
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| IpcError::Internal {
+            message: format!("prepare entity batch: {e}"),
+        })?;
+        let params: Vec<&dyn rusqlite::ToSql> = visited
+            .iter()
+            .map(|id| id as &dyn rusqlite::ToSql)
+            .collect();
+        let rows = stmt
+            .query_map(params.as_slice(), |row| {
+                Ok(MemoryEntity {
+                    entity_id: row.get::<_, i64>(0)?,
+                    name: row.get::<_, String>(1)?,
+                    entity_type: row.get::<_, String>(2)?,
+                    fact_count: row.get::<_, i64>(3)?,
+                })
+            })
+            .map_err(|e| IpcError::Internal {
+                message: format!("exec entity batch: {e}"),
+            })?;
+
+        let mut entities = Vec::new();
+        for r in rows.flatten() {
+            entities.push(r);
+        }
+
+        Ok(GraphQueryResult {
+            entities,
+            relations: all_relations,
+        })
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("corey_graph_query join: {e}"),
+    })?
+}

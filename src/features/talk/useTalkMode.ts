@@ -3,7 +3,6 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 import {
   chatStream,
-  hermesApprovalRespond,
   ipcErrorMessage,
   packActiveSouls,
   talkLocalStatus,
@@ -23,6 +22,7 @@ import {
   voiceTts,
   voiceWarmupMic,
   type ChatStreamHandle,
+  type ChatApprovalRequest,
   type TalkLevelPayload,
   type TalkPartialTranscriptPayload,
   type TalkSpeechEndPayload,
@@ -137,6 +137,8 @@ export interface UseTalkModeReturn {
   /** Open macOS System Settings → Privacy & Security → Microphone.
    *  No-op (rejects) on non-macOS. */
   openMicSettings: () => Promise<void>;
+  pendingApproval: ChatApprovalRequest | null;
+  setPendingApproval: (a: ChatApprovalRequest | null) => void;
 }
 
 /**
@@ -226,6 +228,7 @@ export function useTalkMode(): UseTalkModeReturn {
     config: null,
   });
   const [micPermission, setMicPermission] = useState<MicPermission>('unknown');
+  const [pendingApproval, setPendingApproval] = useState<ChatApprovalRequest | null>(null);
   // Disk-probe of whisper.cpp + sherpa-onnx sidecars. Refreshed on
   // mount + after every successful pack download. When both flip
   // true the talk pipeline routes through `talk_local_*` IPCs
@@ -829,12 +832,7 @@ export function useTalkMode(): UseTalkModeReturn {
               }
             },
             onApproval: (approval) => {
-              const runId = approval.run_id ?? approval._session_id ?? '';
-              console.info(
-                '[talk.approval] auto-approving command:',
-                approval.command,
-              );
-              void hermesApprovalRespond(runId, 'session');
+              setPendingApproval(approval);
             },
           },
         )
@@ -1126,5 +1124,7 @@ export function useTalkMode(): UseTalkModeReturn {
     stop,
     cancelTurn,
     openMicSettings,
+    pendingApproval,
+    setPendingApproval,
   };
 }

@@ -155,9 +155,63 @@ if ($env:COREY_INSTALL_DIR) {
 
 if (Get-Command hermes -ErrorAction SilentlyContinue) {
     Info "Hermes already on PATH: $(Get-Command hermes | Select-Object -ExpandProperty Source)"
-    Info "Version: $(hermes --version 2>&1)"
+    Info "Current version: $(hermes --version 2>&1)"
+    $updateCheckOutput = hermes update --check 2>&1
+    $needsUpdate = $false
+    if ($updateCheckOutput -match "update available|commits behind") {
+        $needsUpdate = $true
+    }
+    if ($needsUpdate) {
+        Info "New version available, running hermes update --yes..."
+        $savedEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            hermes update --yes 2>&1 | ForEach-Object { Write-Log 'UPDATE' $_ }
+        } catch {
+            Warn "hermes update failed: $($_.Exception.Message)"
+            if (Test-Path $HermesDir) {
+                Info "Falling back to git pull + reinstall..."
+                Push-Location $HermesDir
+                git pull 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
+                if (Test-Path (Join-Path $HermesDir "venv\Scripts\python.exe")) {
+                    uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
+                }
+                Pop-Location
+            }
+        }
+        $ErrorActionPreference = $savedEAP
+        Info "Updated version: $(hermes --version 2>&1)"
+    } else {
+        Info "Already up to date. Skipping upgrade."
+    }
 } elseif (Test-Path (Join-Path $HermesDir "venv\Scripts\hermes.exe")) {
     Info "Hermes found at $HermesDir\venv"
+    $hermesExe = Join-Path $HermesDir "venv\Scripts\hermes.exe"
+    Info "Current version: $(& $hermesExe --version 2>&1)"
+    $updateCheckOutput = & $hermesExe update --check 2>&1
+    $needsUpdate = $false
+    if ($updateCheckOutput -match "update available|commits behind") {
+        $needsUpdate = $true
+    }
+    if ($needsUpdate) {
+        Info "New version available, upgrading via git pull + reinstall..."
+        $savedEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            Push-Location $HermesDir
+            git pull 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
+            if (Test-Path (Join-Path $HermesDir "venv\Scripts\python.exe")) {
+                uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
+            }
+            Pop-Location
+        } catch {
+            Warn "Upgrade failed: $($_.Exception.Message)"
+            if ($_.InvocationInfo.ScriptLineNumber -gt 0) { Pop-Location }
+        }
+        $ErrorActionPreference = $savedEAP
+    } else {
+        Info "Already up to date. Skipping upgrade."
+    }
 } else {
     $hermesParent = Split-Path $HermesDir
     if (-not (Test-Path $hermesParent)) { New-Item -ItemType Directory -Path $hermesParent -Force | Out-Null }

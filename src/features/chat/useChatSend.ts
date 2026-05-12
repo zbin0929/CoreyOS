@@ -162,7 +162,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
   // Composer would render the "send" button instead of "stop", making
   // the user think the chat terminated. Deriving from store keeps
   // the UI source-of-truth one place.
-  const sending = messages.some((m) => m.role === 'assistant' && m.pending);
+  const sending = messages.some((m) => m.role === 'assistant' && m.streaming);
   const [pendingApproval, setPendingApproval] = useState<ChatApprovalRequest | null>(null);
   const { voiceRecording, onVoiceStart, onVoiceStop } = useVoiceDraft({ setDraft });
 
@@ -179,7 +179,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     messages
       .slice()
       .reverse()
-      .find((m) => m.role === 'assistant' && m.pending)?.id ?? null;
+      .find((m) => m.role === 'assistant' && (m.pending || m.streaming))?.id ?? null;
   const pendingRef = useRef<string | null>(trailingPendingId);
 
   // No-op shim that replaces the old `setSending` setState. Stream
@@ -188,6 +188,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
   // that already runs in those branches (sets `pending: false`).
   // We keep the function signature so call sites don't need to change.
   const setSending = (_v: boolean) => {};
+  const sendingRef = useRef(false);
 
   // T4.4b — breaches flagged by the budget gate on the LAST send
   // attempt. Re-populated (or cleared) every time send() runs so the
@@ -204,6 +205,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     const pending = useComposerStore.getState().pendingDraft;
     setDraft(pending ?? '');
     setSending(false);
+    sendingRef.current = false;
     streamRef.current = null;
     pendingRef.current = null;
   }, [sessionId]);
@@ -220,7 +222,8 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     // Let the user send a message whose payload is purely
     // attachments — the provider still gets a "[attached: …]" marker
     // in the content.
-    if ((!trimmed && !hasAttachments) || sending) return;
+    if ((!trimmed && !hasAttachments) || sending || sendingRef.current) return;
+    sendingRef.current = true;
 
     // T4.4b — budget gate. Runs BEFORE we commit the message to the
     // store so a blocked send leaves the composer exactly as the
@@ -228,7 +231,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     // the verdict to THIS send, fails-safe on IPC errors, mirrors
     // the send() priority order: profile pin > global active > null).
     const gate = await runBudgetGate({ sessionId, effectiveModel, t });
-    if (!gate.proceed) return;
+    if (!gate.proceed) { sendingRef.current = false; return; }
     // Warnings reset every send so the chip row is clearly tied to
     // the current turn, not stale state from an earlier attempt.
     setBudgetWarnings(gate.warnings);
@@ -266,6 +269,7 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
       role: 'assistant',
       content: '',
       pending: true,
+      streaming: true,
       createdAt: Date.now(),
     };
 
@@ -289,7 +293,10 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
       toDto('user', contentForMessage, hasAttachments ? attachmentsSnapshot : undefined),
     ];
 
-    const finalHistory = await enrichHistoryWithContext(historyForIpc, contentForMessage);
+    const { history: finalHistory, memoryFactCount } = await enrichHistoryWithContext(historyForIpc, contentForMessage);
+    if (memoryFactCount > 0) {
+      patchMessage(sessionId, pendingId, { memoryFactCount });
+    }
 
     // T5.5b / T6.4 — adapter routing. The priority-chain logic is
     // factored into `pickTurnAdapter` (pure, fully unit-tested);
@@ -380,9 +387,11 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
       patchMessage(sessionId, pendingId, {
         content: '',
         pending: false,
+        streaming: false,
         error: ipcErrorMessage(e),
       });
       setSending(false);
+      sendingRef.current = false;
       streamRef.current = null;
       pendingRef.current = null;
       ACTIVE_STREAMS.delete(sessionId);
@@ -461,9 +470,11 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
       patchMessage(sessionId, targetId, {
         content: '',
         pending: false,
+        streaming: false,
         error: ipcErrorMessage(e),
       });
       setSending(false);
+      sendingRef.current = false;
       streamRef.current = null;
       pendingRef.current = null;
       ACTIVE_STREAMS.delete(sessionId);
@@ -477,10 +488,11 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
     pendingRef.current = null;
     ACTIVE_STREAMS.delete(sessionId);
     setSending(false);
+    sendingRef.current = false;
     if (handle) await handle.cancel();
     // Keep whatever content we got; drop the "thinking" state.
     if (pendingId) {
-      patchMessage(sessionId, pendingId, { pending: false });
+      patchMessage(sessionId, pendingId, { pending: false, streaming: false });
     }
   }
 

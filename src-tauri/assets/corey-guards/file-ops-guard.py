@@ -44,10 +44,11 @@ so ``hermes_hooks::seed_guards_script`` knows when to overwrite the
 installed copy.
 """
 
-GUARD_VERSION = "3"  # Bump on any behavioural change.
+GUARD_VERSION = "4"  # Bump on any behavioural change.
 
 import hashlib
 import json
+import uuid as _uuid
 import os
 import re
 import subprocess
@@ -136,6 +137,8 @@ TILDE_EQUIV = {
 
 
 DIALOG_SCRIPT = os.path.expanduser("~/.hermes/scripts/confirm_reliable.sh")
+APPROVAL_DIR = os.path.expanduser("~/.hermes/corey-guards/approvals")
+APPROVAL_TTL_SECS = 300
 
 # ── Lock & debounce for dialog anti-spam ──
 if IS_WINDOWS:
@@ -144,6 +147,7 @@ else:
     DIALOG_LOCK = "/tmp/hermes-guard-dialog.lock"
 DIALOG_DEBOUNCE_SECS = 3  # Same reason within 3s → auto-deny
 _last_reasons: dict = {}  # {reason_hash: timestamp}
+_current_session_id: str = ""
 
 
 def _acquire_lock() -> bool:
@@ -216,59 +220,162 @@ def _ask_user_windows(reason: str) -> bool:
         return False
 
 
-def ask_user(reason: str) -> bool:
-    """Show a native confirm dialog. Returns True if user confirmed,
-    False if rejected/timed out/locked/debounced.
+def _discover_corey_port() -> int | None:
+    for candidate in [
+        os.path.expanduser("~/.hermes/corey-guards/corey.port"),
+        os.path.expanduser("~/.hermes/mcp_server.port"),
+    ]:
+        try:
+            with open(candidate) as f:
+                raw = f.read().strip()
+                port = int(raw)
+                if 1024 <= port <= 65535:
+                    return port
+        except (OSError, ValueError):
+            continue
+    try:
+        import re
+        cfg_path = os.path.expanduser("~/.hermes/config.yaml")
+        with open(cfg_path) as f:
+            for line in f:
+                m = re.search(r'url:\s*http://127\.0\.0\.1:(\d+)', line)
+                if m:
+                    return int(m.group(1))
+    except (OSError, ValueError):
+        pass
+    return None
 
-    On Windows we use PowerShell WPF MessageBox. On macOS we use the
-    confirm_reliable.sh script. On other platforms or if the dialog
-    method is unavailable, we **default to deny** — better to block a
-    legit op and have the user retry than to silently allow a
-    destructive one.
-    """
+
+def _ask_user_ipc(reason: str) -> bool | None:
+    port = _discover_corey_port()
+    if port is None:
+        return None
+    try:
+        import urllib.request
+        import urllib.error
+        url = f"http://127.0.0.1:{port}/guard/prompt"
+        payload = json.dumps({
+            "reason": reason,
+            "id": str(_uuid.uuid4()),
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=130) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            allowed = bool(body.get("allowed", False))
+            _log(f"IPC DIALOG: user {'APPROVED' if allowed else 'REJECTED'}")
+            return allowed
+    except Exception as e:
+        _log(f"IPC DIALOG failed (falling back): {e}")
+        return None
+
+
+def _check_pending_approval(reason: str) -> bool:
+    try:
+        if not os.path.isdir(APPROVAL_DIR):
+            return False
+        reason_hash = hashlib.md5(reason.encode()).hexdigest()
+        now = time.time()
+        for fname in os.listdir(APPROVAL_DIR):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(APPROVAL_DIR, fname)
+            try:
+                with open(fpath) as f:
+                    data = json.load(f)
+                if data.get("reason_hash") != reason_hash:
+                    continue
+                if now - data.get("created_at", 0) > APPROVAL_TTL_SECS:
+                    os.remove(fpath)
+                    continue
+                os.remove(fpath)
+                _log(f"PENDING APPROVAL MATCHED: {fname}")
+                return True
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+    except OSError:
+        pass
+    return False
+
+
+def _write_pending_approval(reason: str, session_id: str):
+    try:
+        os.makedirs(APPROVAL_DIR, exist_ok=True)
+        reason_hash = hashlib.md5(reason.encode()).hexdigest()
+        data = {
+            "reason_hash": reason_hash,
+            "reason": reason,
+            "session_id": session_id,
+            "created_at": time.time(),
+        }
+        fname = f"{reason_hash}.json"
+        with open(os.path.join(APPROVAL_DIR, fname), "w") as f:
+            json.dump(data, f)
+    except OSError as e:
+        _log(f"write pending approval failed: {e}")
+
+
+def ask_user(reason: str) -> tuple:
+    if _check_pending_approval(reason):
+        return (True, False)
+
     if _dialog_debounced(reason):
         _log("DIALOG DEBOUNCED (repeated reason)")
-        return False
+        return (False, False)
 
     if not _acquire_lock():
         _log("DIALOG LOCKED (another guard process holds the lock)")
-        return False
+        return (False, False)
 
-    if IS_WINDOWS:
-        try:
-            ok = _ask_user_windows(reason)
-            return ok
-        finally:
-            _release_lock()
-
-    if not os.path.exists(DIALOG_SCRIPT):
-        _log(f"DIALOG SCRIPT MISSING at {DIALOG_SCRIPT} -- defaulting to deny")
-        _release_lock()
-        return False
-
-    title = "Hermes \u6587\u4ef6\u64cd\u4f5c\u786e\u8ba4"
-    msg = f"Hermes \u60f3\u8981\u6267\u884c\u4ee5\u4e0b\u64cd\u4f5c:\n\n{reason}\n\n\u662f\u5426\u5141\u8bb8\uff1f"
     try:
+        ipc_result = _ask_user_ipc(reason)
+        if ipc_result is not None:
+            return (ipc_result, False)
+
+        if IS_WINDOWS:
+            win_result = _ask_user_windows(reason)
+            return (win_result, False)
+
+        if not os.path.exists(DIALOG_SCRIPT):
+            _log(f"DIALOG SCRIPT MISSING at {DIALOG_SCRIPT} -- defaulting to deny")
+            return (False, True)
+
+        title = "Hermes \u6587\u4ef6\u64cd\u4f5c\u786e\u8ba4"
+        msg = f"Hermes \u60f3\u8981\u6267\u884c\u4ee5\u4e0b\u64cd\u4f5c:\n\n{reason}\n\n\u662f\u5426\u5141\u8bb8\uff1f"
         result = subprocess.run(
             [DIALOG_SCRIPT, msg, title],
             capture_output=True, timeout=130,
         )
-        return result.returncode == 0
+        user_responded = result.returncode in (0, 1)
+        return (result.returncode == 0, not user_responded)
     except Exception as e:
         _log(f"ask_user exception: {e}")
-        return False
+        return (False, True)
     finally:
         _release_lock()
 
 
 def block(reason: str):
     _log(f"BLOCK {reason}")
-    if ask_user(reason):
+    approved, was_headless = ask_user(reason)
+    if approved:
         _log(f"USER APPROVED: {reason}")
         allow(note="user-approved-after-block")
     else:
+        if was_headless:
+            _write_pending_approval(reason, _current_session_id)
+            user_reason = (
+                f"{reason}\n\n"
+                "如果确认要执行此操作，请回复「确认执行」，我将重新尝试。"
+            )
+        else:
+            user_reason = reason
         _log(f"USER REJECTED: {reason}")
-        print(json.dumps({"decision": "block", "reason": reason}))
+        print(json.dumps({"decision": "block", "reason": user_reason}))
         sys.exit(0)
 
 
@@ -371,6 +478,8 @@ def main():
     tool_name = payload.get("tool_name", "") or ""
     tool_input = payload.get("tool_input") or payload.get("args") or {}
     cwd = payload.get("cwd") or os.getcwd()
+    global _current_session_id
+    _current_session_id = payload.get("session_id") or ""
     _log(
         f"FIRED tool={tool_name!r} "
         f"input_keys={list(tool_input.keys()) if isinstance(tool_input, dict) else []} "
@@ -448,9 +557,6 @@ def main():
                         f"if they really want it."
                     )
 
-        # Only fire the path scan when the command CONTAINS a
-        # destructive verb. Read-only ops (cat / ls / grep / head)
-        # against a protected path are fine — they're not destructive.
         destructive_verbs = re.compile(
             r"\b(rm|unlink|mv|cp\s+-[^\s]*[fF]|chmod|chown|"
             r"rsync\s+--delete|truncate|shred|"

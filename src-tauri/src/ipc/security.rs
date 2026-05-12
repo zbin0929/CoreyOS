@@ -11,6 +11,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::IpcError;
+
 use crate::error::IpcResult;
 use crate::hermes_hooks;
 use crate::paths;
@@ -131,4 +133,18 @@ pub async fn security_reconcile() -> IpcResult<SecurityStatus> {
         }
     }
     security_status_get().await
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardResolveArgs {
+    pub id: String,
+    pub allowed: bool,
+}
+
+#[tauri::command]
+pub async fn guard_prompt_resolve(args: GuardResolveArgs) -> IpcResult<()> {
+    crate::mcp_server::guard::resolve_guard_prompt(&args.id, args.allowed)
+        .await
+        .map_err(|e| IpcError::Internal { message: e })
 }

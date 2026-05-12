@@ -76,7 +76,7 @@ export function buildStreamCallbacks(
       if (onApproval) onApproval(approval);
     },
     onDone(summary) {
-      patchMessage(sessionId, targetId, { pending: false });
+      patchMessage(sessionId, targetId, { pending: false, streaming: false });
       setSending(false);
       streamRef.current = null;
       pendingRef.current = null;
@@ -111,6 +111,7 @@ export function buildStreamCallbacks(
       patchMessage(sessionId, targetId, {
         content: '',
         pending: false,
+        streaming: false,
         error: ipcErrorMessage(err),
       });
       setSending(false);

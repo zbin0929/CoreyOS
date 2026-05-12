@@ -40,3 +40,12 @@ export function securityStatusGet(): Promise<SecurityStatus> {
 export function securityReconcile(): Promise<SecurityStatus> {
   return invoke<SecurityStatus>('security_reconcile');
 }
+
+export interface GuardResolveArgs {
+  id: string;
+  allowed: boolean;
+}
+
+export function guardPromptResolve(args: GuardResolveArgs): Promise<void> {
+  return invoke<void>('guard_prompt_resolve', { args });
+}

@@ -36,7 +36,7 @@
 | Pack 架构 | 白标基座 + skill-packs + pack-data + 12 视图模板 + license features | ✅ 已落地 | `cross_border_ecom` v0.2.0：3 Skill + 3 Workflow + CompositeDashboard |
 | Browser 工具 | Playwright 子进程 + CDP 直连 | ⚠️ 脆弱 | 见 `known-issues.md` |
 | MCP 管理 | stdio + URL 传输 + 桌面原生工具（通知/文件选择器/深链接） | ✅ 可用 | |
-| Memory | MEMORY.md + USER.md 编辑 + holographic 后端 + FTS5 搜索 | ✅ 可用 | 见 `../spec/memory-strategy.md` |
+| Memory | MEMORY.md + USER.md 编辑 + holographic 后端 + FTS5 搜索 + Chat 自动 fact 召回 + entity 列表 UI + typed relations 图查询 | ✅ 可用 | 见 `../spec/memory-strategy.md` / `../spec/memory-knowledge-graph.md` |
 | 消息渠道 | Telegram / Discord / Slack / WeCom / WeChat / Feishu / WhatsApp / Signal / DingTalk / Email / SMS / iMessage / Matrix / Mattermost / Webhooks / Home Assistant（16 种） | ✅ 可用 | |
 | License | ed25519 离线签名 + machine ID 绑定 + features 联动 | ✅ 已落地 | `scripts/new-customer.sh` 一键交付 |
 | 安全防护（L0-L3） | SOUL.md 铁律 + corey-guards 物理拦截 + Hermes DANGEROUS_PATTERNS + 路径沙箱 | ✅ 已落地 | 审批卡片已修复（`/v1/runs` 迁移） |
@@ -78,6 +78,21 @@
   - `skill_curator` / `skill_hub` / `workflow oneshot` 三个 IPC 改用 `resolve_hermes_binary()` 替代裸 `Command::new("hermes")`，修复 macOS GUI 应用找不到 `~/.local/bin/hermes` 的问题
   - README.md 全面更新：重新组织功能列表、新增 Pages 表格、更新测试计数
   - Release workflow 改为自动发布（`releaseDraft: false`）
+- **2026-05-12 · v0.2.13 Guard IPC 桥接 + IM 通道审批 + UI 修复**：
+  - Guard 审批从 macOS 原生弹窗改为 Corey UI 内嵌审批卡片（`GuardConfirmModal`，样式与 Hermes `ApprovalCard` 一致）
+  - 新增 Rust `guard.rs` IPC 桥接：axum `/guard/prompt` + oneshot channel + Tauri event
+  - IM 通道（微信/Slack/WhatsApp）文件审批协议：pending approval 文件 + "回复「确认执行」"流程，5 分钟 TTL
+  - Talk Mode 审批与 Chat 对齐：不再自动批准，渲染 `ApprovalCard` 等待用户选择
+  - 发送按钮状态修复：`UiMessage.streaming` 与 `pending` 分离，AI 回复期间保持停止按钮
+  - 双重发送防护：`sendingRef` 同步锁防止 Enter + form submit 同时触发
+  - Guard 脚本升级 v3→v4：新增 `_ask_user_ipc` + `_discover_corey_port` + pending approval 文件协议
+- **2026-05-12 · v0.2.13 Memory 知识图谱增强**：
+  - Chat 自动 fact 召回：每条用户消息发送前 FTS5 检索 Hermes `memory_store.db`，命中 facts 注入 context
+  - Chat bubble 召回标签：assistant 消息下方显示"已召回 N 条记忆"金色标签
+  - Memory 页 entity 列表 UI：展示 Hermes holographic 实体 + 关联 facts（category + trust score）
+  - `corey_entity_relations` 表 + BFS 图查询 service（`corey_graph_query` IPC）
+  - `corey_entity_mentions` 表自动建表（为后续 Tier 递进做准备）
+  - 详见 `docs/spec/memory-knowledge-graph.md` v1.2
 - **2026-05-12 · v0.2.12 安全防护体系**：
   - 迁移 `chat_stream` 到 `POST /v1/runs` + `GET /v1/runs/{run_id}/events` SSE，修复 Corey UI 审批卡片不触发的问题
   - 新增 SOUL.md 铁律"禁止虚构工具结果 / 禁止假冒拦截"

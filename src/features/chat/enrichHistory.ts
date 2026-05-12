@@ -4,6 +4,7 @@ import {
   knowledgeSearch,
   learningReadLearnings,
   packActiveSouls,
+  memoryFactSearch,
 } from '@/lib/ipc';
 import { buildBaseSoul } from '@/app/baseSoul';
 
@@ -20,11 +21,17 @@ import { buildBaseSoul } from '@/app/baseSoul';
 // avoids the empty `[Semantically related context]` system block
 // that was eating prompt tokens for nothing.
 
+export interface EnrichResult {
+  history: ChatMessageDto[];
+  memoryFactCount: number;
+}
+
 export async function enrichHistoryWithContext(
   history: ChatMessageDto[],
   userText: string,
-): Promise<ChatMessageDto[]> {
+): Promise<EnrichResult> {
   const enriched = [...history];
+  let memoryFactCount = 0;
 
   try {
     const souls = await packActiveSouls();
@@ -72,6 +79,22 @@ export async function enrichHistoryWithContext(
   }
 
   try {
+    const facts = await memoryFactSearch(userText, 5);
+    if (facts.length > 0) {
+      memoryFactCount = facts.length;
+      const factContext = facts
+        .map((f) => `- ${f.content.slice(0, 300).replace(/\n/g, ' ')}`)
+        .join('\n');
+      enriched.unshift({
+        role: 'system',
+        content: `[Agent memory — facts the agent has learned about the user]\n${factContext}`,
+      });
+    }
+  } catch {
+    // non-critical — proceed without fact enrichment
+  }
+
+  try {
     const learnings = await learningReadLearnings();
     if (learnings && learnings.length > 10) {
       enriched.unshift({
@@ -97,5 +120,5 @@ export async function enrichHistoryWithContext(
     content: buildBaseSoul(),
   });
 
-  return enriched;
+  return { history: enriched, memoryFactCount };
 }

@@ -54,6 +54,7 @@ use tauri::AppHandle;
 use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
+pub mod guard;
 pub mod tools;
 pub mod webhook;
 
@@ -131,8 +132,10 @@ pub fn start(app: AppHandle) {
         warn!(error = %e, "failed to ensure webhook token; webhook will return 503 until fixed");
     }
 
-    let state = McpState { app };
-    let shared = Arc::new(state);
+    let mcp_state = McpState { app: app.clone() };
+    let guard_state = guard::GuardState::new(app.clone());
+    guard::set_guard_state(guard_state.clone());
+    let mcp_shared = Arc::new(mcp_state);
     let router = Router::new()
         // GET → 405 for MCP clients (Accept: text/event-stream),
         //      banner JSON for everyone else. See `handle_get`.
@@ -144,7 +147,16 @@ pub fn start(app: AppHandle) {
             "/webhook/{workflow_id}",
             axum::routing::post(webhook::handle),
         )
-        .with_state(shared);
+        // L2 guard prompt bridge — lets file-ops-guard.py show an
+        // in-app confirmation dialog instead of osascript popup.
+        // Nested under /guard so it gets its own GuardState extractor.
+        .nest(
+            "/guard",
+            axum::Router::new()
+                .route("/prompt", axum::routing::post(guard::handle_guard_prompt))
+                .with_state(guard_state),
+        )
+        .with_state(mcp_shared);
 
     tauri::async_runtime::spawn(async move {
         // Try the pinned port first. Pinning matters because
@@ -194,6 +206,16 @@ pub fn start(app: AppHandle) {
         };
         let _ = BOUND_PORT.set(bound.port());
         info!(port = bound.port(), "MCP server: listening on 127.0.0.1");
+
+        if let Ok(hermes_dir) = crate::paths::hermes_data_dir() {
+            let port_file = hermes_dir.join("corey-guards").join("corey.port");
+            if let Some(parent) = port_file.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Err(e) = std::fs::write(&port_file, bound.port().to_string()) {
+                warn!(error = %e, "MCP server: failed to write guard port file");
+            }
+        }
 
         // Spawn axum::serve onto its OWN tokio task so we can move on
         // to writing config.yaml + restarting Hermes without waiting.

@@ -151,3 +151,132 @@ E2E selector 红一次，commit `4144272` 修。
 3. 启动后端口 9222 听着 + UPS 浏览成功（AI Browser）
 
 任何一项 fail → v0.2.14 热修。
+
+---
+
+## v0.2.13 续 · 下午（14:00-18:00 CST）
+
+> 接上午 session。主题：**Guard IPC 桥接 + IM 通道审批 + Talk Mode 对齐 + UI 修复 + Bootstrap 升级 bug**。
+
+### 1 分钟摘要
+
+8 项改动，全部围绕安全审批体系的完整闭环：
+
+1. **Guard IPC 桥接**：guard 不再弹 macOS 原生对话框，改为 HTTP POST → Rust axum → Tauri event → React `GuardConfirmModal` 内嵌审批卡片
+2. **IM 通道文件审批协议**：微信/Slack 等 headless 场景下 guard 写 pending approval 文件，用户回复"确认执行"后自动放行
+3. **Talk Mode 审批对齐**：不再自动批准，渲染与 Chat 一致的 `ApprovalCard`
+4. **发送按钮状态修复**：`UiMessage.streaming` 与 `pending` 分离，AI 回复期间保持停止按钮
+5. **双重发送防护**：`sendingRef` 同步锁防止 Enter + form submit 同一 tick 触发两次
+6. **Guard 脚本 v3→v4**：新增 `_ask_user_ipc` + `_discover_corey_port` + pending approval 文件协议 + `was_headless` 语义
+7. **Bootstrap 升级 bug 修复**：macOS/Windows 的 bootstrap 脚本在 hermes 已存在时跳过升级，改为先 `hermes update --check` 再决定是否升级
+8. **文档更新**：`defense-in-depth.md` v1.0→v1.1，`CURRENT-STATE.md` 新增 v0.2.13 改动要点
+
+### 关键文件变更
+
+#### Rust Backend（Guard IPC 桥接）
+| 文件 | 变更 |
+|---|---|
+| `src-tauri/src/mcp_server/guard.rs` | 新增 axum `/guard/prompt` + oneshot channel 桥接 |
+| `src-tauri/src/ipc/security.rs` | 新增 `guard_prompt_resolve` IPC command |
+| `src-tauri/src/mcp_server/mod.rs` | route 嵌套 + port file 写 |
+
+#### Frontend
+| 文件 | 变更 |
+|---|---|
+| `src/features/chat/GuardConfirmModal.tsx` | 重写：内嵌审批卡片，4 按钮，loading 状态正确清理 |
+| `src/stores/chatTypes.ts` | `UiMessage` 新增 `streaming?: boolean` |
+| `src/features/chat/useChatSend.ts` | `sending` 从 `streaming` 派生 + `sendingRef` 同步锁 |
+| `src/features/chat/useStreamCallbacks.ts` | `onDone`/`onError` 清 `streaming: false` |
+| `src/features/talk/useTalkMode.ts` | `pendingApproval` 状态，`onApproval` 不再自动批准 |
+| `src/features/talk/TalkModeInline.tsx` | 渲染 `ApprovalCard` |
+
+#### Python Guard
+| 文件 | 变更 |
+|---|---|
+| `src-tauri/assets/corey-guards/file-ops-guard.py` | 新增 `_ask_user_ipc` + `_discover_corey_port` + `_check_pending_approval` + `_write_pending_approval` + `was_headless` 语义 |
+
+#### Bootstrap 脚本
+| 文件 | 变更 |
+|---|---|
+| `src-tauri/assets/scripts/bootstrap-macos.sh` | hermes 已存在时先 `hermes update --check`，有新版才升级 |
+| `src-tauri/assets/scripts/bootstrap-windows.ps1` | 同上，3 个分支（PATH/venv/新装）全部加版本检查 |
+
+### 深度检查发现并修复的 bug
+
+1. **`_check_pending_approval` 排在 `_dialog_debounced` 之后**：Agent 重试 < 3s 时 debounce 直接 deny，pending approval 永远不被检查。修复：交换顺序
+2. **桌面端拒绝也写 pending approval（安全漏洞）**：用户在桌面端点"拒绝"后，下次重试会被自动放行。修复：`ask_user()` 返回 `(approved, was_headless)` 元组，只有 headless 时才写 pending
+
+### CI 状态
+
+- tsc ✅ / cargo check ✅ / 555 tests ✅ / pnpm build ✅
+
+### 下次开场
+
+1. **Windows 实机验收**：guard IPC 审批 + bootstrap 升级 + AI Browser
+2. **部署 guard v4**：`cp` guard 脚本到 `~/.hermes/corey-guards/`
+3. **观察 LLM 撒谎复发**：查 agent.log `api_calls=0` 且 response_chars > 50
+4. **Hermes 0.13 新功能评估**：`hermes update --check` 在 Corey `hermes_update_check` 里的输出格式是否需要适配（v0.13 改了输出文案）
+
+---
+
+## v0.2.13 续 · 晚间（19:00-22:00 CST）
+
+> 接下午 session。主题：**Memory 知识图谱增强 P1 全部 + P2-1/P2-3 落地**。
+
+### 1 分钟摘要
+
+延续 `docs/spec/memory-knowledge-graph.md` v1.1 方案，按优先级顺序实现了 P1（Chat 自动 fact 检索 + entity 列表 UI + 召回标签）+ P2-1（typed relations + 图查询）+ P2-3（entity mentions 表）。
+
+### 实现内容
+
+#### P1-1：Chat 自动 fact 检索
+
+- Rust 端新增 `memory_fact_search(query, limit)` IPC：FTS5 全文检索 Hermes `memory_store.db` 的 `facts_fts` 表，trust_score ≥ 0.3 过滤，`sanitize_fact_query()` 防注入
+- 前端 `enrichHistory.ts` 每条用户消息发送前自动调 `memoryFactSearch`，命中 facts 注入为 `[Agent memory]` system block
+- 返回类型改为 `EnrichResult{history, memoryFactCount}` 以传递召回数量
+
+#### P1-2：Memory 页 entity 列表 UI
+
+- `MemorySection.tsx` 新增 entity 列表面板（最多 50 个，按关联 fact 数排序）
+- 点击 entity → 展开关联 facts 列表（category + trust score + 内容预览）
+- 返回按钮回到列表视图
+
+#### P1-4：Chat bubble 召回标签
+
+- `chatTypes.ts` 新增 `memoryFactCount?: number`
+- `useChatSend.ts` 发送时把 fact count patch 到 assistant message
+- `MessageBubble.tsx` assistant bubble 下方显示金色"已召回 N 条记忆"标签
+
+#### P2-1：corey_entity_relations + 图查询
+
+- `ensure_corey_tables()` 自动建 `corey_entity_relations` + `corey_entity_mentions` 表（`corey_` 前缀避冲突）
+- `corey_relation_add(from, to, rel_type, source)` — 按名字查 entity id，写入 typed relation
+- `corey_graph_query(entity_name, depth)` — BFS 遍历（默认 2 层，最大 4 层），返回 `GraphQueryResult{entities, relations}`
+- 前端 `coreyRelationAdd` / `coreyGraphQuery` IPC 函数 + `EntityRelation` / `GraphQueryResult` 类型
+
+#### P2-3：corey_entity_mentions
+
+- 表已通过 `ensure_corey_tables()` 自动创建，记录 `(entity_id, session_id, mentioned_at, source)`
+- 为后续 Tier 递进逻辑提供数据基础
+
+### CI 状态
+
+- tsc --noEmit ✅
+- cargo check ✅
+- cargo fmt ✅（自动格式化后确认）
+- cargo test --lib：555 passed / 0 failed / 2 ignored ✅
+- pnpm build ✅
+
+### 文档更新
+
+- `docs/spec/memory-knowledge-graph.md` v1.1 → v1.2（状态标记 + 实现记录 + todo checkbox）
+- `docs/user/用户手册.md` Memory 章节更新（entity 列表 + 召回标签说明）
+- `docs/status/CURRENT-STATE.md` Memory 行更新
+- `docs/session-handoff-2026-05-12.md` 本节
+
+### 下次开场
+
+1. **P1-3：中文实体提取**：改 Hermes `store.py:_extract_entities()` 加中文正则，提 PR 给上游
+2. **P2-2：Entity Pages UI**：React Flow 关系图可视化
+3. **Windows 实机验收**：guard IPC + bootstrap + AI Browser
+4. **观察 Hermes holographic 的 fact 提取效果**：确认 FTS5 召回率是否满足中文场景
