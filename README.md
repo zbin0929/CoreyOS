@@ -1,6 +1,7 @@
 # CoreyOS
 
 [![CI](https://github.com/zbin0929/CoreyOS/actions/workflows/ci.yml/badge.svg)](https://github.com/zbin0929/CoreyOS/actions/workflows/ci.yml)
+**English** | [中文](./README.zh-CN.md)
 
 > A developer-first AI control plane built on [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 >
