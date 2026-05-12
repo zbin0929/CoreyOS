@@ -37,6 +37,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 
 use crate::error::{IpcError, IpcResult};
+use crate::hermes_config::gateway::resolve_hermes_binary;
 
 /// Subcommands the UI is allowed to invoke. Anything else is
 /// rejected server-side — the page shouldn't need to escape this
@@ -88,7 +89,18 @@ pub async fn skill_hub_exec(args: Vec<String>) -> IpcResult<HubCommandResult> {
     }
 
     tokio::task::spawn_blocking(move || -> IpcResult<HubCommandResult> {
-        let mut cmd = Command::new("hermes");
+        let binary = match resolve_hermes_binary() {
+            Ok(b) => b,
+            Err(_) => {
+                return Ok(HubCommandResult {
+                    stdout: String::new(),
+                    stderr: "hermes CLI not found".into(),
+                    status: -1,
+                    cli_available: false,
+                })
+            }
+        };
+        let mut cmd = Command::new(&binary);
         cmd.arg("skills").args(&args);
         crate::hermes_config::suppress_window(&mut cmd);
         let output = cmd.output();
@@ -101,7 +113,7 @@ pub async fn skill_hub_exec(args: Vec<String>) -> IpcResult<HubCommandResult> {
             }),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(HubCommandResult {
                 stdout: String::new(),
-                stderr: format!("hermes CLI not found on PATH: {e}"),
+                stderr: format!("hermes CLI not found: {e}"),
                 status: -1,
                 cli_available: false,
             }),

@@ -1381,7 +1381,18 @@ pub struct HermesOneshotResult {
 #[tauri::command]
 pub async fn hermes_oneshot(prompt: String) -> IpcResult<HermesOneshotResult> {
     tokio::task::spawn_blocking(move || -> IpcResult<HermesOneshotResult> {
-        let mut cmd = std::process::Command::new("hermes");
+        let binary = match crate::hermes_config::gateway::resolve_hermes_binary() {
+            Ok(b) => b,
+            Err(_) => {
+                return Ok(HermesOneshotResult {
+                    stdout: String::new(),
+                    stderr: "hermes CLI not found".into(),
+                    status: -1,
+                    cli_available: false,
+                })
+            }
+        };
+        let mut cmd = std::process::Command::new(&binary);
         cmd.arg("-z").arg(&prompt);
         crate::hermes_config::suppress_window(&mut cmd);
         let output = cmd.output();
