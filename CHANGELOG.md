@@ -6,6 +6,57 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-12 — v0.2.14 · Memory 知识图谱增强 + Guard IPC 桥接 + IM 通道审批
+
+> 激活 Hermes holographic 已有的实体图谱能力，补 Hermes 缺失的 typed relations / entity mentions，从"agent 有记忆但用户感知不到"进化到"用户能看见 entity 列表、能感知 agent 召回了什么"。同时完成 Guard IPC 桥接（桌面端不再弹系统对话框）+ IM 通道文件审批协议（微信/Slack 等 headless 场景）+ Talk Mode 审批对齐。
+
+### Shipped
+
+- **Memory 知识图谱增强（P1 全部 + P2-1/P2-3）**
+  - **Chat 自动 fact 召回（P1-1）**：每条用户消息发送前，CoreyOS 用 FTS5 全文检索 Hermes `memory_store.db`，命中的 facts（trust_score ≥ 0.3，最多 5 条）注入对话 context。返回类型从 `ChatMessageDto[]` 改为 `EnrichResult{history, memoryFactCount}`。搜索失败时 graceful degradation，不影响正常聊天。
+  - **Memory 页 entity 列表 UI（P1-2）**：Settings → Memory 新增实体列表面板，展示 Hermes holographic 自动提取的所有实体（最多 50 个，按关联 fact 数排序）。点击实体展开关联 facts 列表，显示分类标签（`preference`/`fact`/`context`）、信任评分、内容预览。
+  - **Chat bubble 召回标签（P1-4）**：assistant 消息下方显示金色"已召回 N 条记忆"标签（Brain icon），让用户直观感知 agent"记得"之前的对话内容。
+  - **Typed Relations（P2-1）**：`memory_store.db` 新建 `corey_entity_relations` 表（`corey_` 前缀避 Hermes 冲突），支持 `works_at`/`invested_in`/`attended` 等关系类型。新增 `corey_relation_add` IPC（按名字查 entity 写入 relation）和 `corey_graph_query` IPC（BFS 遍历，默认 2 层，最大 4 层，返回 `GraphQueryResult{entities, relations}`）。
+  - **Entity Mentions（P2-3）**：`corey_entity_mentions` 表自动建表，记录 `(entity_id, session_id, mentioned_at, source)`，为后续 Tier 递进逻辑（stub → notable → key）提供数据基础。
+  - 新增 Rust IPC commands：`memory_fact_search` / `memory_entity_list` / `memory_entity_facts` / `corey_relation_add` / `corey_graph_query`
+  - 新增前端类型：`MemoryFactHit` / `MemoryEntity` / `EntityRelation` / `GraphQueryResult` + 5 个 invoke 函数
+  - 设计文档：`docs/spec/memory-knowledge-graph.md` v1.2
+
+- **Guard IPC 桥接（桌面端内嵌审批）**
+  - Guard 不再弹 macOS 原生对话框，改为 HTTP POST → Rust axum `/guard/prompt` → oneshot channel → Tauri event → React `GuardConfirmModal` 内嵌审批卡片
+  - 新增 `src-tauri/src/mcp_server/guard.rs`：axum route + port file 写入 + oneshot channel 桥接
+  - 新增 `src/features/chat/GuardConfirmModal.tsx`：4 按钮（允许/拒绝/允许一次/拒绝并记住），loading 状态正确清理
+  - Guard 脚本升级 v3→v4：新增 `_ask_user_ipc` + `_discover_corey_port`
+
+- **IM 通道文件审批协议**
+  - 微信/Slack/WhatsApp 等 headless 场景：guard 写 pending approval 文件，用户回复"确认执行"后自动放行（5 分钟 TTL）
+  - 桌面端拒绝不写 pending（安全：避免下次重试被自动放行）
+  - `was_headless` 语义：只有真正 headless 时才写 pending approval
+
+- **Talk Mode 审批对齐**
+  - 不再自动批准 guard 拦截，渲染与 Chat 一致的 `ApprovalCard`
+  - `pendingApproval` 状态 + `onApproval` 回调
+
+- **UI 状态修复**
+  - `UiMessage.streaming` 与 `pending` 分离，AI 回复期间保持停止按钮
+  - 双重发送防护：`sendingRef` 同步锁防止 Enter + form submit 同时触发
+  - 发送按钮状态从 `streaming` 派生（跨 unmount/remount 存活）
+
+- **Bootstrap 升级 bug 修复**
+  - macOS/Windows 的 bootstrap 脚本在 hermes 已存在时跳过升级 → 改为先 `hermes update --check` 再决定是否升级
+  - Windows 3 个分支（PATH/venv/新装）全部加版本检查
+
+### Fixed
+
+- **Clippy warning**：`format!` 无参数的静态 SQL 字符串改为 `.to_string()`，消除 `useless_format` warning
+- **Guard `_check_pending_approval` 排序**：Agent 重试 < 3s 时 debounce 直接 deny，pending approval 永远不被检查 → 交换顺序修复
+- **桌面端拒绝写 pending（安全漏洞）**：用户在桌面端点"拒绝"后下次重试会被自动放行 → `ask_user()` 返回 `(approved, was_headless)` 元组修复
+
+### CI
+
+- GitHub CI 5/5 全绿：Frontend + Rust (macOS/Ubuntu/Windows) + E2E
+- 本地验证：tsc ✅ / cargo check ✅ / cargo clippy ✅ / cargo fmt ✅ / 555 tests ✅ / pnpm build ✅
+
 ## 2026-05-12 — v0.2.13 · 铁律 + Hermes 管理面板 + Windows AI 浏览器开箱即用 + 切 tab 不断流 + Win guard 真生效
 
 > Pack 永不打包进 release。Hermes 管理走 UI 面板，跨平台（mac launchd / win bootstrap）。AI 浏览器从"opt-in"翻成"opt-out"，让 Windows 跟 macOS 出厂行为对齐。两个 v0.2.12 bug 实测捕获并修复：(1) chat 流中切 tab 切回来感觉"终止"；(2) Win guard 因为 `.py` shebang 不能跑而完全不拦截。
