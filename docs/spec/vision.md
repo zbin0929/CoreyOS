@@ -1,6 +1,6 @@
 # 00 · Vision
 
-**Status as of 2026-05-02**: Phase 0–12 all shipped. v0.2.0 shipped (white-label + Pack loader + 12 view templates + license + analytics). Current release: **v0.2.2**. Next: v0.3.0 (cross-border e-commerce Pack). Business model: **B2B custom delivery only** (no SaaS). See `status/TODO.md` for the locked product direction.
+**Status as of 2026-05-12**: Phase 0–12 all shipped. v0.2.13 released (security hardening + Windows guard fix + CLI resolver fix). Current release: **v0.2.13**. Next: v0.3.0 (cross-border e-commerce Pack). Business model: **B2B custom delivery only** (no SaaS). See `status/TODO.md` for the locked product direction.
 
 ## One-line
 

@@ -1,7 +1,7 @@
 # Roadmap · 路线图
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-10 -->
+<!-- last-verified: 2026-05-12 -->
 <!-- 校验规则：每月校验；发布新版本时同步 Upcoming 和 In progress 节。 -->
 
 > 本文件描述 CoreyOS **未来计划 + 当下在做**。
