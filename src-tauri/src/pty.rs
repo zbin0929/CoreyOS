@@ -146,9 +146,14 @@ mod tests {
     fn spawn_write_read_round_trip() {
         // Skip in CI containers that don't allocate a pty.
         let (tx, rx) = mpsc::channel::<Vec<u8>>();
-        let pty = match spawn(24, 80, move |bytes| {
-            let _ = tx.send(bytes);
-        }, || {}) {
+        let pty = match spawn(
+            24,
+            80,
+            move |bytes| {
+                let _ = tx.send(bytes);
+            },
+            || {},
+        ) {
             Ok(p) => p,
             Err(_) => return, // environment without pty — skip.
         };

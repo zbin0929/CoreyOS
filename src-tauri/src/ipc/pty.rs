@@ -41,12 +41,17 @@ pub async fn pty_spawn(
     let exit_event = format!("pty:exit:{id}");
     let app_for_cb = app.clone();
     let app_for_exit = app.clone();
-    let pty = pty_mod::spawn(rows, cols, move |bytes| {
-        let b64 = base64_encode(&bytes);
-        let _ = app_for_cb.emit(&event, b64);
-    }, move || {
-        let _ = app_for_exit.emit(&exit_event, ());
-    })
+    let pty = pty_mod::spawn(
+        rows,
+        cols,
+        move |bytes| {
+            let b64 = base64_encode(&bytes);
+            let _ = app_for_cb.emit(&event, b64);
+        },
+        move || {
+            let _ = app_for_exit.emit(&exit_event, ());
+        },
+    )
     .map_err(map_anyhow)?;
 
     state.ptys.lock().insert(id.clone(), pty);
