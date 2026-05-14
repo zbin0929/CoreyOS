@@ -160,21 +160,18 @@ fn detect_chrome_path() -> Option<PathBuf> {
     }
     #[cfg(target_os = "windows")]
     {
-        let candidates: Vec<PathBuf> = vec![
+        let mut candidates: Vec<PathBuf> = vec![
             PathBuf::from(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
             PathBuf::from(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
-            PathBuf::from(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
         ];
-        for p in candidates {
-            if p.exists() {
-                return Some(p);
-            }
-        }
-        // LocalAppData install (Chrome per-user installer). We read
-        // %LOCALAPPDATA% directly to avoid pulling in the `dirs`
-        // crate just for this one path. Tauri's Tauri-Windows env
-        // always has this set; the unwrap_or fallback keeps the cfg
-        // block well-formed if someone strips it.
+        // Per-user Chrome installer (most common on Windows — the
+        // default download from google.com/chrome goes here). MUST be
+        // checked before Edge: Edge is always present under Program
+        // Files (bundled with Windows), so placing it earlier would
+        // mask a perfectly good per-user Chrome install. This was the
+        // v0.2.14 bug — Edge was found first, CoreyOS launched Edge
+        // instead of the user's actual Chrome, and the message still
+        // said "Chrome window opened".
         if let Ok(local) = std::env::var("LOCALAPPDATA") {
             let local = PathBuf::from(local);
             for tail in &[
@@ -185,6 +182,18 @@ fn detect_chrome_path() -> Option<PathBuf> {
                 if candidate.exists() {
                     return Some(candidate);
                 }
+            }
+        }
+        // Edge fallback — only if no Chrome / Chromium was found.
+        candidates.push(PathBuf::from(
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        ));
+        candidates.push(PathBuf::from(
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ));
+        for p in candidates {
+            if p.exists() {
+                return Some(p);
             }
         }
         None
@@ -208,6 +217,20 @@ fn detect_chrome_path() -> Option<PathBuf> {
             }
         }
         None
+    }
+}
+
+fn browser_display_name(path: &Path) -> &'static str {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    if name.contains("msedge") {
+        "Edge"
+    } else if name.contains("chromium") {
+        "Chromium"
+    } else {
+        "Chrome"
     }
 }
 
@@ -839,7 +862,7 @@ pub(crate) fn launch_sync(
             // we just reuse what's already there; the user already
             // has a window they can sign in via.
             Ok(false) => {
-                message.push_str("Chrome was already listening on port 9222 — reusing it. ");
+                message.push_str("AI Browser was already listening on port 9222 — reusing it. ");
                 false
             }
             Err(e) => {
@@ -857,9 +880,11 @@ pub(crate) fn launch_sync(
                 "No Chrome / Chromium / Edge installation detected. Please install Chrome first."
                     .to_string(),
         })?;
+        let browser_name = browser_display_name(&chrome);
         spawn_chrome(&chrome, &dir, false)?;
         if !killed_previous {
-            message.push_str("Chrome window opened. ");
+            message.push_str(browser_name);
+            message.push_str(" window opened. ");
         }
         // Wait up to 8 seconds for the debug port to come up. Cold
         // Chrome on macOS typically takes 1-3 seconds; first-ever
@@ -874,7 +899,7 @@ pub(crate) fn launch_sync(
         if !port_is_listening(CDP_PORT) {
             return Err(IpcError::Internal {
                 message: format!(
-                    "Chrome was spawned ({}) but didn't open port {CDP_PORT} within 8 seconds. Try again in a moment, or check that no firewall is blocking localhost.",
+                    "{browser_name} was spawned ({}) but didn't open port {CDP_PORT} within 8 seconds. Try again in a moment, or check that no firewall is blocking localhost.",
                     chrome.display()
                 ),
             });

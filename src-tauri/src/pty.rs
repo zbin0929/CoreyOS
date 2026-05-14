@@ -60,11 +60,13 @@ impl Pty {
 
 /// Spawn a pty running the user's default shell and start a reader
 /// thread that pushes stdout bytes into `on_data`. Returns an `Arc<Pty>`
-/// the caller can store for writes/resizes/kills.
+/// the caller can store for writes/resizes/kills. `on_exit` is called
+/// when the child process exits or the reader encounters an error.
 pub fn spawn(
     rows: u16,
     cols: u16,
     on_data: impl Fn(Vec<u8>) + Send + 'static,
+    on_exit: impl FnOnce() + Send + 'static,
 ) -> anyhow::Result<Arc<Pty>> {
     let pty_system = portable_pty::native_pty_system();
     let PtyPair { master, slave } = pty_system
@@ -111,6 +113,7 @@ pub fn spawn(
                 }
             }
         }
+        on_exit();
     });
 
     Ok(pty)
@@ -145,7 +148,7 @@ mod tests {
         let (tx, rx) = mpsc::channel::<Vec<u8>>();
         let pty = match spawn(24, 80, move |bytes| {
             let _ = tx.send(bytes);
-        }) {
+        }, || {}) {
             Ok(p) => p,
             Err(_) => return, // environment without pty — skip.
         };

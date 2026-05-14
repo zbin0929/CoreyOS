@@ -105,6 +105,7 @@ export function TerminalRoute() {
     terminalPendingReattach.delete(key);
     if (bundle) {
       bundle.unlisten?.();
+      bundle.unlistenExit?.();
       bundle.ro?.disconnect();
       bundle.term.dispose();
       if (bundle.ptyId) {
@@ -119,6 +120,29 @@ export function TerminalRoute() {
     setTabs(prevTabs.filter((tab) => tab.key !== key));
     setActiveKey((prev) => (prev !== key ? prev : pickNeighbour(prevTabs, key)));
   }, [setTabs, setActiveKey]);
+
+  /** Restart an exited tab: clean up old resources and spawn a fresh pty. */
+  const restartTab = useCallback(async (key: string) => {
+    // Clean up old bundle
+    const bundle = terminalBundles.get(key);
+    if (bundle) {
+      bundle.unlisten?.();
+      bundle.unlistenExit?.();
+      bundle.ro?.disconnect();
+      bundle.term.dispose();
+      terminalBundles.delete(key);
+    }
+    
+    // Reset state to starting
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.key === key ? { ...tab, state: { kind: 'starting' } } : tab,
+      ),
+    );
+    
+    // Re-add to pending init
+    terminalPendingInit.add(key);
+  }, [setTabs]);
 
   /** Mount xterm + spawn pty for any tabs in `pendingInitRef` whose
    *  host div has attached. Runs synchronously after every render
@@ -174,6 +198,7 @@ export function TerminalRoute() {
       term,
       fit,
       unlisten: null,
+      unlistenExit: null,
       ro: null,
       ptyId: null,
     };
@@ -187,10 +212,22 @@ export function TerminalRoute() {
         term.write(base64DecodeToUint8(e.payload));
       });
       bundle.unlisten = unlisten;
+
+      // Listen for pty exit events to mark tab as exited
+      const unlistenExit = await listen(`pty:exit:${ptyId}`, () => {
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.key === key ? { ...tab, state: { kind: 'exited' } } : tab,
+          ),
+        );
+      });
+      bundle.unlistenExit = unlistenExit;
+
       await ptySpawn(ptyId, rows, cols);
       bundle.ptyId = ptyId;
     } catch (e) {
       unlisten?.();
+      bundle.unlistenExit?.();
       term.dispose();
       terminalBundles.delete(key);
       setTabs((prev) =>
@@ -457,6 +494,7 @@ export function TerminalRoute() {
             activeKey={activeKey}
             onSelect={setActiveKey}
             onClose={(key) => void closeTab(key)}
+            onRestart={(key) => void restartTab(key)}
           />
         )}
         {headerError && (

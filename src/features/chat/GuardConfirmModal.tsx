@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ShieldAlert, X, Check, Clock, Infinity as InfinityIcon } from 'lucide-react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -7,6 +7,58 @@ import { guardPromptResolve, type GuardResolveArgs } from '@/lib/ipc/security';
 interface GuardPromptEvent {
   id: string;
   reason: string;
+}
+
+const RE_STRUCTURED =
+  /Corey guard: (\w+) blocked on protected path (.+?) \(under (.+?)\)\./;
+const RE_CODE =
+  /Corey guard: (\w+) blocked because the snippet would touch protected path under (.+?)\. Code: (.+?)\./;
+const RE_SHELL_PYTHON =
+  /Corey guard: shell command blocked — it runs inline Python against protected path under (.+?)\. Command: (.+?)\./;
+const RE_SHELL_DESTRUCTIVE =
+  /Corey guard: shell command blocked because it would touch protected path under (.+?)\. Command: (.+?)\./;
+
+function translateGuardReason(
+  reason: string,
+  t: (key: string, args?: Record<string, string>) => string,
+): string {
+  let m: RegExpMatchArray | null;
+
+  m = reason.match(RE_STRUCTURED);
+  if (m) {
+    return t('chat_page.guard_structured_block', {
+      tool: m[1]!,
+      path: m[2]!,
+      prefix: m[3]!,
+    });
+  }
+
+  m = reason.match(RE_CODE);
+  if (m) {
+    return t('chat_page.guard_code_block', {
+      tool: m[1]!,
+      prefix: m[2]!,
+      code: m[3]!,
+    });
+  }
+
+  m = reason.match(RE_SHELL_PYTHON);
+  if (m) {
+    return t('chat_page.guard_shell_inline_python_block', {
+      prefix: m[1]!,
+      cmd: m[2]!,
+    });
+  }
+
+  m = reason.match(RE_SHELL_DESTRUCTIVE);
+  if (m) {
+    return t('chat_page.guard_shell_destructive_block', {
+      prefix: m[1]!,
+      cmd: m[2]!,
+    });
+  }
+
+  return reason;
 }
 
 export function GuardConfirmModal() {
@@ -46,6 +98,11 @@ export function GuardConfirmModal() {
     if (pending) setLoading(null);
   }, [pending]);
 
+  const translatedReason = useMemo(
+    () => (pending ? translateGuardReason(pending.reason, t) : ''),
+    [pending, t],
+  );
+
   if (!pending) return null;
 
   const btnBase =
@@ -64,7 +121,7 @@ export function GuardConfirmModal() {
 
       <div className="ml-6 rounded-lg border border-border/60 bg-bg-elev-2/80 px-3 py-2">
         <code className="block text-xs text-fg-muted font-mono whitespace-pre-wrap break-all leading-relaxed">
-          {pending.reason}
+          {translatedReason}
         </code>
       </div>
 

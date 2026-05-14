@@ -18,12 +18,14 @@ export interface Tab {
 export type PtyState =
   | { kind: 'starting' }
   | { kind: 'running'; id: string }
+  | { kind: 'exited' }
   | { kind: 'error'; message: string };
 
 export interface XtermBundle {
   term: Terminal;
   fit: FitAddon;
   unlisten: UnlistenFn | null;
+  unlistenExit: UnlistenFn | null;
   ro: ResizeObserver | null;
   /** Set once `ptySpawn` returns; used by teardown to kill the
    *  backend pty. Null while `starting`. */

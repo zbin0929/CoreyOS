@@ -1,4 +1,4 @@
-import { forwardRef, useMemo } from 'react';
+import { forwardRef, useMemo, useState, useCallback } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { MessageBubble } from './MessageBubble';
 import type { UiMessage, UiSuggestion } from '@/stores/chat';
@@ -58,9 +58,12 @@ interface MessageListProps {
 
 export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
   function MessageList({ messages, activeMatchId, onRetryLastAssistant, onSuggestionConfirm, onSuggestionDismiss }, ref) {
-    // Precompute the index of the last assistant row once per render
-    // pass so the per-row `itemContent` closure doesn't re-scan the
-    // array on every scroll event. `-1` when no such row exists.
+    const [atBottom, setAtBottom] = useState(true);
+
+    const handleAtBottomChange = useCallback((bottom: boolean) => {
+      setAtBottom(bottom);
+    }, []);
+
     const lastAssistantIdx = useMemo(() => {
       for (let i = messages.length - 1; i >= 0; i--) {
         if (messages[i]!.role === 'assistant') return i;
@@ -122,7 +125,8 @@ export const MessageList = forwardRef<VirtuosoHandle, MessageListProps>(
         // "Stick to bottom when the user is at bottom; leave them
         // alone otherwise." Matches the old autoscroll-on-every-
         // render behaviour but respects manual scroll-up.
-        followOutput="smooth"
+        followOutput={atBottom ? 'smooth' : false}
+        atBottomStateChange={handleAtBottomChange}
         // A short overscan means slightly richer scrolling at the
         // cost of a few extra rendered rows. `200` picked by eyeball:
         // small enough that memory stays flat, big enough that fast

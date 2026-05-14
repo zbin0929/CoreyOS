@@ -507,6 +507,18 @@ def main():
 
     # ───── Path 3: code execution (Python) ─────
     if tool_name in CODE_TOOLS:
+        # Prevent code execution in protected directories (e.g., Desktop)
+        # to avoid creating garbage script files
+        cwd_norm = _norm(cwd)
+        for prefix in PROTECTED_PREFIXES:
+            if cwd_norm.startswith(prefix):
+                block(
+                    f"Corey guard: {tool_name} blocked because current "
+                    f"working directory ({cwd}) is in a protected zone "
+                    f"({prefix}). Code execution in this location would "
+                    f"create temporary files that clutter the directory."
+                )
+        
         code = (
             tool_input.get("code")
             or tool_input.get("source")
@@ -531,6 +543,18 @@ def main():
 
     # ───── Path 2: shell / terminal command string ─────
     if tool_name in SHELL_TOOLS:
+        # Prevent shell commands in protected directories (e.g., Desktop)
+        # to avoid creating garbage script files
+        cwd_norm = _norm(cwd)
+        for prefix in PROTECTED_PREFIXES:
+            if cwd_norm.startswith(prefix):
+                block(
+                    f"Corey guard: {tool_name} blocked because current "
+                    f"working directory ({cwd}) is in a protected zone "
+                    f"({prefix}). Shell commands in this location would "
+                    f"create temporary files that clutter the directory."
+                )
+        
         cmd = (
             tool_input.get("command")
             or tool_input.get("cmd")

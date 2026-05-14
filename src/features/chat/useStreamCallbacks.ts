@@ -17,6 +17,8 @@ import { useAgentsStore } from '@/stores/agents';
 
 import { ACTIVE_STREAMS } from './activeStreams';
 
+const STREAM_WATCHDOG_MS = 120_000;
+
 type StreamCallbacks = {
   onDelta: (chunk: string) => void;
   onReasoning: (chunk: string) => void;
@@ -41,8 +43,37 @@ export function buildStreamCallbacks(
   onStreamDone?: (pendingId: string, userText: string, summary: ChatStreamDone) => void,
   onApproval?: (approval: ChatApprovalRequest) => void,
 ): StreamCallbacks {
+  let watchdogId: ReturnType<typeof setTimeout> | null = null;
+  let settled = false;
+
+  function resetWatchdog() {
+    if (watchdogId !== null) clearTimeout(watchdogId);
+    if (settled) return;
+    watchdogId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      patchMessage(sessionId, targetId, {
+        pending: false,
+        streaming: false,
+        error: 'Stream timed out — no data received for 2 minutes. The connection may have been lost.',
+      });
+      setSending(false);
+      streamRef.current = null;
+      pendingRef.current = null;
+      ACTIVE_STREAMS.delete(sessionId);
+    }, STREAM_WATCHDOG_MS);
+  }
+
+  function markSettled() {
+    settled = true;
+    if (watchdogId !== null) clearTimeout(watchdogId);
+  }
+
+  resetWatchdog();
+
   return {
     onDelta(chunk) {
+      resetWatchdog();
       const sess = useChatStore.getState().sessions[sessionId];
       const current = sess?.messages.find((m) => m.id === targetId);
       patchMessage(sessionId, targetId, {
@@ -51,6 +82,7 @@ export function buildStreamCallbacks(
       });
     },
     onReasoning(chunk) {
+      resetWatchdog();
       const sess = useChatStore.getState().sessions[sessionId];
       const current = sess?.messages.find((m) => m.id === targetId);
       patchMessage(sessionId, targetId, {
@@ -59,6 +91,7 @@ export function buildStreamCallbacks(
       });
     },
     onTool(progress) {
+      resetWatchdog();
       appendToolCall(sessionId, targetId, {
         id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         tool: progress.tool,
@@ -76,6 +109,7 @@ export function buildStreamCallbacks(
       if (onApproval) onApproval(approval);
     },
     onDone(summary) {
+      markSettled();
       patchMessage(sessionId, targetId, { pending: false, streaming: false });
       setSending(false);
       streamRef.current = null;
@@ -108,6 +142,7 @@ export function buildStreamCallbacks(
       }
     },
     onError(err) {
+      markSettled();
       patchMessage(sessionId, targetId, {
         content: '',
         pending: false,

@@ -38,12 +38,14 @@ pub async fn pty_spawn(
     }
 
     let event = format!("pty:data:{id}");
+    let exit_event = format!("pty:exit:{id}");
     let app_for_cb = app.clone();
+    let app_for_exit = app.clone();
     let pty = pty_mod::spawn(rows, cols, move |bytes| {
-        // base64-encode so the event payload stays clean ASCII; a
-        // terminal stream is a stream of opaque bytes.
         let b64 = base64_encode(&bytes);
         let _ = app_for_cb.emit(&event, b64);
+    }, move || {
+        let _ = app_for_exit.emit(&exit_event, ());
     })
     .map_err(map_anyhow)?;
 
