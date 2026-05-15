@@ -137,10 +137,10 @@ pub fn cron_overrides_from_fuel_rate_config(pack_data_dir: &Path) -> HashMap<Str
 /// appears in the manifest schedule id (e.g. name "早盘抓取" →
 /// match id containing "930", name "兜底抓取" → match id containing
 /// "1030"). Empty map if the file does not exist.
-pub fn cron_overrides_from_exchange_rate_config(
-    pack_data_dir: &Path,
-) -> HashMap<String, String> {
-    let path = pack_data_dir.join("config").join("exchange-rate-config.yaml");
+pub fn cron_overrides_from_exchange_rate_config(pack_data_dir: &Path) -> HashMap<String, String> {
+    let path = pack_data_dir
+        .join("config")
+        .join("exchange-rate-config.yaml");
     let mut overrides: HashMap<String, String> = HashMap::new();
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return overrides;
