@@ -354,6 +354,15 @@ pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    if version < 15 {
+        conn.execute_batch(
+            r#"
+            ALTER TABLE workflow_step_runs ADD COLUMN step_name TEXT;
+            PRAGMA user_version = 15;
+            "#,
+        )?;
+    }
+
     Ok(())
 }
 

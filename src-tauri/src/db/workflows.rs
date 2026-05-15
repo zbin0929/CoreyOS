@@ -99,11 +99,12 @@ impl Db {
                 .map(|v| serde_json::to_string(v).unwrap_or_else(|_| "null".to_string()));
             txn.execute(
                 "INSERT INTO workflow_step_runs
-                   (run_id, step_id, status, output, error, duration_ms, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                   (run_id, step_id, step_name, status, output, error, duration_ms, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     run.id,
                     step_id,
+                    sr.step_name,
                     step_status,
                     output_json,
                     sr.error,
@@ -161,7 +162,7 @@ impl Db {
         // Hydrate step rows in a second pass so we can use a prepared
         // statement reused across runs.
         let mut step_stmt = conn.prepare(
-            "SELECT step_id, status, output, error, duration_ms
+            "SELECT step_id, step_name, status, output, error, duration_ms
              FROM workflow_step_runs
              WHERE run_id = ?1",
         )?;
@@ -169,10 +170,11 @@ impl Db {
             let mut rows = step_stmt.query(params![run.id])?;
             while let Some(row) = rows.next()? {
                 let step_id: String = row.get(0)?;
-                let status_str: String = row.get(1)?;
-                let output_str: Option<String> = row.get(2)?;
-                let error: Option<String> = row.get(3)?;
-                let duration_ms: Option<i64> = row.get(4)?;
+                let step_name: Option<String> = row.get(1)?;
+                let status_str: String = row.get(2)?;
+                let output_str: Option<String> = row.get(3)?;
+                let error: Option<String> = row.get(4)?;
+                let duration_ms: Option<i64> = row.get(5)?;
 
                 let status: StepRunStatus =
                     serde_json::from_value(serde_json::Value::String(status_str))
@@ -183,6 +185,7 @@ impl Db {
                     step_id.clone(),
                     StepRun {
                         step_id,
+                        step_name,
                         status,
                         output,
                         error,
@@ -333,17 +336,18 @@ impl Db {
         };
 
         let mut stmt = conn.prepare(
-            "SELECT step_id, status, output, error, duration_ms
+            "SELECT step_id, step_name, status, output, error, duration_ms
              FROM workflow_step_runs
              WHERE run_id = ?1",
         )?;
         let mut rows = stmt.query(params![run_id])?;
         while let Some(row) = rows.next()? {
             let step_id: String = row.get(0)?;
-            let status_str: String = row.get(1)?;
-            let output_str: Option<String> = row.get(2)?;
-            let error: Option<String> = row.get(3)?;
-            let duration_ms: Option<i64> = row.get(4)?;
+            let step_name: Option<String> = row.get(1)?;
+            let status_str: String = row.get(2)?;
+            let output_str: Option<String> = row.get(3)?;
+            let error: Option<String> = row.get(4)?;
+            let duration_ms: Option<i64> = row.get(5)?;
             let status: StepRunStatus =
                 serde_json::from_value(serde_json::Value::String(status_str))
                     .unwrap_or(StepRunStatus::Pending);
@@ -353,6 +357,7 @@ impl Db {
                 step_id.clone(),
                 StepRun {
                     step_id,
+                    step_name,
                     status,
                     output,
                     error,

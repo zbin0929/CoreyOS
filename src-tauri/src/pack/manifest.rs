@@ -297,7 +297,7 @@ pub struct ConfigField {
     pub key: String,
     #[serde(default)]
     pub label: String,
-    /// `secret | string | number | enum | bool`. Loader-side enum;
+    /// `secret | string | number | enum | bool | url`. Loader-side enum;
     /// kept as a String here to avoid breaking on additions.
     #[serde(rename = "type")]
     pub field_type: String,
@@ -311,6 +311,18 @@ pub struct ConfigField {
     pub options: Vec<String>,
     #[serde(default)]
     pub description: String,
+    /// Help text shown below the field.
+    #[serde(default)]
+    pub help: String,
+    /// Group name for visual grouping in the UI.
+    #[serde(default)]
+    pub group: String,
+    /// Validation rule (e.g., "url", "email", "min:3", "max:100").
+    #[serde(default)]
+    pub validation: String,
+    /// Placeholder text.
+    #[serde(default)]
+    pub placeholder: String,
 }
 
 /// A migration step from one Pack version to the next. Run by the

@@ -1,7 +1,7 @@
 # CoreyOS 全局 TODO
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-12 -->
+<!-- last-verified: 2026-05-14 -->
 <!-- 校验规则：每 30 天一次；超过 500 行需立刻拆分或归档 -->
 
 > ⛔ **2026-05-10 起本文件暂被 [`FOCUS.md`](./FOCUS.md) 覆盖。**
@@ -127,7 +127,64 @@
 
 ---
 
-## 五、其他行业 Pack（P-2 ~ P-8 · 触发式）
+## 五、企业 RPA Pack — 美正（v0.3.x · 设计完成 / 待客户对齐启动）
+
+- **状态**：架构设计已完成，详见 [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md)
+- **目标版本**：v0.3.x（与 v0.3.0 跨境电商并行，不互相阻塞）
+- **客户**：美正（首例）— 实际是企业 RPA 通用架构的第一个落地实例
+- **关键约束**：美正OS 无 API · Win+Mac 混部 · 多角色权限 · 不上专用服务器（复用员工现有 PC）
+
+### 需求清单（6 条已知 + 后续追加）
+
+| # | 需求 | 模式 | 触发 | 跑在哪 |
+|---|---|---|---|---|
+| 1 | 中行美金现汇卖出价 → 美正OS | Pattern A: Scrape→Push | 工作日 09:31 后 | runner |
+| 2 | UPS/Fedex/USPS 月度分区 → 美正OS | Pattern B: 多源→规则→Push | 每月 1 号后 | runner |
+| 3 | 财务发票自动化 | Pattern D: 文档→结构化→Push | 邮件/上传事件 | runner |
+| 4 | 领星费用导出 → 美正OS | Pattern B 浏览器版 | 每月 1-3 号 | runner |
+| 5 | 一件代发订单取消 | Pattern C: 事件→操作 | UI 按钮 | end_user |
+| 6 | UPS/Fedex 燃油费率 | Pattern A | 周一上班前 | runner |
+
+### 关键设计决策（不再讨论）
+
+| 决策 | 理由 |
+|---|---|
+| 不上专用服务器，混合 runner/end_user 部署 | 复用客户现有员工 PC，零额外硬件成本 |
+| 目标系统无 API → Adapter MCP 内部走 Playwright RPA | Tool surface 不变，未来上 API 切底层即可 |
+| 分布式锁存目标系统自己一张表 | 零外部依赖，审计直观 |
+| 时间窗调度而非准点（`first_after HH:MM`）| 员工 PC 开机时间不固定，配 Owner + Failover 兜底 |
+| 锁屏可跑、睡眠不可跑 | 安装向导自动配电源管理 + 开机自启 + 防 App Nap |
+| Workflow 模式库 A/B/C/D | 新需求按模板填空，1-3 天/条 |
+| 复用 Hermes `vue-element-ui-automation` skill | HD-1：上游已有，不重写 |
+
+### 待客户 Kickoff 对齐（阻塞工程启动）
+
+详见 [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md) § 十四：
+
+- [ ] 美正OS 是否真无 API
+- [ ] 能否开放一张表给 Corey 存 corey_locks / corey_heartbeats
+- [ ] user_role 完整列表 + runner 候选机器清单
+- [ ] 6 条需求各自的时间敏感度
+- [ ] 失败通知首选渠道（企业微信/钉钉/飞书/邮件）
+- [ ] UI 改版提前通知 N 天（合同条款）
+
+### 执行计划（阶段化）
+
+| 阶段 | 周次 | 交付物 |
+|---|---|---|
+| 阶段 0 | Week 0 | 客户对齐 11 条开放问题 |
+| 阶段 1 | Week 1-2 | Workflow Engine 节点扩展 + 分布式锁库 + 凭证库 + Adapter 框架 |
+| 阶段 2 | Week 3-4 | 美正 Pack v0.1（需求 #1 + #6）端到端 |
+| 阶段 3 | Week 5-7 | 美正 Pack v0.2（需求 #2 + #4 + #5）端到端 |
+| 阶段 4 | Week 8-11 | 美正 Pack v0.3（需求 #3 财务发票）|
+
+### 通用化（v0.4.x 之后）
+
+设计上已为后续企业客户做好抽象 —— `templates/patterns/` 跨 Pack 复用，水平 skill（中行汇率、UPS 分区等）抽到 `corey-horizontal-skills/`。第 N 个企业客户工期预期 4-8 周（取决于目标系统复杂度）。
+
+---
+
+## 六、其他行业 Pack（P-2 ~ P-8 · 触发式）
 
 不主动开发。真实付费客户合同到位时启动对应 Pack，沿用 P-1 模板（manifest + 视图 + Skill + Workflow + MCP）。
 
@@ -137,7 +194,7 @@
 
 ---
 
-## 六、永远不做（商业模式 / 架构决策）
+## 七、永远不做（商业模式 / 架构决策）
 
 | 砍掉项 | 原因 |
 |---|---|
@@ -157,7 +214,7 @@
 
 ---
 
-## 七、基座能力速查（B-1 ~ B-12 全部 ✅）
+## 八、基座能力速查（B-1 ~ B-12 全部 ✅）
 
 | # | 能力 | 版本 | 交付核心 |
 |---|---|---|---|
@@ -180,7 +237,7 @@ DataTable / MetricsCard / TimeSeriesChart / PivotTable / TrendsMatrix / Timeline
 
 ---
 
-## 八、关键决策记录（不再讨论）
+## 九、关键决策记录（不再讨论）
 
 | 日期 | 决策 | 理由 |
 |---|---|---|
@@ -199,7 +256,7 @@ DataTable / MetricsCard / TimeSeriesChart / PivotTable / TrendsMatrix / Timeline
 
 ---
 
-## 九、提交前必跑的本地检查（CI 第一关）
+## 十、提交前必跑的本地检查（CI 第一关）
 
 CI 在 Rust 任何 push 上跑这两个 gate；**本地不通过就别 push**：
 
@@ -219,7 +276,7 @@ pnpm tsc --noEmit && pnpm lint && pnpm vitest run
 
 **教训**（2026-04-30）：`cargo test` 通过 ≠ CI 通过。连续两个 commit（license / customer.yaml）因未跑 gate 导致 CI 红灯。
 
-## 十、当下阻塞 & 下次会话起手
+## 十一、当下阻塞 & 下次会话起手
 
 1. **Amazon SP-API 开发者账号**：审核中。SP-API 到位后启动 P-1 P1（预估 1-2 周）。
 2. **端到端行业链路 demo**：见 § 一 · 第 2 项。Soul 注入已打通，可立即用跨境电商 Pack 跑完整 demo。

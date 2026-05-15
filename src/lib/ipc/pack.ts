@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { WorkflowSummary } from './runtime';
 
 /**
  * Wire types for the Pack subsystem (`crate::ipc::pack`).
@@ -84,12 +85,35 @@ export function packViewData(
   return invoke<unknown>('pack_view_data', { packId, viewId, params: params ?? {} });
 }
 
+export interface PackConfigSchemaField {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  secret: boolean;
+  description: string;
+  help: string;
+  group: string;
+  validation: string;
+  placeholder: string;
+  default: unknown;
+  options: string[];
+}
+
+export function packConfigSchema(packId: string): Promise<PackConfigSchemaField[]> {
+  return invoke<PackConfigSchemaField[]>('pack_config_schema', { packId });
+}
+
 export function packConfigGet(packId: string): Promise<Record<string, unknown>> {
   return invoke<Record<string, unknown>>('pack_config_get', { packId });
 }
 
 export function packConfigSet(packId: string, config: Record<string, unknown>): Promise<void> {
   return invoke<void>('pack_config_set', { packId, config });
+}
+
+export function packWorkflowsList(): Promise<WorkflowSummary[]> {
+  return invoke<WorkflowSummary[]>('pack_workflows_list');
 }
 
 export function packImportZip(zipPath: string): Promise<string> {

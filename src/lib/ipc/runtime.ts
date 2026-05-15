@@ -796,6 +796,7 @@ export function workflowApprove(
 
 export interface WorkflowStepRun {
   step_id: string;
+  step_name?: string;
   /**
    * `awaiting_approval` was added when the engine learned to actually
    * pause on `approval` steps (previously they auto-approved silently).

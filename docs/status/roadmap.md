@@ -1,7 +1,7 @@
 # Roadmap · 路线图
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-12 -->
+<!-- last-verified: 2026-05-14 -->
 <!-- 校验规则：每月校验；发布新版本时同步 Upcoming 和 In progress 节。 -->
 
 > 本文件描述 CoreyOS **未来计划 + 当下在做**。
@@ -30,6 +30,7 @@
 |---|---|---|
 | **v0.3.0** | [`TODO.md`](./TODO.md) § P-1 | 跨境电商 Pack（SP-API 真实数据接入 · MCP 浏览器自动化 · 9 能力矩阵 P1 批次）|
 | **v0.3.1** | 客户反馈驱动 | 9 能力矩阵 P2 + 第一个真实客户运行数据验证 |
+| **v0.3.x** | [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md) | 企业 RPA Pack 通用架构（首例：美正）— 混合 runner/end_user 部署 · 无 API 走浏览器自动化 · 分布式锁 · 时间窗 + Owner + Failover 调度 · Pattern A/B/C/D 模板库 |
 | v0.3.2+ | 客户反馈驱动 | 视第一个真实客户的使用数据决定 |
 
 ---
@@ -69,6 +70,7 @@
 | Tauri 2 updater 签名在 Win/mac 上复杂 | 高 | 中 | 详见 [`../spec/release.md`](../spec/release.md) |
 | Amazon SP-API 开发者资格卡审批 | 高 | 高 | 预留备选 Pack（电商工具替代品 / 新行业） |
 | Bundle 体积蠕增 | 高 | 低 | CI size budget + Rollup visualizer |
+| 企业 RPA 目标系统 UI 改版（如美正OS） | 高 | 高 | Adapter 启动探测 + 合同要求改版前通知 N 天，详见 [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md) § 风险登记 |
 
 ---
 

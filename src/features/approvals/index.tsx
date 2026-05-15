@@ -185,7 +185,7 @@ export function ApprovalsRoute() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-2">
                     <h3 className="truncate text-sm font-semibold text-fg">
-                      {step.step_id}
+                      {step.step_name || step.step_id}
                     </h3>
                     <span className="text-[11px] text-fg-subtle">
                       {workflowId} · run {runId.slice(0, 8)}

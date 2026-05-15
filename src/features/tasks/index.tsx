@@ -561,7 +561,7 @@ function StepRow({ step, runId }: { step: WorkflowStepRun; runId: string }) {
         >
           {step.status}
         </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-fg">{step.step_id}</span>
+        <span className="min-w-0 flex-1 truncate text-fg">{step.step_name || step.step_id}</span>
         {step.duration_ms != null && (
           <span className="shrink-0 tabular-nums text-fg-subtle">
             {step.duration_ms >= 1000

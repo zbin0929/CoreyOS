@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
   Clock,
+  Download,
   Loader2,
   XCircle,
 } from 'lucide-react';
@@ -53,6 +54,28 @@ export function WorkflowRunView({
         subtitle={running ? t('workflow_page.running') : t('workflow_page.run_result')}
         actions={
           <div className="flex items-center gap-2">
+            {runResult && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const logData = {
+                    workflow: { id: wf.id, name: wf.name },
+                    run: runResult,
+                    timestamp: new Date().toISOString(),
+                  };
+                  const blob = new Blob([JSON.stringify(logData, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${wf.id}_${runResult.id}_log.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Icon icon={Download} size="sm" className="mr-1.5" />
+                {t('workflow_page.download_log', { defaultValue: '下载日志' })}
+              </Button>
+            )}
             {(runResult?.status === 'running' || runResult?.status === 'paused') && (
               <Button variant="ghost" onClick={() => void handleCancelRun()} className="text-red-500 hover:bg-red-500/10">
                 {t('workflow_page.cancel_run', { defaultValue: '停止运行' })}
@@ -126,7 +149,7 @@ export function WorkflowRunView({
                     sr.status === 'pending' && 'text-fg-subtle',
                     sr.status === 'awaiting_approval' && 'text-amber-500',
                   )} />
-                  <span className="text-sm font-medium text-fg">{sr.step_id}</span>
+                  <span className="text-sm font-medium text-fg">{sr.step_name || sr.step_id}</span>
                   <span className={cn('rounded-full px-2 py-0.5 text-[11px]',
                     sr.status === 'completed' && 'bg-green-500/10 text-green-500',
                     sr.status === 'running' && 'bg-blue-500/10 text-blue-500',
@@ -145,7 +168,26 @@ export function WorkflowRunView({
                   {sr.output && sr.status !== 'awaiting_approval' && (
                     <details className="ml-auto">
                       <summary className="cursor-pointer text-xs text-fg-subtle hover:text-fg">{t('workflow_page.step_output')}</summary>
-                      <pre className="mt-1 max-w-sm overflow-auto rounded bg-bg-elev-2 p-2 text-xs text-fg-subtle">{JSON.stringify(sr.output, null, 2).slice(0, 500)}</pre>
+                      <div className="mt-1 space-y-2">
+                        <pre className="max-w-2xl max-h-96 overflow-auto rounded bg-bg-elev-2 p-3 text-xs text-fg-subtle font-mono">{JSON.stringify(sr.output, null, 2)}</pre>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const blob = new Blob([JSON.stringify(sr.output, null, 2)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${wf.id}_${sr.step_id}_output.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="text-xs"
+                        >
+                          <Icon icon={Download} size="xs" className="mr-1" />
+                          {t('workflow_page.download_output', { defaultValue: '下载输出' })}
+                        </Button>
+                      </div>
                     </details>
                   )}
                   {sr.status === 'running' && typeof sr.output === 'object' && sr.output !== null && typeof (sr.output as Record<string, unknown>).partial === 'string' && ((sr.output as Record<string, unknown>).partial as string).length > 0 && (

@@ -55,6 +55,8 @@ pub enum StepRunStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepRun {
     pub step_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step_name: Option<String>,
     pub status: StepRunStatus,
     pub output: Option<serde_json::Value>,
     pub error: Option<String>,
@@ -118,6 +120,7 @@ pub fn create_initial_run(
             step.id.clone(),
             StepRun {
                 step_id: step.id.clone(),
+                step_name: Some(step.name.clone()),
                 status: StepRunStatus::Pending,
                 output: None,
                 error: None,

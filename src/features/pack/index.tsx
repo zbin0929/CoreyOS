@@ -25,6 +25,8 @@ import { CompositeDashboardTemplate } from '@/features/pack/templates/CompositeD
 import { DataTableTemplate } from '@/features/pack/templates/DataTable';
 import { FormRunnerTemplate } from '@/features/pack/templates/FormRunner';
 import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
+import { PackConfigTemplate } from '@/features/pack/templates/PackConfig';
+import { MeizhengConfigTemplate } from '@/features/pack/templates/MeizhengConfig';
 import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
 import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
 import { SkillPaletteTemplate } from '@/features/pack/templates/SkillPalette';
@@ -45,6 +47,8 @@ const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   DataTable: DataTableTemplate,
   FormRunner: FormRunnerTemplate,
   MetricsCard: MetricsCardTemplate,
+  MeizhengConfig: MeizhengConfigTemplate,
+  PackConfig: PackConfigTemplate,
   PivotTable: PivotTableTemplate,
   RadarChart: RadarChartTemplate,
   SkillPalette: SkillPaletteTemplate,

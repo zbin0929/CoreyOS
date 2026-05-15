@@ -24,6 +24,7 @@ use crate::pack::{
     RegistryEntry, TemplateContext,
 };
 use crate::state::AppState;
+use crate::workflow::model::WorkflowSummary;
 
 pub mod data_source;
 pub mod mcp_transport;
@@ -369,6 +370,139 @@ pub struct PackSoulEntry {
     pub content: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackConfigSchema {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub required: bool,
+    pub secret: bool,
+    pub description: String,
+    pub help: String,
+    pub group: String,
+    pub validation: String,
+    pub placeholder: String,
+    pub default: serde_json::Value,
+    pub options: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn pack_config_schema(
+    pack_id: String,
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<PackConfigSchema>> {
+    let registry = state.packs.read();
+    let entry = registry
+        .packs
+        .iter()
+        .find(|e| e.manifest.as_ref().map(|m| &m.id) == Some(&pack_id))
+        .ok_or_else(|| IpcError::Internal {
+            message: format!("pack not found: {pack_id}"),
+        })?;
+
+    let manifest = entry.manifest.as_ref().ok_or_else(|| IpcError::Internal {
+        message: "pack has no manifest".into(),
+    })?;
+
+    let schema = manifest
+        .config_schema
+        .iter()
+        .map(|f| PackConfigSchema {
+            key: f.key.clone(),
+            label: f.label.clone(),
+            field_type: f.field_type.clone(),
+            required: f.required,
+            secret: f.field_type == "secret",
+            description: f.description.clone(),
+            help: f.help.clone(),
+            group: f.group.clone(),
+            validation: f.validation.clone(),
+            placeholder: f.placeholder.clone(),
+            default: serde_yaml::from_value(f.default.clone()).unwrap_or(serde_json::Value::Null),
+            options: f.options.clone(),
+        })
+        .collect();
+
+    Ok(schema)
+}
+
+fn transform_yaml_to_ui(mut value: serde_json::Value) -> serde_json::Value {
+    if let Some(carriers) = value.get_mut("carriers").and_then(|v| v.as_object_mut()) {
+        for carrier in carriers.values_mut() {
+            if let Some(obj) = carrier.as_object_mut() {
+                if let Some(url) = obj.remove("source_url") {
+                    obj.insert("sourceUrl".to_string(), url);
+                }
+                if let Some(schedule) = obj.remove("update_schedule") {
+                    obj.insert("updateFrequency".to_string(), schedule);
+                }
+                obj.insert("validityDays".to_string(), serde_json::json!(7));
+
+                if let Some(services) = obj.get_mut("services").and_then(|v| v.as_array_mut()) {
+                    for service in services {
+                        if let Some(svc_obj) = service.as_object_mut() {
+                            if let Some(name) = svc_obj.remove("source_name") {
+                                svc_obj.insert("sourceName".to_string(), name);
+                            }
+                            if let Some(apply) = svc_obj.remove("apply_to") {
+                                svc_obj.insert("applyTo".to_string(), apply);
+                            } else {
+                                svc_obj.insert(
+                                    "applyTo".to_string(),
+                                    serde_json::Value::String("default".to_string()),
+                                );
+                            }
+                            if let Some(codes) = svc_obj.remove("service_codes") {
+                                svc_obj.insert("serviceCodes".to_string(), codes);
+                            }
+                            // legacy field: drop silently if present
+                            svc_obj.remove("meizheng_service");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    value
+}
+
+fn transform_ui_to_yaml(mut value: serde_json::Value) -> serde_json::Value {
+    if let Some(carriers) = value.get_mut("carriers").and_then(|v| v.as_object_mut()) {
+        for carrier in carriers.values_mut() {
+            if let Some(obj) = carrier.as_object_mut() {
+                if let Some(url) = obj.remove("sourceUrl") {
+                    obj.insert("source_url".to_string(), url);
+                }
+                if let Some(freq) = obj.remove("updateFrequency") {
+                    obj.insert("update_schedule".to_string(), freq);
+                }
+                obj.remove("validityDays");
+
+                if let Some(services) = obj.get_mut("services").and_then(|v| v.as_array_mut()) {
+                    for service in services {
+                        if let Some(svc_obj) = service.as_object_mut() {
+                            if let Some(name) = svc_obj.remove("sourceName") {
+                                svc_obj.insert("source_name".to_string(), name);
+                            }
+                            if let Some(apply) = svc_obj.remove("applyTo") {
+                                svc_obj.insert("apply_to".to_string(), apply);
+                            }
+                            if let Some(codes) = svc_obj.remove("serviceCodes") {
+                                svc_obj.insert("service_codes".to_string(), codes);
+                            }
+                            // strip legacy field on save too
+                            svc_obj.remove("targetService");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    value
+}
+
 #[tauri::command]
 pub async fn pack_config_get(
     pack_id: String,
@@ -376,19 +510,37 @@ pub async fn pack_config_get(
 ) -> IpcResult<serde_json::Value> {
     let hermes_dir = state.packs.read().hermes_dir.clone();
     tokio::task::spawn_blocking(move || {
-        let path = hermes_dir
+        let yaml_path = hermes_dir
+            .join("pack-data")
+            .join(&pack_id)
+            .join("config")
+            .join("fuel-rate-config.yaml");
+
+        if yaml_path.exists() {
+            let raw = fs::read_to_string(&yaml_path).map_err(|e| IpcError::Internal {
+                message: format!("read YAML config: {e}"),
+            })?;
+            let value: serde_json::Value =
+                serde_yaml::from_str(&raw).map_err(|e| IpcError::Internal {
+                    message: format!("parse YAML config: {e}"),
+                })?;
+            return Ok(transform_yaml_to_ui(value));
+        }
+
+        let json_path = hermes_dir
             .join("pack-data")
             .join(&pack_id)
             .join("config.json");
-        if !path.exists() {
-            return Ok(serde_json::Value::Object(serde_json::Map::new()));
+        if json_path.exists() {
+            let raw = fs::read_to_string(&json_path).map_err(|e| IpcError::Internal {
+                message: format!("read JSON config: {e}"),
+            })?;
+            return serde_json::from_str(&raw).map_err(|e| IpcError::Internal {
+                message: format!("parse JSON config: {e}"),
+            });
         }
-        let raw = fs::read_to_string(&path).map_err(|e| IpcError::Internal {
-            message: format!("read config: {e}"),
-        })?;
-        serde_json::from_str(&raw).map_err(|e| IpcError::Internal {
-            message: format!("parse config: {e}"),
-        })
+
+        Ok(serde_json::Value::Object(serde_json::Map::new()))
     })
     .await
     .map_err(|e| IpcError::Internal {
@@ -404,26 +556,78 @@ pub async fn pack_config_set(
 ) -> IpcResult<()> {
     let hermes_dir = state.packs.read().hermes_dir.clone();
     tokio::task::spawn_blocking(move || {
-        let dir = hermes_dir.join("pack-data").join(&pack_id);
-        fs::create_dir_all(&dir).map_err(|e| IpcError::Internal {
-            message: format!("create pack-data dir: {e}"),
+        let config_dir = hermes_dir.join("pack-data").join(&pack_id).join("config");
+        fs::create_dir_all(&config_dir).map_err(|e| IpcError::Internal {
+            message: format!("create config dir: {e}"),
         })?;
-        let path = dir.join("config.json");
-        let tmp = path.with_extension("json.tmp");
-        let body = serde_json::to_string_pretty(&config).map_err(|e| IpcError::Internal {
-            message: format!("serialize config: {e}"),
+
+        let yaml_path = config_dir.join("fuel-rate-config.yaml");
+        let tmp = yaml_path.with_extension("yaml.tmp");
+        let yaml_config = transform_ui_to_yaml(config);
+        let body = serde_yaml::to_string(&yaml_config).map_err(|e| IpcError::Internal {
+            message: format!("serialize YAML config: {e}"),
         })?;
         fs::write(&tmp, body).map_err(|e| IpcError::Internal {
-            message: format!("write config tmp: {e}"),
+            message: format!("write YAML config tmp: {e}"),
         })?;
-        fs::rename(&tmp, &path).map_err(|e| IpcError::Internal {
-            message: format!("rename config: {e}"),
+        fs::rename(&tmp, &yaml_path).map_err(|e| IpcError::Internal {
+            message: format!("rename YAML config: {e}"),
         })
     })
     .await
     .map_err(|e| IpcError::Internal {
         message: format!("config_set join: {e}"),
     })?
+}
+
+#[tauri::command]
+pub async fn pack_workflows_list(state: State<'_, AppState>) -> IpcResult<Vec<WorkflowSummary>> {
+    let registry = state.packs.read();
+    let mut workflows = Vec::new();
+
+    for entry in &registry.packs {
+        if !entry.enabled {
+            continue;
+        }
+        let Some(manifest) = entry.manifest.as_ref() else {
+            continue;
+        };
+
+        for wf_path in &manifest.workflows {
+            let full_path = registry
+                .hermes_dir
+                .join("skill-packs")
+                .join(&entry.dir_name)
+                .join(wf_path);
+
+            if !full_path.exists() {
+                continue;
+            }
+
+            let Ok(yaml_str) = fs::read_to_string(&full_path) else {
+                continue;
+            };
+
+            let Ok(wf_def) = serde_yaml::from_str::<crate::workflow::model::WorkflowDef>(&yaml_str)
+            else {
+                continue;
+            };
+
+            let prefixed_id = prefix_workflow_id(&manifest.id, &wf_def.name);
+
+            workflows.push(WorkflowSummary {
+                id: prefixed_id,
+                name: wf_def.name.clone(),
+                description: wf_def.description.clone(),
+                version: wf_def.version,
+                trigger_type: wf_def.trigger_type_label().to_string(),
+                step_count: wf_def.steps.len(),
+                updated_at_ms: 0,
+            });
+        }
+    }
+
+    Ok(workflows)
 }
 
 #[tauri::command]

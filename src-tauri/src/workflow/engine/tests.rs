@@ -184,6 +184,7 @@ fn execute_with_custom_executor() {
 fn contract_step_run_serializes_expected_fields() {
     let sr = StepRun {
         step_id: "test-step".into(),
+        step_name: Some("Test Step".into()),
         status: StepRunStatus::Completed,
         output: Some(json!({"key": "val"})),
         error: None,
@@ -207,6 +208,7 @@ fn contract_workflow_run_serializes_expected_fields() {
         "s1".into(),
         StepRun {
             step_id: "s1".into(),
+            step_name: None,
             status: StepRunStatus::Pending,
             output: None,
             error: None,
