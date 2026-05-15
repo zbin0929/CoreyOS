@@ -438,7 +438,12 @@ fn transform_yaml_to_ui(mut value: serde_json::Value) -> serde_json::Value {
                 if let Some(schedule) = obj.remove("update_schedule") {
                     obj.insert("updateFrequency".to_string(), schedule);
                 }
-                obj.insert("validityDays".to_string(), serde_json::json!(7));
+                // Keep validityDays if present, default to 7
+                if !obj.contains_key("validityDays") && !obj.contains_key("validity_days") {
+                    obj.insert("validityDays".to_string(), serde_json::json!(7));
+                } else if let Some(vd) = obj.remove("validity_days") {
+                    obj.insert("validityDays".to_string(), vd);
+                }
 
                 if let Some(services) = obj.get_mut("services").and_then(|v| v.as_array_mut()) {
                     for service in services {
@@ -478,7 +483,10 @@ fn transform_ui_to_yaml(mut value: serde_json::Value) -> serde_json::Value {
                 if let Some(freq) = obj.remove("updateFrequency") {
                     obj.insert("update_schedule".to_string(), freq);
                 }
-                obj.remove("validityDays");
+                // Save validityDays back to YAML as validity_days
+                if let Some(vd) = obj.remove("validityDays") {
+                    obj.insert("validity_days".to_string(), vd);
+                }
 
                 if let Some(services) = obj.get_mut("services").and_then(|v| v.as_array_mut()) {
                     for service in services {
