@@ -389,6 +389,7 @@ mod tests {
             "validate".into(),
             StepRun {
                 step_id: "validate".into(),
+                step_name: None,
                 status: StepRunStatus::Completed,
                 output: Some(json!({"ok": true})),
                 error: None,
@@ -399,6 +400,7 @@ mod tests {
             "approval".into(),
             StepRun {
                 step_id: "approval".into(),
+                step_name: None,
                 status: StepRunStatus::AwaitingApproval,
                 output: Some(json!({"message": "please review"})),
                 error: None,
