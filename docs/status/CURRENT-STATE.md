@@ -73,6 +73,20 @@
 
 > 截止 2026-05-12。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)。
 
+- **2026-05-15 · 美正 Pack 需求 #2 UPS 分区数据**：
+  - 发现 UPS 公开 CDN 索引 API：`zone-chart.json`（902 个 ZIP3 的 XLS URL）
+  - 正确域名 `assets.ups.com`（不是 `www.ups.com`），无需 cookies
+  - XLS 解析完成：自动定位表头行 + Ground 列 + Hawaii/Alaska 脚注（Zone44/46）
+  - 模板输出格式与用户提供的 `邮编分区模板.xlsx` 完全一致
+  - 端到端验证通过：ZIP3=910 → 下载 44KB XLS → 解析 905 主行 + 419 脚注 → 输出 1324 行模板 Excel
+  - 架构设计完成：4 个独立脚本（下载/批量下载/上传/批量上传）+ checkpoint/resume + workflow
+  - 详见 `TODO.md` 需求 #2 章节
+- **2026-05-15 · 美正 Pack 需求 #1 汇率自动更新**：
+  - BOC 中行美金现汇卖出价抓取 + 美正OS API 写入端到端跑通
+  - 纯 HTTP 抓取（JWT 验证码绕过），零浏览器
+  - 独立 `exchange-rate-config.yaml` 配置 + 独立 IPC 命令 `pack_exchange_rate_config_get/set`
+  - manifest 中两个 schedule（09:30 + 10:30 兜底）触发同一 workflow
+  - 已知问题：`fuel-rate-config.yaml` 中凭证 username 曾被误覆盖，需确认用户最新配置
 - **2026-05-12 · v0.2.13**：
   - Windows file-ops-guard 路径匹配修复 + PowerShell WPF 确认对话框（GUARD_VERSION 2→3）
   - `skill_curator` / `skill_hub` / `workflow oneshot` 三个 IPC 改用 `resolve_hermes_binary()` 替代裸 `Command::new("hermes")`，修复 macOS GUI 应用找不到 `~/.local/bin/hermes` 的问题

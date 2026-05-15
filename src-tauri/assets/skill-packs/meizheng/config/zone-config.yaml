@@ -1,12 +1,27 @@
-enabled: true
-schedules:
-  - name: 月度分区更新
-    cron: "0 0 2 1 * *"
-source:
-  carrier: UPS
-  service: GROUND
-  totalZip3: 902
-upload:
-  maxRetries: 3
-  retryDelay: 2
-  requestInterval: 1
+carriers:
+  ups:
+    enabled: true
+    schedules:
+      - name: 月度分区更新
+        cron: "0 0 2 1 * *"
+    source:
+      carrier: UPS
+      service: GROUND
+      totalZip3: 902
+    upload:
+      maxRetries: 3
+      retryDelay: 2
+      requestInterval: 1
+  usps:
+    enabled: true
+    schedules:
+      - name: 月度分区更新
+        cron: "0 0 3 1 * *"
+    source:
+      carrier: USPS
+      service: GROUND
+      totalZip3: 930
+    upload:
+      maxRetries: 3
+      retryDelay: 2
+      requestInterval: 0.3

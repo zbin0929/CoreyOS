@@ -139,8 +139,8 @@
 
 | # | 需求 | 模式 | 触发 | 跑在哪 | 状态 |
 |---|---|---|---|---|---|
-| 1 | 中行美金现汇卖出价 → 美正OS | Pattern A: Scrape→Push | 工作日 09:31 后 | runner | 🟡 待客户对齐 |
-| 2 | UPS/Fedex/USPS 月度分区 → 美正OS | Pattern B: 多源→规则→Push | 每月 1 号后 | runner | 🟡 待客户对齐 |
+| 1 | 中行美金现汇卖出价 → 美正OS | Pattern A: Scrape→Push | 工作日 09:30 + 10:30 兜底 | runner | 🟡 端到端已跑通，待部署验证 |
+| 2 | UPS 月度分区 → 美正OS | Pattern B: 批量下载→转换→逐个上传 | 每月 1 号 | runner | 🟡 架构已设计，脚本开发中 |
 | 3 | 财务发票自动化 | Pattern D: 文档→结构化→Push | 邮件/上传事件 | runner | 🟡 待客户对齐 |
 | 4 | 领星费用导出 → 美正OS | Pattern B 浏览器版 | 每月 1-3 号 | runner | 🟡 待客户对齐 |
 | 5 | 一件代发订单取消 | Pattern C: 事件→操作 | UI 按钮 | end_user | 🟡 待客户对齐 |
@@ -154,6 +154,103 @@
 - **配置 UI**：`CarrierConfigEditor` 中文 cron picker（每周/每月/每天/自定义 + 时间选择器），保存后立即更新 jobs.json
 - **自动审核**：CREATE 成功后自动调 `PUT /quote/feetype/fuelRate/admin/audit`
 - **效率**：单次更新从 8 分钟 / 6.3M tokens → **1.5 秒 / 5K tokens**
+
+### 需求 #1 已交付内容
+
+- **抓取**：`scrape_boc_usd_rate.py` — 纯 HTTP 抓取 BOC 汇率页面（JWT 验证码绕过），取 earliestTime 后第一条匹配记录
+- **写入**：`update_exchange_rate_via_api.py` — login（Basic Auth `/login/token`）→ find_currency → update_currency，JWT 解码获取操作人，token 缓存 + TTL
+- **调度**：manifest 中两个 schedule（`daily-usd-rate-930` 09:30 + `daily-usd-rate-1030` 10:30 兜底），触发 `update-usd-exchange-rate` workflow
+- **配置 UI**：`ExchangeRateConfigEditor` — 独立 `exchange-rate-config.yaml`，含 source（URL/queryKeyword/rateType/earliestTime）、conversion（divideBy）、target（currencyCode）、remarkTemplate
+- **IPC**：新增 `pack_exchange_rate_config_get/set` 读写独立配置文件
+- **配置读取**：脚本从 `exchange-rate-config.yaml` 读抓取参数，从 `fuel-rate-config.yaml` 读美正OS API 凭证
+- **注意**：`fuel-rate-config.yaml` 中 `meizheng_os.credentials.username` 曾被误覆盖为 `admin@admin`，需确认用户最新配置已正确保存
+
+### 需求 #2 UPS 月度分区 — 架构设计
+
+#### 已验证的数据源
+
+- **索引 API**：`GET https://www.ups.com/us/en/zone-chart.json` → 返回 902 个 ZIP3 的 XLS 下载 URL
+- **XLS CDN**：`https://assets.ups.com/adobe/assets/urn:aaid:aem:{uuid}/original/as/{zip3}.xls`
+  - 域名是 `assets.ups.com`（不是 `www.ups.com`）
+  - 无需 cookies / Bot 防护绕过，纯公开 CDN
+  - 每个 XLS 约 44KB，包含完整的 Ground/3Day/2Day/NextDay 分区 + Hawaii/Alaska 脚注
+- **分页**：索引 API 支持 `?offset=N&limit=M` 参数
+
+#### XLS 结构（以 910 为例）
+
+```
+Row 0-7: 标题/说明（ZONE CHART / UPS Ground... / ZONES）
+Row 8:    表头 Dest. ZIP | Ground | 3 Day Select | 2nd Day Air | ...
+Row 9-945: 主数据（每行一个 ZIP3，Ground 列值如 008=Zone8, 045=Zone45）
+Row 946+:  脚注
+  [3] For Alaska ... Zone 44 for Ground → 5位邮编列表
+  For Alaska ... Zone 46 for Ground → 5位邮编列表
+  [2] For Hawaii ... Zone 44 for Ground → 5位邮编列表
+  For Hawaii ... Zone 46 for Ground → 5位邮编列表
+```
+
+#### 美正OS 上传模板格式
+
+```
+Row 1: 说明文字（"1、分区代码、开始邮编、截止邮编均为必填..."）
+Row 2: 分区代码 | 开始邮编 | 截止邮编
+Row 3+: Zone2 | 00500 | 00599  （ZIP3=005 → 00500-00599）
+        Zone44 | 96703 | 96703 （Hawaii 5位邮编，一对一）
+```
+
+- 邮编列必须设为 `@`（文本格式），防止前导零丢失
+- Zone 代码：Zone2/Zone3/Zone4/Zone5/Zone6/Zone7/Zone8/Zone44/Zone45/Zone46
+- Zone44/45/46 是独立分区（Hawaii/Alaska），不是 4 区
+
+#### 脚本拆分方案（不做一体化）
+
+| 脚本 | 职责 | 输入 | 输出 |
+|---|---|---|---|
+| `download_ups_zone_xls.py` | 下载单个 ZIP3 的 XLS + 解析 + 转换为模板 Excel | `--zip3 910` | `UPS-GROUND-910.xlsx` |
+| `batch_download_ups_zones.py` | 批量调度：读索引 → 逐个调用下载脚本 → checkpoint/resume | `--all` 或 `--zip3-list file.txt` | 目录下 902 个 xlsx + `checkpoint.json` |
+| `upload_zone_to_meizheng.py` | 上传单个 ZIP3 的 Excel 到美正OS（复用 login/token/cache 模式） | `--xlsx UPS-GROUND-910.xlsx` | API 响应 |
+| `batch_upload_zones.py` | 批量上传：读目录 → 逐个调用上传脚本 → checkpoint/resume | `--dir ./zones/` | `upload_report.json` |
+
+#### 批处理策略
+
+- **下载**：902 个 × ~3s/个 ≈ 45 分钟。串行下载（UPS CDN 不限流但不宜并发）
+- **上传**：902 个 × ~2s/个 ≈ 30 分钟。串行上传（美正OS API 可能有频率限制）
+- **checkpoint**：每完成一个记录到 JSON，断了重跑自动跳过
+- **重试**：单个失败指数退避（2s/4s/8s），最多 3 次
+- **日志**：每个操作记录到 `zone-update-{date}.log`，失败的手动补
+
+#### Workflow 设计
+
+```yaml
+id: update-ups-zones
+trigger:
+  type: cron
+  expression: "0 0 2 1 * *"  # 每月1号凌晨2点
+steps:
+  - id: batch_download
+    prompt: |
+      运行批量下载脚本，902个ZIP3全部下载并转换为模板Excel
+  - id: batch_upload
+    prompt: |
+      运行批量上传脚本，逐个上传到美正OS
+```
+
+#### 已完成
+
+- ✅ XLS 下载+解析+转换端到端验证（ZIP3=910，1324行，10个Zone）
+- ✅ 模板格式验证（与用户提供的 `邮编分区模板.xlsx` 一致）
+- ✅ Hawaii/Alaska 脚注解析（Zone44/46 的 5 位邮编）
+- ✅ 数据源验证（`assets.ups.com` CDN 无需认证）
+
+#### 待完成
+
+- [ ] `download_ups_zone_xls.py` — 整理当前 `download_ups_zones_browser.py` 为正式脚本
+- [ ] `batch_download_ups_zones.py` — 批量下载 + checkpoint
+- [ ] `upload_zone_to_meizheng.py` — 美正OS 分区上传 API（需确认接口）
+- [ ] `batch_upload_zones.py` — 批量上传 + checkpoint
+- [ ] `zone-config.yaml` — 独立配置文件
+- [ ] `update-ups-zones.yaml` — workflow
+- [ ] 端到端测试：下载 → 转换 → 上传
 
 ### 关键设计决策（不再讨论）
 

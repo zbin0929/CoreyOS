@@ -186,9 +186,10 @@ pub fn cron_overrides_from_exchange_rate_config(
 }
 
 /// Read `pack-data/<id>/config/zone-config.yaml` and return a map of
-/// manifest schedule id substring → cron string. Matches schedule
-/// entries by name containing keywords like "月度" or "分区".
-/// Empty map if the file does not exist or is disabled.
+/// manifest schedule id substring → cron string. Supports multi-carrier
+/// format (`carriers.ups`, `carriers.usps`) and legacy single-carrier
+/// format (`enabled` + `schedules` at top level). Empty map if the file
+/// does not exist or is disabled.
 pub fn cron_overrides_from_zone_config(pack_data_dir: &Path) -> HashMap<String, String> {
     let path = pack_data_dir.join("config").join("zone-config.yaml");
     let mut overrides: HashMap<String, String> = HashMap::new();
@@ -198,6 +199,51 @@ pub fn cron_overrides_from_zone_config(pack_data_dir: &Path) -> HashMap<String, 
     let Ok(value): Result<serde_yaml::Value, _> = serde_yaml::from_str(&raw) else {
         return overrides;
     };
+
+    if let Some(carriers) = value.get("carriers").and_then(|v| v.as_mapping()) {
+        for (carrier_key, carrier_val) in carriers {
+            let Some(carrier_map) = carrier_val.as_mapping() else {
+                continue;
+            };
+            let enabled = carrier_map
+                .get(serde_yaml::Value::String("enabled".into()))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            if !enabled {
+                continue;
+            }
+            let key_str = carrier_key.as_str().unwrap_or("");
+            let schedule_key = match key_str {
+                "ups" => "ups-zones",
+                "usps" => "usps-zones",
+                "fedex" => "fedex-zones",
+                other => other,
+            };
+            let Some(schedules) = carrier_map
+                .get(serde_yaml::Value::String("schedules".into()))
+                .and_then(|v| v.as_sequence())
+            else {
+                continue;
+            };
+            for schedule in schedules {
+                let Some(map) = schedule.as_mapping() else {
+                    continue;
+                };
+                let cron = map
+                    .get(serde_yaml::Value::String("cron".into()))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if !cron.is_empty() {
+                    overrides.insert(schedule_key.to_string(), cron);
+                    break;
+                }
+            }
+        }
+        return overrides;
+    }
+
     let Some(enabled) = value.get("enabled").and_then(|v| v.as_bool()) else {
         return overrides;
     };
@@ -600,5 +646,94 @@ schedules:
         overrides.insert("ups-zones".to_string(), "0 30 3 1 * *".to_string());
         apply_cron_overrides(&mut jobs, &overrides);
         assert_eq!(jobs[0].schedule_display(), "0 30 3 1 * *");
+    }
+
+    #[test]
+    fn zone_config_multi_carrier_overrides() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cfg_dir = tmp.path().join("config");
+        std::fs::create_dir_all(&cfg_dir).expect("mkdir");
+        let yaml = r#"
+carriers:
+  ups:
+    enabled: true
+    schedules:
+      - name: 月度分区更新
+        cron: "0 30 2 1 * *"
+    source:
+      carrier: UPS
+      service: GROUND
+      totalZip3: 902
+    upload:
+      maxRetries: 3
+      retryDelay: 2
+      requestInterval: 1
+  usps:
+    enabled: true
+    schedules:
+      - name: 月度分区更新
+        cron: "0 30 3 1 * *"
+    source:
+      carrier: USPS
+      service: GROUND
+      totalZip3: 930
+    upload:
+      maxRetries: 3
+      retryDelay: 2
+      requestInterval: 0.3
+"#;
+        std::fs::write(cfg_dir.join("zone-config.yaml"), yaml).expect("write");
+        let overrides = cron_overrides_from_zone_config(tmp.path());
+        assert_eq!(
+            overrides.get("ups-zones").map(String::as_str),
+            Some("0 30 2 1 * *")
+        );
+        assert_eq!(
+            overrides.get("usps-zones").map(String::as_str),
+            Some("0 30 3 1 * *")
+        );
+    }
+
+    #[test]
+    fn zone_config_multi_carrier_disabled_skipped() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cfg_dir = tmp.path().join("config");
+        std::fs::create_dir_all(&cfg_dir).expect("mkdir");
+        let yaml = r#"
+carriers:
+  ups:
+    enabled: true
+    schedules:
+      - name: 月度分区更新
+        cron: "0 0 2 1 * *"
+    source:
+      carrier: UPS
+      service: GROUND
+      totalZip3: 902
+    upload:
+      maxRetries: 3
+      retryDelay: 2
+      requestInterval: 1
+  usps:
+    enabled: false
+    schedules:
+      - name: 月度分区更新
+        cron: "0 0 3 1 * *"
+    source:
+      carrier: USPS
+      service: GROUND
+      totalZip3: 930
+    upload:
+      maxRetries: 3
+      retryDelay: 2
+      requestInterval: 0.3
+"#;
+        std::fs::write(cfg_dir.join("zone-config.yaml"), yaml).expect("write");
+        let overrides = cron_overrides_from_zone_config(tmp.path());
+        assert_eq!(
+            overrides.get("ups-zones").map(String::as_str),
+            Some("0 0 2 1 * *")
+        );
+        assert!(overrides.get("usps-zones").is_none());
     }
 }

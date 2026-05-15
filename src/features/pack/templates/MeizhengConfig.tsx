@@ -293,7 +293,7 @@ export function MeizhengConfigTemplate({ view }: { view: PackView }) {
         />
       </div>
 
-      {/* UPS 分区配置 */}
+      {/* 承运商分区配置 */}
       <div className="rounded-xl border border-border/50 bg-gradient-to-br from-bg-elev-1 to-bg-elev-2/50 p-6 shadow-sm">
         <ZoneConfigEditor
           config={zoneConfig}
