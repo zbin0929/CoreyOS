@@ -25,17 +25,19 @@ steps:
       set -e
       SCRIPTS_DIR="$HOME/.hermes/skill-packs/meizheng/scripts"
       VENV_PYTHON="$HOME/.hermes/hermes-agent/venv/bin/python"
+      OUTPUT_DIR="$HOME/.hermes/pack-data/meizheng/zone-charts/usps"
 
-      "$VENV_PYTHON" "$SCRIPTS_DIR/download_usps_zones.py" --zip3-list "$HOME/.hermes/pack-data/meizheng/config/usps_zip3_list.txt" --output-dir "$HOME/.hermes/pack-data/meizheng/zone-charts"
+      "$VENV_PYTHON" "$SCRIPTS_DIR/download_usps_zones.py" --all --output-dir "$OUTPUT_DIR"
       ```
 
       **Step 2: 上传全部分区到美正OS**
 
       ```bash
-      "$VENV_PYTHON" "$SCRIPTS_DIR/upload_zones_meizheng.py" --dir "$HOME/.hermes/pack-data/meizheng/zone-charts" --carrier USPS-GROUND
+      "$VENV_PYTHON" "$SCRIPTS_DIR/upload_zones_meizheng.py" --dir "$OUTPUT_DIR" --carrier USPS-GROUND
       ```
 
       🔒 **铁律**：
       - 按顺序执行两条命令
       - 每条命令的 stdout 原样作为输出
       - Step 1 失败则不执行 Step 2
+      - 两条命令都支持 checkpoint 断点续传，中断后重跑会跳过已完成的

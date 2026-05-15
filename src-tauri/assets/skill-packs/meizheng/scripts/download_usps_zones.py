@@ -199,6 +199,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download USPS zone charts and convert to template Excel")
     parser.add_argument("--zip3", default=None, help="Single ZIP3 code")
     parser.add_argument("--zip3-list", default=None, help="File with ZIP3 codes, one per line")
+    parser.add_argument("--all", action="store_true", help="Download all valid ZIP3 (000-999)")
     parser.add_argument("--output-dir", default=os.path.join(os.path.expanduser("~"), "Desktop"))
     args = parser.parse_args()
 
@@ -209,21 +210,27 @@ if __name__ == "__main__":
         else:
             print("FAILED")
             sys.exit(1)
-    elif args.zip3_list:
+    elif args.zip3_list or args.all:
         session = create_session()
         if not session:
             print("FAILED to create session")
             sys.exit(1)
-        with open(args.zip3_list) as f:
-            zip3_list = [line.strip() for line in f if line.strip()]
+        if args.all:
+            zip3_list = [str(i).zfill(3) for i in range(1000)]
+        else:
+            with open(args.zip3_list) as f:
+                zip3_list = [line.strip() for line in f if line.strip()]
         results = []
+        skipped = 0
         for i, zip3 in enumerate(zip3_list):
             print(f"\n[{i+1}/{len(zip3_list)}] ZIP3 {zip3}", file=sys.stderr)
             r = download_and_convert(zip3, args.output_dir, session=session)
             if r:
                 results.append(r)
-            time.sleep(0.5)
-        print(f"\nDone: {len(results)}/{len(zip3_list)} succeeded")
+            else:
+                skipped += 1
+            time.sleep(0.3)
+        print(f"\nDone: {len(results)} OK, {skipped} skipped/empty")
     else:
-        print("Specify --zip3 or --zip3-list", file=sys.stderr)
+        print("Specify --zip3, --zip3-list, or --all", file=sys.stderr)
         sys.exit(1)
