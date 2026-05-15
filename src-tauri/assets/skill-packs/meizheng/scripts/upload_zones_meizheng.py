@@ -21,7 +21,7 @@ except ImportError:
 HERMES_DIR = os.environ.get("HERMES_DIR", os.path.expanduser("~/.hermes"))
 CONFIG_PATH = os.path.join(HERMES_DIR, "pack-data", "meizheng", "config", "fuel-rate-config.yaml")
 TOKEN_CACHE_PATH = os.path.join(HERMES_DIR, "pack-data", "meizheng", "config", ".token_cache.json")
-ZONE_NAME_PREFIX = "UPS-GROUND"
+DEFAULT_PREFIX = "UPS-GROUND"
 MAX_RETRIES = 3
 RETRY_DELAYS = [2, 4, 8]
 
@@ -112,8 +112,8 @@ def _api_post_json(api_base, token, path, body):
             return json.loads(resp.read().decode())
 
 
-def find_zone_schema(api_base, token, zip3):
-    name = f"{ZONE_NAME_PREFIX} {zip3}"
+def find_zone_schema(api_base, token, zip3, prefix=DEFAULT_PREFIX):
+    name = f"{prefix} {zip3}"
     data = _api_post_json(api_base, token, "/quote/zoneschema/zoneSchema/admin/page",
         {"pageNo": 1, "pageSize": 20, "name": name})
     records = data.get("data", {}).get("records", data.get("data", []))
@@ -167,11 +167,11 @@ def save_zone(api_base, token, zone_detail, parsed_items):
     return _api_post_json(api_base, token, "/quote/zoneschema/zoneSchema/admin/update", body)
 
 
-def upload_single(api_base, token_mgr, zip3, xlsx_path):
+def upload_single(api_base, token_mgr, zip3, xlsx_path, prefix=DEFAULT_PREFIX):
     token = token_mgr.get()
-    zone_rec = token_mgr.refresh_if_401(lambda t: find_zone_schema(api_base, t, zip3))
+    zone_rec = token_mgr.refresh_if_401(lambda t: find_zone_schema(api_base, t, zip3, prefix))
     if not zone_rec:
-        raise RuntimeError(f"Zone not found: {ZONE_NAME_PREFIX} {zip3}")
+        raise RuntimeError(f"Zone not found: {prefix} {zip3}")
 
     parse_result = token_mgr.refresh_if_401(lambda t: parse_xlsx(api_base, t, xlsx_path))
     if parse_result.get("code") != 0:
@@ -202,7 +202,7 @@ def save_checkpoint(path, data):
     os.replace(tmp, path)
 
 
-def batch_upload(zone_dir, checkpoint_path=None):
+def batch_upload(zone_dir, prefix=DEFAULT_PREFIX, checkpoint_path=None):
     if checkpoint_path is None:
         checkpoint_path = os.path.join(zone_dir, "upload_checkpoint.json")
 
@@ -215,13 +215,14 @@ def batch_upload(zone_dir, checkpoint_path=None):
     creds = mz["credentials"]
     token_mgr = TokenManager(api_base, creds["username"], creds["password"])
 
-    xlsx_files = sorted(f for f in os.listdir(zone_dir) if f.startswith("UPS-GROUND-") and f.endswith(".xlsx"))
+    file_prefix = f"{prefix}-"
+    xlsx_files = sorted(f for f in os.listdir(zone_dir) if f.startswith(file_prefix) and f.endswith(".xlsx"))
     total = len(xlsx_files)
-    print(f"Found {total} xlsx files, {len(completed)} already done", file=sys.stderr)
+    print(f"Found {total} xlsx files ({prefix}), {len(completed)} already done", file=sys.stderr)
 
     new_failed = []
     for i, fname in enumerate(xlsx_files):
-        zip3 = fname.replace("UPS-GROUND-", "").replace(".xlsx", "")
+        zip3 = fname.replace(file_prefix, "").replace(".xlsx", "")
         if zip3 in completed:
             continue
 
@@ -232,7 +233,7 @@ def batch_upload(zone_dir, checkpoint_path=None):
         ok = False
         for attempt in range(MAX_RETRIES):
             try:
-                upload_single(api_base, token_mgr, zip3, xlsx_path)
+                upload_single(api_base, token_mgr, zip3, xlsx_path, prefix)
                 ok = True
                 break
             except Exception as e:
@@ -261,12 +262,15 @@ def batch_upload(zone_dir, checkpoint_path=None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Upload UPS zone Excel to meizheng OS")
+    parser = argparse.ArgumentParser(description="Upload zone Excel to meizheng OS")
     parser.add_argument("--zip3", default="", help="Single ZIP3 to upload (e.g. 910)")
     parser.add_argument("--xlsx", default="", help="Path to xlsx file (single mode)")
     parser.add_argument("--dir", default="", help="Directory of xlsx files (batch mode)")
+    parser.add_argument("--carrier", default="UPS-GROUND", help="Zone name prefix (default: UPS-GROUND)")
     parser.add_argument("--all", action="store_true", help="Upload all xlsx in default zone-charts dir")
     args = parser.parse_args()
+
+    prefix = args.carrier
 
     if not args.zip3 and not args.all and not args.dir:
         parser.error("Specify --zip3 <code>, --dir <path>, or --all")
@@ -279,20 +283,20 @@ if __name__ == "__main__":
             creds = mz["credentials"]
             token_mgr = TokenManager(api_base, creds["username"], creds["password"])
 
-            xlsx_path = args.xlsx or os.path.join(HERMES_DIR, "pack-data", "meizheng", "zone-charts", f"UPS-GROUND-{args.zip3}.xlsx")
+            xlsx_path = args.xlsx or os.path.join(HERMES_DIR, "pack-data", "meizheng", "zone-charts", f"{prefix}-{args.zip3}.xlsx")
             if not os.path.exists(xlsx_path):
                 print(json.dumps({"status": "failed", "reason": f"File not found: {xlsx_path}"}))
                 sys.exit(1)
 
             print(f"Token OK", file=sys.stderr)
-            result = upload_single(api_base, token_mgr, args.zip3, xlsx_path)
+            result = upload_single(api_base, token_mgr, args.zip3, xlsx_path, prefix)
             print(json.dumps(result, ensure_ascii=False))
         elif args.all:
             zone_dir = os.path.join(HERMES_DIR, "pack-data", "meizheng", "zone-charts")
-            result = batch_upload(zone_dir)
+            result = batch_upload(zone_dir, prefix)
             print(json.dumps(result, ensure_ascii=False))
         elif args.dir:
-            result = batch_upload(args.dir)
+            result = batch_upload(args.dir, prefix)
             print(json.dumps(result, ensure_ascii=False))
     except Exception as e:
         print(json.dumps({"status": "failed", "reason": str(e)}, ensure_ascii=False))

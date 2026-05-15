@@ -15,14 +15,16 @@ meizheng/
 │   └── meizheng_os_automation.md           # 主 skill 文件
 ├── workflows/
 │   ├── update-usd-exchange-rate.yaml       # 每日汇率更新
-│   └── update-ups-zones.yaml               # 每月 UPS 分区更新
+│   ├── update-ups-zones.yaml               # 每月 UPS 分区更新
+│   └── update-usps-zones.yaml              # 每月 USPS 分区更新
 └── scripts/
     ├── scrape_boc_usd_rate.py              # 抓取中行美元汇率
     ├── update_exchange_rate_via_api.py      # 更新汇率到美正OS
     ├── download_ups_zones_browser.py       # 下载 UPS 分区（Playwright）
     ├── download_ups_zones.py               # 下载 UPS 分区（旧版 HTTP）
+    ├── download_usps_zones.py              # 下载 USPS 分区（纯 HTTP API）
     ├── download_fedex_zones.py             # 下载 FedEx 分区（开发中）
-    ├── upload_zones_meizheng.py            # 上传分区到美正OS
+    ├── upload_zones_meizheng.py            # 上传分区到美正OS（支持多承运商）
     └── ensure_crawl4ai.py                  # 环境初始化
 ```
 
@@ -38,6 +40,12 @@ meizheng/
 - 自动转换格式并上传到美正OS
 - 批量上传约 30 分钟，支持断点续传
 - Workflow: `update-ups-zones.yaml`
+
+### ✅ 每月 USPS Priority Mail 分区自动更新
+- 每月1号自动从 USPS 公开 API 下载分区数据
+- 纯 HTTP 请求，无需浏览器，从中国可直接访问
+- 自动转换为美正OS模板格式并上传
+- Workflow: `update-usps-zones.yaml`
 
 ### 🔧 FedEx Ground 分区更新（开发中）
 - 需要能访问 fedex.com 的网络环境
