@@ -1,14 +1,14 @@
 # CoreyOS 全局 TODO
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-14 -->
+<!-- last-verified: 2026-05-15 -->
 <!-- 校验规则：每 30 天一次；超过 500 行需立刻拆分或归档 -->
 
 > ⛔ **2026-05-10 起本文件暂被 [`FOCUS.md`](./FOCUS.md) 覆盖。**
 > 在拿到第 1 个真实付费客户之前，不参考下文 30 条，只看 FOCUS.md 的 3 件事。
 > 拿到客户、跑完一轮反馈之后，回头基于真实数据重写本文件。
 >
-> **当下状态**：v0.2.13 · 基座 12 项（B-1~B-12）全部 ✅ · 进入行业内容建设阶段
+> **当下状态**：v0.2.14 · 基座 12 项（B-1~B-12）全部 ✅ · 美正 Pack 燃油费率已上线（需求 #6 ✅）
 > **铁律**：0 修改 Hermes Agent 代码 / trait 表面。Hermes 升级只换 binary。
 > **当前阻塞**：P-1 的 Amazon SP-API 开发者账号（审核 1-2 周）。不阻塞 demo 交付（先用报表上传方案）。
 > **关联文档**：[`CURRENT-STATE.md`](./CURRENT-STATE.md) · [`roadmap.md`](./roadmap.md) · [`known-issues.md`](./known-issues.md) · [`../spec/architecture.md`](../spec/architecture.md) § Pack Architecture
@@ -127,44 +127,54 @@
 
 ---
 
-## 五、企业 RPA Pack — 美正（v0.3.x · 设计完成 / 待客户对齐启动）
+## 五、企业 RPA Pack — 美正（v0.3.x · 燃油费率已上线）
 
-- **状态**：架构设计已完成，详见 [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md)
+- **状态**：燃油费率自动化已交付（需求 #6 ✅），其余 5 条待客户对齐启动
+- **架构设计**：详见 [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md)
 - **目标版本**：v0.3.x（与 v0.3.0 跨境电商并行，不互相阻塞）
 - **客户**：美正（首例）— 实际是企业 RPA 通用架构的第一个落地实例
-- **关键约束**：美正OS 无 API · Win+Mac 混部 · 多角色权限 · 不上专用服务器（复用员工现有 PC）
+- **关键约束**：美正OS 有 REST API（燃油费率模块已验证）· Win+Mac 混部 · 多角色权限 · 不上专用服务器（复用员工现有 PC）
 
 ### 需求清单（6 条已知 + 后续追加）
 
-| # | 需求 | 模式 | 触发 | 跑在哪 |
-|---|---|---|---|---|
-| 1 | 中行美金现汇卖出价 → 美正OS | Pattern A: Scrape→Push | 工作日 09:31 后 | runner |
-| 2 | UPS/Fedex/USPS 月度分区 → 美正OS | Pattern B: 多源→规则→Push | 每月 1 号后 | runner |
-| 3 | 财务发票自动化 | Pattern D: 文档→结构化→Push | 邮件/上传事件 | runner |
-| 4 | 领星费用导出 → 美正OS | Pattern B 浏览器版 | 每月 1-3 号 | runner |
-| 5 | 一件代发订单取消 | Pattern C: 事件→操作 | UI 按钮 | end_user |
-| 6 | UPS/Fedex 燃油费率 | Pattern A | 周一上班前 | runner |
+| # | 需求 | 模式 | 触发 | 跑在哪 | 状态 |
+|---|---|---|---|---|---|
+| 1 | 中行美金现汇卖出价 → 美正OS | Pattern A: Scrape→Push | 工作日 09:31 后 | runner | 🟡 待客户对齐 |
+| 2 | UPS/Fedex/USPS 月度分区 → 美正OS | Pattern B: 多源→规则→Push | 每月 1 号后 | runner | 🟡 待客户对齐 |
+| 3 | 财务发票自动化 | Pattern D: 文档→结构化→Push | 邮件/上传事件 | runner | 🟡 待客户对齐 |
+| 4 | 领星费用导出 → 美正OS | Pattern B 浏览器版 | 每月 1-3 号 | runner | 🟡 待客户对齐 |
+| 5 | 一件代发订单取消 | Pattern C: 事件→操作 | UI 按钮 | end_user | 🟡 待客户对齐 |
+| 6 | UPS/Fedex/DHL 燃油费率 | **API 直写**（非浏览器）| 每周日 23:30 + 每月 1 号 02:00 | runner | ✅ 已交付 |
+
+### 需求 #6 已交付内容
+
+- **抓取**：`crawl4ai_extract_{ups,fedex,dhl}.py` 抓取承运商官网 → Agent 解析 → JSON
+- **写入**：`update_fuel_rates_via_api.py` 直接调美正OS REST API（login → CREATE → audit），零浏览器、零 LLM 推理
+- **调度**：两个 Cron Workflow（`update-fuel-rates-weekly` / `update-fuel-rates-monthly`），通过 `~/.hermes/cron/jobs.json` 注册到 Hermes scheduler
+- **配置 UI**：`CarrierConfigEditor` 中文 cron picker（每周/每月/每天/自定义 + 时间选择器），保存后立即更新 jobs.json
+- **自动审核**：CREATE 成功后自动调 `PUT /quote/feetype/fuelRate/admin/audit`
+- **效率**：单次更新从 8 分钟 / 6.3M tokens → **1.5 秒 / 5K tokens**
 
 ### 关键设计决策（不再讨论）
 
 | 决策 | 理由 |
 |---|---|
 | 不上专用服务器，混合 runner/end_user 部署 | 复用客户现有员工 PC，零额外硬件成本 |
-| 目标系统无 API → Adapter MCP 内部走 Playwright RPA | Tool surface 不变，未来上 API 切底层即可 |
+| 目标系统有 API 则优先 API（如燃油费率），无 API 走 Playwright RPA | 确定性 > 灵活性；API 路径零 LLM 推理 |
 | 分布式锁存目标系统自己一张表 | 零外部依赖，审计直观 |
 | 时间窗调度而非准点（`first_after HH:MM`）| 员工 PC 开机时间不固定，配 Owner + Failover 兜底 |
 | 锁屏可跑、睡眠不可跑 | 安装向导自动配电源管理 + 开机自启 + 防 App Nap |
 | Workflow 模式库 A/B/C/D | 新需求按模板填空，1-3 天/条 |
 | 复用 Hermes `vue-element-ui-automation` skill | HD-1：上游已有，不重写 |
 
-### 待客户 Kickoff 对齐（阻塞工程启动）
+### 待客户 Kickoff 对齐（阻塞其余 5 条需求）
 
 详见 [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md) § 十四：
 
-- [ ] 美正OS 是否真无 API
+- [ ] 美正OS 其他模块是否也有 API（汇率/分区/订单）
 - [ ] 能否开放一张表给 Corey 存 corey_locks / corey_heartbeats
 - [ ] user_role 完整列表 + runner 候选机器清单
-- [ ] 6 条需求各自的时间敏感度
+- [ ] 5 条剩余需求各自的时间敏感度
 - [ ] 失败通知首选渠道（企业微信/钉钉/飞书/邮件）
 - [ ] UI 改版提前通知 N 天（合同条款）
 
@@ -172,9 +182,9 @@
 
 | 阶段 | 周次 | 交付物 |
 |---|---|---|
-| 阶段 0 | Week 0 | 客户对齐 11 条开放问题 |
+| 阶段 0 | Week 0 | 客户对齐开放问题 |
 | 阶段 1 | Week 1-2 | Workflow Engine 节点扩展 + 分布式锁库 + 凭证库 + Adapter 框架 |
-| 阶段 2 | Week 3-4 | 美正 Pack v0.1（需求 #1 + #6）端到端 |
+| 阶段 2 | Week 3-4 | 美正 Pack v0.1（需求 #1）端到端 |
 | 阶段 3 | Week 5-7 | 美正 Pack v0.2（需求 #2 + #4 + #5）端到端 |
 | 阶段 4 | Week 8-11 | 美正 Pack v0.3（需求 #3 财务发票）|
 

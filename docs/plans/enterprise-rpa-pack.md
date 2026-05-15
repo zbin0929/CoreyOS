@@ -1,9 +1,12 @@
 # 企业 RPA Pack 架构 — 设计 / 执行 / 扩展
 
 > 创建日期：2026-05-14
+> 最后更新：2026-05-15（燃油费率 API 方案已交付）
 > 适用范围：所有 CoreyOS 企业定制客户（首个案例：美正）
 > 目标版本：v0.3.0（美正落地）→ v0.4.x（架构通用化）
 > 关联文档：`docs/01-architecture.md` § Pack Architecture v2.0、`docs/status/hermes-deps.md`、`docs/competitor-maiduo-ai.md`
+>
+> **2026-05-15 更新**：需求 #6（燃油费率）已从浏览器自动化方案升级为 API 直写方案并交付。美正OS 的燃油费率模块有完整的 REST API（login → CREATE → audit），单次更新从 8 分钟 / 6.3M tokens 降至 **1.5 秒 / 5K tokens**。其余 5 条需求仍按原计划，待客户对齐后启动。
 
 ---
 
@@ -82,11 +85,11 @@
 | 3 | 财务发票自动化 | D: 文档 → 结构化 → Push | 邮件/上传事件 | runner |
 | 4 | 领星费用导出 → 美正OS | B: RPA 导出 → Push | 每月 1-3 号 | runner |
 | 5 | 一件代发订单取消 | C: 事件 → 操作 | UI 按钮 | end_user |
-| 6 | UPS/Fedex 燃油费率 | A: Scrape → Push | 周一上班前 | runner |
+| 6 | UPS/Fedex/DHL 燃油费率 | **API 直写**（非浏览器）| 每周日 23:30 + 每月 1 号 02:00 | runner | ✅ 已交付（2026-05-15）|
 
 ### 2.2 关键约束
 
-- **美正OS 无对外 API**，仅有 Web UI（疑似 Vue + Element UI）
+- **美正OS 有 REST API**（燃油费率模块已验证：login → CREATE → audit），其他模块待确认
 - **跨平台**：员工有 Win 有 Mac
 - **角色权限**：不同员工在美正OS 内角色不同，可见数据 + 可用功能不同
 - **固定机器**：财务、物流办公室有固定开机的电脑可承担 runner 角色
@@ -437,7 +440,7 @@ steps:
   - { id: audit,    type: write_audit }
 ```
 
-适用：#1 汇率、#6 燃油费率、任何"每日/每周拉个数推过去"
+适用：#1 汇率。~~#6 燃油费率~~（已升级为 API 直写，见 § 2.1）
 
 ### 7.2 Pattern B — Multi-Source Download + Rule + Push
 
