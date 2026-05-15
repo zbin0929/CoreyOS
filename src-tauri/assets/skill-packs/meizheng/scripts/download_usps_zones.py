@@ -106,7 +106,12 @@ def build_excel_rows(zone_data):
     rows = []
     for z in zone_data["zones"]:
         zone_code = f"Zone{z['zone']}"
-        rows.append((zone_code, z["dest_start"], z["dest_end"]))
+        start = z["dest_start"]
+        end = z["dest_end"]
+        if len(start) == 3:
+            start = start + "00"
+            end = end + "99"
+        rows.append((zone_code, start, end))
     return rows
 
 
