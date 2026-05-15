@@ -8,7 +8,7 @@
 
 1. **美金汇率自动更新** — 每日从中国银行抓取美元现汇卖出价并更新到美正OS
 2. **UPS Ground 分区月度更新** — 每月从 UPS 下载全美 902 个 ZIP3 分区数据并上传到美正OS
-3. **USPS Priority Mail 分区月度更新** — 每月从 USPS 公开 API 下载分区数据并上传到美正OS
+3. **USPS 分区月度更新** — 每月从 USPS 公开 API 下载分区数据并上传到美正OS
 
 ### 开发中
 
@@ -47,4 +47,4 @@
 - 902 个 ZIP3 批量上传约需 30 分钟
 - USPS 下载通过 `postcalc.usps.com` 公开 API，纯 HTTP 无需浏览器
 - FedEx 分区下载需要能访问 fedex.com 的网络环境（中国大陆需代理）
-- 上传脚本通过 `--carrier` 参数支持不同承运商（如 `--carrier USPS-PRIORITY`）
+- 上传脚本通过 `--carrier` 参数支持不同承运商（如 `--carrier USPS-GROUND`）

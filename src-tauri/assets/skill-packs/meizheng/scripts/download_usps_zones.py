@@ -11,7 +11,7 @@ except ImportError:
 
 BASE_URL = "https://postcalc.usps.com/DomesticZoneChart"
 API_URL = "https://postcalc.usps.com/DomesticZoneChart/GetZoneChart"
-ZONE_NAME_PREFIX = "USPS-PRIORITY"
+ZONE_NAME_PREFIX = "USPS-GROUND"
 HERMES_DIR = os.environ.get("HERMES_DIR", os.path.expanduser("~/.hermes"))
 CONFIG_PATH = os.path.join(HERMES_DIR, "pack-data", "meizheng", "config", "zone-config.yaml")
 TOKEN_CACHE_PATH = os.path.join(HERMES_DIR, "pack-data", "meizheng", "config", ".usps_token_cache.json")
@@ -146,7 +146,7 @@ def download_and_convert(zip3, output_dir, session=None):
         return None
 
     os.makedirs(output_dir, exist_ok=True)
-    xlsx_name = f"USPS-PRIORITY-{str(zip3).zfill(3)}.xlsx"
+    xlsx_name = f"USPS-GROUND-{str(zip3).zfill(3)}.xlsx"
     xlsx_path = os.path.join(output_dir, xlsx_name)
     write_excel(rows, xlsx_path)
     print(f"  Saved: {xlsx_path} ({len(rows)} rows)", file=sys.stderr)

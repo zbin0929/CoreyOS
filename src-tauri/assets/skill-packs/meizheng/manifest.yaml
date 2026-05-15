@@ -4,7 +4,7 @@ version: "0.3.0"
 title: 美正OS 自动化
 description: |
   美正OS 企业 RPA Pack —— 自动更新汇率、承运商分区等数据。
-  功能：中行美元汇率每日自动更新、UPS Ground 分区月度自动更新、USPS Priority Mail 分区月度自动更新、FedEx Ground 分区月度自动更新（开发中）。
+  功能：中行美元汇率每日自动更新、UPS Ground 分区月度自动更新、USPS 分区月度自动更新、FedEx Ground 分区月度自动更新（开发中）。
 author: Corey
 requires:
   corey: ">=0.2.0"

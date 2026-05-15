@@ -41,10 +41,10 @@ meizheng/
 - 批量上传约 30 分钟，支持断点续传
 - Workflow: `update-ups-zones.yaml`
 
-### ✅ 每月 USPS Priority Mail 分区自动更新
+### ✅ 每月 USPS 分区自动更新
 - 每月1号自动从 USPS 公开 API 下载分区数据
 - 纯 HTTP 请求，无需浏览器，从中国可直接访问
-- 自动转换为美正OS模板格式并上传
+- 自动转换为美正OS模板格式并上传（分区名前缀 `USPS-GROUND`）
 - Workflow: `update-usps-zones.yaml`
 
 ### 🔧 FedEx Ground 分区更新（开发中）

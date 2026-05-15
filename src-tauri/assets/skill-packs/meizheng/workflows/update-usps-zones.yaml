@@ -1,7 +1,7 @@
 id: update-usps-zones
 name: USPS 分区月度更新
 description: |
-  通过 USPS 公开 API 下载全部 USPS Priority Mail ZIP3 分区数据，
+  通过 USPS 公开 API 下载全部 USPS ZIP3 分区数据，
   转换为美正OS模板格式并上传。纯 HTTP 请求，无需浏览器。
   对应 REQUIREMENTS.md 需求 #4。
 version: 1
@@ -32,7 +32,7 @@ steps:
       **Step 2: 上传全部分区到美正OS**
 
       ```bash
-      "$VENV_PYTHON" "$SCRIPTS_DIR/upload_zones_meizheng.py" --dir "$HOME/.hermes/pack-data/meizheng/zone-charts" --carrier USPS-PRIORITY
+      "$VENV_PYTHON" "$SCRIPTS_DIR/upload_zones_meizheng.py" --dir "$HOME/.hermes/pack-data/meizheng/zone-charts" --carrier USPS-GROUND
       ```
 
       🔒 **铁律**：
