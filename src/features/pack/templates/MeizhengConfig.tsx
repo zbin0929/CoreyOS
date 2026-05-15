@@ -8,9 +8,17 @@ import { Save, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Select, type SelectOption } from '@/components/ui/select';
-import { packConfigGet, packConfigSet } from '@/lib/ipc/pack';
+import { packConfigGet, packConfigSet, packExchangeRateConfigGet, packExchangeRateConfigSet, packZoneConfigGet, packZoneConfigSet } from '@/lib/ipc/pack';
 import type { PackView } from '@/lib/ipc/pack';
 import { CarrierConfigEditor } from './CarrierConfigEditor';
+import {
+  ExchangeRateConfigEditor,
+  buildDefaultExchangeRateConfig,
+} from './ExchangeRateConfigEditor';
+import {
+  ZoneConfigEditor,
+  buildDefaultZoneConfig,
+} from './ZoneConfigEditor';
 
 interface MeizhengConfig {
   meizheng_os: {
@@ -68,6 +76,8 @@ const LOG_LEVEL_OPTIONS: SelectOption<'debug' | 'info' | 'warn' | 'error'>[] = [
 
 export function MeizhengConfigTemplate({ view }: { view: PackView }) {
   const [config, setConfig] = useState<MeizhengConfig>(DEFAULT_CONFIG);
+  const [exchangeRateConfig, setExchangeRateConfig] = useState(() => buildDefaultExchangeRateConfig());
+  const [zoneConfig, setZoneConfig] = useState(() => buildDefaultZoneConfig());
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -78,8 +88,18 @@ export function MeizhengConfigTemplate({ view }: { view: PackView }) {
   useEffect(() => {
     async function load() {
       try {
-        const data = await packConfigGet(packId);
+        const [data, erData, zData] = await Promise.all([
+          packConfigGet(packId),
+          packExchangeRateConfigGet(packId),
+          packZoneConfigGet(packId),
+        ]);
         setConfig({ ...DEFAULT_CONFIG, ...data } as MeizhengConfig);
+        if (erData && Object.keys(erData).length > 0) {
+          setExchangeRateConfig(prev => ({ ...prev, ...erData }) as ReturnType<typeof buildDefaultExchangeRateConfig>);
+        }
+        if (zData && Object.keys(zData).length > 0) {
+          setZoneConfig(prev => ({ ...prev, ...zData }) as ReturnType<typeof buildDefaultZoneConfig>);
+        }
       } catch (e) {
         console.error('Failed to load config:', e);
       } finally {
@@ -93,7 +113,11 @@ export function MeizhengConfigTemplate({ view }: { view: PackView }) {
     setSaving(true);
     setSaveStatus('saving');
     try {
-      await packConfigSet(packId, config as unknown as Record<string, unknown>);
+      await Promise.all([
+        packConfigSet(packId, config as unknown as Record<string, unknown>),
+        packExchangeRateConfigSet(packId, exchangeRateConfig as unknown as Record<string, unknown>),
+        packZoneConfigSet(packId, zoneConfig as unknown as Record<string, unknown>),
+      ]);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (e) {
@@ -258,6 +282,22 @@ export function MeizhengConfigTemplate({ view }: { view: PackView }) {
         <CarrierConfigEditor
           carriers={config.carriers}
           onChange={(carriers) => setConfig({ ...config, carriers })}
+        />
+      </div>
+
+      {/* 汇率配置 */}
+      <div className="rounded-xl border border-border/50 bg-gradient-to-br from-bg-elev-1 to-bg-elev-2/50 p-6 shadow-sm">
+        <ExchangeRateConfigEditor
+          config={exchangeRateConfig}
+          onChange={setExchangeRateConfig}
+        />
+      </div>
+
+      {/* UPS 分区配置 */}
+      <div className="rounded-xl border border-border/50 bg-gradient-to-br from-bg-elev-1 to-bg-elev-2/50 p-6 shadow-sm">
+        <ZoneConfigEditor
+          config={zoneConfig}
+          onChange={setZoneConfig}
         />
       </div>
 

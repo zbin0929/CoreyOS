@@ -112,6 +112,22 @@ export function packConfigSet(packId: string, config: Record<string, unknown>): 
   return invoke<void>('pack_config_set', { packId, config });
 }
 
+export function packExchangeRateConfigGet(packId: string): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('pack_exchange_rate_config_get', { packId });
+}
+
+export function packExchangeRateConfigSet(packId: string, config: Record<string, unknown>): Promise<void> {
+  return invoke<void>('pack_exchange_rate_config_set', { packId, config });
+}
+
+export function packZoneConfigGet(packId: string): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('pack_zone_config_get', { packId });
+}
+
+export function packZoneConfigSet(packId: string, config: Record<string, unknown>): Promise<void> {
+  return invoke<void>('pack_zone_config_set', { packId, config });
+}
+
 export function packWorkflowsList(): Promise<WorkflowSummary[]> {
   return invoke<WorkflowSummary[]>('pack_workflows_list');
 }

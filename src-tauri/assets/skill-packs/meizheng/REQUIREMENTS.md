@@ -29,9 +29,11 @@
 
 | 数据                    | 来源              | 更新频率      | 状态      | 备注                               |
 | ----------------------- | ----------------- | ------------- | --------- | ---------------------------------- |
-| UPS 全美分区表         | ups.com 官网     | 每月 1 号    | 🟢 已落地 | 见 `workflows/refresh_ups_zones.yaml` |
-| UPS 燃油附加费         | ups.com 官网     | 每周一       | 🟡 计划中 | 截图历史已留存                     |
-| FedEx 分区表 / 燃油费   | fedex.com         | 每月 / 每周   | ⚪ 待定   |                                    |
+| UPS 全美分区表         | ups.com 官网     | 每月 1 号    | 🟢 已落地 | 见 `workflows/update-ups-zones.yaml` |
+| 中行美元汇率           | boc.cn           | 每天 2 次    | 🟢 已落地 | 见 `workflows/update-usd-exchange-rate.yaml` |
+| FedEx 分区表           | fedex.com         | 每月         | 🔧 开发中 | 脚本已写好，需解决网络访问问题     |
+| UPS 燃油附加费         | ups.com 官网     | 每周一       | ⚪ 待定   |                                    |
+| FedEx 燃油费            | fedex.com         | 每周          | ⚪ 待定   |                                    |
 | （继续添加…）          |                   |               |           |                                    |
 
 ---

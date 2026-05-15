@@ -130,6 +130,106 @@ pub fn cron_overrides_from_fuel_rate_config(pack_data_dir: &Path) -> HashMap<Str
     overrides
 }
 
+/// Read `pack-data/<id>/config/exchange-rate-config.yaml` and return
+/// a map of manifest schedule id substring → cron string. The
+/// exchange-rate config stores schedules as an array of `{name, cron}`
+/// and we match by the schedule's `name` containing a keyword that
+/// appears in the manifest schedule id (e.g. name "早盘抓取" →
+/// match id containing "930", name "兜底抓取" → match id containing
+/// "1030"). Empty map if the file does not exist.
+pub fn cron_overrides_from_exchange_rate_config(
+    pack_data_dir: &Path,
+) -> HashMap<String, String> {
+    let path = pack_data_dir.join("config").join("exchange-rate-config.yaml");
+    let mut overrides: HashMap<String, String> = HashMap::new();
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return overrides;
+    };
+    let Ok(value): Result<serde_yaml::Value, _> = serde_yaml::from_str(&raw) else {
+        return overrides;
+    };
+    let Some(enabled) = value.get("enabled").and_then(|v| v.as_bool()) else {
+        return overrides;
+    };
+    if !enabled {
+        return overrides;
+    }
+    let Some(schedules) = value.get("schedules").and_then(|v| v.as_sequence()) else {
+        return overrides;
+    };
+    for schedule in schedules {
+        let Some(map) = schedule.as_mapping() else {
+            continue;
+        };
+        let Some(name) = map
+            .get(serde_yaml::Value::String("name".into()))
+            .and_then(|v| v.as_str())
+        else {
+            continue;
+        };
+        let Some(cron) = map
+            .get(serde_yaml::Value::String("cron".into()))
+            .and_then(|v| v.as_str())
+        else {
+            continue;
+        };
+        let keyword = if name.contains("早") || name.contains("9:30") || name.contains("09:30") {
+            "930"
+        } else if name.contains("兜底") || name.contains("10:30") {
+            "1030"
+        } else {
+            continue;
+        };
+        overrides.insert(keyword.to_string(), cron.trim().to_string());
+    }
+    overrides
+}
+
+/// Read `pack-data/<id>/config/zone-config.yaml` and return a map of
+/// manifest schedule id substring → cron string. Matches schedule
+/// entries by name containing keywords like "月度" or "分区".
+/// Empty map if the file does not exist or is disabled.
+pub fn cron_overrides_from_zone_config(pack_data_dir: &Path) -> HashMap<String, String> {
+    let path = pack_data_dir.join("config").join("zone-config.yaml");
+    let mut overrides: HashMap<String, String> = HashMap::new();
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return overrides;
+    };
+    let Ok(value): Result<serde_yaml::Value, _> = serde_yaml::from_str(&raw) else {
+        return overrides;
+    };
+    let Some(enabled) = value.get("enabled").and_then(|v| v.as_bool()) else {
+        return overrides;
+    };
+    if !enabled {
+        return overrides;
+    }
+    let Some(schedules) = value.get("schedules").and_then(|v| v.as_sequence()) else {
+        return overrides;
+    };
+    for schedule in schedules {
+        let Some(map) = schedule.as_mapping() else {
+            continue;
+        };
+        let Some(name) = map
+            .get(serde_yaml::Value::String("name".into()))
+            .and_then(|v| v.as_str())
+        else {
+            continue;
+        };
+        let Some(cron) = map
+            .get(serde_yaml::Value::String("cron".into()))
+            .and_then(|v| v.as_str())
+        else {
+            continue;
+        };
+        if name.contains("月度") || name.contains("分区") || name.contains("zone") {
+            overrides.insert("ups-zones".to_string(), cron.trim().to_string());
+        }
+    }
+    overrides
+}
+
 /// Apply cron overrides to a job list in-place. A manifest schedule
 /// id ending in `-weekly` / `-monthly` (or containing the keyword)
 /// gets its cron replaced if the overrides map has the matching key.
@@ -172,6 +272,10 @@ pub fn install_schedules_with_overrides(
     if let Some(dir) = pack_data_dir {
         let overrides = cron_overrides_from_fuel_rate_config(dir);
         apply_cron_overrides(&mut new_jobs, &overrides);
+        let exchange_overrides = cron_overrides_from_exchange_rate_config(dir);
+        apply_cron_overrides(&mut new_jobs, &exchange_overrides);
+        let zone_overrides = cron_overrides_from_zone_config(dir);
+        apply_cron_overrides(&mut new_jobs, &zone_overrides);
     }
     let existing = hermes_cron::load_jobs()?;
     let (mut kept, removed) = filter_pack(existing, &manifest.id);
@@ -378,5 +482,123 @@ carriers:
         let tmp = tempfile::tempdir().expect("tempdir");
         let overrides = cron_overrides_from_fuel_rate_config(tmp.path());
         assert!(overrides.is_empty());
+    }
+
+    #[test]
+    fn exchange_rate_overrides_match_by_keyword() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cfg_dir = tmp.path().join("config");
+        std::fs::create_dir_all(&cfg_dir).expect("mkdir");
+        let yaml = r#"
+enabled: true
+schedules:
+  - name: 早盘抓取
+    cron: "0 45 9 * * *"
+  - name: 兜底抓取
+    cron: "0 15 11 * * *"
+"#;
+        std::fs::write(cfg_dir.join("exchange-rate-config.yaml"), yaml).expect("write");
+        let overrides = cron_overrides_from_exchange_rate_config(tmp.path());
+        assert_eq!(
+            overrides.get("930").map(String::as_str),
+            Some("0 45 9 * * *")
+        );
+        assert_eq!(
+            overrides.get("1030").map(String::as_str),
+            Some("0 15 11 * * *")
+        );
+    }
+
+    #[test]
+    fn exchange_rate_overrides_disabled_returns_empty() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cfg_dir = tmp.path().join("config");
+        std::fs::create_dir_all(&cfg_dir).expect("mkdir");
+        let yaml = r#"
+enabled: false
+schedules:
+  - name: 早盘抓取
+    cron: "0 45 9 * * *"
+"#;
+        std::fs::write(cfg_dir.join("exchange-rate-config.yaml"), yaml).expect("write");
+        let overrides = cron_overrides_from_exchange_rate_config(tmp.path());
+        assert!(overrides.is_empty());
+    }
+
+    #[test]
+    fn exchange_rate_overrides_missing_file_returns_empty() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let overrides = cron_overrides_from_exchange_rate_config(tmp.path());
+        assert!(overrides.is_empty());
+    }
+
+    #[test]
+    fn exchange_rate_overrides_applied_to_jobs() {
+        let mut jobs = vec![
+            HermesJob {
+                id: "pack__meizheng__daily-usd-rate-930".to_string(),
+                ..HermesJob::default()
+            },
+            HermesJob {
+                id: "pack__meizheng__daily-usd-rate-1030".to_string(),
+                ..HermesJob::default()
+            },
+        ];
+        jobs[0].set_schedule_str("0 30 9 * * *".to_string());
+        jobs[1].set_schedule_str("0 30 10 * * *".to_string());
+        let mut overrides = HashMap::new();
+        overrides.insert("930".to_string(), "0 45 9 * * *".to_string());
+        overrides.insert("1030".to_string(), "0 15 11 * * *".to_string());
+        apply_cron_overrides(&mut jobs, &overrides);
+        assert_eq!(jobs[0].schedule_display(), "0 45 9 * * *");
+        assert_eq!(jobs[1].schedule_display(), "0 15 11 * * *");
+    }
+
+    #[test]
+    fn zone_config_overrides_match_by_keyword() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cfg_dir = tmp.path().join("config");
+        std::fs::create_dir_all(&cfg_dir).expect("mkdir");
+        let yaml = r#"
+enabled: true
+schedules:
+  - name: 月度分区更新
+    cron: "0 30 3 1 * *"
+"#;
+        std::fs::write(cfg_dir.join("zone-config.yaml"), yaml).expect("write");
+        let overrides = cron_overrides_from_zone_config(tmp.path());
+        assert_eq!(
+            overrides.get("ups-zones").map(String::as_str),
+            Some("0 30 3 1 * *")
+        );
+    }
+
+    #[test]
+    fn zone_config_overrides_disabled_returns_empty() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cfg_dir = tmp.path().join("config");
+        std::fs::create_dir_all(&cfg_dir).expect("mkdir");
+        let yaml = r#"
+enabled: false
+schedules:
+  - name: 月度分区更新
+    cron: "0 30 3 1 * *"
+"#;
+        std::fs::write(cfg_dir.join("zone-config.yaml"), yaml).expect("write");
+        let overrides = cron_overrides_from_zone_config(tmp.path());
+        assert!(overrides.is_empty());
+    }
+
+    #[test]
+    fn zone_config_overrides_applied_to_jobs() {
+        let mut jobs = vec![HermesJob {
+            id: "pack__meizheng__monthly-ups-zones".to_string(),
+            ..HermesJob::default()
+        }];
+        jobs[0].set_schedule_str("0 0 2 1 * *".to_string());
+        let mut overrides = HashMap::new();
+        overrides.insert("ups-zones".to_string(), "0 30 3 1 * *".to_string());
+        apply_cron_overrides(&mut jobs, &overrides);
+        assert_eq!(jobs[0].schedule_display(), "0 30 3 1 * *");
     }
 }

@@ -1,43 +1,48 @@
 schema_version: 1
 id: meizheng
-version: "0.1.0"
-title: 美正国际物流
+version: "0.2.0"
+title: 美正OS 自动化
 description: |
-  美正国际物流业务 Pack —— 为美正OS 客户提供 UPS / FedEx 分区与运费查询、
-  自动报价、政策追踪、客户群机器人集成。
-  当前为骨架版本，需求持续收集中（见 REQUIREMENTS.md）。
-author: 美正国际物流
+  美正OS 企业 RPA Pack —— 自动更新汇率、承运商分区等数据。
+  功能：中行美元汇率每日自动更新、UPS Ground 分区月度自动更新、FedEx Ground 分区月度自动更新（开发中）。
+author: Corey
 requires:
   corey: ">=0.2.0"
 
-# === 业务人设（注入 chat system prompt）===
-# 当前还没写——等 REQUIREMENTS.md §1 填好后转成正式 prompt
-# soul_inject:
-#   - prompts/soul.md
+dependencies:
+  python:
+    - crawl4ai>=0.8.0
+    - playwright>=1.40.0
+  setup_script: scripts/ensure_crawl4ai.py
 
-# === Skills（客户高频问题）===
-# 等 REQUIREMENTS.md §3 填好
-skills: []
+skills:
+  - skills/meizheng_os_automation.md
 
-# === Workflows（客户高频任务）===
 workflows:
-  - workflows/refresh_ups_zones.yaml
+  - workflows/update-usd-exchange-rate.yaml
+  - workflows/update-ups-zones.yaml
 
-# === 定时任务 ===
 schedules:
+  - id: daily-usd-rate-930
+    cron: "0 30 9 * * *"
+    workflow: update-usd-exchange-rate
+    description: 每天 09:30 抓取中行美金汇率
+  - id: daily-usd-rate-1030
+    cron: "0 30 10 * * *"
+    workflow: update-usd-exchange-rate
+    description: 每天 10:30 兜底抓取中行美金汇率
   - id: monthly-ups-zones
-    cron: "0 3 1 * *"          # 每月 1 号凌晨 3 点
-    workflow: refresh_ups_zones
-    description: 每月 1 号自动更新 UPS 全美分区表
+    cron: "0 0 2 1 * *"
+    workflow: update-ups-zones
+    description: 每月1号自动下载并上传 UPS Ground 分区数据
 
-# === Home 视图（客户首屏）===
-# 等 REQUIREMENTS.md §5 填好
-views: []
+views:
+  - id: config
+    title: 系统配置
+    template: MeizhengConfig
+    nav_section: primary
+    description: 配置美正OS连接和承运商自动化参数
 
-# === 客户专属配置项（白标）===
-# 等 REQUIREMENTS.md §7 填好
 config_schema: []
 
-# === MCP 服务器（外部集成：微信/钉钉/CRM 等）===
-# 等 REQUIREMENTS.md §6 填好
 mcp_servers: []
