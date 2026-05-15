@@ -47,6 +47,7 @@ const VALIDITY_OPTIONS: SelectOption[] = [
   { value: '7', label: '7 天' },
   { value: '30', label: '30 天' },
   { value: '90', label: '90 天' },
+  { value: '-1', label: '整月（脚本自动计算到月末）' },
 ];
 
 type CronMode = 'weekly' | 'monthly' | 'daily' | 'custom';
@@ -69,7 +70,7 @@ const WEEKDAY_OPTIONS: SelectOption[] = [
   { value: '6', label: '周六' },
 ];
 
-const DOM_OPTIONS: SelectOption[] = Array.from({ length: 28 }, (_, i) => ({
+const DOM_OPTIONS: SelectOption[] = Array.from({ length: 31 }, (_, i) => ({
   value: String(i + 1),
   label: `${i + 1} 号`,
 }));
@@ -311,6 +312,9 @@ export function CarrierConfigEditor({ carriers, onChange }: CarrierConfigEditorP
                       const parsed = parseCron(carrier.cron || '');
                       const timeStr = `${String(parsed.hour).padStart(2, '0')}:${String(parsed.minute).padStart(2, '0')}`;
                       const setMode = (mode: CronMode) => {
+                        if (mode === 'custom') {
+                          return;
+                        }
                         const next: ParsedCron = { ...parsed, mode };
                         updateCarrier(id, { cron: buildCron(next, carrier.cron || '') });
                       };
@@ -367,13 +371,20 @@ export function CarrierConfigEditor({ carriers, onChange }: CarrierConfigEditorP
                               className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
                             />
                           ) : (
-                            <input
-                              type="text"
-                              value={carrier.cron || ''}
-                              onChange={(e) => updateCarrier(id, { cron: e.target.value })}
-                              placeholder="0 30 23 * * 0"
-                              className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 font-mono text-xs text-fg transition-colors placeholder:text-fg-subtle/50 hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
-                            />
+                            <>
+                              <input
+                                type="text"
+                                value={carrier.cron || ''}
+                                onChange={(e) => {
+                                  updateCarrier(id, { cron: e.target.value });
+                                }}
+                                placeholder="0 30 23 * * 0"
+                                className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 font-mono text-xs text-fg transition-colors placeholder:text-fg-subtle/50 hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                              />
+                              <p className="text-[10px] text-fg-subtle/70 mt-1">
+                                提示：每月28号 <code className="px-1 py-0.5 bg-bg-subtle rounded text-[10px]">0 30 23 28 * *</code> 或每天 <code className="px-1 py-0.5 bg-bg-subtle rounded text-[10px]">0 30 23 * * *</code>（脚本内判断月末）
+                              </p>
+                            </>
                           )}
                           <p className="text-[11px] text-fg-subtle">
                             预览：{describeCron(carrier.cron || '')}
