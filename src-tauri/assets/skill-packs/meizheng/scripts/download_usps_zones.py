@@ -76,6 +76,7 @@ def fetch_zone_data(zip3, session):
             "dest_end": dest_end,
             "has_5digit_exceptions": has_plus,
             "priority_mail_only": mail_svc == "Priority Mail",
+            "is_zip5_override": False,
         })
 
     for exc in zip5:
@@ -97,13 +98,15 @@ def fetch_zone_data(zip3, session):
             "dest_end": dest_end,
             "has_5digit_exceptions": False,
             "priority_mail_only": False,
+            "is_zip5_override": True,
         })
 
     return {"zip3": zip3, "effective": effective, "zones": zones}
 
 
 def build_excel_rows(zone_data):
-    rows = []
+    base_rows = []
+    overrides = []
     for z in zone_data["zones"]:
         zone_code = f"Zone{z['zone']}"
         start = z["dest_start"]
@@ -111,8 +114,42 @@ def build_excel_rows(zone_data):
         if len(start) == 3:
             start = start + "00"
             end = end + "99"
-        rows.append((zone_code, start, end))
-    return rows
+        if z.get("is_zip5_override"):
+            overrides.append((zone_code, start, end))
+        else:
+            base_rows.append((zone_code, start, end))
+
+    if not overrides:
+        return base_rows
+
+    filtered = []
+    for br in base_rows:
+        bs, be = int(br[1]), int(br[2])
+        parts = [(bs, be, br[0])]
+        for ov in overrides:
+            os_, oe = int(ov[1]), int(ov[2])
+            new_parts = []
+            for ps, pe, pzc in parts:
+                if os_ > pe or oe < ps:
+                    new_parts.append((ps, pe, pzc))
+                else:
+                    if ps < os_:
+                        new_parts.append((ps, os_ - 1, pzc))
+                    if oe < pe:
+                        new_parts.append((oe + 1, pe, pzc))
+            parts = new_parts
+        for ps, pe, pzc in parts:
+            filtered.append((pzc, str(ps).zfill(5), str(pe).zfill(5)))
+
+    filtered.extend(overrides)
+    seen = set()
+    deduped = []
+    for row in filtered:
+        key = (row[0], row[1], row[2])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(row)
+    return deduped
 
 
 def write_excel(rows, output_path):
