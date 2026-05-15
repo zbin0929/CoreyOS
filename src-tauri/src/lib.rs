@@ -709,7 +709,11 @@ pub fn run() {
                             Err(e) => tracing::warn!(pack_id = %manifest.id, error = %e, "reconcile: install_skills failed"),
                         }
                     }
-                    match pack::install_schedules(manifest) {
+                    let pack_data_dir = hermes_dir.join("pack-data").join(&manifest.id);
+                    match pack::schedules::install_schedules_with_overrides(
+                        manifest,
+                        Some(pack_data_dir.as_path()),
+                    ) {
                         Ok((added, removed)) => {
                             if added > 0 || removed > 0 {
                                 info!(pack_id = %manifest.id, added, removed, "reconcile: pack schedules synced");

@@ -29,7 +29,7 @@ pub(crate) mod backup;
 mod manifest;
 mod migrations;
 mod scanner;
-mod schedules;
+pub mod schedules;
 mod seed;
 mod skills;
 pub mod state;

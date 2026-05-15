@@ -16,7 +16,9 @@
 //! public `install_schedules` / `uninstall_schedules` functions
 //! plug those into [`crate::hermes_cron`] for the live path.
 
+use std::collections::HashMap;
 use std::io;
+use std::path::Path;
 
 use crate::hermes_cron::{self, HermesJob};
 use crate::pack::manifest::PackManifest;
@@ -84,6 +86,68 @@ pub fn filter_pack(existing: Vec<HermesJob>, pack_id: &str) -> (Vec<HermesJob>, 
     (kept, removed)
 }
 
+/// Read `pack-data/<id>/config/fuel-rate-config.yaml` and return a
+/// map of `update_schedule` (e.g. "weekly", "monthly") → cron string,
+/// taken from the first enabled carrier in each group. Empty map if
+/// the file does not exist or carries no cron field.
+///
+/// This lets the Pack UI (CarrierConfigEditor) edit schedule timing
+/// in plain Chinese without touching the read-only manifest. The
+/// returned map is consumed by `apply_cron_overrides`.
+pub fn cron_overrides_from_fuel_rate_config(pack_data_dir: &Path) -> HashMap<String, String> {
+    let path = pack_data_dir.join("config").join("fuel-rate-config.yaml");
+    let mut overrides: HashMap<String, String> = HashMap::new();
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return overrides;
+    };
+    let Ok(value): Result<serde_yaml::Value, _> = serde_yaml::from_str(&raw) else {
+        return overrides;
+    };
+    let Some(carriers) = value.get("carriers").and_then(|v| v.as_mapping()) else {
+        return overrides;
+    };
+    for (_, carrier) in carriers {
+        let Some(map) = carrier.as_mapping() else {
+            continue;
+        };
+        let cron = map
+            .get(serde_yaml::Value::String("cron".into()))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let schedule = map
+            .get(serde_yaml::Value::String("update_schedule".into()))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if cron.is_empty() || schedule.is_empty() {
+            continue;
+        }
+        overrides.entry(schedule).or_insert(cron);
+    }
+    overrides
+}
+
+/// Apply cron overrides to a job list in-place. A manifest schedule
+/// id ending in `-weekly` / `-monthly` (or containing the keyword)
+/// gets its cron replaced if the overrides map has the matching key.
+/// Pure helper so unit tests can exercise the matching logic.
+pub fn apply_cron_overrides(jobs: &mut [HermesJob], overrides: &HashMap<String, String>) {
+    if overrides.is_empty() {
+        return;
+    }
+    for job in jobs.iter_mut() {
+        for (schedule_kind, cron) in overrides.iter() {
+            if job.id.contains(schedule_kind.as_str()) {
+                job.set_schedule_str(cron.clone());
+                break;
+            }
+        }
+    }
+}
+
 /// Replace every Pack-owned job in `~/.hermes/cron/jobs.json` with
 /// the new set computed from the manifest. Returns `(installed,
 /// replaced_or_removed)` for logging; call from `pack_set_enabled`
@@ -91,13 +155,23 @@ pub fn filter_pack(existing: Vec<HermesJob>, pack_id: &str) -> (Vec<HermesJob>, 
 ///
 /// Idempotent: re-running with the same manifest leaves jobs.json
 /// in the same state.
-pub fn install_schedules(manifest: &PackManifest) -> io::Result<(usize, usize)> {
-    let new_jobs = compute_jobs(manifest);
+///
+/// If `pack_data_dir` is `Some`, cron overrides from
+/// `<pack_data_dir>/config/fuel-rate-config.yaml` are merged in,
+/// letting the Pack UI control schedule timing without touching the
+/// read-only manifest. Pass `None` for behaviour identical to the
+/// pre-override version.
+pub fn install_schedules_with_overrides(
+    manifest: &PackManifest,
+    pack_data_dir: Option<&Path>,
+) -> io::Result<(usize, usize)> {
+    let mut new_jobs = compute_jobs(manifest);
     if new_jobs.is_empty() {
-        // Nothing to install — but be sure to clear any stale
-        // entries from a previous version of the manifest that
-        // had schedules.
         return uninstall_schedules(&manifest.id).map(|removed| (0, removed));
+    }
+    if let Some(dir) = pack_data_dir {
+        let overrides = cron_overrides_from_fuel_rate_config(dir);
+        apply_cron_overrides(&mut new_jobs, &overrides);
     }
     let existing = hermes_cron::load_jobs()?;
     let (mut kept, removed) = filter_pack(existing, &manifest.id);
@@ -105,6 +179,12 @@ pub fn install_schedules(manifest: &PackManifest) -> io::Result<(usize, usize)> 
     kept.extend(new_jobs);
     hermes_cron::save_jobs(&kept)?;
     Ok((installed, removed))
+}
+
+/// Backward-compatible entry point — same as
+/// [`install_schedules_with_overrides`] with `pack_data_dir=None`.
+pub fn install_schedules(manifest: &PackManifest) -> io::Result<(usize, usize)> {
+    install_schedules_with_overrides(manifest, None)
 }
 
 /// Strip every Pack-owned job for `pack_id` from jobs.json.
@@ -222,5 +302,81 @@ version: "1.0.0"
         let (kept, removed) = filter_pack(existing, "foo");
         assert_eq!(removed, 0);
         assert_eq!(kept.len(), 2);
+    }
+
+    #[test]
+    fn apply_cron_overrides_replaces_matching_schedule() {
+        let mut jobs = vec![
+            HermesJob {
+                id: "pack__meizheng__weekly-fuel-rates".to_string(),
+                ..HermesJob::default()
+            },
+            HermesJob {
+                id: "pack__meizheng__monthly-fuel-rates".to_string(),
+                ..HermesJob::default()
+            },
+        ];
+        jobs[0].set_schedule_str("0 30 23 * * 0".to_string());
+        jobs[1].set_schedule_str("0 0 2 1 * *".to_string());
+        let mut overrides = HashMap::new();
+        overrides.insert("weekly".to_string(), "0 0 9 * * 1".to_string());
+        apply_cron_overrides(&mut jobs, &overrides);
+        assert_eq!(jobs[0].schedule_display(), "0 0 9 * * 1");
+        assert_eq!(
+            jobs[1].schedule_display(),
+            "0 0 2 1 * *",
+            "non-matching schedule must not change"
+        );
+    }
+
+    #[test]
+    fn apply_cron_overrides_empty_map_is_noop() {
+        let mut jobs = vec![HermesJob {
+            id: "pack__x__weekly".to_string(),
+            ..HermesJob::default()
+        }];
+        jobs[0].set_schedule_str("0 0 0 * * *".to_string());
+        let overrides = HashMap::new();
+        apply_cron_overrides(&mut jobs, &overrides);
+        assert_eq!(jobs[0].schedule_display(), "0 0 0 * * *");
+    }
+
+    #[test]
+    fn cron_overrides_from_yaml_picks_first_per_group() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cfg_dir = tmp.path().join("config");
+        std::fs::create_dir_all(&cfg_dir).expect("mkdir");
+        let yaml = r#"
+carriers:
+  ups:
+    name: UPS
+    update_schedule: weekly
+    cron: "0 30 23 * * 0"
+  fedex:
+    name: FedEx
+    update_schedule: weekly
+    cron: "0 0 9 * * 1"
+  dhl:
+    name: DHL
+    update_schedule: monthly
+    cron: "0 0 2 1 * *"
+"#;
+        std::fs::write(cfg_dir.join("fuel-rate-config.yaml"), yaml).expect("write");
+        let overrides = cron_overrides_from_fuel_rate_config(tmp.path());
+        assert_eq!(
+            overrides.get("weekly").map(String::as_str),
+            Some("0 30 23 * * 0")
+        );
+        assert_eq!(
+            overrides.get("monthly").map(String::as_str),
+            Some("0 0 2 1 * *")
+        );
+    }
+
+    #[test]
+    fn cron_overrides_missing_file_returns_empty() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let overrides = cron_overrides_from_fuel_rate_config(tmp.path());
+        assert!(overrides.is_empty());
     }
 }

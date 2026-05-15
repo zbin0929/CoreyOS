@@ -563,8 +563,22 @@ pub async fn pack_config_set(
     state: State<'_, AppState>,
 ) -> IpcResult<()> {
     let hermes_dir = state.packs.read().hermes_dir.clone();
+    let manifest_for_schedule = {
+        let registry = state.packs.read();
+        registry
+            .packs
+            .iter()
+            .find(|e| {
+                e.manifest
+                    .as_deref()
+                    .map(|m| m.id == pack_id)
+                    .unwrap_or(false)
+            })
+            .and_then(|e| e.manifest.as_deref().cloned())
+    };
     tokio::task::spawn_blocking(move || {
-        let config_dir = hermes_dir.join("pack-data").join(&pack_id).join("config");
+        let pack_data_dir = hermes_dir.join("pack-data").join(&pack_id);
+        let config_dir = pack_data_dir.join("config");
         fs::create_dir_all(&config_dir).map_err(|e| IpcError::Internal {
             message: format!("create config dir: {e}"),
         })?;
@@ -580,7 +594,34 @@ pub async fn pack_config_set(
         })?;
         fs::rename(&tmp, &yaml_path).map_err(|e| IpcError::Internal {
             message: format!("rename YAML config: {e}"),
-        })
+        })?;
+
+        // Reinstall schedules so the carrier-level cron change in
+        // fuel-rate-config.yaml takes effect without a restart. Best-effort:
+        // a failure here is logged but doesn't fail the save.
+        if let Some(manifest) = manifest_for_schedule.as_ref() {
+            match crate::pack::schedules::install_schedules_with_overrides(
+                manifest,
+                Some(pack_data_dir.as_path()),
+            ) {
+                Ok((installed, replaced)) => {
+                    tracing::info!(
+                        pack_id = %manifest.id,
+                        installed,
+                        replaced,
+                        "pack_config_set: schedules re-installed with cron overrides"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        pack_id = %manifest.id,
+                        error = %e,
+                        "pack_config_set: failed to re-install schedules"
+                    );
+                }
+            }
+        }
+        Ok(())
     })
     .await
     .map_err(|e| IpcError::Internal {
