@@ -160,6 +160,38 @@ customer.yaml is imported once on startup, then deleted. Feature flags persisted
 ### CW-3: Data directory is sacred
 ~/.hermes/ is NEVER touched by app updates. config.yaml migration is additive only (add fields, never remove). User data (skills, workflows, vault, db) survives every update.
 
+## Skill Pack Source of Truth
+
+### SP-1: Assets are source of truth
+All pack files (scripts, workflows, config templates, manifest.yaml, skills) live in `src-tauri/assets/skill-packs/<id>/`. This directory is the **only source of truth**. Never edit files directly in `~/.hermes/skill-packs/<id>/`.
+
+### SP-2: Seed mechanism
+On first install, `~/.hermes/skill-packs/<id>/` is seeded from `src-tauri/assets/skill-packs/<id>/`. If the directory already exists, seed is skipped. During development, manually sync after changes:
+
+```bash
+# Sync all pack files
+cp -r ~/AI项目/CoreyOS/src-tauri/assets/skill-packs/meizheng/* ~/.hermes/skill-packs/meizheng/
+
+# Or sync individual files
+cp ~/AI项目/CoreyOS/src-tauri/assets/skill-packs/meizheng/scripts/xxx.py ~/.hermes/skill-packs/meizheng/scripts/
+
+# Force re-seed (destructive — deletes and re-copies)
+COREY_FORCE_RESEED=1  # set env var before app launch
+```
+
+### SP-3: Never lose user workflows
+User-created or modified workflows in `~/.hermes/workflows/pack__meizheng__*` must be registered in `manifest.yaml` so they survive pack reinstalls. The uninstall process deletes `pack__meizheng__*` files — if a workflow exists only in `~/.hermes/` and not in assets, it will be lost.
+
+### SP-4: Test before declaring done
+After modifying any pack script:
+1. Run `npx tsc --noEmit` (frontend)
+2. Run `cargo test --lib --manifest-path src-tauri/Cargo.toml -- bundled_skill_packs_are_wellformed` (pack validation)
+3. Sync to `~/.hermes/skill-packs/` and run the script manually
+4. Verify output matches expected format
+
+### SP-5: Pack dependencies must be declared
+All Python packages used by pack scripts must be listed in `manifest.yaml` under `dependencies.python`. Before adding a new import, check if it's already declared. After adding, remind user to install: `~/.hermes/hermes-agent/venv/bin/python -m pip install <package>`
+
 ## Build Commands
 
 ```bash

@@ -4,7 +4,6 @@ import json
 import os
 import re
 import struct
-import subprocess
 import tempfile
 import argparse
 
@@ -24,7 +23,7 @@ def _get_zone_index():
     import urllib.request
     url = "https://www.ups.com/us/en/zone-chart.json"
     req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         "Accept": "application/json",
     })
     with urllib.request.urlopen(req, timeout=60) as resp:
@@ -35,7 +34,7 @@ def _download_xls(url, dest):
     import urllib.request
     full_url = f"https://assets.ups.com{url}" if url.startswith("/") else url
     req = urllib.request.Request(full_url, headers={
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         "Accept": "*/*",
         "Referer": "https://www.ups.com/us/en/support/shipping-support/shipping-costs-rates/daily-rates",
     })
@@ -44,25 +43,6 @@ def _download_xls(url, dest):
         with open(dest, "wb") as f:
             f.write(data)
     return len(data)
-
-
-def _download_via_curl(url, dest, cookie_file=None):
-    full_url = f"https://assets.ups.com{url}" if url.startswith("/") else url
-    cmd = [
-        "curl", "-sL", "-o", dest,
-        "-H", "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        "-H", "Accept: */*",
-        "-H", "Referer: https://www.ups.com/us/en/support/shipping-support/shipping-costs-rates/daily-rates",
-        "--connect-timeout", "30",
-        "--max-time", "120",
-        full_url,
-    ]
-    if cookie_file and os.path.exists(cookie_file):
-        cmd.extend(["-b", cookie_file])
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-    if result.returncode != 0:
-        raise RuntimeError(f"curl failed: {result.stderr}")
-    return os.path.getsize(dest)
 
 
 def parse_xls_ground(xls_path):
@@ -217,8 +197,7 @@ def download_and_convert(zip3, output_path, cookie_file=None):
         try:
             size = _download_xls(xls_url, tmp_xls)
         except Exception as e:
-            print(f"urllib failed ({e}), trying curl...", file=sys.stderr)
-            size = _download_via_curl(xls_url, tmp_xls, cookie_file)
+            raise RuntimeError(f"Failed to download XLS: {e}") from e
         print(f"Downloaded: {size} bytes", file=sys.stderr)
 
         if size < 100:

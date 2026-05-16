@@ -46,13 +46,13 @@ describe('canRetryLastAssistant', () => {
     ).toBe(false);
   });
 
-  it('rejects an errored assistant', () => {
+  it('accepts an errored assistant (retry is the recovery path)', () => {
     expect(
       canRetryLastAssistant([
         mk({ role: 'user', content: 'hi' }),
         mk({ role: 'assistant', content: '', error: 'transport closed' }),
       ]),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('rejects when no preceding user turn exists (malformed session)', () => {

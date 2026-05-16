@@ -27,6 +27,7 @@ import { FormRunnerTemplate } from '@/features/pack/templates/FormRunner';
 import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
 import { PackConfigTemplate } from '@/features/pack/templates/PackConfig';
 import { MeizhengConfigTemplate } from '@/features/pack/templates/MeizhengConfig';
+import { MeizhengDashboardTemplate } from '@/features/pack/templates/MeizhengDashboard';
 import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
 import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
 import { SkillPaletteTemplate } from '@/features/pack/templates/SkillPalette';
@@ -48,6 +49,7 @@ const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   FormRunner: FormRunnerTemplate,
   MetricsCard: MetricsCardTemplate,
   MeizhengConfig: MeizhengConfigTemplate,
+  MeizhengDashboard: MeizhengDashboardTemplate,
   PackConfig: PackConfigTemplate,
   PivotTable: PivotTableTemplate,
   RadarChart: RadarChartTemplate,

@@ -17,7 +17,7 @@ import type { UiMessage } from '@/stores/chat';
  */
 export function canRetryLastAssistant(messages: readonly UiMessage[]): boolean {
   const last = messages[messages.length - 1];
-  if (!last || last.role !== 'assistant' || last.pending || last.error) {
+  if (!last || last.role !== 'assistant' || last.pending) {
     return false;
   }
   // Walk back for the turn this assistant replied to. We don't need

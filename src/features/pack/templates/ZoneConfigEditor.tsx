@@ -5,8 +5,9 @@ interface ZoneSchedule {
   cron: string;
 }
 
-interface CarrierZoneConfig {
+export interface CarrierZoneConfig {
   enabled: boolean;
+  upload_prefix: string;
   schedules: ZoneSchedule[];
   source: {
     carrier: string;
@@ -34,15 +35,24 @@ export function buildDefaultZoneConfig(): ZoneConfig {
     carriers: {
       ups: {
         enabled: true,
+        upload_prefix: 'UPS-GROUND',
         schedules: [{ name: '月度分区更新', cron: '0 0 2 1 * *' }],
         source: { carrier: 'UPS', service: 'GROUND', totalZip3: 902 },
         upload: { maxRetries: 3, retryDelay: 2, requestInterval: 1 },
       },
       usps: {
         enabled: true,
+        upload_prefix: 'USPS-GROUND',
         schedules: [{ name: '月度分区更新', cron: '0 0 3 1 * *' }],
         source: { carrier: 'USPS', service: 'GROUND', totalZip3: 930 },
         upload: { maxRetries: 3, retryDelay: 2, requestInterval: 0.3 },
+      },
+      fedex: {
+        enabled: true,
+        upload_prefix: 'FedEx Ground',
+        schedules: [{ name: '月度分区更新', cron: '0 0 4 1 * *' }],
+        source: { carrier: 'FedEx', service: 'Ground', totalZip3: 1000 },
+        upload: { maxRetries: 3, retryDelay: 2, requestInterval: 1 },
       },
     },
   };
@@ -114,17 +124,30 @@ function CarrierSection({
               />
             </div>
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-fg">ZIP3 总数</label>
+              <label className="block text-xs font-medium text-fg">上传名称前缀</label>
               <input
-                type="number"
-                value={carrier.source.totalZip3}
+                type="text"
+                value={carrier.upload_prefix}
                 onChange={(e) =>
-                  onChange({ ...carrier, source: { ...carrier.source, totalZip3: Number(e.target.value) } })
+                  onChange({ ...carrier, upload_prefix: e.target.value })
                 }
                 className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
               />
-              <p className="text-[10px] text-fg-subtle">美国 3 位邮编前缀总数</p>
+              <p className="text-[10px] text-fg-subtle">美正OS 中的分区搜索名称，如 UPS-GROUND</p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-fg">ZIP3 总数</label>
+            <input
+              type="number"
+              value={carrier.source.totalZip3}
+              onChange={(e) =>
+                onChange({ ...carrier, source: { ...carrier.source, totalZip3: Number(e.target.value) } })
+              }
+              className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+            />
+            <p className="text-[10px] text-fg-subtle">美国 3 位邮编前缀总数</p>
           </div>
 
           <div className="space-y-3">

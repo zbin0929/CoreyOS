@@ -181,14 +181,16 @@ export function useChatSend(args: UseChatSendArgs): UseChatSendResult {
       .reverse()
       .find((m) => m.role === 'assistant' && (m.pending || m.streaming))?.id ?? null;
   const pendingRef = useRef<string | null>(trailingPendingId);
-
-  // No-op shim that replaces the old `setSending` setState. Stream
-  // callbacks still call `setSending(false)` on done/error/stop —
-  // sending is now derived, so flipping it is the patchMessage call
-  // that already runs in those branches (sets `pending: false`).
-  // We keep the function signature so call sites don't need to change.
-  const setSending = (_v: boolean) => {};
   const sendingRef = useRef(false);
+
+  // Thin wrapper that keeps `sendingRef` in sync with the derived
+  // `sending` state. Stream callbacks call `setSending(false)` on
+  // done/error/stop — the derived `sending` already flips via
+  // patchMessage, but `sendingRef` must also be cleared so the next
+  // send() isn't blocked by a stale ref (bug: "stuck after stream").
+  const setSending = (v: boolean) => {
+    if (!v) sendingRef.current = false;
+  };
 
   // T4.4b — breaches flagged by the budget gate on the LAST send
   // attempt. Re-populated (or cleared) every time send() runs so the

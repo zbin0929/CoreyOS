@@ -1,19 +1,23 @@
 schema_version: 1
 id: meizheng
-version: "0.3.0"
+version: "0.5.0"
 title: 美正OS 自动化
 description: |
-  美正OS 企业 RPA Pack —— 自动更新汇率、承运商分区等数据。
-  功能：中行美元汇率每日自动更新、UPS Ground 分区月度自动更新、USPS 分区月度自动更新、FedEx Ground 分区月度自动更新（开发中）。
+  美正OS 企业 RPA Pack —— 自动更新汇率、燃油附加费、承运商分区等数据。
+  功能：中行美元汇率每日自动更新、燃油附加费周度/月度更新、UPS/USPS/FedEx Ground 分区月度自动更新。
 author: Corey
 requires:
   corey: ">=0.2.0"
 
 dependencies:
   python:
-    - crawl4ai>=0.8.0
-    - playwright>=1.40.0
-  setup_script: scripts/ensure_crawl4ai.py
+    - requests>=2.28.0
+    - beautifulsoup4>=4.12.0
+    - openpyxl>=3.0.0
+    - xlrd==1.2.0
+    - pdfplumber>=0.9.0
+    - websocket-client>=1.0.0
+    - pyyaml>=6.0
 
 skills:
   - skills/meizheng_os_automation.md
@@ -22,6 +26,9 @@ workflows:
   - workflows/update-usd-exchange-rate.yaml
   - workflows/update-ups-zones.yaml
   - workflows/update-usps-zones.yaml
+  - workflows/update-fedex-zones.yaml
+  - workflows/update-fuel-rates-weekly.yaml
+  - workflows/update-fuel-rates-monthly.yaml
 
 schedules:
   - id: daily-usd-rate-930
@@ -40,12 +47,29 @@ schedules:
     cron: "0 0 3 1 * *"
     workflow: update-usps-zones
     description: 每月1号自动下载并上传 USPS Ground 分区数据
+  - id: monthly-fedex-zones
+    cron: "0 0 4 1 * *"
+    workflow: update-fedex-zones
+    description: 每月1号自动下载并上传 FedEx Ground 分区数据
+  - id: weekly-fuel-rates
+    cron: "0 30 23 * * 0"
+    workflow: update-fuel-rates-weekly
+    description: 每周日 23:30 更新 UPS + FedEx 燃油附加费
+  - id: monthly-dhl-fuel
+    cron: "0 0 28-31 * * *"
+    workflow: update-fuel-rates-monthly
+    description: 每月最后一天更新 DHL 燃油附加费
 
 views:
+  - id: dashboard
+    title: 美正OS
+    template: MeizhengDashboard
+    nav_section: primary
+    description: 燃油价率、汇率、工作流一览
   - id: config
     title: 系统配置
     template: MeizhengConfig
-    nav_section: primary
+    nav_section: settings
     description: 配置美正OS连接和承运商自动化参数
 
 config_schema: []

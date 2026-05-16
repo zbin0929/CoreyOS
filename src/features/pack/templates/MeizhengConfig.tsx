@@ -18,6 +18,7 @@ import {
 import {
   ZoneConfigEditor,
   buildDefaultZoneConfig,
+  type CarrierZoneConfig,
 } from './ZoneConfigEditor';
 
 interface MeizhengConfig {
@@ -98,7 +99,19 @@ export function MeizhengConfigTemplate({ view }: { view: PackView }) {
           setExchangeRateConfig(prev => ({ ...prev, ...erData }) as ReturnType<typeof buildDefaultExchangeRateConfig>);
         }
         if (zData && Object.keys(zData).length > 0) {
-          setZoneConfig(prev => ({ ...prev, ...zData }) as ReturnType<typeof buildDefaultZoneConfig>);
+          setZoneConfig(prev => {
+            const merged = { ...prev, ...zData };
+            if (zData.carriers && prev.carriers) {
+              merged.carriers = { ...prev.carriers } as Record<string, CarrierZoneConfig>;
+              for (const [key, val] of Object.entries(zData.carriers)) {
+                (merged.carriers as Record<string, CarrierZoneConfig>)[key] = {
+                  ...(prev.carriers[key] || {}),
+                  ...(val as Partial<CarrierZoneConfig>),
+                } as CarrierZoneConfig;
+              }
+            }
+            return merged as unknown as ReturnType<typeof buildDefaultZoneConfig>;
+          });
         }
       } catch (e) {
         console.error('Failed to load config:', e);

@@ -27,15 +27,16 @@
 
 > 这些数据 Corey 帮你**定时刷新**+**入库**，agent 查询时**毫秒级返回**、零 token 浪费。
 
-| 数据                    | 来源              | 更新频率      | 状态      | 备注                               |
-| ----------------------- | ----------------- | ------------- | --------- | ---------------------------------- |
-| UPS 全美分区表         | ups.com 官网     | 每月 1 号    | 🟢 已落地 | 见 `workflows/update-ups-zones.yaml` |
-| 中行美元汇率           | boc.cn           | 每天 2 次    | 🟢 已落地 | 见 `workflows/update-usd-exchange-rate.yaml` |
-| USPS 分区表           | postcalc.usps.com | 每月 1 号    | 🟢 已落地 | 见 `workflows/update-usps-zones.yaml`，纯 HTTP API |
-| FedEx 分区表           | fedex.com         | 每月         | 🔧 开发中 | 脚本已写好，需解决网络访问问题     |
-| UPS 燃油附加费         | ups.com 官网     | 每周一       | ⚪ 待定   |                                    |
-| FedEx 燃油费            | fedex.com         | 每周          | ⚪ 待定   |                                    |
-| （继续添加…）          |                   |               |           |                                    |
+| 数据                    | 来源              | 更新频率      | 状态      | 抓取方式 | 备注                               |
+| ----------------------- | ----------------- | ------------- | --------- | -------- | ---------------------------------- |
+| UPS 全美分区表         | ups.com 官网     | 每月 1 号    | 🟢 已落地 | requests | 见 `workflows/update-ups-zones.yaml` |
+| 中行美元汇率           | boc.cn           | 每天 2 次    | 🟢 已落地 | requests | 见 `workflows/update-usd-exchange-rate.yaml` |
+| USPS 分区表           | postcalc.usps.com | 每月 1 号    | 🟢 已落地 | requests | 见 `workflows/update-usps-zones.yaml` |
+| FedEx 分区表           | fedex.com         | 每月 1 号    | 🟢 已落地 | CDP      | 见 `workflows/update-fedex-zones.yaml` |
+| UPS 燃油附加费         | ups.com 官网     | 每周日       | 🟢 已落地 | CDP      | Ground + Air 百分比，见 `workflows/update-fuel-rates-weekly.yaml` |
+| FedEx 燃油附加费       | fedex.com         | 每周日       | 🟢 已落地 | CDP      | Ground 百分比，见 `workflows/update-fuel-rates-weekly.yaml` |
+| DHL 燃油附加费         | dhl.com           | 每月最后一天   | 🟢 已落地 | CDP      | Domestic 每磅金额（非百分比），见 `workflows/update-fuel-rates-monthly.yaml` |
+| （继续添加…）          |                   |               |           |          |                                    |
 
 ---
 

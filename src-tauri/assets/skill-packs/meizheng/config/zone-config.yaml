@@ -1,6 +1,7 @@
 carriers:
   ups:
     enabled: true
+    upload_prefix: "UPS-GROUND"
     schedules:
       - name: 月度分区更新
         cron: "0 0 2 1 * *"
@@ -14,6 +15,7 @@ carriers:
       requestInterval: 1
   usps:
     enabled: true
+    upload_prefix: "USPS-GROUND"
     schedules:
       - name: 月度分区更新
         cron: "0 0 3 1 * *"
@@ -25,3 +27,19 @@ carriers:
       maxRetries: 3
       retryDelay: 2
       requestInterval: 0.3
+  fedex:
+    enabled: true
+    upload_prefix: "FedEx Ground"
+    schedules:
+      - name: 月度分区更新
+        cron: "0 0 4 1 * *"
+    source:
+      carrier: FedEx
+      service: Ground
+      download_method: cdp
+      cdp_port: 9222
+      totalZip3: 1000
+    upload:
+      maxRetries: 3
+      retryDelay: 2
+      requestInterval: 1
