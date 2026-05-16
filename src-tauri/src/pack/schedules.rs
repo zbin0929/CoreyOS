@@ -734,6 +734,6 @@ carriers:
             overrides.get("ups-zones").map(String::as_str),
             Some("0 0 2 1 * *")
         );
-        assert!(overrides.get("usps-zones").is_none());
+        assert!(!overrides.contains_key("usps-zones"));
     }
 }
