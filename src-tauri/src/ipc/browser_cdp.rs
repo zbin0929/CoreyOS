@@ -216,6 +216,7 @@ fn detect_chrome_path() -> Option<PathBuf> {
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
+        use std::process::Command;
         for name in &[
             "google-chrome",
             "google-chrome-stable",
