@@ -71,7 +71,7 @@ pub struct PackConfigSchema {
     pub width: String,
 }
 
-fn convert_field(f: &crate::pack::manifest::ConfigField) -> PackConfigSchema {
+fn convert_field(f: &crate::pack::ConfigField) -> PackConfigSchema {
     PackConfigSchema {
         key: f.key.clone(),
         label: f.label.clone(),

@@ -49,7 +49,9 @@ mod workflows;
 #[allow(unused_imports)]
 pub use backup::backup_pack;
 #[allow(unused_imports)]
-pub use manifest::{load_from_dir, parse, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME};
+pub use manifest::{
+    load_from_dir, parse, ConfigField, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME,
+};
 pub use migrations::run_migrations;
 pub use scanner::scan_skill_packs_dir;
 pub use schedules::{install_schedules, uninstall_schedules};
