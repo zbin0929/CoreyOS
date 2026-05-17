@@ -28,6 +28,8 @@ import {
   packConfigGet,
   packConfigSchema,
   packConfigSet,
+  packNamedConfigGet,
+  packNamedConfigSet,
   type PackConfigSchemaField,
   type PackView,
 } from '@/lib/ipc/pack';
@@ -293,6 +295,50 @@ function validateField(
   }
 }
 
+/**
+ * Coerce a raw `PackConfigSchemaField`-shaped value (parsed from
+ * the manifest's per-view `schema:` option) into the recursive TS
+ * type expected by `<FieldNode>`. Manifest YAML uses snake_case
+ * (`show_if`, `min_items`, ...) but the TS interface mirrors the
+ * Rust IPC DTO which is already camelCase. We accept either casing
+ * so a Pack author can write whichever feels natural.
+ */
+function coerceSchema(raw: unknown): PackConfigSchemaField[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(coerceField);
+}
+
+function coerceField(v: unknown): PackConfigSchemaField {
+  const r = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  function pick<T>(camel: string, snake: string, fallback: T): T {
+    if (camel in r && r[camel] !== undefined) return r[camel] as T;
+    if (snake in r && r[snake] !== undefined) return r[snake] as T;
+    return fallback;
+  }
+  return {
+    key: typeof r.key === 'string' ? r.key : '',
+    label: typeof r.label === 'string' ? r.label : '',
+    type: typeof r.type === 'string' ? r.type : 'text',
+    required: Boolean(r.required),
+    secret: Boolean(r.secret) || r.type === 'secret',
+    description: typeof r.description === 'string' ? r.description : '',
+    help: typeof r.help === 'string' ? r.help : '',
+    group: typeof r.group === 'string' ? r.group : '',
+    validation: typeof r.validation === 'string' ? r.validation : '',
+    placeholder: typeof r.placeholder === 'string' ? r.placeholder : '',
+    default: r.default,
+    options: Array.isArray(r.options) ? (r.options as string[]) : [],
+    fields: coerceSchema(r.fields),
+    item: coerceSchema(r.item),
+    showIf: pick<string>('showIf', 'show_if', ''),
+    preview: typeof r.preview === 'string' ? r.preview : '',
+    minItems: Number(pick<number>('minItems', 'min_items', 0)) || 0,
+    maxItems: Number(pick<number>('maxItems', 'max_items', 0)) || 0,
+    addLabel: pick<string>('addLabel', 'add_label', ''),
+    width: typeof r.width === 'string' ? r.width : '',
+  };
+}
+
 export function SchemaConfigTemplate({ view }: { view: PackView }) {
   const [schema, setSchema] = useState<PackConfigSchemaField[]>([]);
   const [config, setConfig] = useState<Ctx>({});
@@ -300,17 +346,40 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
   const [status, setStatus] = useState<Status>('idle');
   const [loading, setLoading] = useState(true);
 
+  // v0.3.0 per-view schema — when `view.options.schema` is set the
+  // template uses an inline manifest schema and the generic
+  // `pack_named_config_*` IPC against `view.options.config_file`.
+  // Pre-v0.3.0 fall-back: a Pack with no `schema:` declared falls
+  // back to the manifest top-level `config_schema` + the
+  // `pack_config_*` IPC (which is hardcoded to fuel-rate-config.yaml).
+  const options = (view.options ?? {}) as Record<string, unknown>;
+  const inlineSchema = coerceSchema(options.schema);
+  const configFile =
+    typeof options.config_file === 'string'
+      ? (options.config_file as string)
+      : typeof options.configFile === 'string'
+        ? (options.configFile as string)
+        : null;
+  const useInline = inlineSchema.length > 0 && configFile !== null;
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [s, c] = await Promise.all([
-          packConfigSchema(view.packId),
-          packConfigGet(view.packId),
-        ]);
-        if (cancelled) return;
-        setSchema(s);
-        setConfig(c);
+        if (useInline && configFile) {
+          const c = await packNamedConfigGet(view.packId, configFile);
+          if (cancelled) return;
+          setSchema(inlineSchema);
+          setConfig(c);
+        } else {
+          const [s, c] = await Promise.all([
+            packConfigSchema(view.packId),
+            packConfigGet(view.packId),
+          ]);
+          if (cancelled) return;
+          setSchema(s);
+          setConfig(c);
+        }
       } catch (e) {
         console.error('SchemaConfig load:', e);
       } finally {
@@ -320,7 +389,12 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
     return () => {
       cancelled = true;
     };
-  }, [view.packId]);
+    // `inlineSchema` is recomputed on every render but its content
+    // is driven by `view.options` which is the real input. Tracking
+    // the JSON-stringified options avoids re-fetching on identity
+    // churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.packId, configFile, useInline, JSON.stringify(options.schema)]);
 
   const handleSave = useCallback(async () => {
     const next: Record<string, string> = {};
@@ -332,14 +406,18 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
     }
     setStatus('saving');
     try {
-      await packConfigSet(view.packId, config);
+      if (useInline && configFile) {
+        await packNamedConfigSet(view.packId, configFile, config);
+      } else {
+        await packConfigSet(view.packId, config);
+      }
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);
     } catch (e) {
       console.error('SchemaConfig save:', e);
       setStatus('error');
     }
-  }, [schema, config, view.packId]);
+  }, [schema, config, view.packId, useInline, configFile]);
 
   if (loading) {
     return (
