@@ -178,7 +178,7 @@ pub(super) fn apply_cdp_post_launch(minimize: bool) -> Result<(), String> {
             if let Err(e) = cdp_minimize_window(&mut ws).await {
                 tracing::warn!("CDP minimize window failed (non-fatal): {e}");
                 let _ = ws.close(None).await;
-                if let Err(e2) = super::os_minimize_chrome_window() {
+                if let Err(e2) = super::lifecycle::os_minimize_chrome_window() {
                     tracing::warn!("OS minimize fallback failed (non-fatal): {e2}");
                 } else {
                     tracing::info!("OS-level fallback minimized background Chrome window");
