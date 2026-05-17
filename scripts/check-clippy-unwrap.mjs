@@ -133,7 +133,13 @@ for (let i = 0; i < outLines.length; i++) {
   if (/index\.html#unwrap_used/.test(outLines[i]) && pendingHits.length > 0) {
     const hit = pendingHits[0]; // primary = first --> after warning:
     const starts = testStartFor(hit.file);
-    const isTestFile = /_tests\.rs$/.test(hit.file);
+    // Match both naming conventions for test files:
+    //   - `foo_tests.rs` (suffix style, e.g. `mod_tests.rs`)
+    //   - `tests.rs` (sibling style — included via
+    //     `#[cfg(test)] mod tests;` from the parent `mod.rs`)
+    // The `(^|\/)` anchor prevents matching the bare word
+    // "tests" inside arbitrary filenames.
+    const isTestFile = /_tests\.rs$|(^|\/)tests\.rs$/.test(hit.file);
     const insideTestMod = starts.some((s) => hit.line >= s);
     if (isTestFile || insideTestMod) {
       test++;
