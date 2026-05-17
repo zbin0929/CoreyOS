@@ -82,6 +82,65 @@ function setAt(obj: Ctx, path: string, value: unknown): Ctx {
   return next;
 }
 
+/**
+ * Deep-merge schema-declared defaults INTO existing data.
+ * - For records / nested objects: keys missing in `data` are filled
+ *   from `defaults`; keys present in `data` are kept (recurse for
+ *   objects, scalars win).
+ * - For arrays: the data array wins as-is. Defaults only apply
+ *   when the data array is missing/empty.
+ *
+ * Used to recover the "MeizhengConfig had hard-coded fallback
+ * carriers" behaviour for record fields whose disk file is missing
+ * one of the declared keys (e.g. fedex never persisted to
+ * zone-config.yaml because the old form merged defaults in memory
+ * but the user never hit save).
+ */
+function mergeDefaultsIntoData(
+  schema: PackConfigSchemaField[],
+  data: Ctx,
+): Ctx {
+  const out: Ctx = { ...data };
+  for (const f of schema) {
+    const cur = out[f.key];
+    if (f.type === 'nested') {
+      const sub = (cur && typeof cur === 'object' && !Array.isArray(cur) ? cur : {}) as Ctx;
+      out[f.key] = mergeDefaultsIntoData(f.fields, sub);
+    } else if (f.type === 'record') {
+      const dict = (cur && typeof cur === 'object' && !Array.isArray(cur) ? cur : {}) as Ctx;
+      const fallback =
+        f.default && typeof f.default === 'object' && !Array.isArray(f.default)
+          ? (f.default as Ctx)
+          : {};
+      const merged: Ctx = { ...dict };
+      for (const [k, defEntry] of Object.entries(fallback)) {
+        const defObj = (defEntry && typeof defEntry === 'object' && !Array.isArray(defEntry)
+          ? defEntry
+          : {}) as Ctx;
+        const existing = merged[k];
+        if (existing === undefined || existing === null) {
+          // missing entry → seed from default and recurse so nested
+          // sub-fields also pick up their declared defaults
+          merged[k] = mergeDefaultsIntoData(f.fields, defObj);
+        } else if (typeof existing === 'object' && !Array.isArray(existing)) {
+          // existing entry → recurse: disk wins per scalar but
+          // nested defaults still fill missing sub-keys
+          merged[k] = mergeDefaultsIntoData(f.fields, {
+            ...(defObj as Ctx),
+            ...(existing as Ctx),
+          });
+        }
+      }
+      out[f.key] = merged;
+    } else if (cur === undefined || cur === null || cur === '') {
+      if (f.default !== undefined && f.default !== null) {
+        out[f.key] = f.default;
+      }
+    }
+  }
+  return out;
+}
+
 function defaultForField(field: PackConfigSchemaField): unknown {
   switch (field.type) {
     case 'array':
@@ -484,7 +543,7 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
             : await packConfigGet(view.packId);
           if (cancelled) return;
           setSchema(inlineSchema);
-          setConfig(data);
+          setConfig(mergeDefaultsIntoData(inlineSchema, data));
         } else {
           const [s, c] = await Promise.all([
             packConfigSchema(view.packId),

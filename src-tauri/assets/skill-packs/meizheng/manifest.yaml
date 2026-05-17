@@ -409,6 +409,32 @@ views:
         key_label: 承运商 ID（如 ups / usps / fedex）
         add_label: 添加承运商
         min_items: 1
+        # Seed defaults — first-load if zone-config.yaml is missing
+        # one of these keys, the UI populates it from this block
+        # and writes it back on next save. Mirrors the legacy
+        # `buildDefaultZoneConfig()` behaviour.
+        default:
+          ups:
+            enabled: true
+            upload_prefix: UPS-GROUND
+            schedules:
+              - { name: 月度分区更新, cron: "0 0 2 1 * *" }
+            source: { carrier: UPS, service: GROUND, totalZip3: 902 }
+            upload: { maxRetries: 3, retryDelay: 2, requestInterval: 1 }
+          usps:
+            enabled: true
+            upload_prefix: USPS-GROUND
+            schedules:
+              - { name: 月度分区更新, cron: "0 0 3 1 * *" }
+            source: { carrier: USPS, service: GROUND, totalZip3: 930 }
+            upload: { maxRetries: 3, retryDelay: 2, requestInterval: 0.3 }
+          fedex:
+            enabled: true
+            upload_prefix: FedEx Ground
+            schedules:
+              - { name: 月度分区更新, cron: "0 0 4 1 * *" }
+            source: { carrier: FedEx, service: Ground, totalZip3: 1000 }
+            upload: { maxRetries: 3, retryDelay: 2, requestInterval: 1 }
         fields:
           - key: enabled
             type: bool
