@@ -197,6 +197,92 @@ views:
     template: MeizhengConfig
     nav_section: settings
     description: 配置美正OS连接和承运商自动化参数
+  # SchemaConfig migration target — runs against the same
+  # `exchange-rate-config.yaml` that the legacy
+  # `<ExchangeRateConfigEditor>` writes inside the umbrella
+  # MeizhengConfig view. Listed in `settings` for now so the user
+  # can verify the migrated schema-driven UX side-by-side; once
+  # the umbrella migration lands this hidden view will be the
+  # only entry point.
+  - id: exchange-rate-config
+    title: 汇率配置
+    template: SchemaConfig
+    nav_section: settings
+    description: 中行美元汇率抓取计划（schema-driven 迁移版）
+    config_file: exchange-rate-config
+    schema:
+      - key: enabled
+        type: bool
+        label: 启用美金汇率自动更新
+      - key: source
+        type: nested
+        label: 数据源
+        show_if: enabled
+        fields:
+          - key: name
+            type: text
+            label: 数据源
+            placeholder: 中国银行
+            width: half
+          - key: rateType
+            type: text
+            label: 汇率类型
+            placeholder: 现汇卖出价
+            width: half
+          - key: queryKeyword
+            type: text
+            label: 搜索关键词
+            placeholder: 美元
+            help: 数据源页面上的货币名称
+            width: half
+          - key: earliestTime
+            type: time
+            label: 抓取时间起点
+            help: 取此时间后第一笔汇率
+            width: half
+      - key: conversion
+        type: nested
+        label: 换算
+        show_if: enabled
+        fields:
+          - key: divideBy
+            type: number
+            label: 除以系数
+            width: small
+            help: "示例：原始报价 ÷ 此系数 = 入库汇率"
+      - key: schedules
+        type: array
+        label: 抓取计划
+        show_if: enabled
+        add_label: 添加计划
+        min_items: 1
+        item:
+          - key: name
+            type: text
+            label: 计划名称
+            placeholder: 计划名称（如 早盘抓取）
+          - key: cron
+            type: cron
+            label: 调度
+      - key: target
+        type: nested
+        label: 目标
+        show_if: enabled
+        fields:
+          - key: currencyCode
+            type: text
+            label: 货币代码
+            width: half
+          - key: currencyName
+            type: text
+            label: 货币名称
+            width: half
+      - key: remarkTemplate
+        type: text
+        label: 备注模板
+        show_if: enabled
+        placeholder: "更新汇率{datetime}  {rate}"
+        help: "支持 {datetime} 和 {rate} 占位符"
 
 config_schema: []
 mcp_servers: []
