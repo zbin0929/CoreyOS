@@ -124,67 +124,120 @@
 | SVG URL 触发下载 | SVG `Content-Type: image/svg+xml` 浏览器内联渲染不下载，要用 .zip/.dmg 等 attachment |
 | 用 `ps aux \| grep tauri` 找 dev 进程 | 进程名是 `caduceus`，但用 `pgrep -f 'tauri dev\|caduceus'` 才命中 |
 
-## PR B / PR 3 — 美正 5 个 .tsx 模板 schema 化（部分推进）
+## PR B / PR 3 — 美正 5 个 .tsx 模板 schema 化（Phase 3a 已完成）
 
-**状态：Phase 1+2 已完成，Phase 3 未做（v0.3.0 milestone）。**
+**状态：Phase 1 + 2 + 3a 已完成，3b 5 个模板迁移待做。**
 
-### 完成部分（commit `116f232` + `04adce8`）
+### 完成部分（commit `116f232` + `04adce8` + `9a51aa1` + `5f8f47a`）
 
 - **PR A**: `features/talk/useTalkMode.ts` 1130 → 937（-17%），抽出
   `talkTypes.ts` / `speechCleanup.ts` / `useTalkReadiness.ts`。
-- **PR B Phase 1**: `docs/plans/v0.3.0-pack-schema-dsl.md` —— 完整 DSL 设计
-  文档：列清美正 Pack 用到但当前 PackConfig schema 不支持的 6 类字段
-  （nested / array / custom widget / computed / showIf / multi-select），
-  提案 YAML 草案、Phase 3a/3b/3c 实施路径、4-6 天工程量估算。
+- **PR B Phase 1**: `docs/plans/v0.3.0-pack-schema-dsl.md` —— 完整 DSL 设计文档。
 - **PR B Phase 2**: `src/features/pack/templates/shared/inputStyles.ts` —— 7
-  个 Tailwind class 常量（INPUT_FULL_CLASS / INPUT_COMPACT_CLASS /
-  FIELD_LABEL_CLASS / ARRAY_ITEM_CARD_CLASS 等），从 5 个美正 .tsx 中重复
-  28 次的 fragment 提取。`ExchangeRateConfigEditor.tsx` 309 → 271 作为 POC
-  迁移，证明置换可行 + 视觉零差异。
+  个 Tailwind class 常量。`ExchangeRateConfigEditor.tsx` 309 → 271 作为 POC。
+- **PR B Phase 3a**（2026-05-17 新增）：
+  - `9a51aa1` Rust 后端：`ConfigField` 加 8 个可选字段（fields / item /
+    show_if / preview / min_items / max_items / add_label / width），全部
+    `#[serde(default)]` 兼容旧扁平 manifest。`PackConfigSchema` IPC DTO
+    递归镜像。新增 2 个 manifest 解析测试（recursive + flat BC）。
+  - `5f8f47a` 前端：`PackConfigSchemaField` TS 接口加 8 个对应字段。新增
+    `SchemaConfig.tsx` 通用渲染器（递归 nested / array add+remove +
+    computed preview + showIf 隐藏）+ `SchemaConfig/expr.ts`（mini AST
+    parser：eq / ne / and / or / not / 括号 / 单引号字符串 / dotted
+    path）+ `SchemaConfig/widgets.tsx`（text / number / secret / select /
+    bool / time / cron / tag 7 个 widget + WIDGET_REGISTRY）。19 个
+    expr 单元测试全绿，已注册到 `features/pack/index.tsx::TEMPLATES`。
 
-### Phase 3 待做清单（v0.3.0 milestone，约 4-6 天）
+### Phase 3a 验证状态
 
-**3a. 基础设施**（2-3 天）：
-- 后端：扩展 `src-tauri/src/ipc/pack/config.rs::PackConfigSchema` 为递归
-  enum（Field::Scalar / Field::Nested / Field::Array / Field::Computed），
-  保持向后兼容旧扁平 schema。
-- 前端 widget 注册表：`src/features/pack/templates/SchemaConfig/widgets/registry.ts`，
-  内置 text / number / secret / select / time / cron / tag。
-- 通用 renderer：`src/features/pack/templates/SchemaConfig.tsx` 递归遍历
-  schema、dispatch 到 widget、支持 showIf 表达式 + preview 模板字符串 +
-  array 的 add/remove/update。
+| Gate | 状态 |
+| --- | --- |
+| `pnpm tsc --noEmit` | ✅ |
+| `pnpm vitest run` | ✅ 131 passed (含 19 个新 expr 测试) |
+| `pnpm lint` | ✅ 0 error / 9 warning（7 个旧 react-refresh + 2 个 widgets.tsx 同模式） |
+| Rust gates（rustfmt / clippy / cargo test） | ⏳ 未跑 —— tauri dev 在跑，按规则不能开 cargo |
 
-**3b. 5 个美正模板迁移**（2-3 天，从简到繁）：
-1. `MeizhengDashboard` (327 行) → `CompositeDashboard` + `MetricsCard` +
-   `WorkflowLauncher` 组合（用现有模板，几乎不改 schema renderer）。
-2. `ExchangeRateConfigEditor` (271 行) → `SchemaConfig`（Phase 2 已 POC
-   迁移到 shared styles，剩工作就是 manifest YAML 化 + 删原文件）。
-3. `ZoneConfigEditor` (286 行) → `SchemaConfig`。
-4. `CarrierConfigEditor` (380 行) → `SchemaConfig`（最复杂：carrier list +
-   service 映射）。
-5. `MeizhengConfig` (408 行) → `CompositeDashboard`（包含上面 3 个
-   SchemaConfig view），删原文件。
+**下次 push 前必须停 tauri dev 跑一遍：**
 
-每迁完一个都跑 vitest + Playwright + 用户人工 smoke 验证美正 UX 还原。
+```bash
+pkill -9 -f 'tauri.js dev|cargo.*--no-default-features|rustc.*caduceus|Corey'
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+node scripts/check-clippy-unwrap.mjs
+cargo test --manifest-path src-tauri/Cargo.toml --lib pack::manifest::tests
+```
+
+预期：rustfmt OK（改动只加结构体字段，没有奇怪缩进），clippy OK（没有
+新 unwrap），unwrap baseline 持平 141，新增的 2 个测试
+（`recursive_config_schema_parses` + `flat_config_schema_stays_backwards_compatible`）通过。
+
+### Phase 3b 待做清单（约 2-3 天）
+
+**前置依赖（Phase 3a）已就绪。** 现在可以按"从简到繁"顺序迁移：
+
+1. `MeizhengDashboard` (327 行) → 用现有 `CompositeDashboard` +
+   `MetricsCard` + `WorkflowLauncher` 组合（不依赖新 SchemaConfig，
+   直接 manifest YAML 化）。
+2. `ExchangeRateConfigEditor` (271 行) → `SchemaConfig`。Phase 2 POC
+   已迁到 shared styles，剩工作 = manifest YAML 化 + 删原文件。需
+   nested (source) + array (schedules) + nested (target) + nested
+   (advanced) + computed preview。
+3. `ZoneConfigEditor` (286 行) → `SchemaConfig`。每承运商 nested +
+   schedules array + showIf 控 enabled 子字段。
+4. `CarrierConfigEditor` (380 行) → `SchemaConfig`。最复杂：carriers
+   keyValueArray + service mapping nested array + multi-select
+   serviceCodes（如果 tag widget 不够要扩 selectMulti widget）。
+5. `MeizhengConfig` (408 行) → `CompositeDashboard` 组合上面 3 个
+   SchemaConfig view + 删原文件 + 清理 `TEMPLATES` 注册表。
+
+每迁完一个：删原 .tsx + 跑 vitest + 跑 Playwright（如有美正 specs）+
+用户人工 smoke 验证 UX 还原。
+
+### Phase 3a 设计决策（避免下一会话重新发明）
+
+- **showIf 语法用自实现 AST parser**，不依赖 jsep（约 90 LOC，包语法
+  在 `expr.ts` 顶部 docstring 中）。malformed → fail-open（visible），
+  避免 manifest typo 把字段藏死。
+- **fillTemplate 是 mustache 风格 `{path}`**，不支持 filter / pipe（用户
+  原 plan 草案里的 `{{value | divide:682.78}}` 没实现 —— 用计算字段或
+  computed widget 在数据源 JS 里算好再渲染，避免引入 mini DSL）。
+- **width hint 只支持 `''` / `full` / `half` / `small`**，分别映射
+  `w-full` / `w-1/2` / `w-32`。需要其他宽度就加映射，不要让 Pack 作者
+  写原始 Tailwind class。
+- **widget 注册表是 plain object** `WIDGET_REGISTRY: Record<string,
+  WidgetComponent>`。未知 type 落到 `TextWidget`（兜底），方便未来加
+  widget。
+- **recursive Rust 类型**用 `Vec<ConfigField>` 而非 `Box<ConfigField>` —
+  Vec 自带堆间接，serde 友好，没踩 large_enum_variant lint。
+- **数组验证**：min_items > 0 时 `errors[fullKey]` 标 "至少 N 项"，但
+  内部子字段错误用 `fullKey[idx].subkey` 路径——前端目前用扁平
+  `errors` map，未来要分层 errors 时改这里。
+- **架构铁律**：SchemaConfig 不是新 escape hatch。Pack 作者只能用
+  manifest YAML，不能注入 React 组件。如果某 Pack 实在表达不出来，
+  优先扩 widget 注册表（一次性，所有 Pack 共享），不要回到写 .tsx。
 
 **3c. 跨境电商 Pack 顺带受益**：未来 v0.3.0 跨境电商 Pack 直接用
 SchemaConfig，**无需写任何 React**。
 
-### 接手指引
+### Phase 3b 接手指引（新会话开局做 3 件事）
 
-新会话开局做 3 件事：
-1. **读** `docs/plans/v0.3.0-pack-schema-dsl.md`（5 分钟读完，含 YAML 草案 +
-   widget 注册表设计 + 风险点）
-2. **读** `src/features/pack/templates/shared/inputStyles.ts`（48 行，看共
-   享 style 已经定义了什么）
-3. **读** `src-tauri/src/ipc/pack/config.rs`（487 行，是要扩展的入口；现有
-   `PackConfigSchema` 在文件顶部）
+1. **读** `src/features/pack/templates/SchemaConfig.tsx`（~390 行，看
+   FieldNode 递归怎么走 + validateField 结构）+ `SchemaConfig/expr.ts`
+   顶部 docstring（grammar + fail-open 语义）+ `SchemaConfig/widgets.tsx`
+   底部 `WIDGET_REGISTRY`（看哪些 type 已经有，哪些要扩）。
+2. **读** `src/features/pack/templates/ExchangeRateConfigEditor.tsx`（最简
+   单的迁移目标）→ 从它的 default state 反推 manifest YAML 草案。
+3. **读** `src-tauri/assets/skill-packs/meizheng/manifest.yaml` 看 views
+   现在如何声明 `template: MeizhengConfig` 等。
 
 主要文件路径：
 - 5 个美正 .tsx：`src/features/pack/templates/{MeizhengConfig,MeizhengDashboard,CarrierConfigEditor,ExchangeRateConfigEditor,ZoneConfigEditor}.tsx`
 - Pack view dispatch：`src/features/pack/index.tsx::TEMPLATES`
 - Pack manifest：`src-tauri/assets/skill-packs/meizheng/manifest.yaml`
 - Pack manifest schema：`src-tauri/src/pack/manifest.rs`
+- 通用 renderer：`src/features/pack/templates/SchemaConfig.tsx`
+- expr eval：`src/features/pack/templates/SchemaConfig/expr.ts`
+- widget catalog：`src/features/pack/templates/SchemaConfig/widgets.tsx`
 
 ## 其他待选 PR（非美正方向）
 
