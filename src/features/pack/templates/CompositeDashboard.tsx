@@ -30,6 +30,7 @@ import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
 import { TimelineTemplate } from '@/features/pack/templates/Timeline';
 import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
 import { WorkflowLauncherTemplate } from '@/features/pack/templates/WorkflowLauncher';
+import { SchemaConfigTemplate } from '@/features/pack/templates/SchemaConfig';
 
 import { type ComponentType, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ const CHILD_TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   Timeline: TimelineTemplate,
   TimeSeriesChart: TimeSeriesChartTemplate,
   WorkflowLauncher: WorkflowLauncherTemplate,
+  SchemaConfig: SchemaConfigTemplate,
 };
 
 interface LayoutCell {
@@ -65,7 +67,13 @@ interface LayoutCell {
     title?: string;
     template?: string;
     icon?: string;
-    metrics?: string[];
+    /** Any other manifest fields beyond the named ones below land
+     *  in `options` of the synthesized child PackView. Lets a cell
+     *  drive SchemaConfig (`schema`, `config_file`), MetricsCard
+     *  (`metrics`), DataTable (`columns`), etc., without growing
+     *  this interface every time a new template ships. */
+    [key: string]: unknown;
+    metrics?: unknown[];
     columns?: string[];
     axes?: string[];
     data_source?: unknown;
@@ -158,6 +166,11 @@ function formatActionError(err: unknown): string {
   return String(err);
 }
 
+// Manifest-level keys that get hoisted to `PackView` top-level
+// fields, not into `options`. Anything else in the cell `view:`
+// block flows through to the child template's `view.options`.
+const VIEW_TOP_LEVEL_KEYS = new Set(['id', 'title', 'template', 'icon', 'data_source']);
+
 function buildChildView(cell: LayoutCell, parentPackId: string, parentPackTitle: string, siblingViews: PackView[]): PackView | null {
   if (cell.ref) {
     const found = siblingViews.find((sv) => sv.viewId === cell.ref && sv.packId === parentPackId);
@@ -165,6 +178,10 @@ function buildChildView(cell: LayoutCell, parentPackId: string, parentPackTitle:
   }
   const v = cell.view;
   if (!v || !v.template) return null;
+  const options: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(v)) {
+    if (!VIEW_TOP_LEVEL_KEYS.has(k)) options[k] = val;
+  }
   return {
     packId: parentPackId,
     packTitle: parentPackTitle,
@@ -174,11 +191,7 @@ function buildChildView(cell: LayoutCell, parentPackId: string, parentPackTitle:
     navSection: 'hidden',
     template: v.template,
     dataSource: v.data_source ?? { static: {} },
-    options: {
-      metrics: v.metrics,
-      columns: v.columns,
-      axes: v.axes,
-    },
+    options,
     actions: [],
   };
 }
