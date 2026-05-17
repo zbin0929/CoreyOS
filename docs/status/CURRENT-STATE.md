@@ -78,6 +78,7 @@
 - **超长文件 warn 线（800-1500）**：13 个，全部属 AC-1b 稳定 catalog（`workflow/engine/tests.rs` 1236 测试目录、`hermes_memory.rs` 1014 Hermes contract、`db/analytics.rs` 933 schema 锁定、`lib.rs` 922 IPC 注册、`engine/mod.rs` 863、`channels/mod.rs` 801），或 sprint 拆出的 cohesive 子模块（`workflow/execution.rs` 956 — 含 HermesExecutor + run path）。剩 `features/talk/useTalkMode.ts` 1130 高频但 Talk Mode v0.4.0+ 还没上线，无紧迫性。
 - **clippy unwrap baseline 546**：基本来自 tests + db 模块；新代码用 `.expect()` 不要 `.unwrap()`，否则越基线 CI 红。
 - **release 不打包 Pack** 已在 v0.2.13 起落地：`tauri.conf.json :: bundle.resources` 不含 `assets/skill-packs/**`。dev 模式 + bundled seed 仍走 `assets/skill-packs/`。
+- **客户 Pack 出基座**（2026-05-17 8c · commit `40e63c0` + `8c0d7d3`）：美正 Pack 从 `src-tauri/assets/skill-packs/meizheng/` 搬到顶层 `packs/meizheng/` 并 gitignored。`src-tauri/assets/skill-packs/` 现在**只有** `cross_border_ecom`（通用骨架）。客户 Pack 分发走私有 zip + Settings → Packs → 导入 zip（`pack_import_zip` IPC）。详见 `packs/README.md`。
 
 ## 最近改动要点（近 30 天）
 

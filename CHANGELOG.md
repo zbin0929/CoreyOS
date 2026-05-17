@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-17 — 客户 Pack 出基座（TODO 8c）
+
+> 把美正 Pack 从基座源码彻底剥离，落地"唯一基座 + 数据驱动定制"架构铁律。打包出的 Corey 二进制从此对所有客户完全相同，不夹带任何客户特定业务规则。
+
+### Shipped
+
+- **目录搬迁 + untrack**（commits `40e63c0` + `8c0d7d3`）
+  - `src-tauri/assets/skill-packs/meizheng/`（23 文件）→ `packs/meizheng/`，全量 `git mv` 保留历史
+  - `.gitignore` 加 `packs/*` + `!packs/README.md` —— 美正源码本地工作目录保留，Git 仓库零跟踪
+  - 新增 `packs/README.md` 锁死"两个 source-of-truth 根"契约：通用 Pack 走 `src-tauri/assets/skill-packs/`（bundle 进基座），客户 Pack 走 `packs/`（gitignored，私有 zip 分发）
+  - 分发流程：私有 zip → 客户机 Settings → Packs → 导入 zip（`pack_import_zip` IPC）→ 解到 `~/.hermes/skill-packs/<id>/`
+
+- **测试 fixture 去 meizheng 化**
+  - `src-tauri/src/pack/manifest.rs:707` 测试用 `id: test_pack`（pack id validator 禁连字符，必须 `a-z 0-9 _`）
+  - `src-tauri/src/pack/schedules.rs` 5 处 `pack__meizheng__*` → `pack__test__*`
+  - 修改后 `cargo test --lib 'pack::'` 107 passed / 0 failed
+
+- **规则更新**
+  - `.trae/rules/project_rules.md` SP-1/SP-2/SP-3 改写：明确两个 source-of-truth 根，`COREY_FORCE_RESEED=1` 仅影响 bundled 包（不会动客户导入的 Pack）
+  - `docs/status/CURRENT-STATE.md` 加 8c milestone 行
+  - `docs/status/TODO.md` 8c 标记完成 + 列剩余 carryover
+
+### Deferred
+
+- **CI smoke**：基座干净启动后 `Registry.packs.len() == 0` + e2e 真 zip 导入后 `packs=1 enabled=1 healthy`（等首次客户机器实地装时一起做）
+- **`customer.yaml::preinstall_packs:` 字段**：手工导入足够覆盖当前唯一客户（美正），不抢做
+
+### 验证
+
+| Gate | 结果 |
+|---|---|
+| `cargo fmt --check` | ✅ |
+| `node scripts/check-clippy-unwrap.mjs` | ✅ 546 = 546 baseline |
+| `pnpm tsc --noEmit` | ✅ |
+| `cargo test --lib 'pack::'` | ✅ 107 passed / 0 failed |
+| `bundle.resources` 是否含 `assets/skill-packs/**` | ❌ 不含（v0.2.13 起就没列） |
+| `src-tauri/assets/skill-packs/` 还有什么 | 仅 `cross_border_ecom/` 一个 |
+
+---
+
 ## 2026-05-12 — v0.2.14 · Memory 知识图谱增强 + Guard IPC 桥接 + IM 通道审批
 
 > 激活 Hermes holographic 已有的实体图谱能力，补 Hermes 缺失的 typed relations / entity mentions，从"agent 有记忆但用户感知不到"进化到"用户能看见 entity 列表、能感知 agent 召回了什么"。同时完成 Guard IPC 桥接（桌面端不再弹系统对话框）+ IM 通道文件审批协议（微信/Slack 等 headless 场景）+ Talk Mode 审批对齐。

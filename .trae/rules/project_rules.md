@@ -180,25 +180,51 @@ customer.yaml is imported once on startup, then deleted. Feature flags persisted
 
 ## Skill Pack Source of Truth
 
-### SP-1: Assets are source of truth
-All pack files (scripts, workflows, config templates, manifest.yaml, skills) live in `src-tauri/assets/skill-packs/<id>/`. This directory is the **only source of truth**. Never edit files directly in `~/.hermes/skill-packs/<id>/`.
+### SP-1: Two source-of-truth roots (post 2026-05-17 8c split)
+Pack sources live in **one of two** roots depending on distribution scope:
+
+- **Generic / industry packs** that ship to every customer go in
+  `src-tauri/assets/skill-packs/<id>/`. Only `cross_border_ecom`
+  qualifies today. Files here ARE bundled into base binary builds
+  (well, in dev — see `tauri.conf.json::bundle.resources` for which
+  ones get released).
+- **Customer-specific packs** (e.g. `meizheng`) live in top-level
+  `packs/<id>/`. This directory is **gitignored** (`.gitignore` has
+  `packs/* + !packs/README.md`) and **never bundled** into the base
+  binary. Distribution = private zip / private repo + customer runs
+  `pack_import_zip` IPC on their machine.
+
+Either way, never edit files directly in `~/.hermes/skill-packs/<id>/`
+— that's the runtime install target, treated as read-only.
 
 ### SP-2: Seed mechanism
-On first install, `~/.hermes/skill-packs/<id>/` is seeded from `src-tauri/assets/skill-packs/<id>/`. If the directory already exists, seed is skipped. During development, manually sync after changes:
+On first install, `~/.hermes/skill-packs/<id>/` is seeded from the
+**bundled** copy at `<resource_dir>/assets/skill-packs/<id>/`. If the
+target already exists, seed is skipped. During development, manually
+sync after editing a pack source:
 
 ```bash
-# Sync all pack files
-cp -r ~/AI项目/CoreyOS/src-tauri/assets/skill-packs/meizheng/* ~/.hermes/skill-packs/meizheng/
+# Generic pack (bundled, lives under src-tauri/assets/):
+cp -r ~/AI项目/CoreyOS/src-tauri/assets/skill-packs/cross_border_ecom/* \
+      ~/.hermes/skill-packs/cross_border_ecom/
 
-# Or sync individual files
-cp ~/AI项目/CoreyOS/src-tauri/assets/skill-packs/meizheng/scripts/xxx.py ~/.hermes/skill-packs/meizheng/scripts/
+# Customer-specific pack (out-of-tree, lives under packs/):
+cp -r ~/AI项目/CoreyOS/packs/meizheng/* ~/.hermes/skill-packs/meizheng/
 
-# Force re-seed (destructive — deletes and re-copies)
+# Force re-seed of bundled packs (destructive — deletes user edits)
 COREY_FORCE_RESEED=1  # set env var before app launch
 ```
 
+Force-reseed only touches packs that are bundled (i.e. under
+`src-tauri/assets/skill-packs/`), so it never blows away
+customer-specific Packs the user imported via `pack_import_zip`.
+
 ### SP-3: Never lose user workflows
-User-created or modified workflows in `~/.hermes/workflows/pack__meizheng__*` must be registered in `manifest.yaml` so they survive pack reinstalls. The uninstall process deletes `pack__meizheng__*` files — if a workflow exists only in `~/.hermes/` and not in assets, it will be lost.
+User-created or modified workflows in `~/.hermes/workflows/pack__<id>__*`
+must be registered in the Pack's `manifest.yaml` so they survive pack
+reinstalls. The uninstall process deletes `pack__<id>__*` files — if a
+workflow exists only in `~/.hermes/` and not in the manifest, it will
+be lost.
 
 ### SP-4: Test before declaring done
 After modifying any pack script:
