@@ -1,26 +1,40 @@
 /**
  * MetricsCard view template.
  *
- * Renders a row of KPI cards. The Pack manifest declares it as:
+ * Renders a row of KPI cards. The Pack manifest declares it in one
+ * of two forms:
+ *
+ * **Legacy (string keys looked up in the built-in META table):**
  *
  * ```yaml
- * views:
- *   - id: profit-overview
- *     title: 利润总览
- *     template: MetricsCard
- *     metrics: [revenue, cost, profit, margin]
- *     data_source:
- *       static:
- *         revenue: 12345
- *         cost: 8000
- *         profit: 4345
- *         margin: "35.2%"
+ * template: MetricsCard
+ * metrics: [revenue, cost, profit, margin]
+ * data_source:
+ *   static: { revenue: 12345, cost: 8000, profit: 4345, margin: "35.2%" }
  * ```
  *
- * The `metrics` array names the keys to extract from the
- * data-source response. Stage 5e wires the data via
- * `usePackViewData` (resolves manifest `data_source` →
- * `pack_view_data` IPC).
+ * **Inline meta (Pack supplies its own label / icon / stripe color
+ * / value formatter / subtitle):**
+ *
+ * ```yaml
+ * template: MetricsCard
+ * metrics:
+ *   - key: ups_fuel              # also used as data lookup key
+ *     label: UPS 燃油
+ *     icon: Fuel                 # Lucide icon name
+ *     stripe: amber              # carrier-style left color bar
+ *     format: "{rate}%"          # mustache against the per-key data object
+ *     subtitle: "{effective_date} ~ {valid_to}"
+ * data_source:
+ *   static:
+ *     ups_fuel:
+ *       rate: 18.75
+ *       effective_date: 2026-05-12
+ *       valid_to: 2026-05-19
+ * ```
+ *
+ * The two forms can be mixed in one view. Inline meta wins when
+ * present.
  */
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
@@ -34,10 +48,17 @@ import {
   Package,
   BarChart3,
   Percent,
+  Fuel,
+  Truck,
+  RefreshCw,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
   type LucideIcon,
 } from 'lucide-react';
 import type { PackView } from '@/lib/ipc/pack';
 import { usePackViewData } from '@/features/pack/usePackViewData';
+import { fillTemplate } from '@/features/pack/templates/SchemaConfig/expr';
 
 interface MetricMeta {
   label: string;
@@ -66,6 +87,70 @@ const META: Record<string, MetricMeta> = {
   cvr: { label: 'CVR', icon: Percent, unit: '' },
 };
 
+/**
+ * Lucide icons available to Pack manifest authors via `icon: <Name>`.
+ * Anything outside this list falls back to `BarChart3`. Add to the
+ * registry as new Pack use-cases need them — keep it intentional
+ * so a manifest typo can't import an unbounded icon set.
+ */
+const ICON_REGISTRY: Record<string, LucideIcon> = {
+  DollarSign,
+  ShoppingCart,
+  Target,
+  TrendingUp,
+  TrendingDown,
+  Package,
+  BarChart3,
+  Percent,
+  Fuel,
+  Truck,
+  RefreshCw,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+};
+
+/** Tailwind classes for the carrier-style left color stripe. */
+const STRIPE_BG: Record<string, string> = {
+  amber: 'bg-amber-500',
+  purple: 'bg-purple-600',
+  red: 'bg-red-600',
+  blue: 'bg-blue-600',
+  green: 'bg-success',
+  gold: 'bg-gold-500',
+  gray: 'bg-gray-500',
+};
+const STRIPE_TEXT: Record<string, string> = {
+  amber: 'text-amber-600',
+  purple: 'text-purple-600',
+  red: 'text-red-600',
+  blue: 'text-blue-600',
+  green: 'text-success',
+  gold: 'text-gold-500',
+  gray: 'text-gray-600',
+};
+
+interface InlineMetricMeta {
+  /** Lookup key inside the data-source response. */
+  key: string;
+  label?: string;
+  /** Lucide icon name resolved against `ICON_REGISTRY`. */
+  icon?: string;
+  /** Stripe color key resolved against `STRIPE_BG` / `STRIPE_TEXT`. */
+  stripe?: string;
+  /** Mustache template applied against the value object. Use
+   *  `{value}` to refer to the raw value when it's a primitive. */
+  format?: string;
+  /** Mustache template for the subtitle / context line. */
+  subtitle?: string;
+  unit?: string;
+  invertTrend?: boolean;
+}
+
+function isInlineMeta(v: unknown): v is InlineMetricMeta {
+  return Boolean(v && typeof v === 'object' && !Array.isArray(v) && typeof (v as { key?: unknown }).key === 'string');
+}
+
 function metaFor(key: string): MetricMeta {
   if (META[key]) return META[key];
   return {
@@ -73,6 +158,11 @@ function metaFor(key: string): MetricMeta {
     icon: BarChart3,
     unit: '',
   };
+}
+
+function resolveIcon(name: string | undefined): LucideIcon {
+  if (!name) return BarChart3;
+  return ICON_REGISTRY[name] ?? BarChart3;
 }
 
 function formatCell(value: unknown): string {
@@ -142,11 +232,32 @@ function TrendBadge({ delta, invert }: { delta: number; invert?: boolean }) {
   );
 }
 
+/** Normalize one entry in `options.metrics` to its inline-meta form. */
+function normalizeMetric(entry: unknown): InlineMetricMeta | null {
+  if (typeof entry === 'string') return { key: entry };
+  if (isInlineMeta(entry)) return entry;
+  return null;
+}
+
+/** Pull the per-metric data slice, supporting the legacy primitive
+ *  shape AND the new "value object" shape used by inline meta. */
+function lookupDataSlice(dataObj: Record<string, unknown>, key: string): {
+  raw: unknown;
+  ctx: Record<string, unknown>;
+} {
+  const raw = dataObj[key];
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return { raw, ctx: { value: raw, ...(raw as Record<string, unknown>) } };
+  }
+  return { raw, ctx: { value: raw } };
+}
+
 export function MetricsCardTemplate({ view }: { view: PackView }) {
   const options = (view.options ?? {}) as Record<string, unknown>;
-  const metrics = Array.isArray(options.metrics)
-    ? (options.metrics as string[])
-    : [];
+  const rawMetrics = Array.isArray(options.metrics) ? (options.metrics as unknown[]) : [];
+  const metrics = rawMetrics
+    .map(normalizeMetric)
+    .filter((m): m is InlineMetricMeta => m !== null);
 
   const { data, loading, error } = usePackViewData(view.packId, view.viewId);
   const dataObj: Record<string, unknown> =
@@ -168,39 +279,67 @@ export function MetricsCardTemplate({ view }: { view: PackView }) {
         <p className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{error}</p>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((key, idx) => {
-          const meta = metaFor(key);
-          const val = dataObj[key];
-          const delta = typeof dataObj[`${key}_delta`] === 'number'
-            ? (dataObj[`${key}_delta`] as number)
+        {metrics.map((spec, idx) => {
+          const baseMeta = metaFor(spec.key);
+          const { raw, ctx } = lookupDataSlice(dataObj, spec.key);
+          const label = spec.label ?? baseMeta.label;
+          const IconComp = spec.icon ? resolveIcon(spec.icon) : baseMeta.icon;
+          const display = spec.format
+            ? loading
+              ? '…'
+              : fillTemplate(spec.format, ctx) || '—'
+            : loading
+              ? '…'
+              : formatCell(raw);
+          const subtitle = spec.subtitle && !loading ? fillTemplate(spec.subtitle, ctx) : '';
+          const stripeBg = spec.stripe ? STRIPE_BG[spec.stripe] : undefined;
+          const stripeText = spec.stripe ? STRIPE_TEXT[spec.stripe] : undefined;
+          const valColor = stripeText ?? (loading ? 'text-fg' : valueClass(spec.key, raw));
+          const iconWrapClass = loading
+            ? 'bg-bg-elev-2 text-fg-muted'
+            : stripeBg
+              ? `${stripeBg} text-white`
+              : iconBgClass(spec.key, raw);
+          const delta = typeof dataObj[`${spec.key}_delta`] === 'number'
+            ? (dataObj[`${spec.key}_delta`] as number)
             : null;
           return (
             <Card
-              key={key}
-              className="group flex flex-col gap-3 border-border bg-bg-elev-1 p-4 shadow-sm transition-shadow hover:shadow-1"
+              key={spec.key}
+              className="group relative flex flex-col gap-3 overflow-hidden border-border bg-bg-elev-1 p-4 shadow-sm transition-shadow hover:shadow-1"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium tracking-wide text-fg-subtle">
-                  {meta.label}
-                </span>
-                <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${loading ? 'bg-bg-elev-2 text-fg-muted' : iconBgClass(key, val)}`}>
-                  <Icon icon={meta.icon} size="sm" />
-                </span>
-              </div>
-              <div className="flex items-end justify-between gap-2">
-                <div className="flex flex-col gap-1">
-                  <span className={`text-2xl font-bold leading-none tracking-tight ${loading ? 'text-fg' : valueClass(key, val)}`}>
-                    {loading ? '…' : formatCell(val)}
+              {stripeBg && (
+                <span aria-hidden className={`absolute left-0 top-0 h-full w-1 ${stripeBg}`} />
+              )}
+              <div className={stripeBg ? 'pl-2' : undefined}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium tracking-wide text-fg-subtle">
+                    {label}
                   </span>
-                  {delta !== null && !loading && (
-                    <TrendBadge delta={delta} invert={meta.invertTrend} />
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconWrapClass}`}
+                  >
+                    <Icon icon={IconComp} size="sm" />
+                  </span>
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <div className="flex flex-col gap-1">
+                    <span className={`text-2xl font-bold leading-none tracking-tight tabular-nums ${valColor}`}>
+                      {display}
+                    </span>
+                    {subtitle && (
+                      <span className="text-[10px] text-fg-subtle line-clamp-1">{subtitle}</span>
+                    )}
+                    {delta !== null && !loading && (
+                      <TrendBadge delta={delta} invert={spec.invertTrend ?? baseMeta.invertTrend} />
+                    )}
+                  </div>
+                  {!loading && !spec.subtitle && (
+                    <span className="text-fg-muted/40 transition-opacity group-hover:opacity-100 opacity-60">
+                      <MiniSparkline seed={idx + 1} />
+                    </span>
                   )}
                 </div>
-                {!loading && (
-                  <span className="text-fg-muted/40 transition-opacity group-hover:opacity-100 opacity-60">
-                    <MiniSparkline seed={idx + 1} />
-                  </span>
-                )}
               </div>
             </Card>
           );
