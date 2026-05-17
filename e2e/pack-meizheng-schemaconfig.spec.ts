@@ -206,10 +206,11 @@ test.describe('meizheng SchemaConfig render', () => {
     );
 
     // The view title only renders after `pack_views_list` resolves +
-    // `pack_config_get` returns. Waiting on the carrier id is the
-    // strongest signal that both happened.
+    // `pack_config_get` returns. The lowercase `ups` is the record
+    // entry key (rendered as a heading), not the `name: 'UPS'` field
+    // value (which lives inside an <input> and isn't matched by
+    // getByText).
     await expect(page.getByText('ups', { exact: true })).toBeVisible();
-    await expect(page.getByText('UPS', { exact: true })).toBeVisible();
 
     // Two `applyTo` Select widgets = two service mapping cards. We
     // probe by label rather than card-class because Tailwind class
