@@ -30,6 +30,7 @@ import { MeizhengConfigTemplate } from '@/features/pack/templates/MeizhengConfig
 import { MeizhengDashboardTemplate } from '@/features/pack/templates/MeizhengDashboard';
 import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
 import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
+import { SchemaConfigTemplate } from '@/features/pack/templates/SchemaConfig';
 import { SkillPaletteTemplate } from '@/features/pack/templates/SkillPalette';
 import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
 import { TimelineTemplate } from '@/features/pack/templates/Timeline';
@@ -53,6 +54,7 @@ const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   PackConfig: PackConfigTemplate,
   PivotTable: PivotTableTemplate,
   RadarChart: RadarChartTemplate,
+  SchemaConfig: SchemaConfigTemplate,
   SkillPalette: SkillPaletteTemplate,
   TimeSeriesChart: TimeSeriesChartTemplate,
   Timeline: TimelineTemplate,

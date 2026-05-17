@@ -85,6 +85,14 @@ export function packViewData(
   return invoke<unknown>('pack_view_data', { packId, viewId, params: params ?? {} });
 }
 
+/**
+ * Recursive Pack config schema field. Mirrors the Rust IPC DTO
+ * `crate::ipc::pack::config::PackConfigSchema`. The recursive
+ * fields (`fields` / `item` / `showIf` / `preview` / array bounds /
+ * `width`) drive the v0.3.0 `SchemaConfig` template; pre-v0.3.0
+ * flat-schema Packs receive empty defaults for them and still
+ * render correctly via the legacy `PackConfig` template.
+ */
 export interface PackConfigSchemaField {
   key: string;
   label: string;
@@ -98,6 +106,22 @@ export interface PackConfigSchemaField {
   placeholder: string;
   default: unknown;
   options: string[];
+  /** Sub-schema for `type: nested`. */
+  fields: PackConfigSchemaField[];
+  /** Sub-schema for `type: array` items. */
+  item: PackConfigSchemaField[];
+  /** Optional showIf expression (eq / ne / and / or / not). */
+  showIf: string;
+  /** Mustache-style preview / computed template. */
+  preview: string;
+  /** Array length lower bound; 0 = unlimited. */
+  minItems: number;
+  /** Array length upper bound; 0 = unlimited. */
+  maxItems: number;
+  /** Array "+ Add" button label. Empty = frontend default. */
+  addLabel: string;
+  /** Width hint: `""` / `"full"` / `"half"` / `"small"`. */
+  width: string;
 }
 
 export function packConfigSchema(packId: string): Promise<PackConfigSchemaField[]> {
