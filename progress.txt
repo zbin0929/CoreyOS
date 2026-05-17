@@ -171,27 +171,48 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib pack::manifest::tests
 新 unwrap），unwrap baseline 持平 141，新增的 2 个测试
 （`recursive_config_schema_parses` + `flat_config_schema_stays_backwards_compatible`）通过。
 
-### Phase 3b 待做清单（约 2-3 天）
+### Phase 3b 完成记录（2026-05-17 当日全部落地）
 
-**前置依赖（Phase 3a）已就绪。** 现在可以按"从简到繁"顺序迁移：
+| 任务 | commit | 净行数 | 备注 |
+| --- | --- | --- | --- |
+| 1. MeizhengDashboard → CompositeDashboard manifest | `8468d90` | −327 行 .tsx | 纯 YAML 组合 |
+| 2. CompositeDashboard cell options + SchemaConfig 作为 child | `bb31edc` | +CHILD_TEMPLATES | 为后续做铺垫 |
+| 3. ExchangeRateConfigEditor → SchemaConfig POC | `a073672` | +1 view | 验证 per-view 内联 schema 走通 |
+| 4. `record` 字段类型 + ZoneConfigEditor 迁移 | `bac1ca9` | +190 行 | Record<string,T> 字典 |
+| 5. CarrierConfigEditor + MeizhengConfig → 单 SchemaConfig 视图 | `0300f71` | **−1216 行 .tsx** | 4 个 .tsx 全删 |
+| 6. fedex 默认值找回（行为回归修复） | `5e2811d` | +mergeDefaultsIntoData | record 支持 `default:` 深合并 |
+| 7. 死 IPC 清理 | `c77f1c0` | −228 行 Rust+TS | `pack_exchange_rate_config_*`/`pack_zone_config_*` |
 
-1. `MeizhengDashboard` (327 行) → 用现有 `CompositeDashboard` +
-   `MetricsCard` + `WorkflowLauncher` 组合（不依赖新 SchemaConfig，
-   直接 manifest YAML 化）。
-2. `ExchangeRateConfigEditor` (271 行) → `SchemaConfig`。Phase 2 POC
-   已迁到 shared styles，剩工作 = manifest YAML 化 + 删原文件。需
-   nested (source) + array (schedules) + nested (target) + nested
-   (advanced) + computed preview。
-3. `ZoneConfigEditor` (286 行) → `SchemaConfig`。每承运商 nested +
-   schedules array + showIf 控 enabled 子字段。
-4. `CarrierConfigEditor` (380 行) → `SchemaConfig`。最复杂：carriers
-   keyValueArray + service mapping nested array + multi-select
-   serviceCodes（如果 tag widget 不够要扩 selectMulti widget）。
-5. `MeizhengConfig` (408 行) → `CompositeDashboard` 组合上面 3 个
-   SchemaConfig view + 删原文件 + 清理 `TEMPLATES` 注册表。
+**结果**：美正 Pack UI 100% manifest 声明，新增字段 = 改 YAML，不写 React。
 
-每迁完一个：删原 .tsx + 跑 vitest + 跑 Playwright（如有美正 specs）+
-用户人工 smoke 验证 UX 还原。
+**实际新增能力（超出原计划）**：
+- `pack_named_config_get/set` 通用 IPC（`config_file: <name>` 直读
+  任意 YAML，绕过老的 transform 链路）。`config.rs` 的
+  `validate_config_name` 把 `[a-z0-9][a-z0-9-]*` 锁死防路径穿越。
+- `record` 字段类型 = `Record<string, NestedShape>` 字典，UI 表现
+  = "点+号 prompt key → 卡片展示" + 删除按钮。`key_label: <prompt>`
+  可定制。
+- `default:` 深合并（`mergeDefaultsIntoData`）：record / nested 字段
+  在 manifest 声明的默认值会和磁盘数据深合并，磁盘缺的 key 用
+  默认补，磁盘有的 key 保留。**等价于老 `buildDefaultZoneConfig()`
+  的 in-memory fallback**，但是声明式的。
+- SchemaConfig 支持"内联 schema + 老 IPC"组合：当 `schema:` 内联
+  但 `config_file:` 不写时，走 `pack_config_get/set`（带
+  transform 链路）。系统配置视图靠这条保住 fuel-rate-config.yaml
+  的 snake_case 兼容。
+
+### 已知遗留 / 可选清理（不阻塞）
+
+- **CDP warning**：`Browser.setDownloadBehavior` 在重接管已有
+  Chrome 时返回 `-32000 Browser context management is not
+  supported`。用户已决定暂不处理（无害，只影响 session 内下载路径
+  回退到 ~/Downloads）。详见 `@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/browser_cdp.rs:337-343`。
+- **DSL 设计文档未补 record + default 章节**：
+  `docs/plans/v0.3.0-pack-schema-dsl.md` 还停在 Phase 3a 的快照。
+  下次写跨境电商 Pack 之前补一下。
+- **美正 Playwright smoke 没加**：`e2e/` 下 0 个美正 specs。
+  下次想加可以做 `/pack/meizheng/config` 渲染 + UPS 卡片 2 条
+  services 断言。
 
 ### Phase 3a 设计决策（避免下一会话重新发明）
 
