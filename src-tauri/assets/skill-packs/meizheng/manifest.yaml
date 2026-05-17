@@ -283,6 +283,80 @@ views:
         show_if: enabled
         placeholder: "更新汇率{datetime}  {rate}"
         help: "支持 {datetime} 和 {rate} 占位符"
+  # SchemaConfig migration target for ZoneConfigEditor — exercises
+  # the new `record` field type (carriers keyed by id). Same data
+  # file as the legacy umbrella view writes.
+  - id: zone-config
+    title: 分区配置
+    template: SchemaConfig
+    nav_section: settings
+    description: 承运商分区自动更新（schema-driven 迁移版）
+    config_file: zone-config
+    schema:
+      - key: carriers
+        type: record
+        label: 承运商
+        key_label: 承运商 ID（如 ups / usps / fedex）
+        add_label: 添加承运商
+        min_items: 1
+        fields:
+          - key: enabled
+            type: bool
+            label: 启用此承运商分区自动更新
+          - key: upload_prefix
+            type: text
+            label: 上传前缀
+            show_if: enabled
+            placeholder: UPS-GROUND
+          - key: source
+            type: nested
+            label: 数据源
+            show_if: enabled
+            fields:
+              - key: carrier
+                type: text
+                label: 承运商
+                width: half
+              - key: service
+                type: text
+                label: 服务类型
+                width: half
+              - key: totalZip3
+                type: number
+                label: ZIP3 总数
+                width: small
+                help: 用于校验抓取完整度
+          - key: upload
+            type: nested
+            label: 上传参数
+            show_if: enabled
+            fields:
+              - key: maxRetries
+                type: number
+                label: 最大重试次数
+                width: small
+              - key: retryDelay
+                type: number
+                label: 重试间隔（秒）
+                width: small
+              - key: requestInterval
+                type: number
+                label: 请求间隔（秒）
+                width: small
+          - key: schedules
+            type: array
+            label: 抓取计划
+            show_if: enabled
+            add_label: 添加计划
+            min_items: 1
+            item:
+              - key: name
+                type: text
+                label: 计划名称
+                placeholder: 月度分区更新
+              - key: cron
+                type: cron
+                label: 调度
 
 config_schema: []
 mcp_servers: []

@@ -86,6 +86,8 @@ function defaultForField(field: PackConfigSchemaField): unknown {
   switch (field.type) {
     case 'array':
       return [];
+    case 'record':
+      return {};
     case 'nested': {
       const out: Ctx = {};
       for (const f of field.fields) out[f.key] = defaultForField(f);
@@ -146,6 +148,96 @@ function FieldNode({ field, scope, onScopeChange, errors }: FieldNodeProps) {
             />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (field.type === 'record') {
+    const dict = (getAt(scope, field.key) as Record<string, unknown>) ?? {};
+    const entries = Object.entries(dict);
+    const min = field.minItems || 0;
+    const max = field.maxItems || 0;
+    const canRemove = entries.length > min;
+    const canAdd = max === 0 || entries.length < max;
+    const updateDict = (next: Record<string, unknown>) =>
+      onScopeChange(setAt(scope, field.key, next));
+    const entryDefault = (): Ctx => {
+      const out: Ctx = {};
+      for (const f of field.fields) out[f.key] = defaultForField(f);
+      return out;
+    };
+    const handleAdd = () => {
+      const keyLabel = field.keyLabel || '键';
+      const raw = window.prompt(`${field.label || field.key} — ${keyLabel}`, '');
+      if (raw === null) return;
+      const k = raw.trim();
+      if (!k) return;
+      if (k in dict) {
+        window.alert(`键 "${k}" 已存在`);
+        return;
+      }
+      updateDict({ ...dict, [k]: entryDefault() });
+    };
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          {field.label && <div className={FIELD_LABEL_CLASS}>{field.label}</div>}
+          {canAdd && (
+            <button
+              type="button"
+              onClick={handleAdd}
+              className="flex items-center gap-1 rounded-md border border-border/60 bg-bg-elev-1 px-2 py-1 text-xs text-fg hover:border-border"
+            >
+              <Icon icon={Plus} size="xs" />
+              {field.addLabel || '添加'}
+            </button>
+          )}
+        </div>
+        {field.description && (
+          <div className="text-xs text-fg-subtle">{field.description}</div>
+        )}
+        {entries.length === 0 && (
+          <div className="rounded-md border border-dashed border-border/60 bg-bg-elev-1/30 p-3 text-xs text-fg-subtle">
+            （空,点击右上角添加一项）
+          </div>
+        )}
+        {entries.map(([k, entry]) => {
+          const entryCtx = (entry && typeof entry === 'object' ? entry : {}) as Ctx;
+          return (
+            <div key={k} className={ARRAY_ITEM_CARD_CLASS}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 space-y-2">
+                  <div className="text-sm font-medium text-fg">{k}</div>
+                  {field.fields.map((child) => (
+                    <FieldNode
+                      key={child.key}
+                      field={child}
+                      scope={entryCtx}
+                      onScopeChange={(nextEntry) => {
+                        updateDict({ ...dict, [k]: nextEntry });
+                      }}
+                      errors={errors}
+                    />
+                  ))}
+                </div>
+                {canRemove && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = { ...dict };
+                      delete next[k];
+                      updateDict(next);
+                    }}
+                    aria-label="删除"
+                    className={ARRAY_ITEM_DELETE_BTN_CLASS}
+                  >
+                    <Icon icon={Trash2} size="xs" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -287,6 +379,20 @@ function validateField(
     });
     return;
   }
+  if (field.type === 'record') {
+    const dict = (getAt(scope, field.key) as Record<string, unknown>) ?? {};
+    const entries = Object.entries(dict);
+    if (field.minItems > 0 && entries.length < field.minItems) {
+      errors[fullKey] = `至少 ${field.minItems} 项`;
+    }
+    for (const [k, entry] of entries) {
+      const entryCtx = (entry && typeof entry === 'object' ? entry : {}) as Ctx;
+      for (const child of field.fields) {
+        validateField(child, entryCtx, errors, `${fullKey}[${k}].`);
+      }
+    }
+    return;
+  }
   if (field.type === 'computed') return;
 
   const value = getAt(scope, field.key);
@@ -336,6 +442,7 @@ function coerceField(v: unknown): PackConfigSchemaField {
     maxItems: Number(pick<number>('maxItems', 'max_items', 0)) || 0,
     addLabel: pick<string>('addLabel', 'add_label', ''),
     width: typeof r.width === 'string' ? r.width : '',
+    keyLabel: pick<string>('keyLabel', 'key_label', ''),
   };
 }
 

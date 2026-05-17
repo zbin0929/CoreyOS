@@ -122,6 +122,8 @@ export interface PackConfigSchemaField {
   addLabel: string;
   /** Width hint: `""` / `"full"` / `"half"` / `"small"`. */
   width: string;
+  /** Label for the record key prompt. Empty = frontend default. */
+  keyLabel: string;
 }
 
 export function packConfigSchema(packId: string): Promise<PackConfigSchemaField[]> {

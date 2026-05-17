@@ -359,6 +359,10 @@ pub struct ConfigField {
     /// Visual width hint: empty / `"full"` / `"half"` / `"small"`.
     #[serde(default)]
     pub width: String,
+    /// Label for the dictionary key prompt when `type: record`.
+    /// Defaults to "Key" / "键" on the frontend.
+    #[serde(default)]
+    pub key_label: String,
 }
 
 /// A migration step from one Pack version to the next. Run by the

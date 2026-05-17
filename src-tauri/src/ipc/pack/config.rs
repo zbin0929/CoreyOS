@@ -69,6 +69,8 @@ pub struct PackConfigSchema {
     pub add_label: String,
     /// Visual width hint: `""` / `"full"` / `"half"` / `"small"`.
     pub width: String,
+    /// Label for the record key prompt. Empty = frontend default.
+    pub key_label: String,
 }
 
 fn convert_field(f: &crate::pack::ConfigField) -> PackConfigSchema {
@@ -93,6 +95,7 @@ fn convert_field(f: &crate::pack::ConfigField) -> PackConfigSchema {
         max_items: f.max_items,
         add_label: f.add_label.clone(),
         width: f.width.clone(),
+        key_label: f.key_label.clone(),
     }
 }
 
