@@ -5,7 +5,6 @@ import {
   chatStream,
   ipcErrorMessage,
   packActiveSouls,
-  talkLocalStatus,
   talkLocalTranscribe,
   talkLocalTts,
   talkSessionStart,
@@ -13,20 +12,17 @@ import {
   talkSessionStop,
   talkTtsReference,
   TALK_EVENTS,
-  voiceGetConfig,
   voiceOpenMicSettings,
   voicePlayStop,
   voiceRecord,
   voiceRecordStop,
   voiceTranscribe,
   voiceTts,
-  voiceWarmupMic,
   type ChatStreamHandle,
   type ChatApprovalRequest,
   type TalkLevelPayload,
   type TalkPartialTranscriptPayload,
   type TalkSpeechEndPayload,
-  type VoiceConfig,
 } from '@/lib/ipc';
 import { llmProfileEnsureAdapter, llmProfileList } from '@/lib/ipc/hermes-instances';
 import { useAppStatusStore } from '@/stores/appStatus';
@@ -72,138 +68,16 @@ import { useChatStore } from '@/stores/chat';
  *   for 30s we just speak the final assistant text.
  */
 
-export type TalkState =
-  | 'idle'
-  | 'listening'
-  | 'thinking'
-  | 'speaking'
-  | 'error'
-  | 'unconfigured';
-
-/** Talk operation mode. `auto` requires `talk_session_start` to
- *  succeed (mic permission + cpal device available); on failure we
- *  silently fall back to `ptt`. */
-export type TalkMode = 'ptt' | 'auto';
-
-export interface TalkReadiness {
-  ready: boolean;
-  /** Why Talk Mode is not yet usable. Surfaced verbatim in the UI
-   *  next to a "Open Voice settings" link so the user has one
-   *  obvious next step instead of decoding a backend error string
-   *  mid-recording. */
-  reason: string | null;
-  config: VoiceConfig | null;
-}
-
-/** Microphone access status as observed by Talk Mode.
- *
- * - `unknown`  — we haven't probed yet (initial mount, or non-macOS).
- * - `granted`  — `voiceWarmupMic` saw at least one sample.
- * - `denied`   — warmup got 0 samples in 500ms, OR a `voice_record`
- *                call returned `mic_permission_denied`. The overlay
- *                shows a banner with a "Open System Settings" button
- *                wired to {@link UseTalkModeReturn.openMicSettings}.
- *
- * On non-macOS platforms we leave the state as `unknown` and rely
- * on the recorder's existing `no_audio_captured` error path —
- * Linux/Windows don't have a TCC-equivalent we'd usefully poke. */
-export type MicPermission = 'unknown' | 'granted' | 'denied';
-
-export interface UseTalkModeReturn {
-  state: TalkState;
-  mode: TalkMode;
-  /** Live RMS from the auto-listening session (0..1). Always 0 in
-   *  PTT mode — the recorder doesn't emit a level stream. */
-  level: number;
-  partialTranscript: string;
-  finalTranscript: string;
-  reply: string;
-  error: string | null;
-  readiness: TalkReadiness;
-  micPermission: MicPermission;
-  setMode: (mode: TalkMode) => void;
-  pressPtt: () => void;
-  releasePtt: () => void;
-  /** Cancel everything in flight AND wipe the on-screen reply +
-   *  transcript. Used by the close (X / Esc) buttons because once
-   *  the overlay closes, leaving stale state to flash on next
-   *  open is worse than wiping. */
-  stop: () => void;
-  /** Cancel the in-flight LLM stream + TTS playback but **keep**
-   *  the visible transcript and reply intact, so the user can
-   *  still read what Hermes was about to say. Used by the
-   *  「停止生成」/「停止朗读」 button next to the ring. */
-  cancelTurn: () => void;
-  /** Open macOS System Settings → Privacy & Security → Microphone.
-   *  No-op (rejects) on non-macOS. */
-  openMicSettings: () => Promise<void>;
-  pendingApproval: ChatApprovalRequest | null;
-  setPendingApproval: (a: ChatApprovalRequest | null) => void;
-}
-
-/**
- * Best-effort Markdown → speech-friendly plain text.
- *
- * Piper (and most CLI TTS engines) treat punctuation literally:
- * `**bold**` becomes "asterisk asterisk bold asterisk asterisk",
- * fenced code blocks are read line-by-line including the ``` , and
- * link syntax `[label](url)` either spells out the URL or goes
- * silent on the brackets. Stripping these before synthesis is the
- * difference between "Hermes 在线播报" and a confused mumble.
- *
- * We intentionally keep this **conservative** — full Markdown→
- * SSML is a rabbit hole; for v1 we only need to handle what
- * Hermes actually emits in chat replies (bold, italics, inline
- * code, fences, list bullets, headings, links).
- */
-function stripMarkdownForSpeech(input: string): string {
-  return (
-    input
-      // Fenced code blocks → drop the fences but keep the text
-      // (often contains commands the user wants read aloud).
-      .replace(/```[a-zA-Z0-9_-]*\n?/g, '')
-      .replace(/```/g, '')
-      // Inline code: keep contents, drop backticks.
-      .replace(/`([^`]+)`/g, '$1')
-      // Bold + italic markers (** *** _ __) — drop the marker chars,
-      // keep the inner text.
-      .replace(/\*\*\*([^*]+)\*\*\*/g, '$1')
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-      .replace(/(?<!\w)\*([^*]+)\*(?!\w)/g, '$1')
-      .replace(/__([^_]+)__/g, '$1')
-      // Links: `[label](url)` → just the label.
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
-      // Heading hashes at line start.
-      .replace(/^#{1,6}\s+/gm, '')
-      // Bullet markers (- * +) at line start → drop, the pause comes
-      // from the surrounding newline anyway.
-      .replace(/^\s*[-*+]\s+/gm, '')
-      // Numbered list markers (1. 2. ...) → keep number, drop dot
-      // so Piper doesn't pause oddly.
-      .replace(/^\s*(\d+)\.\s+/gm, '$1 ')
-      // Emojis + pictographs (`\u{1F300}-\u{1F9FF}` + dingbats etc).
-      // The Unicode property `Extended_Pictographic` covers every
-      // emoji-like glyph; ZWJ + variation selectors get swept up
-      // alongside so a sequence like 👨‍👩‍👧 doesn't leave fragment
-      // chars behind. Without this, macOS `say` reads "huo3" for
-      // 🔥 and Piper's phonemizer produces dead-air. Either way:
-      // hearing "fire-emoji" mid-sentence is jarring UX.
-      .replace(/\p{Extended_Pictographic}/gu, '')
-      // ZWJ / variation selector / keycap glue — strip individually,
-      // not via a character class (eslint flags combining marks
-      // inside `[…]`).
-      .replace(/\u{200D}/gu, '')
-      .replace(/\u{FE0F}/gu, '')
-      .replace(/\u{20E3}/gu, '')
-      .replace(/[ \t]{2,}/g, ' ')
-      .replace(/[：；、，,]/g, ' ')
-      .replace(/。/g, '.')
-      .replace(/？/g, '?')
-      .replace(/！/g, '!')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-  );
-}
+import type { TalkState, TalkMode, MicPermission, UseTalkModeReturn } from './talkTypes';
+export type {
+  TalkState,
+  TalkMode,
+  TalkReadiness,
+  MicPermission,
+  UseTalkModeReturn,
+} from './talkTypes';
+import { stripMarkdownForSpeech } from './speechCleanup';
+import { useTalkReadiness } from './useTalkReadiness';
 
 export function useTalkMode(): UseTalkModeReturn {
   const [state, setState] = useState<TalkState>('idle');
@@ -222,18 +96,9 @@ export function useTalkMode(): UseTalkModeReturn {
   const [finalTranscript, setFinalTranscript] = useState('');
   const [reply, setReply] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [readiness, setReadiness] = useState<TalkReadiness>({
-    ready: false,
-    reason: null,
-    config: null,
-  });
+  const { readiness, localRoute } = useTalkReadiness();
   const [micPermission, setMicPermission] = useState<MicPermission>('unknown');
   const [pendingApproval, setPendingApproval] = useState<ChatApprovalRequest | null>(null);
-  // Disk-probe of whisper.cpp + sherpa-onnx sidecars. Refreshed on
-  // mount + after every successful pack download. When both flip
-  // true the talk pipeline routes through `talk_local_*` IPCs
-  // instead of the cloud `voice_*` ones — full-offline path.
-  const [localRoute, setLocalRoute] = useState({ stt: false, tts: false });
 
   // Recorder promise; resolves when voice_record_stop fires.
   const recordingPromiseRef = useRef<Promise<string> | null>(null);
@@ -269,74 +134,16 @@ export function useTalkMode(): UseTalkModeReturn {
   // queue without us hoisting the queue into hook-level state.
   const cancelHookRef = useRef<(() => void) | null>(null);
 
-  // ── Readiness probe ───────────────────────────────────
-  // Talk Mode requires either:
-  //  (a) cloud STT + cloud TTS providers configured, OR
-  //  (b) the local voice pack installed (whisper-cli + sherpa-onnx).
-  // We check both and treat the union as "ready". Local takes
-  // precedence in the per-turn pipeline so users who installed
-  // the pack get the offline path automatically.
+  // Bridge `useTalkReadiness` output into the central state
+  // machine: readiness flips → 'unconfigured', readiness arrives
+  // → leave 'unconfigured' (only). All other state transitions
+  // are owned by the recording / streaming code below.
   useEffect(() => {
-    let cancelled = false;
-    const probe = async () => {
-      try {
-        const [cfg, local] = await Promise.all([
-          voiceGetConfig(),
-          talkLocalStatus().catch(() => ({ stt_ready: false, tts_ready: false })),
-        ]);
-        if (cancelled) return;
-        setLocalRoute({ stt: local.stt_ready, tts: local.tts_ready });
-        const cloudSttOk = cfg.asr_provider !== '' && cfg.asr_api_key_set;
-        const cloudTtsOk =
-          cfg.tts_provider !== '' &&
-          (cfg.tts_provider === 'edge' || cfg.tts_api_key_set);
-        const sttOk = local.stt_ready || cloudSttOk;
-        const ttsOk = local.tts_ready || cloudTtsOk;
-        let reason: string | null = null;
-        if (!sttOk && !ttsOk) reason = '尚未配置语音输入与输出';
-        else if (!sttOk) reason = '尚未配置语音输入（STT）';
-        else if (!ttsOk) reason = '尚未配置语音输出（TTS）';
-        const ready = sttOk && ttsOk;
-        setReadiness({ ready, reason, config: cfg });
-        setState((cur) => {
-          if (!ready) return 'unconfigured';
-          if (cur === 'unconfigured') return 'idle';
-          return cur;
-        });
-      } catch (e) {
-        if (cancelled) return;
-        setReadiness({
-          ready: false,
-          reason: ipcErrorMessage(e),
-          config: null,
-        });
-        setState('unconfigured');
-      }
-    };
-    void probe();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ── Mic permission warmup (macOS) ─────────────────────
-  // Fire-and-forget on mount: the act of opening cpal *itself*
-  // is what triggers the macOS Privacy dialog, regardless of
-  // whether we wait for samples. Earlier we plumbed the warmup
-  // result into `micPermission` to drive a pre-emptive banner —
-  // that turned out to false-positive on real users (CoreAudio
-  // cold-start can take >500ms to deliver the first callback
-  // even when permission is granted, e.g. coming back from
-  // sleep, switching default device, or first launch after
-  // boot). The dropped reads then made the banner say "denied"
-  // even though the next PTT press recorded fine. Now we keep
-  // the warmup purely as a dialog-trigger and rely on actual
-  // recording outcomes to set `micPermission` — granted on
-  // success, denied on `mic_permission_denied` error. That
-  // matches user mental model ("if it's working, no warning").
-  useEffect(() => {
-    void voiceWarmupMic().catch(() => {});
-  }, []);
+    setState((cur) => {
+      if (!readiness.ready) return cur === 'unconfigured' ? cur : 'unconfigured';
+      return cur === 'unconfigured' ? 'idle' : cur;
+    });
+  }, [readiness.ready]);
 
   const reset = useCallback(() => {
     setPartialTranscript('');
