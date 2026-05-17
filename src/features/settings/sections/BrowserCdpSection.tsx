@@ -76,6 +76,12 @@ export function BrowserCdpSection() {
     setBusy('launch');
     setError(null);
     setMessage(null);
+    // Optimistic update so the button label flips immediately while
+    // the IPC awaits gateway_restart (3-8s). Without this, users
+    // would see a stale "Launch" button + stuck spinner and tend to
+    // navigate away — the unmount/remount path is what historically
+    // "fixed" the apparent freeze.
+    setStatus((prev) => (prev ? { ...prev, running: true, env_configured: true } : prev));
     try {
       const result = await browserCdpLaunch();
       setStatus(result.status);
@@ -84,6 +90,11 @@ export function BrowserCdpSection() {
       setError(ipcErrorMessage(e));
     } finally {
       setBusy(null);
+      // Reconcile against the real backend state. Cheap (TCP probe
+      // + 2 fs stats) and fire-and-forget — defends against the
+      // case where the IPC response landed on an unmounted
+      // component instance and setStatus above was a no-op.
+      void refresh();
     }
   }
 
@@ -91,6 +102,7 @@ export function BrowserCdpSection() {
     setBusy('stop');
     setError(null);
     setMessage(null);
+    setStatus((prev) => (prev ? { ...prev, running: false, env_configured: false } : prev));
     try {
       setStatus(await browserCdpStop());
       setMessage(t('settings.browser_cdp.stopped_msg'));
@@ -98,6 +110,7 @@ export function BrowserCdpSection() {
       setError(ipcErrorMessage(e));
     } finally {
       setBusy(null);
+      void refresh();
     }
   }
 
