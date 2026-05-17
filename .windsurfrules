@@ -14,6 +14,24 @@ Threshold guide:
 - 300-500 lines: monitor, consider extraction
 - > 500 lines: MUST refactor before adding features
 
+### AC-1b: Stable feature files may exceed 500 lines
+The AC-1 size limit targets **high-frequency** files (active UI pages, growing IPC surfaces). Stable catalog-style files where each entry is independent and changes are rare are exempt — splitting them only spreads the same shape across more files without reducing per-edit blast radius.
+
+Examples that may stay large:
+- `mcp_server/tools.rs` — flat list of MCP tool handlers; adding a tool is ~30 LOC + 1 branch
+- `hermes_config/gateway.rs` — gateway start/stop/restart logic; only touched on Hermes upgrades
+- `workflow/engine/tests.rs` — test catalog; large but doesn't break the build to read
+- `ipc/hermes_memory.rs` — Memory IPC surface; locked by Hermes contract
+- `db/analytics.rs` — DB schema + query module; stabilized once columns are committed
+
+Examples that must follow AC-1 (will keep growing):
+- `ipc/workflow/mod.rs` — workflow IPC handlers; new features add new endpoints
+- `ipc/pack/mod.rs` — Pack management; grows with every new industry Pack
+- `features/talk/useTalkMode.ts` — Talk Mode is still under v0.4.0+ development
+- `ipc/browser_cdp.rs` — refactored 2026-05-17 from 2149 → 1067 lines via cohesive submodules (`chromium_bundle`, `cdp_protocol`, `disabled_sentinel`, `lifecycle`, `profile_ops`)
+
+When in doubt: ask "will I edit this file again in the next 4 weeks?". Yes → AC-1 applies. No → AC-1b applies.
+
 ### AC-2: New capabilities land in service/hook first
 When adding a new feature:
 1. Create the hook/service file first
