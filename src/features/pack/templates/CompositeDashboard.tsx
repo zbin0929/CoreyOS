@@ -193,7 +193,23 @@ export function CompositeDashboardTemplate({ view }: { view: PackView }) {
   const [dateRange, setDateRange] = useState<DateRange>('7d');
   const options = (view.options ?? {}) as Record<string, unknown>;
   const layout = Array.isArray(options.layout) ? (options.layout as LayoutCell[]) : [];
-  const summary = buildSummary(layout, view.packId, siblingViews);
+
+  // `summary` opts the Pack into the Amazon-flavored risk banner +
+  // KPI strip + action hint header. Default `"amazon"` keeps the
+  // pre-existing UX for the cross-border-ecom Pack; manifest can
+  // pass `summary: none` to render only the layout cells (used by
+  // the meizheng dashboard so it doesn't get a销售额 strip it has
+  // no data for). New Packs should explicitly choose.
+  const summaryMode = (typeof options.summary === 'string' ? options.summary : 'amazon') as
+    | 'amazon'
+    | 'none'
+    | string;
+  const showAmazonSummary = summaryMode === 'amazon';
+  const showDateRange = options.date_range !== false && showAmazonSummary;
+
+  const summary = showAmazonSummary
+    ? buildSummary(layout, view.packId, siblingViews)
+    : null;
 
   if (layout.length === 0) {
     return (
@@ -252,44 +268,50 @@ export function CompositeDashboardTemplate({ view }: { view: PackView }) {
   return (
     <DateRangeContext.Provider value={dateRange}>
     <div className="flex flex-col gap-5">
-      <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm font-medium ${riskBannerClass(summary.riskLevel)}`}>
-        <span className="flex-1">{riskBannerText(summary.riskLevel)}</span>
-        <div className="flex shrink-0 gap-2">
-          {actionButtons(summary.riskLevel).map((btn) => (
-            <ActionTrigger key={btn.workflow} label={btn.label} workflow={btn.workflow} packId={view.packId} />
+      {summary && (
+        <>
+          <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm font-medium ${riskBannerClass(summary.riskLevel)}`}>
+            <span className="flex-1">{riskBannerText(summary.riskLevel)}</span>
+            <div className="flex shrink-0 gap-2">
+              {actionButtons(summary.riskLevel).map((btn) => (
+                <ActionTrigger key={btn.workflow} label={btn.label} workflow={btn.workflow} packId={view.packId} />
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <SummaryItem label="今日销售额" value={summary.revenue} tone="low" />
+            <SummaryItem label="订单量" value={summary.orders} tone="low" />
+            <SummaryItem label="告警总数" value={summary.alertCount} tone="warning" />
+            <SummaryItem label="风险项" value={summary.riskCount} tone="danger" />
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-bg-elev-1/40 px-4 py-2.5 text-sm text-fg">
+            <span className="font-medium text-fg-subtle">今日建议：</span>{' '}
+            <span>{actionHint(summary.riskLevel)}</span>
+          </div>
+        </>
+      )}
+
+      {showDateRange && (
+        <div className="flex items-center gap-1.5 self-end">
+          <Icon icon={Calendar} size="sm" className="text-fg-muted" />
+          {(Object.entries(DATE_RANGE_LABELS) as [DateRange, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setDateRange(key)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                dateRange === key
+                  ? 'bg-gold-500/15 text-gold-500'
+                  : 'text-fg-muted hover:bg-bg-elev-2 hover:text-fg'
+              }`}
+            >
+              {label}
+            </button>
           ))}
         </div>
-      </div>
-
-      <div className="flex items-center gap-1.5 self-end">
-        <Icon icon={Calendar} size="sm" className="text-fg-muted" />
-        {(Object.entries(DATE_RANGE_LABELS) as [DateRange, string][]).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setDateRange(key)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              dateRange === key
-                ? 'bg-gold-500/15 text-gold-500'
-                : 'text-fg-muted hover:bg-bg-elev-2 hover:text-fg'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <SummaryItem label="今日销售额" value={summary.revenue} tone="low" />
-        <SummaryItem label="订单量" value={summary.orders} tone="low" />
-        <SummaryItem label="告警总数" value={summary.alertCount} tone="warning" />
-        <SummaryItem label="风险项" value={summary.riskCount} tone="danger" />
-      </div>
-
-      <div className="rounded-xl border border-border/60 bg-bg-elev-1/40 px-4 py-2.5 text-sm text-fg">
-        <span className="font-medium text-fg-subtle">今日建议：</span>{' '}
-        <span>{actionHint(summary.riskLevel)}</span>
-      </div>
+      )}
 
       {kpiCells.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
