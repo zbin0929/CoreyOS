@@ -68,6 +68,7 @@ use crate::state::AppState;
 mod cdp_protocol;
 mod chromium_bundle;
 mod disabled_sentinel;
+mod profile_ops;
 use cdp_protocol::{apply_cdp_download_behavior, apply_cdp_post_launch};
 #[cfg(target_os = "macos")]
 use chromium_bundle::managed_ai_browser_path;
@@ -75,6 +76,8 @@ use chromium_bundle::prepare_ai_browser_macos;
 #[cfg(all(test, target_os = "macos"))]
 use chromium_bundle::{patch_chromium_bundle, source_bundle_root};
 use disabled_sentinel::{clear_disabled_sentinel, is_disabled, write_disabled_sentinel};
+use profile_ops::list_logged_in_domains;
+pub(crate) use profile_ops::{clear_cookies_sync, clear_domain_sync};
 
 /// Port we always use. 9222 is the de-facto Chrome devtools default;
 /// Hermes' own `/browser connect` slash command also defaults here, so
@@ -514,60 +517,6 @@ pub(crate) fn ensure_running_background(
     })
 }
 
-/// Read the dedicated profile's `Cookies` sqlite and return the set
-/// of distinct host keys with persistent cookies. Returns an empty
-/// vec on any failure (no profile yet, sqlite locked, schema
-/// mismatch on a future Chrome version) — the UI treats that as "no
-/// data" rather than an error, which is the right call for a
-/// non-essential informational column.
-fn list_logged_in_domains() -> Vec<String> {
-    let Ok(dir) = profile_dir() else {
-        return Vec::new();
-    };
-    // The default profile's cookie store. Chrome supports multiple
-    // profiles ("Profile 1", "Profile 2", ...) but we never create
-    // them — the dedicated AI Browser only ever has Default.
-    let cookies_db = dir.join("Default").join("Cookies");
-    if !cookies_db.exists() {
-        return Vec::new();
-    }
-    use rusqlite::{Connection, OpenFlags};
-    let Ok(conn) = Connection::open_with_flags(
-        &cookies_db,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    ) else {
-        return Vec::new();
-    };
-    // Filter `host_key != ''` to drop blank rows; we don't filter on
-    // `expires_utc` because session cookies (expires=0) still imply
-    // the user has visited and Chrome remembers state. Cap at 200
-    // raw rows so the dedupe + sort cost stays bounded if a power
-    // user has been browsing for years.
-    let Ok(mut stmt) =
-        conn.prepare("SELECT DISTINCT host_key FROM cookies WHERE host_key != '' LIMIT 200")
-    else {
-        return Vec::new();
-    };
-    let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) else {
-        return Vec::new();
-    };
-    let mut domains: Vec<String> = rows
-        .filter_map(Result::ok)
-        // Chrome sometimes prefixes with '.' for cross-subdomain
-        // cookies (".example.com"). Normalize so example.com and
-        // .example.com aren't shown as two entries.
-        .map(|d| d.trim_start_matches('.').to_string())
-        .filter(|d| !d.is_empty())
-        .collect();
-    domains.sort();
-    domains.dedup();
-    // 50 is plenty for a panel — power users with hundreds of sites
-    // can still see everything by inspecting the profile path
-    // directly via the "Technical details" disclosure.
-    domains.truncate(50);
-    domains
-}
-
 /// What the Settings panel renders on mount. Cheap (TCP probe + 2 fs
 /// stats) so it's fine to call on every focus.
 #[tauri::command]
@@ -803,59 +752,6 @@ pub async fn browser_cdp_clear_domain(domain: String) -> IpcResult<BrowserCdpSta
         .map_err(|e| IpcError::Internal {
             message: format!("clear_domain join: {e}"),
         })?
-}
-
-pub(crate) fn clear_domain_sync(domain: &str) -> IpcResult<BrowserCdpStatus> {
-    if port_is_listening(CDP_PORT) {
-        return Err(IpcError::Internal {
-            message: "Please quit the AI Browser window first (Chrome locks the cookies database \
-                      while running)."
-                .to_string(),
-        });
-    }
-    let target = domain.trim().trim_start_matches('.').to_string();
-    if target.is_empty() {
-        return Err(IpcError::Internal {
-            message: "domain is empty".to_string(),
-        });
-    }
-    let dir = profile_dir()?;
-    let cookies_db = dir.join("Default").join("Cookies");
-    if !cookies_db.exists() {
-        // Nothing to clear; return current snapshot rather than a
-        // confusing "no profile" error.
-        return Ok(build_status());
-    }
-    use rusqlite::{params, Connection};
-    let conn = Connection::open(&cookies_db).map_err(|e| IpcError::Internal {
-        message: format!("open cookies db: {e}"),
-    })?;
-    let dotted = format!(".{target}");
-    let affected = conn
-        .execute(
-            "DELETE FROM cookies WHERE host_key = ?1 OR host_key = ?2",
-            params![target, dotted],
-        )
-        .map_err(|e| IpcError::Internal {
-            message: format!("delete cookies for {target}: {e}"),
-        })?;
-    tracing::info!(domain = %target, rows = affected, "cleared per-domain cookies");
-    Ok(build_status())
-}
-
-pub(crate) fn clear_cookies_sync() -> IpcResult<BrowserCdpStatus> {
-    if port_is_listening(CDP_PORT) {
-        return Err(IpcError::Internal {
-            message: "Please quit the AI Browser window first (Chrome must be closed before its profile can be wiped).".to_string(),
-        });
-    }
-    let dir = profile_dir()?;
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(|e| IpcError::Internal {
-            message: format!("remove profile dir {}: {e}", dir.display()),
-        })?;
-    }
-    Ok(build_status())
 }
 
 /// Resolve the directory where AI-Browser downloads (Export-to-Excel,
