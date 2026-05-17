@@ -13,7 +13,7 @@
 
 ## 当前版本
 
-- 产品版本：**v0.2.14**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准；最新 tag `8fdde13` 后已累积 19 个 post-release commit，下一版未定号）
+- 产品版本：**v0.2.14**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准；最新 tag `8fdde13` 后已累积 **62** 个 post-release commit，包含 P0/P1 重构 sprint + Pack Schema DSL Phase 3a+3b + 美正 5 个 `.tsx` 全删；下一版未定号）
 - 上游 Hermes 版本：**v0.13.0 (2026.5.7)**；参见 [`hermes-deps.md`](./hermes-deps.md)
 - 代码规模：Rust **169** 文件 / TS+TSX **346** 文件（合计 ~111K 行）
 - 测试：Rust **568** · Vitest **112** · Playwright **38 specs / 77 tests**（2026-05-17 sprint 全绿）

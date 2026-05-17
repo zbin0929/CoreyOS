@@ -201,18 +201,61 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib pack::manifest::tests
   transform 链路）。系统配置视图靠这条保住 fuel-rate-config.yaml
   的 snake_case 兼容。
 
+### Phase 3b 收尾后追加的修复（2026-05-17 晚）
+
+| commit | 内容 |
+| --- | --- |
+| `c8fad5b` | 加 `e2e/pack-meizheng-schemaconfig.spec.ts`：2 个 spec，覆盖 UPS 2-services 渲染 + zone-config manifest 默认合并 |
+| `0c638ac` | 修上面 spec 的 `getByText('UPS')` bug（input value 不是 text node），改成 `input[value="UPS"]` |
+| `9fc1b96` | **关键 fix**：`pack_view_data` 现在递归扫 `options.layout[].view`，CompositeDashboard 嵌套子视图（dashboard-ups-fuel 等 6 个）不再 404。+4 个新 Rust 单元测试 |
+| `f62b477` | MetricsCard 内部 grid 按 metric 数量自适应：1→full / 2→2col / 3→3col / 4+→4col。修复美正 dashboard 单 metric 卡片被压扁到 1/4 cell 宽的视觉问题 |
+
 ### 已知遗留 / 可选清理（不阻塞）
 
 - **CDP warning**：`Browser.setDownloadBehavior` 在重接管已有
   Chrome 时返回 `-32000 Browser context management is not
   supported`。用户已决定暂不处理（无害，只影响 session 内下载路径
   回退到 ~/Downloads）。详见 `@/Users/zbin/AI项目/CoreyOS/src-tauri/src/ipc/browser_cdp.rs:337-343`。
-- **DSL 设计文档未补 record + default 章节**：
-  `docs/plans/v0.3.0-pack-schema-dsl.md` 还停在 Phase 3a 的快照。
-  下次写跨境电商 Pack 之前补一下。
-- **美正 Playwright smoke 没加**：`e2e/` 下 0 个美正 specs。
-  下次想加可以做 `/pack/meizheng/config` 渲染 + UPS 卡片 2 条
-  services 断言。
+- **美正 Pack 仍捆绑在基座源码**：见下方 "下次会话主任务" 段。
+
+## 下次会话主任务：把美正 Pack 从基座摘出（TODO 8c · 1.5-2h）
+
+**为什么**：架构铁律 "Pack ≠ 基座代码"。PR 3 Phase 3b 把美正 5 个
+`.tsx` 删干净了（不写 React 代码 ✓），但 `src-tauri/assets/skill-packs/meizheng/`
+仍完整 bundle 在基座 binary 里——`seed::ensure_bundled_packs` 启动时
+拷到每个客户的 `~/.hermes/skill-packs/`。逻辑层面美正客户和非美正客户拿
+到的是同一个 binary，但同一个 binary 把美正业务规则写死了。
+
+**步骤**（按顺序，每步独立可 commit）：
+
+1. **移走 bundle 目录**（10 min）
+   - `src-tauri/assets/skill-packs/meizheng/` → 备选 a) 同仓库 `packs/meizheng/` 顶层目录 / b) 单独 `corey-pack-meizheng/` repo / c) 单独 zip 放发布产物
+   - 推荐 a：保留版本控制 + 不阻塞内部测试，但 `tauri.conf.json::bundle.resources` 不再包含
+
+2. **更新 seed 逻辑**（20 min）
+   - `src-tauri/src/pack/seed.rs::ensure_bundled_packs` 当前读 `assets/skill-packs/` 下所有子目录。改成只 bundle `cross_border_ecom`（v0.3.0 的通用骨架）。或干脆改成 0 bundled pack，等用户主动 `pack_import_zip`。
+
+3. **修测试 fixture**（10 min）
+   - `src-tauri/src/pack/manifest.rs:707` 写死了 `id: meizheng`，改成通用 `id: test-pack`
+   - `src-tauri/src/pack/schedules.rs` 用 `pack__meizheng__*` 做 cron id 测试，改成 `pack__test__*`
+
+4. **安装路径 2 选 1**（30 min）
+   - a) 客户走 Settings → Packs → "导入 zip"：`pack_import_zip` IPC 已有，把 `packs/meizheng/` 打 zip 放发布产物
+   - b) `customer.yaml` 加 `preinstall_packs: ['./packs/meizheng.zip']` 字段，启动 seeder 解 zip 并装
+   - 推荐 a：UX 简单，无需新 IPC
+
+5. **CI smoke**（30 min）
+   - 加 `src-tauri/tests/pack_seed_clean.rs`：基座干净启动后 `Registry.packs.len() == 0`（或只有 cross_border_ecom）
+   - 加 `e2e/pack-meizheng-import.spec.ts`：先调 `pack_import_zip` 装美正 zip，验证 dashboard / config 视图渲染 OK
+
+6. **文档**（10 min）
+   - 更新 `docs/spec/pack-development.md` 加 "如何分发 Pack"：zip 发布 + 客户导入流程
+   - 更新本文件，记 commit + 验证状态
+
+**预期净行数**：基座 −2000 行（删 manifest YAML 等），加 `packs/meizheng/` 同样大小，CI 多 1-2 个 smoke spec。
+
+**风险**：低。`pack_import_zip` 是已有的稳定 IPC（已测）；`seed.rs`
+的"只 bundle XX 个 pack"是参数化的，不改架构。
 
 ### Phase 3a 设计决策（避免下一会话重新发明）
 
