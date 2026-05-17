@@ -150,6 +150,50 @@ pub struct PackActionDto {
     pub confirm: bool,
 }
 
+/// Look up a view's `data_source` by `view_id`. Top-level views in
+/// `manifest.views` are matched first; if no top-level match, walk
+/// each view's `options.layout[].view` (CompositeDashboard child
+/// cells) and match on the embedded `view.id`.
+///
+/// Returns `Some(data_source_yaml)` on hit, `None` on miss. Child
+/// cells with `data_source: { static: {} }` resolve here too — they
+/// just produce an empty object, which is the correct render for
+/// "no live data; the cell shows its declared metrics with zeros".
+fn find_view_data_source(manifest: &PackManifest, view_id: &str) -> Option<serde_yaml::Value> {
+    if let Some(v) = manifest.views.iter().find(|v| v.id == view_id) {
+        return Some(v.data_source.clone());
+    }
+    for parent in &manifest.views {
+        let Some(layout) = parent.options.get("layout") else {
+            continue;
+        };
+        let Some(cells) = layout.as_sequence() else {
+            continue;
+        };
+        for cell in cells {
+            let Some(cell_map) = cell.as_mapping() else {
+                continue;
+            };
+            let Some(inner) = cell_map.get(serde_yaml::Value::String("view".into())) else {
+                continue;
+            };
+            let Some(inner_map) = inner.as_mapping() else {
+                continue;
+            };
+            let id_val = inner_map.get(serde_yaml::Value::String("id".into()));
+            if id_val.and_then(|v| v.as_str()) == Some(view_id) {
+                return Some(
+                    inner_map
+                        .get(serde_yaml::Value::String("data_source".into()))
+                        .cloned()
+                        .unwrap_or(serde_yaml::Value::Null),
+                );
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 pub async fn pack_view_data(
     pack_id: String,
@@ -161,8 +205,7 @@ pub async fn pack_view_data(
         let registry = state.packs.read();
         let entry = registry.packs.iter().find(|p| matches_pack_id(p, &pack_id));
         let manifest = entry.and_then(|p| p.manifest.as_ref());
-        let view = manifest.and_then(|m| m.views.iter().find(|v| v.id == view_id));
-        view.map(|v| v.data_source.clone())
+        manifest.and_then(|m| find_view_data_source(m, &view_id))
     };
     let Some(ds) = data_source_val else {
         return Err(IpcError::Internal {
@@ -431,6 +474,125 @@ mod tests {
     use super::*;
     use crate::pack::Registry;
     use std::sync::Arc;
+
+    fn manifest_for_lookup(yaml: &str) -> PackManifest {
+        serde_yaml::from_str(yaml).expect("parse manifest")
+    }
+
+    #[test]
+    fn find_view_data_source_hits_top_level() {
+        let m = manifest_for_lookup(
+            r#"
+id: t
+title: T
+version: 1.0.0
+views:
+  - id: top
+    title: Top
+    template: MetricsCard
+    data_source:
+      static: {}
+"#,
+        );
+        let ds = find_view_data_source(&m, "top").expect("found");
+        assert!(ds
+            .as_mapping()
+            .is_some_and(|m| m.contains_key(serde_yaml::Value::String("static".into()))));
+    }
+
+    #[test]
+    fn find_view_data_source_hits_nested_child_in_composite_layout() {
+        // Mirror the meizheng dashboard shape: top-level CompositeDashboard
+        // view whose `layout[].view` block declares its own id + data_source.
+        let m = manifest_for_lookup(
+            r#"
+id: t
+title: T
+version: 1.0.0
+views:
+  - id: dashboard
+    title: Dashboard
+    template: CompositeDashboard
+    layout:
+      - span: 4
+        view:
+          id: dashboard-ups-fuel
+          title: UPS
+          template: MetricsCard
+          data_source:
+            static: {}
+      - span: 4
+        view:
+          id: dashboard-fedex-fuel
+          title: FedEx
+          template: MetricsCard
+          data_source:
+            mcp:
+              server: x
+              method: y
+"#,
+        );
+        let ups = find_view_data_source(&m, "dashboard-ups-fuel").expect("ups found");
+        assert!(ups
+            .as_mapping()
+            .is_some_and(|m| m.contains_key(serde_yaml::Value::String("static".into()))));
+        let fedex = find_view_data_source(&m, "dashboard-fedex-fuel").expect("fedex found");
+        assert!(fedex
+            .as_mapping()
+            .is_some_and(|m| m.contains_key(serde_yaml::Value::String("mcp".into()))));
+    }
+
+    #[test]
+    fn find_view_data_source_returns_none_for_unknown_id() {
+        let m = manifest_for_lookup(
+            r#"
+id: t
+title: T
+version: 1.0.0
+views:
+  - id: dashboard
+    title: D
+    template: CompositeDashboard
+    layout:
+      - span: 4
+        view:
+          id: child
+          title: C
+          template: MetricsCard
+"#,
+        );
+        assert!(find_view_data_source(&m, "missing").is_none());
+    }
+
+    #[test]
+    fn find_view_data_source_keeps_scanning_other_parents_after_layoutless_one() {
+        // Regression: an early `?` operator returned None from the function as
+        // soon as the first parent had no `layout`, masking children declared
+        // under a later parent. With `let-else continue` we must keep scanning.
+        let m = manifest_for_lookup(
+            r#"
+id: t
+title: T
+version: 1.0.0
+views:
+  - id: solo
+    title: Solo
+    template: MetricsCard
+  - id: dashboard
+    title: D
+    template: CompositeDashboard
+    layout:
+      - span: 12
+        view:
+          id: child
+          title: C
+          template: MetricsCard
+          data_source:
+            static: {}
+"#,
+        );
+        assert!(find_view_data_source(&m, "child").is_some());
+    }
 
     #[test]
     fn pack_list_entry_handles_broken_manifest() {

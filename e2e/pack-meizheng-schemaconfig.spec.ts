@@ -207,11 +207,13 @@ test.describe('meizheng SchemaConfig render', () => {
 
     // The view title only renders after `pack_views_list` resolves +
     // `pack_config_get` returns. The lowercase `ups` is the record
-    // entry key (rendered as a heading), not the `name: 'UPS'` field
-    // value (which lives inside an <input> and isn't matched by
-    // getByText).
+    // entry key (rendered as a heading via the record card's
+    // <div>{key}</div>), so plain `getByText` finds it.
     await expect(page.getByText('ups', { exact: true })).toBeVisible();
-
+    // `name: 'UPS'` is the record entry's `name` field — rendered by
+    // <TextWidget> as `<input type="text" value="UPS">`. Input values
+    // are NOT text nodes, so we have to match by attribute.
+    await expect(page.locator('input[value="UPS"]')).toBeVisible();
     // Two `applyTo` Select widgets = two service mapping cards. We
     // probe by label rather than card-class because Tailwind class
     // names are noise the spec shouldn't depend on.
