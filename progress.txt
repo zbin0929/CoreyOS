@@ -5,6 +5,50 @@
 
 ---
 
+# 2026-05-17 (晚) — TODO 8c：美正 Pack 出基座
+
+**做了什么**：把 `src-tauri/assets/skill-packs/meizheng/` 整个 `git mv`
+到 repo 顶层 `packs/meizheng/`。基座 binary 从此只 bundle
+`cross_border_ecom`（通用骨架），不再夹带任何客户业务规则。
+
+**改的文件**：
+- `packs/meizheng/`（新位置，~23 文件全量保留 git 历史）
+- `packs/README.md`（新建，说明 zip + Settings → 导入 流程）
+- `src-tauri/src/pack/manifest.rs:707` 测试 fixture `id: meizheng` → `test_pack`
+  （pack id validator 禁用连字符，必须 `a-z 0-9 _`）
+- `src-tauri/src/pack/schedules.rs` 5 处 `pack__meizheng__*` → `pack__test__*`
+
+**不需要改的**：
+- `src-tauri/src/pack/seed.rs::ensure_bundled_packs` — 目录扫描型，meizheng
+  消失就自然不 seed。`bundled_skill_packs_are_wellformed` 测试要求
+  `checked > 0`，cross_border_ecom 还在所以满足。
+- `tauri.conf.json::bundle.resources` — 本来就没列 `assets/skill-packs/**`
+  （dev 走 `resource_dir = src-tauri/` 直接读源码），所以不动。
+- `e2e/pack-meizheng-schemaconfig.spec.ts` — 用 `__CADUCEUS_MOCK__` mock 了
+  `pack_views_list` / `pack_config_get`，不依赖磁盘上有 meizheng pack。
+- workflow 内的 `~/.hermes/skill-packs/meizheng/scripts/` 路径 — 是运行时
+  安装路径（pack_import_zip 解到那里），保持不变。
+
+**分发流程**（待用户在客户机器上验证一次）：
+1. `cd packs && zip -r meizheng-0.6.0.zip meizheng -x '*.DS_Store'`
+2. 客户在 Corey 的 Settings → Packs → "导入 zip" 选 zip
+3. 启用开关打开
+
+**没做**（留给真正第一次客户机器实地装时再做）：
+- TODO 8c 计划里的 step 5（`src-tauri/tests/pack_seed_clean.rs` 干净启动
+  smoke + `e2e/pack-meizheng-import.spec.ts` 真 zip 导入端到端）
+- `customer.yaml` 的 `preinstall_packs:` 字段（推荐方案 a：手工导入即可）
+
+**测试状态**（本地全绿）：
+- `cargo fmt --check` ✅
+- `node scripts/check-clippy-unwrap.mjs` ✅ current=546 baseline=546
+- `pnpm tsc --noEmit` ✅
+- `cargo test --lib 'pack::'` ✅ 107 passed / 0 failed（含
+  `bundled_skill_packs_are_wellformed`，只剩 cross_border_ecom 仍满足
+  `checked > 0`）
+
+---
+
 # 2026-05-17 — P0/P1 重构 Sprint（14 commit，已合主线）
 
 ## 目标与产出

@@ -704,7 +704,7 @@ views:
     fn recursive_config_schema_parses() {
         let yaml = r#"
 schema_version: 1
-id: meizheng
+id: test_pack
 version: "0.1.0"
 config_schema:
   - key: source

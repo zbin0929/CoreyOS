@@ -458,11 +458,11 @@ version: "1.0.0"
     fn apply_cron_overrides_replaces_matching_schedule() {
         let mut jobs = vec![
             HermesJob {
-                id: "pack__meizheng__weekly-fuel-rates".to_string(),
+                id: "pack__test__weekly-fuel-rates".to_string(),
                 ..HermesJob::default()
             },
             HermesJob {
-                id: "pack__meizheng__monthly-fuel-rates".to_string(),
+                id: "pack__test__monthly-fuel-rates".to_string(),
                 ..HermesJob::default()
             },
         ];
@@ -582,11 +582,11 @@ schedules:
     fn exchange_rate_overrides_applied_to_jobs() {
         let mut jobs = vec![
             HermesJob {
-                id: "pack__meizheng__daily-usd-rate-930".to_string(),
+                id: "pack__test__daily-usd-rate-930".to_string(),
                 ..HermesJob::default()
             },
             HermesJob {
-                id: "pack__meizheng__daily-usd-rate-1030".to_string(),
+                id: "pack__test__daily-usd-rate-1030".to_string(),
                 ..HermesJob::default()
             },
         ];
@@ -638,7 +638,7 @@ schedules:
     #[test]
     fn zone_config_overrides_applied_to_jobs() {
         let mut jobs = vec![HermesJob {
-            id: "pack__meizheng__monthly-ups-zones".to_string(),
+            id: "pack__test__monthly-ups-zones".to_string(),
             ..HermesJob::default()
         }];
         jobs[0].set_schedule_str("0 0 2 1 * *".to_string());
