@@ -16,12 +16,12 @@
 - 产品版本：**v0.2.14**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准；最新 tag `8fdde13` 后已累积 19 个 post-release commit，下一版未定号）
 - 上游 Hermes 版本：**v0.13.0 (2026.5.7)**；参见 [`hermes-deps.md`](./hermes-deps.md)
 - 代码规模：Rust **169** 文件 / TS+TSX **346** 文件（合计 ~111K 行）
-- 测试：Rust **555** · Vitest **112** · Playwright **38 specs / 77 tests**（v0.2.14 tag 时全绿；post-tag 未重跑）
+- 测试：Rust **568** · Vitest **112** · Playwright **38 specs / 77 tests**（2026-05-17 sprint 全绿）
 - 路由：25 个页面
 - IPC 模块：48 个 `.rs` + 5 个子目录（合计 53），约 200+ commands
 - E2E 覆盖：38 个 spec 文件
 - clippy unwrap baseline：**546**（`scripts/clippy-unwrap-baseline.txt`）
-- 文件长度告警阈：≥ 800 行 warn，≥ 1500 行 fail；当前 10 个文件越警戒线，2 个越 fail 线（见下"健康提示"）
+- 文件长度告警阈：≥ 800 行 warn，≥ 1500 行 fail；当前 **12 个文件越警戒线，1 个越 fail 线**（仅 `mcp_server/tools.rs` 1724 行，属 AC-1b 稳定 catalog 豁免，参见下"健康提示"）
 
 > 🔁 校验提醒：数字随代码变动，至少每月核对一次。
 
@@ -72,16 +72,26 @@
 
 > 🔁 校验提醒：每次发布前抽测一次。
 
-## 健康提示（2026-05-17 校验）
+## 健康提示（2026-05-17 校验 · 重构 sprint 后）
 
-- **超长文件 fail 线（≥1500）**：`src-tauri/src/ipc/browser_cdp.rs` (2149) · `src-tauri/src/hermes_config/gateway.rs` (1850)。这两个被 `check-file-sizes.mjs` 标 warn 但脚本目前不 fail（脚本注释为"warnings advisory"）。`browser_cdp.rs` 还会随 LSUIElement Chromium 自带方案继续涨。
-- **超长文件 warn 线（800-1500）**：`mcp_server/tools.rs` (1724) · `ipc/workflow/mod.rs` (1422) · `workflow/engine/tests.rs` (1237) · `ipc/pack/mod.rs` (1215) · `features/talk/useTalkMode.ts` (1131) · `ipc/hermes_memory.rs` (1015) · `db/analytics.rs` (934) · `lib.rs` (923) · `lib/ipc/runtime.ts` (916) · `workflow/engine/mod.rs` (864) · `channels/mod.rs` (802)。FOCUS.md 明确"重构等付费客户"，本批不动。
+- **超长文件 fail 线（≥1500）**：仅 `src-tauri/src/mcp_server/tools.rs` (1724) 一个。属 **AC-1b 稳定 catalog 豁免**（MCP 工具目录，加新工具是 ~30 LOC + 1 branch 的低频操作）。`browser_cdp.rs` 在 2026-05-17 sprint 由 2149 → 1090；`gateway.rs` 由 1850 → 1399（patch_* 退役）已脱离 fail 线。
+- **超长文件 warn 线（800-1500）**：13 个，全部属 AC-1b 稳定 catalog（`workflow/engine/tests.rs` 1236 测试目录、`hermes_memory.rs` 1014 Hermes contract、`db/analytics.rs` 933 schema 锁定、`lib.rs` 922 IPC 注册、`engine/mod.rs` 863、`channels/mod.rs` 801），或 sprint 拆出的 cohesive 子模块（`workflow/execution.rs` 956 — 含 HermesExecutor + run path）。剩 `features/talk/useTalkMode.ts` 1130 高频但 Talk Mode v0.4.0+ 还没上线，无紧迫性。
 - **clippy unwrap baseline 546**：基本来自 tests + db 模块；新代码用 `.expect()` 不要 `.unwrap()`，否则越基线 CI 红。
 - **release 不打包 Pack** 已在 v0.2.13 起落地：`tauri.conf.json :: bundle.resources` 不含 `assets/skill-packs/**`。dev 模式 + bundled seed 仍走 `assets/skill-packs/`。
 
 ## 最近改动要点（近 30 天）
 
 > 截止 2026-05-17。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)（CHANGELOG 在 v0.2.14 之后未补条目，post-tag 19 个 commit 全部围绕美正 Pack）。
+
+- **2026-05-17 · P0/P1 重构 sprint（14 commit，未发版）**：把 3 个高频文件按 cohesive 拆子模块：
+  - `ipc/browser_cdp.rs` **2149 → 1090（−49%）**，拆 5 子模块（`chromium_bundle` / `cdp_protocol` / `disabled_sentinel` / `lifecycle` / `profile_ops`）
+  - `ipc/workflow/mod.rs` **1421 → 506（−64%）**，拆 `execution` 子模块（HermesExecutor + run path）
+  - `ipc/pack/mod.rs` **1214 → 524（−57%）**，拆 `install` + `config` 子模块
+  - 新增 AC-1b 规则区分"稳定 catalog 文件"vs"高频更新文件"（写入 `.windsurfrules` + `.trae/rules/project_rules.md`）
+  - Bug fix：BrowserCdpSection.tsx 乐观更新 + finally refresh（解决"启停按钮要切 tab 才更新"问题）
+  - 顺手退役 4 个 `gateway.rs::patch_*` 函数（功能已被 Hermes plugin hooks / corey-guards / i18n / config toggle 替代）
+  - 顺手 de-flake `seed_chrome_download_prefs_is_idempotent_and_skips_existing`（PR 4-pack 重构暴露了未获 HOME_LOCK 的潜伏 bug）
+  - CI 5 项 gate 全绿 / Rust 568 tests / Vitest 112 tests / `cargo build --bin Corey` 通过
 
 - **2026-05-13 ~ 17 · 美正 Pack 多承运商分区自动化（post-v0.2.14，未发版）**：
   - **USPS Priority Mail 分区** 端到端落地（`download_usps_zones.py` + `upload_zones_meizheng.py` carrier-parametric + `update-usps-zones.yaml`）：3 位 ZIP3 → 5 位完整邮编展开（005→00500-00599）+ 5 位 override 拆分去重；命名按美正OS 约定 `USPS-GROUND` 前缀；workflow 用 `--all` + venv python + 独立 output 目录

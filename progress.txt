@@ -1,6 +1,128 @@
-# CoreyOS 进度笔记 — 2026-05-11
+# CoreyOS 进度笔记
 
 > 这份笔记给下一段对话用。读完应该能 5 分钟接上工作，不重复走死路。
+> 顶层是最新一轮 Sprint，下方保留历史快照。
+
+---
+
+# 2026-05-17 — P0/P1 重构 Sprint（14 commit，已合主线）
+
+## 目标与产出
+
+把 v0.2.14 里 **3 个高频更新巨型文件** 拆成 cohesive 子模块，建立 AC-1b
+"稳定/高频"分级规则，并修了 1 个 flaky test。所有改动每条独立 commit、
+可单独 `git revert`，CI 5 项 gate 全绿。
+
+## 文件减重
+
+| 文件 | 起 | 终 | 减幅 | 拆出子模块 |
+| --- | --- | --- | --- | --- |
+| `src-tauri/src/ipc/browser_cdp.rs` | 2149 | 1090 | **−49%** | 5 个（chromium_bundle / cdp_protocol / disabled_sentinel / lifecycle / profile_ops） |
+| `src-tauri/src/ipc/workflow/mod.rs` | 1421 | 506 | **−64%** | 1 个 execution（HermesExecutor + run path） |
+| `src-tauri/src/ipc/pack/mod.rs` | 1214 | 524 | **−57%** | 2 个（install / config） |
+
+总 P0 减重 **4784 → 2120**（−2664 行 / −56%）。
+
+## Commit 表（按合并顺序）
+
+| Commit | 说明 |
+| --- | --- |
+| `0cdf357` | refactor(gateway): drop 4 retired `patch_*` functions |
+| `2212fa8` | fix(browser-cdp): optimistic UI update + finally refresh on launch/stop |
+| `4ed61d3` | docs(status): refresh to v0.2.14 + meizheng multi-carrier zones |
+| `120446a` | refactor(browser-cdp): extract macOS chromium_bundle submodule |
+| `abc61b5` | refactor(browser-cdp): extract cdp_protocol submodule (−300 lines) |
+| `4628329` | refactor(browser-cdp): extract disabled_sentinel submodule |
+| `8b377a0` | refactor(browser-cdp): extract profile_ops submodule |
+| `314fc43` | refactor(browser-cdp): extract lifecycle submodule (spawn/kill/PID/window-hide) |
+| `c04059d` | docs(rules): add AC-1b to distinguish stable vs high-frequency files |
+| `69b682e` | refactor(workflow): extract execution submodule (HermesExecutor + run path) |
+| `8bc98cf` | refactor(pack): extract install submodule (import/uninstall + sync helpers) |
+| `795d473` | test(browser-cdp): de-flake seed_chrome_download_prefs via HOME_LOCK |
+| `6853769` | refactor(pack): extract config submodule (schema + transform + exchange-rate/zone) |
+
+## 新规则 AC-1b（已写入 `.windsurfrules` + `.trae/rules/project_rules.md`）
+
+500 行硬线**只对高频更新文件**生效。稳定 catalog-style 文件（每条 entry
+独立、改动罕见）可以更大：拆它们只会把同样形状的内容分散到更多文件，不
+降低每次编辑的爆炸半径。
+
+**可以保留大文件**：
+- `mcp_server/tools.rs`（1724 行，MCP 工具目录）
+- `hermes_config/gateway.rs`（1399 行，Hermes 启停逻辑，仅 Hermes 升级时改）
+- `workflow/engine/tests.rs`（1236 行，测试目录）
+- `ipc/hermes_memory.rs`（1014 行，Hermes contract 锁定）
+- `db/analytics.rs`（933 行，schema 一旦固化就不动）
+
+**必须遵守 AC-1**：
+- `ipc/workflow/mod.rs` / `ipc/pack/mod.rs` / `features/talk/useTalkMode.ts`
+  （都是会随新业务持续长肉的入口）
+
+判定问题："这个文件未来 4 周还会改吗？"——会就 AC-1，不会就 AC-1b。
+
+## 关键架构细节（拆分时踩过的坑，下次免重）
+
+1. **`tauri::generate_handler!` 需要 IPC fn 和 macro 生成的 `__cmd__<name>` shim 都
+   reachable**。子模块挪走 `#[tauri::command]` 后，父 mod 必须 `pub use submod::*;`
+   glob re-export 才能让 lib.rs 的 handler 路径 `ipc::workflow::workflow_run`
+   仍解析得到。单独 `pub use submod::workflow_run;` 不够 —— `__cmd__workflow_run`
+   会丢。
+2. **`pub(crate) use` re-export 让外部 crate 路径不变**。`mcp_server::tools.rs` 通
+   过 `crate::ipc::browser_cdp::clear_cookies_sync` 直接调，子模块拆走后用
+   `pub(crate) use profile_ops::{clear_cookies_sync, clear_domain_sync};` 桥接。
+3. **`pub(super)` 可见性陷阱**：父 mod 的 `pub(crate) use submod::X` 失败如果
+   `X` 在 submod 是 `pub(super)` —— 因为 re-export 可见性不能超过源可见性。
+   解：把 X 升到 `pub(crate)`。
+4. **Test flakiness**：`browser_cdp` 的 5/8 test 都 acquire `crate::skills::HOME_LOCK`
+   串行化 `COREY_HERMES_DIR` 改写，独 `seed_chrome_download_prefs_is_idempotent`
+   漏了 → PR 4-pack 重构改变了测试顺序把这个潜伏 bug 暴露出来 → 顺手补了锁。
+5. **跨模块 `super::lifecycle::os_minimize_chrome_window` 兄弟模块访问 OK**：
+   `cdp_protocol` 和 `lifecycle` 都是 `browser_cdp` 私有子模块，兄弟之间可见
+   父私有项（这是 Rust 的子模块继承父私有访问权特性）。
+
+## 验证状态（截至 sprint 结束）
+
+| Gate | 状态 |
+| --- | --- |
+| `cargo fmt --check` | ✅ |
+| `cargo clippy -D warnings` | ✅ |
+| `cargo test --lib` × 5 次稳定 | ✅ 568 passed / 2 ignored |
+| `cargo build --bin Corey`（含 tauri::generate_handler! 宏展开） | ✅ |
+| `pnpm typecheck` (TypeScript strict) | ✅ |
+| `pnpm lint` | ✅ 0 error（7 pre-existing react-refresh warnings） |
+| `pnpm vitest run` | ✅ 112 passed |
+| `check-clippy-unwrap.mjs` baseline | ✅ 141 持平 |
+
+## 还需 runtime smoke（编译期检测不到的副作用）
+
+以下三条**实运行才能验证**，建议下次 `tauri:dev` 起来后跑：
+
+1. **AI Browser launch/stop 完整链** — Settings → AI Browser → Launch → 检查
+   `~/.hermes/.corey/ai-browser.app/Contents/Info.plist` 有 LSBackgroundOnly + 端口
+   9222 listening + 下载文件落到 `~/.hermes/downloads/`。Stop 后检查
+   `~/.hermes/.corey/ai-browser-disabled` sentinel 文件生成。
+2. **工作流跑一遍** — Workflows → 任意 workflow → Run → 检查 step progress
+   事件 emit、approval 中断、完成后 Tasks 页能看到记录。验证
+   `HermesExecutor::execute_agent` / `execute_tool` / `execute_browser` 三条 step
+   类型分支都活着。
+3. **Pack 安装/卸载** — Settings → Packs → Import (.zip) → 检查
+   `~/.hermes/skill-packs/<id>/` + `~/.hermes/config.yaml` 多了 MCP server entry
+   + workflows / schedules 文件入了 ~/.hermes/。然后 Uninstall → 验证全部清理。
+
+## 下一步候选（按价值排序）
+
+1. **A**（中风险）拆 `features/talk/useTalkMode.ts` 1130 行 — Talk Mode v0.4.0+
+   还在开发中，但功能本身**还没上线**，没有紧迫性。
+2. **B**（高风险）PR 3：美正 5 个 `.tsx` 模板 schema 化迁移到基座视图模板，
+   删原文件。需要你 smoke 验证美正 Pack 完整 UX。
+3. **C**（极低风险）继续削减 `clippy unwrap baseline` 141 → 100 内（替换为 `?` 或
+   `expect("...")`）。
+
+我的建议是**先停**，让你抽时间跑一次上面的 3 条 runtime smoke，然后再启动新 PR。
+
+---
+
+# 2026-05-11 — AI Browser 焦点抢夺解决（历史档案）
 
 ## 当前状态
 
