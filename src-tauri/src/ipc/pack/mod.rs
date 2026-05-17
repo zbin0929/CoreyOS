@@ -28,9 +28,8 @@ mod install;
 use install::{matches_pack_id, sync_config_yaml, sync_schedules, sync_skills, sync_workflows};
 // Glob re-exports so `tauri::generate_handler!` can find handlers
 // (`pack_import_zip` / `pack_uninstall` from install, `pack_config_*` /
-// `pack_exchange_rate_config_*` / `pack_zone_config_*` from config)
-// and their `__cmd__*` shims at `crate::ipc::pack::*`. Same pattern as
-// `workflow/mod.rs`.
+// `pack_named_config_*` from config) and their `__cmd__*` shims at
+// `crate::ipc::pack::*`. Same pattern as `workflow/mod.rs`.
 #[allow(unused_imports)]
 pub use config::*;
 #[allow(unused_imports)]
