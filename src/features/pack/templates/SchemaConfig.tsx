@@ -542,8 +542,11 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
             ? await packNamedConfigGet(view.packId, configFile)
             : await packConfigGet(view.packId);
           if (cancelled) return;
+          console.debug('[SchemaConfig] raw data', view.packId, view.viewId, JSON.parse(JSON.stringify(data)));
+          const merged = mergeDefaultsIntoData(inlineSchema, data);
+          console.debug('[SchemaConfig] merged', JSON.parse(JSON.stringify(merged)));
           setSchema(inlineSchema);
-          setConfig(mergeDefaultsIntoData(inlineSchema, data));
+          setConfig(merged);
         } else {
           const [s, c] = await Promise.all([
             packConfigSchema(view.packId),
