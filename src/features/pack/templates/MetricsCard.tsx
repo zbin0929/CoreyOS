@@ -252,6 +252,17 @@ function lookupDataSlice(dataObj: Record<string, unknown>, key: string): {
   return { raw, ctx: { value: raw } };
 }
 
+/** Match inner grid columns to metric count so a single-metric
+ *  card doesn't render at 1/4 width inside a narrow
+ *  CompositeDashboard cell. Strings are spelled out literally
+ *  so Tailwind's JIT scanner picks them up. */
+function metricGridCols(count: number): string {
+  if (count <= 1) return '';
+  if (count === 2) return 'sm:grid-cols-2';
+  if (count === 3) return 'sm:grid-cols-2 lg:grid-cols-3';
+  return 'sm:grid-cols-2 lg:grid-cols-4';
+}
+
 export function MetricsCardTemplate({ view }: { view: PackView }) {
   const options = (view.options ?? {}) as Record<string, unknown>;
   const rawMetrics = Array.isArray(options.metrics) ? (options.metrics as unknown[]) : [];
@@ -278,7 +289,7 @@ export function MetricsCardTemplate({ view }: { view: PackView }) {
       {error && (
         <p className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">{error}</p>
       )}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid grid-cols-1 gap-3 ${metricGridCols(metrics.length)}`}>
         {metrics.map((spec, idx) => {
           const baseMeta = metaFor(spec.key);
           const { raw, ctx } = lookupDataSlice(dataObj, spec.key);
