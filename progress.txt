@@ -8,8 +8,11 @@
 # 2026-05-17 (晚) — TODO 8c：美正 Pack 出基座
 
 **做了什么**：把 `src-tauri/assets/skill-packs/meizheng/` 整个 `git mv`
-到 repo 顶层 `packs/meizheng/`。基座 binary 从此只 bundle
-`cross_border_ecom`（通用骨架），不再夹带任何客户业务规则。
+到 repo 顶层 `packs/meizheng/`，**然后 untrack** —— `.gitignore` 加
+`packs/*` + `!packs/README.md`，本地工作目录保留全部源码，Git 仓库里
+看不到任何美正业务规则。基座 binary 从此只 bundle `cross_border_ecom`
+（通用骨架）。客户分发：私有 zip / 私仓 → 客户 Settings → Packs →
+"导入 zip"。
 
 **改的文件**：
 - `packs/meizheng/`（新位置，~23 文件全量保留 git 历史）

@@ -71,3 +71,9 @@ src-tauri/binaries/*
 # Customer delivery bundles (contain signed license tokens, never commit).
 # Use scripts/new-customer.sh to regenerate; see docs/spec/licensing.md.
 customers/
+
+# Customer-specific Packs (live source). Tracked separately (private
+# zip / private repo). Keep `packs/` itself + `packs/README.md`
+# tracked so the directory contract is documented in CoreyOS.
+packs/*
+!packs/README.md

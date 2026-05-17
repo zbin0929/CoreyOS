@@ -1,9 +1,22 @@
 # Out-of-tree Packs
 
-Customer / industry Packs live here, **outside** the base binary. They
-are version-controlled but are NOT bundled into `Corey.app` —
+Customer / industry Packs live here, **outside** the base binary AND
+**outside Git** (see `.gitignore` — `packs/*` is ignored, only this
+`README.md` is tracked). The base binary
 `src-tauri/tauri.conf.json::bundle.resources` only ships the generic
 `cross_border_ecom` skeleton under `src-tauri/assets/skill-packs/`.
+
+Pack source is distributed via:
+
+- **Private zip / private repo** (you decide per-customer)
+- The zip lands on the customer machine and gets imported through
+  Settings → Packs → "导入 zip" (`pack_import_zip` IPC), unpacking
+  into `~/.hermes/skill-packs/<id>/`.
+
+Local devs working on a Pack just put its directory under `packs/<id>/`
+— Git won't track it, but every other tooling (workflow runner, IPC,
+manifest validator) treats it identically to a Pack the customer
+imported.
 
 This enforces the architecture iron rule from
 `docs/01-architecture.md` § Pack Architecture:
