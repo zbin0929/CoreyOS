@@ -319,6 +319,8 @@ pub fn run() {
             ipc::pack::pack_exchange_rate_config_set,
             ipc::pack::pack_zone_config_get,
             ipc::pack::pack_zone_config_set,
+            ipc::pack::pack_named_config_get,
+            ipc::pack::pack_named_config_set,
             ipc::pack::pack_workflows_list,
             ipc::pack::pack_import_zip,
             ipc::pack::pack_uninstall,
