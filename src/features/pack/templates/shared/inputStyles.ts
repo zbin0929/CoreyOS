@@ -1,9 +1,9 @@
 /**
  * Shared Tailwind class fragments for Pack template form inputs.
  *
- * Extracted 2026-05-17 from `ExchangeRateConfigEditor` /
- * `ZoneConfigEditor` / `CarrierConfigEditor` / `MeizhengConfig`
- * which collectively repeated the same ~80-char Tailwind string
+ * Extracted 2026-05-17 from the (now-deleted) Meizheng-specific
+ * editors (ExchangeRate / Zone / Carrier / umbrella) which
+ * collectively repeated the same ~80-char Tailwind string
  * 28 times. Bundled here so that:
  *
  *   1. Style adjustments (e.g. dark-mode tweaks, focus-ring changes)

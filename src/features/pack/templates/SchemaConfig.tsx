@@ -467,17 +467,24 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
       : typeof options.configFile === 'string'
         ? (options.configFile as string)
         : null;
-  const useInline = inlineSchema.length > 0 && configFile !== null;
+  const useInlineSchema = inlineSchema.length > 0;
+  const useNamedFile = useInlineSchema && configFile !== null;
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        if (useInline && configFile) {
-          const c = await packNamedConfigGet(view.packId, configFile);
+        if (useInlineSchema) {
+          // Inline schema path. Data file is either the
+          // generic `pack_named_config_get` (when `config_file`
+          // is set) or the legacy transformed `pack_config_get`
+          // (which goes through camelCase normalisation).
+          const data = useNamedFile && configFile
+            ? await packNamedConfigGet(view.packId, configFile)
+            : await packConfigGet(view.packId);
           if (cancelled) return;
           setSchema(inlineSchema);
-          setConfig(c);
+          setConfig(data);
         } else {
           const [s, c] = await Promise.all([
             packConfigSchema(view.packId),
@@ -501,7 +508,7 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
     // the JSON-stringified options avoids re-fetching on identity
     // churn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view.packId, configFile, useInline, JSON.stringify(options.schema)]);
+  }, [view.packId, configFile, useNamedFile, JSON.stringify(options.schema)]);
 
   const handleSave = useCallback(async () => {
     const next: Record<string, string> = {};
@@ -513,7 +520,7 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
     }
     setStatus('saving');
     try {
-      if (useInline && configFile) {
+      if (useNamedFile && configFile) {
         await packNamedConfigSet(view.packId, configFile, config);
       } else {
         await packConfigSet(view.packId, config);
@@ -524,7 +531,7 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
       console.error('SchemaConfig save:', e);
       setStatus('error');
     }
-  }, [schema, config, view.packId, useInline, configFile]);
+  }, [schema, config, view.packId, useNamedFile, configFile]);
 
   if (loading) {
     return (

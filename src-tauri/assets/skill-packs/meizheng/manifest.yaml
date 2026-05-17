@@ -194,9 +194,119 @@ views:
               icon: Truck
   - id: config
     title: 系统配置
-    template: MeizhengConfig
+    template: SchemaConfig
     nav_section: settings
-    description: 配置美正OS连接和承运商自动化参数
+    description: 美正OS 连接 + 承运商燃油费率自动化参数
+    # No `config_file` — uses legacy `pack_config_get/set` IPC
+    # which transforms `fuel-rate-config.yaml` (snake_case) into
+    # camelCase for the UI and back. This is the **only** file the
+    # weekly/monthly fuel-rate workflows read, so we MUST go
+    # through the transform path; using `config_file` here would
+    # silently fork the data into a parallel YAML.
+    schema:
+      - key: meizheng_os
+        type: nested
+        label: 美正OS 连接
+        fields:
+          - key: base_url
+            type: text
+            label: 浏览器入口 URL
+            placeholder: http://dev.mazonlabel.com/ship
+          - key: api_base_url
+            type: text
+            label: API Base URL
+            placeholder: https://devgw.mazonlabel.com
+          - key: credentials
+            type: nested
+            label: 登录凭据
+            fields:
+              - key: username
+                type: text
+                label: 用户名
+                width: half
+              - key: password
+                type: secret
+                label: 密码
+                width: half
+      - key: carriers
+        type: record
+        label: 承运商配置
+        key_label: 承运商 ID（如 ups / fedex / dhl）
+        add_label: 添加承运商
+        fields:
+          - key: name
+            type: text
+            label: 承运商名称
+            placeholder: UPS
+            width: half
+          - key: enabled
+            type: bool
+            label: 启用
+            width: half
+          - key: sourceUrl
+            type: text
+            label: 数据源 URL
+            show_if: enabled
+            placeholder: "https://www.ups.com/..."
+          - key: updateFrequency
+            type: select
+            label: 更新频率
+            show_if: enabled
+            options: [weekly, monthly]
+            width: half
+          - key: cron
+            type: cron
+            label: 触发时间
+            show_if: enabled
+          - key: validityDays
+            type: number
+            label: 有效期（天）
+            show_if: enabled
+            width: small
+            help: "示例：7 / 30 / 90；-1 = 当月月末（脚本自动计算）"
+          - key: services
+            type: array
+            label: 服务映射
+            show_if: enabled
+            add_label: 添加映射
+            item:
+              - key: sourceName
+                type: text
+                label: 源服务名
+                placeholder: Domestic Ground Surcharge
+              - key: country
+                type: text
+                label: 国家
+                width: small
+                placeholder: US
+              - key: applyTo
+                type: select
+                label: 写入到
+                options: [default, channels]
+                width: half
+                help: "default = 承运商默认费率；channels = 指定服务代码"
+              - key: serviceCodes
+                type: tag
+                label: 服务代码
+                show_if: "applyTo == 'channels'"
+                placeholder: "NEXT_DAY_AIR, SECOND_DAY_AIR"
+      - key: advanced
+        type: nested
+        label: 高级设置
+        fields:
+          - key: browserTimeout
+            type: number
+            label: 浏览器超时（秒）
+            width: small
+          - key: retryAttempts
+            type: number
+            label: 重试次数
+            width: small
+          - key: logLevel
+            type: select
+            label: 日志级别
+            options: [debug, info, warn, error]
+            width: half
   # SchemaConfig migration target — runs against the same
   # `exchange-rate-config.yaml` that the legacy
   # `<ExchangeRateConfigEditor>` writes inside the umbrella
@@ -357,6 +467,5 @@ views:
               - key: cron
                 type: cron
                 label: 调度
-
 config_schema: []
 mcp_servers: []
