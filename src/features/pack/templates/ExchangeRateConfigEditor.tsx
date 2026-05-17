@@ -2,8 +2,18 @@ import { Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { cn } from '@/lib/cn';
 
 import { CronPicker, describeCron } from './shared/CronPicker';
+import {
+  ARRAY_ITEM_CARD_CLASS,
+  ARRAY_ITEM_DELETE_BTN_CLASS,
+  FIELD_HELP_CLASS,
+  FIELD_LABEL_CLASS,
+  INPUT_BASE_CLASS,
+  INPUT_COMPACT_CLASS,
+  INPUT_FULL_CLASS,
+} from './shared/inputStyles';
 
 interface ExchangeRateSchedule {
   name: string;
@@ -130,11 +140,11 @@ export function ExchangeRateConfigEditor({ config, onChange }: ExchangeRateConfi
                     onChange({ ...config, source: { ...config.source, name: e.target.value } })
                   }
                   placeholder="中国银行"
-                  className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors placeholder:text-fg-subtle/50 hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                  className={INPUT_FULL_CLASS}
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-fg">汇率类型</label>
+                <label className={FIELD_LABEL_CLASS}>汇率类型</label>
                 <input
                   type="text"
                   value={config.source.rateType}
@@ -142,11 +152,11 @@ export function ExchangeRateConfigEditor({ config, onChange }: ExchangeRateConfi
                     onChange({ ...config, source: { ...config.source, rateType: e.target.value } })
                   }
                   placeholder="现汇卖出价"
-                  className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors placeholder:text-fg-subtle/50 hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                  className={INPUT_FULL_CLASS}
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-fg">搜索关键词</label>
+                <label className={FIELD_LABEL_CLASS}>搜索关键词</label>
                 <input
                   type="text"
                   value={config.source.queryKeyword}
@@ -154,24 +164,24 @@ export function ExchangeRateConfigEditor({ config, onChange }: ExchangeRateConfi
                     onChange({ ...config, source: { ...config.source, queryKeyword: e.target.value } })
                   }
                   placeholder="美元"
-                  className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors placeholder:text-fg-subtle/50 hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                  className={INPUT_FULL_CLASS}
                 />
-                <p className="text-[10px] text-fg-subtle">数据源页面上的货币名称</p>
+                <p className={FIELD_HELP_CLASS}>数据源页面上的货币名称</p>
               </div>
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-fg">抓取时间起点</label>
+                <label className={FIELD_LABEL_CLASS}>抓取时间起点</label>
                 <input
                   type="time"
                   value={config.source.earliestTime}
                   onChange={(e) =>
                     onChange({ ...config, source: { ...config.source, earliestTime: e.target.value } })
                   }
-                  className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                  className={INPUT_FULL_CLASS}
                 />
-                <p className="text-[10px] text-fg-subtle">取此时间后第一笔汇率</p>
+                <p className={FIELD_HELP_CLASS}>取此时间后第一笔汇率</p>
               </div>
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-fg">除以系数</label>
+                <label className={FIELD_LABEL_CLASS}>除以系数</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -182,7 +192,7 @@ export function ExchangeRateConfigEditor({ config, onChange }: ExchangeRateConfi
                         conversion: { divideBy: Number(e.target.value) },
                       })
                     }
-                    className="w-24 rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                    className={cn('w-24', INPUT_BASE_CLASS)}
                   />
                   <span className="text-xs text-fg-subtle">
                     示例: 682.78 ÷ {config.conversion.divideBy} ={' '}
@@ -202,19 +212,19 @@ export function ExchangeRateConfigEditor({ config, onChange }: ExchangeRateConfi
               </div>
 
               {config.schedules.map((schedule, idx) => (
-                <div key={idx} className="space-y-2 rounded-lg border border-border/60 bg-bg p-3 shadow-sm">
+                <div key={idx} className={ARRAY_ITEM_CARD_CLASS}>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       value={schedule.name}
                       onChange={(e) => updateSchedule(idx, { name: e.target.value })}
                       placeholder="计划名称（如 早盘抓取）"
-                      className="flex-1 rounded-md border border-border/60 bg-bg-elev-1 px-3 py-1.5 text-xs text-fg transition-colors placeholder:text-fg-subtle/50 hover:border-border focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500/20"
+                      className={cn('flex-1', INPUT_COMPACT_CLASS)}
                     />
                     <button
                       type="button"
                       onClick={() => removeSchedule(idx)}
-                      className="rounded p-1.5 text-red-500 transition-colors hover:bg-red-500/10"
+                      className={ARRAY_ITEM_DELETE_BTN_CLASS}
                     >
                       <Icon icon={Trash2} size="xs" />
                     </button>
@@ -232,24 +242,24 @@ export function ExchangeRateConfigEditor({ config, onChange }: ExchangeRateConfi
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-fg">货币代码</label>
+                <label className={FIELD_LABEL_CLASS}>货币代码</label>
                 <input
                   type="text"
                   value={config.target.currencyCode}
                   onChange={(e) =>
                     onChange({ ...config, target: { ...config.target, currencyCode: e.target.value } })
                   }
-                  className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                  className={INPUT_FULL_CLASS}
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-fg">备注模板</label>
+                <label className={FIELD_LABEL_CLASS}>备注模板</label>
                 <input
                   type="text"
                   value={config.remarkTemplate}
                   onChange={(e) => onChange({ ...config, remarkTemplate: e.target.value })}
                   placeholder="更新汇率{datetime}  {rate}"
-                  className="w-full rounded-lg border border-border/60 bg-bg px-3 py-2 text-xs text-fg transition-colors placeholder:text-fg-subtle/50 hover:border-border focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20"
+                  className={INPUT_FULL_CLASS}
                 />
               </div>
             </div>
