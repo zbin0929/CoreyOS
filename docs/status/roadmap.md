@@ -1,7 +1,7 @@
 # Roadmap · 路线图
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-15 -->
+<!-- last-verified: 2026-05-17 -->
 <!-- 校验规则：每月校验；发布新版本时同步 Upcoming 和 In progress 节。 -->
 
 > 本文件描述 CoreyOS **未来计划 + 当下在做**。
@@ -19,7 +19,10 @@
 | 跨境电商 Pack 端到端链路 | v0.2.11 | ✅ 2026-05-10 | v0.2.0：3 Skill + 3 Workflow + 3 demo CSV + CompositeDashboard layout 修复；9 能力矩阵 5/9 落地 |
 | 交付工具 `scripts/new-customer.sh` | v0.2.11 | ✅ 2026-05-10 | 一键生成客户包 + Rust smoke test 锁死 yaml 契约 + licensing.md 整包交付章节 |
 | 美正 Pack 燃油费率自动化 | v0.2.14 | ✅ 2026-05-15 | 需求 #6：API 直写（非浏览器）· crawl4ai 抓取 UPS/FedEx/DHL · 中文 cron picker UI · 自动审核 · 1.5s/5K tokens |
+| 美正 Pack 多承运商月度分区自动化 | post-v0.2.14 (未发版) | ✅ 2026-05-17 | 需求 #2 + 衍生：UPS/USPS/FedEx 三家 download → transform → upload 全链路；ZoneConfigEditor + carrier-parametric upload + ZIP3→5位邮编 expand/override 拆分；3 条月度 schedule |
+| 美正 Pack USD 汇率自动化 | post-v0.2.14 (未发版) | ✅ 2026-05-17 | 需求 #1：剥离 fuel-rate 配置 → 独立 `exchange-rate-config.yaml` + 独立 IPC + ExchangeRateConfigEditor + 09:30/10:30 双 schedule |
 | Amazon SP-API 开发者账号申请 | v0.3.0 | ⛔ 阻塞中 | 外部审批时效；解阻后推进 9 能力矩阵 P1 批次 |
+| AI Browser 焦点抢夺根治（自带 Chromium + LSUIElement + ad-hoc 重签） | v0.3.x | 🟡 spike 中 | progress.txt 记录；当前卡在"先验证 LSUIElement 能否隔绝焦点"，验证通过再进入正式集成 |
 
 > 🔁 当下在做应当永远 ≤ 5 条，超出代表注意力分散。
 

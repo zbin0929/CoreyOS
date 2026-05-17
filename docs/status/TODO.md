@@ -1,14 +1,14 @@
 # CoreyOS 全局 TODO
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-15 -->
+<!-- last-verified: 2026-05-17 -->
 <!-- 校验规则：每 30 天一次；超过 500 行需立刻拆分或归档 -->
 
 > ⛔ **2026-05-10 起本文件暂被 [`FOCUS.md`](./FOCUS.md) 覆盖。**
 > 在拿到第 1 个真实付费客户之前，不参考下文 30 条，只看 FOCUS.md 的 3 件事。
 > 拿到客户、跑完一轮反馈之后，回头基于真实数据重写本文件。
 >
-> **当下状态**：v0.2.14 · 基座 12 项（B-1~B-12）全部 ✅ · 美正 Pack 燃油费率已上线（需求 #6 ✅）
+> **当下状态**：v0.2.14 · 基座 12 项（B-1~B-12）全部 ✅ · 美正 Pack 6 个需求中 4 个已交付（#1 USD 汇率 ✅ · #2 UPS 分区 ✅ · USPS 分区 ✅ · FedEx 分区 ✅ · #6 燃油费率 ✅）；剩余 #3 财务发票 / #4 领星费用 / #5 一件代发待客户对齐启动
 > **铁律**：0 修改 Hermes Agent 代码 / trait 表面。Hermes 升级只换 binary。
 > **当前阻塞**：P-1 的 Amazon SP-API 开发者账号（审核 1-2 周）。不阻塞 demo 交付（先用报表上传方案）。
 > **关联文档**：[`CURRENT-STATE.md`](./CURRENT-STATE.md) · [`roadmap.md`](./roadmap.md) · [`known-issues.md`](./known-issues.md) · [`../spec/architecture.md`](../spec/architecture.md) § Pack Architecture
@@ -129,7 +129,7 @@
 
 ## 五、企业 RPA Pack — 美正（v0.3.x · 燃油费率已上线）
 
-- **状态**：燃油费率自动化已交付（需求 #6 ✅），其余 5 条待客户对齐启动
+- **状态**：燃油费率（#6）+ 汇率（#1）+ UPS/USPS/FedEx 月度分区（#2 + 衍生 USPS/FedEx）共 4 条已交付；剩余 #3 财务发票 / #4 领星费用 / #5 一件代发待客户对齐启动
 - **架构设计**：详见 [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md)
 - **目标版本**：v0.3.x（与 v0.3.0 跨境电商并行，不互相阻塞）
 - **客户**：美正（首例）— 实际是企业 RPA 通用架构的第一个落地实例
@@ -139,8 +139,10 @@
 
 | # | 需求 | 模式 | 触发 | 跑在哪 | 状态 |
 |---|---|---|---|---|---|
-| 1 | 中行美金现汇卖出价 → 美正OS | Pattern A: Scrape→Push | 工作日 09:30 + 10:30 兜底 | runner | 🟡 端到端已跑通，待部署验证 |
-| 2 | UPS 月度分区 → 美正OS | Pattern B: 批量下载→转换→逐个上传 | 每月 1 号 | runner | 🟡 架构已设计，脚本开发中 |
+| 1 | 中行美金现汇卖出价 → 美正OS | Pattern A: Scrape→Push | 工作日 09:30 + 10:30 兜底 | runner | ✅ 已交付（独立 `exchange-rate-config.yaml` + `pack_exchange_rate_config_*` IPC + ExchangeRateConfigEditor + 2 schedules） |
+| 2 | UPS 月度分区 → 美正OS | Pattern B: 批量下载→转换→逐个上传 | 每月 1 号 02:00 | runner | ✅ 已交付（`download_ups_zones.py` + `download_ups_zones_browser.py` 兜底 + ZoneConfigEditor + workflow） |
+| 2b | USPS Priority Mail 分区 | Pattern B + 5位邮编展开/拆分 | 每月 1 号 03:00 | runner | ✅ 已交付（`download_usps_zones.py` + carrier-parametric `upload_zones_meizheng.py` + ZIP3→5位 expand + override 拆分去重 + workflow） |
+| 2c | FedEx Ground 分区 | Pattern B | 每月 1 号 04:00 | runner | ✅ 已交付（`download_fedex_zones.py` + workflow） |
 | 3 | 财务发票自动化 | Pattern D: 文档→结构化→Push | 邮件/上传事件 | runner | 🟡 待客户对齐 |
 | 4 | 领星费用导出 → 美正OS | Pattern B 浏览器版 | 每月 1-3 号 | runner | 🟡 待客户对齐 |
 | 5 | 一件代发订单取消 | Pattern C: 事件→操作 | UI 按钮 | end_user | 🟡 待客户对齐 |

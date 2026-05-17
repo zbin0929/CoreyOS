@@ -1,7 +1,7 @@
 # CURRENT-STATE · 当下事实
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-12 -->
+<!-- last-verified: 2026-05-17 -->
 <!-- 校验规则：每 30 天至少一次。过期后由下一个接触者重新校验或标记为 stale。 -->
 
 > 本文件描述 CoreyOS **当下**是什么样子，不描述计划。
@@ -13,13 +13,15 @@
 
 ## 当前版本
 
-- 产品版本：**v0.2.13**（以 `package.json` / `CHANGELOG.md` 为准）
+- 产品版本：**v0.2.14**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准；最新 tag `8fdde13` 后已累积 19 个 post-release commit，下一版未定号）
 - 上游 Hermes 版本：**v0.13.0 (2026.5.7)**；参见 [`hermes-deps.md`](./hermes-deps.md)
-- 代码规模：Rust 168 文件 / TS 338 文件
-- 测试：Rust **555** · Vitest **112** · Playwright **38 specs / 77 tests**（全绿）
+- 代码规模：Rust **169** 文件 / TS+TSX **346** 文件（合计 ~111K 行）
+- 测试：Rust **555** · Vitest **112** · Playwright **38 specs / 77 tests**（v0.2.14 tag 时全绿；post-tag 未重跑）
 - 路由：25 个页面
-- IPC 模块：53 个（193+ commands）
+- IPC 模块：48 个 `.rs` + 5 个子目录（合计 53），约 200+ commands
 - E2E 覆盖：38 个 spec 文件
+- clippy unwrap baseline：**546**（`scripts/clippy-unwrap-baseline.txt`）
+- 文件长度告警阈：≥ 800 行 warn，≥ 1500 行 fail；当前 10 个文件越警戒线，2 个越 fail 线（见下"健康提示"）
 
 > 🔁 校验提醒：数字随代码变动，至少每月核对一次。
 
@@ -33,7 +35,8 @@
 | Workflow | React Flow DAG + 7 步类型 + 审批 / webhook / AI 生成 | ✅ 可用 | 浏览器自动化步骤待加固 |
 | Talk Mode | zipformer STT + silero-vad + VITS/MeloTTS 进程内合成 | ✅ 可用 | 支持即时打断、语速调节 |
 | RAG | Jaccard 关键词 + BGE-M3 ONNX 本地语义检索 + RRF 融合 | ✅ 可用 | 2.3 GB，支持离线 zip 导入 |
-| Pack 架构 | 白标基座 + skill-packs + pack-data + 12 视图模板 + license features | ✅ 已落地 | `cross_border_ecom` v0.2.0：3 Skill + 3 Workflow + CompositeDashboard |
+| Pack 架构 | 白标基座 + skill-packs + pack-data + 12 视图模板 + license features | ✅ 已落地 | `cross_border_ecom` v0.2.0：3 Skill + 3 Workflow + CompositeDashboard；`meizheng` v0.5.0：1 Skill + 6 Workflow + 12 Python 脚本 + 7 cron schedules |
+| 企业 RPA Pack | 美正 Pack —— 汇率 + 燃油费率 + UPS/USPS/FedEx 分区自动化 | ✅ 已落地 | API 直写（无浏览器）/ 中文 cron picker UI / `pack_exchange_rate_config_*` + `pack_zone_config_*` IPC |
 | Browser 工具 | Playwright 子进程 + CDP 直连 | ⚠️ 脆弱 | 见 `known-issues.md` |
 | MCP 管理 | stdio + URL 传输 + 桌面原生工具（通知/文件选择器/深链接） | ✅ 可用 | |
 | Memory | MEMORY.md + USER.md 编辑 + holographic 后端 + FTS5 搜索 + Chat 自动 fact 召回 + entity 列表 UI + typed relations 图查询 | ✅ 可用 | 见 `../spec/memory-strategy.md` / `../spec/memory-knowledge-graph.md` |
@@ -69,10 +72,24 @@
 
 > 🔁 校验提醒：每次发布前抽测一次。
 
+## 健康提示（2026-05-17 校验）
+
+- **超长文件 fail 线（≥1500）**：`src-tauri/src/ipc/browser_cdp.rs` (2149) · `src-tauri/src/hermes_config/gateway.rs` (1850)。这两个被 `check-file-sizes.mjs` 标 warn 但脚本目前不 fail（脚本注释为"warnings advisory"）。`browser_cdp.rs` 还会随 LSUIElement Chromium 自带方案继续涨。
+- **超长文件 warn 线（800-1500）**：`mcp_server/tools.rs` (1724) · `ipc/workflow/mod.rs` (1422) · `workflow/engine/tests.rs` (1237) · `ipc/pack/mod.rs` (1215) · `features/talk/useTalkMode.ts` (1131) · `ipc/hermes_memory.rs` (1015) · `db/analytics.rs` (934) · `lib.rs` (923) · `lib/ipc/runtime.ts` (916) · `workflow/engine/mod.rs` (864) · `channels/mod.rs` (802)。FOCUS.md 明确"重构等付费客户"，本批不动。
+- **clippy unwrap baseline 546**：基本来自 tests + db 模块；新代码用 `.expect()` 不要 `.unwrap()`，否则越基线 CI 红。
+- **release 不打包 Pack** 已在 v0.2.13 起落地：`tauri.conf.json :: bundle.resources` 不含 `assets/skill-packs/**`。dev 模式 + bundled seed 仍走 `assets/skill-packs/`。
+
 ## 最近改动要点（近 30 天）
 
-> 截止 2026-05-12。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)。
+> 截止 2026-05-17。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)（CHANGELOG 在 v0.2.14 之后未补条目，post-tag 19 个 commit 全部围绕美正 Pack）。
 
+- **2026-05-13 ~ 17 · 美正 Pack 多承运商分区自动化（post-v0.2.14，未发版）**：
+  - **USPS Priority Mail 分区** 端到端落地（`download_usps_zones.py` + `upload_zones_meizheng.py` carrier-parametric + `update-usps-zones.yaml`）：3 位 ZIP3 → 5 位完整邮编展开（005→00500-00599）+ 5 位 override 拆分去重；命名按美正OS 约定 `USPS-GROUND` 前缀；workflow 用 `--all` + venv python + 独立 output 目录
+  - **UPS 月度分区** 落地：`download_ups_zones.py` + `download_ups_zones_browser.py`（CDP 触发原生下载兜底）+ `update-ups-zones.yaml` + ZoneConfigEditor UI
+  - **FedEx 月度分区** 落地：`download_fedex_zones.py` + `update-fedex-zones.yaml`
+  - **USD 汇率工作流分离**：从 fuel-rate 配置剥离独立 `exchange-rate-config.yaml` + `pack_exchange_rate_config_get/set` IPC + ExchangeRateConfigEditor
+  - **CarrierConfigEditor 中文 cron picker**：每周/每月/每天/自定义 + 时间选择器，保存即写 `~/.hermes/cron/jobs.json`
+  - manifest schedules 从 1 → 7（USD daily 09:30/10:30 + UPS/USPS/FedEx monthly + 周日 23:30 fuel + 月底 DHL fuel）
 - **2026-05-15 · 美正 Pack 需求 #2 UPS 分区数据**：
   - 发现 UPS 公开 CDN 索引 API：`zone-chart.json`（902 个 ZIP3 的 XLS URL）
   - 正确域名 `assets.ups.com`（不是 `www.ups.com`），无需 cookies
