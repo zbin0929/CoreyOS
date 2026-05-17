@@ -124,14 +124,77 @@
 | SVG URL 触发下载 | SVG `Content-Type: image/svg+xml` 浏览器内联渲染不下载，要用 .zip/.dmg 等 attachment |
 | 用 `ps aux \| grep tauri` 找 dev 进程 | 进程名是 `caduceus`，但用 `pgrep -f 'tauri dev\|caduceus'` 才命中 |
 
-## 下一步候选（按价值排序）
+## PR B / PR 3 — 美正 5 个 .tsx 模板 schema 化（部分推进）
 
-1. **A**（中风险）拆 `features/talk/useTalkMode.ts` 1130 行 — Talk Mode v0.4.0+
-   还在开发中，但功能本身**还没上线**，没有紧迫性。
-2. **B**（高风险）PR 3：美正 5 个 `.tsx` 模板 schema 化迁移到基座视图模板，
-   删原文件。需要你 smoke 验证美正 Pack 完整 UX。
-3. **C**（极低风险）继续削减 `clippy unwrap baseline` 141 → 100 内（替换为 `?` 或
-   `expect("...")`）。
+**状态：Phase 1+2 已完成，Phase 3 未做（v0.3.0 milestone）。**
+
+### 完成部分（commit `116f232` + `04adce8`）
+
+- **PR A**: `features/talk/useTalkMode.ts` 1130 → 937（-17%），抽出
+  `talkTypes.ts` / `speechCleanup.ts` / `useTalkReadiness.ts`。
+- **PR B Phase 1**: `docs/plans/v0.3.0-pack-schema-dsl.md` —— 完整 DSL 设计
+  文档：列清美正 Pack 用到但当前 PackConfig schema 不支持的 6 类字段
+  （nested / array / custom widget / computed / showIf / multi-select），
+  提案 YAML 草案、Phase 3a/3b/3c 实施路径、4-6 天工程量估算。
+- **PR B Phase 2**: `src/features/pack/templates/shared/inputStyles.ts` —— 7
+  个 Tailwind class 常量（INPUT_FULL_CLASS / INPUT_COMPACT_CLASS /
+  FIELD_LABEL_CLASS / ARRAY_ITEM_CARD_CLASS 等），从 5 个美正 .tsx 中重复
+  28 次的 fragment 提取。`ExchangeRateConfigEditor.tsx` 309 → 271 作为 POC
+  迁移，证明置换可行 + 视觉零差异。
+
+### Phase 3 待做清单（v0.3.0 milestone，约 4-6 天）
+
+**3a. 基础设施**（2-3 天）：
+- 后端：扩展 `src-tauri/src/ipc/pack/config.rs::PackConfigSchema` 为递归
+  enum（Field::Scalar / Field::Nested / Field::Array / Field::Computed），
+  保持向后兼容旧扁平 schema。
+- 前端 widget 注册表：`src/features/pack/templates/SchemaConfig/widgets/registry.ts`，
+  内置 text / number / secret / select / time / cron / tag。
+- 通用 renderer：`src/features/pack/templates/SchemaConfig.tsx` 递归遍历
+  schema、dispatch 到 widget、支持 showIf 表达式 + preview 模板字符串 +
+  array 的 add/remove/update。
+
+**3b. 5 个美正模板迁移**（2-3 天，从简到繁）：
+1. `MeizhengDashboard` (327 行) → `CompositeDashboard` + `MetricsCard` +
+   `WorkflowLauncher` 组合（用现有模板，几乎不改 schema renderer）。
+2. `ExchangeRateConfigEditor` (271 行) → `SchemaConfig`（Phase 2 已 POC
+   迁移到 shared styles，剩工作就是 manifest YAML 化 + 删原文件）。
+3. `ZoneConfigEditor` (286 行) → `SchemaConfig`。
+4. `CarrierConfigEditor` (380 行) → `SchemaConfig`（最复杂：carrier list +
+   service 映射）。
+5. `MeizhengConfig` (408 行) → `CompositeDashboard`（包含上面 3 个
+   SchemaConfig view），删原文件。
+
+每迁完一个都跑 vitest + Playwright + 用户人工 smoke 验证美正 UX 还原。
+
+**3c. 跨境电商 Pack 顺带受益**：未来 v0.3.0 跨境电商 Pack 直接用
+SchemaConfig，**无需写任何 React**。
+
+### 接手指引
+
+新会话开局做 3 件事：
+1. **读** `docs/plans/v0.3.0-pack-schema-dsl.md`（5 分钟读完，含 YAML 草案 +
+   widget 注册表设计 + 风险点）
+2. **读** `src/features/pack/templates/shared/inputStyles.ts`（48 行，看共
+   享 style 已经定义了什么）
+3. **读** `src-tauri/src/ipc/pack/config.rs`（487 行，是要扩展的入口；现有
+   `PackConfigSchema` 在文件顶部）
+
+主要文件路径：
+- 5 个美正 .tsx：`src/features/pack/templates/{MeizhengConfig,MeizhengDashboard,CarrierConfigEditor,ExchangeRateConfigEditor,ZoneConfigEditor}.tsx`
+- Pack view dispatch：`src/features/pack/index.tsx::TEMPLATES`
+- Pack manifest：`src-tauri/assets/skill-packs/meizheng/manifest.yaml`
+- Pack manifest schema：`src-tauri/src/pack/manifest.rs`
+
+## 其他待选 PR（非美正方向）
+
+1. **C**（极低风险）继续削减 `clippy unwrap baseline` —— 实际 production
+   unwrap 数 = 0（commit `6874686` 修了脚本误判后明确），所以 baseline
+   546 全部是 test code unwrap，按行业惯例可保留。本项实质完成，无更多动作。
+2. 拆 `lib/ipc/runtime.ts` 915 行 —— 但属 AC-1b 稳定 catalog（IPC 类型录），
+   AC-1 不强制。除非你需要加大量新 IPC，否则不动。
+3. 拆 `channels/mod.rs` 801 行 —— 同上，AC-1b 豁免。
+4. **真实业务**（美正需求 #3+ / 跨境电商 Pack）—— 推荐方向。
 
 我的建议是**先停**，让你抽时间跑一次上面的 3 条 runtime smoke，然后再启动新 PR。
 
