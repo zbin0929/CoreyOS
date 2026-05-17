@@ -67,12 +67,14 @@ use crate::state::AppState;
 
 mod cdp_protocol;
 mod chromium_bundle;
+mod disabled_sentinel;
 use cdp_protocol::{apply_cdp_download_behavior, apply_cdp_post_launch};
 #[cfg(target_os = "macos")]
 use chromium_bundle::managed_ai_browser_path;
 use chromium_bundle::prepare_ai_browser_macos;
 #[cfg(all(test, target_os = "macos"))]
 use chromium_bundle::{patch_chromium_bundle, source_bundle_root};
+use disabled_sentinel::{clear_disabled_sentinel, is_disabled, write_disabled_sentinel};
 
 /// Port we always use. 9222 is the de-facto Chrome devtools default;
 /// Hermes' own `/browser connect` slash command also defaults here, so
@@ -240,49 +242,6 @@ fn browser_display_name(path: &Path) -> &'static str {
         "Chromium"
     } else {
         "Chrome"
-    }
-}
-
-/// Sentinel file path the customer (or Settings → AI Browser → Stop)
-/// writes when they want AI Browser to **stay off**, even at boot.
-/// Without this file, [`auto_start_if_configured`] now defaults to
-/// auto-starting the browser on every Corey boot — see the comment on
-/// that function for rationale (cross-platform UX parity:
-/// agent-driven browsing must "just work" out of the box on Windows
-/// and macOS alike, without requiring the customer to first click
-/// Settings → AI Browser → Launch).
-fn disabled_sentinel_path() -> PathBuf {
-    crate::paths::hermes_data_dir()
-        .map(|d| d.join(".corey").join("ai-browser-disabled"))
-        .unwrap_or_else(|_| PathBuf::from(".corey/ai-browser-disabled"))
-}
-
-/// Returns true if the customer explicitly opted out of AI Browser
-/// auto-start (sentinel file exists from a prior `Stop` action).
-fn is_disabled() -> bool {
-    disabled_sentinel_path().exists()
-}
-
-/// Mark AI Browser as explicitly disabled (called by `stop_sync`).
-/// Writes the sentinel so subsequent boots skip the auto-spawn.
-fn write_disabled_sentinel() {
-    let path = disabled_sentinel_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Err(e) = std::fs::write(&path, b"disabled by Settings -> AI Browser -> Stop\n") {
-        tracing::warn!(error = %e, path = %path.display(), "write ai-browser-disabled sentinel failed");
-    }
-}
-
-/// Clear the disabled sentinel (called by `launch_sync` /
-/// `ensure_running_background`). Re-arms boot auto-start.
-fn clear_disabled_sentinel() {
-    let path = disabled_sentinel_path();
-    if path.exists() {
-        if let Err(e) = std::fs::remove_file(&path) {
-            tracing::warn!(error = %e, path = %path.display(), "clear ai-browser-disabled sentinel failed");
-        }
     }
 }
 
