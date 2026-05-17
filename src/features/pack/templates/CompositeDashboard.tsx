@@ -29,6 +29,7 @@ import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
 import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
 import { TimelineTemplate } from '@/features/pack/templates/Timeline';
 import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
+import { WorkflowLauncherTemplate } from '@/features/pack/templates/WorkflowLauncher';
 
 import { type ComponentType, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ const CHILD_TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   TrendsMatrix: TrendsMatrixTemplate,
   Timeline: TimelineTemplate,
   TimeSeriesChart: TimeSeriesChartTemplate,
+  WorkflowLauncher: WorkflowLauncherTemplate,
 };
 
 interface LayoutCell {
@@ -313,13 +315,41 @@ export function CompositeDashboardTemplate({ view }: { view: PackView }) {
         </div>
       )}
 
-      {kpiCells.length > 0 && (
+      {showAmazonSummary ? (
+        <>
+          {kpiCells.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              {kpiCells.map((cell, idx) => {
+                const childView = buildChildView(cell, view.packId, view.packTitle, siblingViews);
+                if (!childView) return null;
+                const Template = CHILD_TEMPLATES[childView.template];
+                if (!Template) return null;
+                const span = Math.max(1, Math.min(12, cell.span ?? cell.w ?? 12));
+                return (
+                  <div
+                    key={idx}
+                    className="flex flex-col gap-2"
+                    style={{ gridColumn: `span ${span} / span ${span}` }}
+                  >
+                    <Template view={childView} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {renderSection('风险管控', alertCells)}
+          {renderSection('数据分析', otherCells)}
+        </>
+      ) : (
+        // Flat layout: render every cell in declared order with no
+        // section headers. Used by Packs that opt out of the Amazon
+        // summary header (`summary: none` in the manifest).
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          {kpiCells.map((cell, idx) => {
+          {layout.map((cell, idx) => {
             const childView = buildChildView(cell, view.packId, view.packTitle, siblingViews);
             if (!childView) return null;
             const Template = CHILD_TEMPLATES[childView.template];
-            if (!Template) return null;
             const span = Math.max(1, Math.min(12, cell.span ?? cell.w ?? 12));
             return (
               <div
@@ -327,15 +357,18 @@ export function CompositeDashboardTemplate({ view }: { view: PackView }) {
                 className="flex flex-col gap-2"
                 style={{ gridColumn: `span ${span} / span ${span}` }}
               >
-                <Template view={childView} />
+                {Template ? (
+                  <Template view={childView} />
+                ) : (
+                  <div className="rounded-md border border-dashed border-border bg-bg-elev-1 p-4 text-xs text-fg-subtle">
+                    Template <code>{childView.template}</code> not available
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
-
-      {renderSection('风险管控', alertCells)}
-      {renderSection('数据分析', otherCells)}
     </div>
     </DateRangeContext.Provider>
   );

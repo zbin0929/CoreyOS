@@ -1,6 +1,6 @@
 schema_version: 1
 id: meizheng
-version: "0.5.0"
+version: "0.6.0"
 title: 美正OS 自动化
 description: |
   美正OS 企业 RPA Pack —— 自动更新汇率、燃油附加费、承运商分区等数据。
@@ -63,9 +63,135 @@ schedules:
 views:
   - id: dashboard
     title: 美正OS
-    template: MeizhengDashboard
+    template: CompositeDashboard
     nav_section: primary
-    description: 燃油价率、汇率、工作流一览
+    description: 燃油费率、汇率、工作流一览
+    # Opt out of the Amazon-flavored risk-summary header that the
+    # cross-border-ecom Pack uses. Dashboard renders the layout
+    # cells flat in declared order, no section headers.
+    summary: none
+    layout:
+      # Row 1 — fuel surcharges (3 carriers across 12 cols)
+      - span: 4
+        view:
+          id: dashboard-ups-fuel
+          title: UPS 燃油附加费
+          template: MetricsCard
+          metrics:
+            - key: ups_fuel
+              label: UPS
+              icon: Fuel
+              stripe: amber
+              format: "{rate}%"
+              subtitle: "{effective_date} ~ {valid_to}"
+          # TODO(meizheng-os-api): replace `static` with a live
+          # data source once a `pack_data: meizheng_api` source
+          # is wired (see docs/plans/v0.3.0-pack-schema-dsl.md
+          # follow-ups). For now the placeholder lets the cell
+          # render its zero-data UI and the Run buttons below
+          # are the source of truth.
+          data_source:
+            static: {}
+      - span: 4
+        view:
+          id: dashboard-fedex-fuel
+          title: FedEx 燃油附加费
+          template: MetricsCard
+          metrics:
+            - key: fedex_fuel
+              label: FedEx
+              icon: Fuel
+              stripe: purple
+              format: "{rate}%"
+              subtitle: "{effective_date} ~ {valid_to}"
+          data_source:
+            static: {}
+      - span: 4
+        view:
+          id: dashboard-dhl-fuel
+          title: DHL 燃油附加费
+          template: MetricsCard
+          metrics:
+            - key: dhl_fuel
+              label: DHL
+              icon: Fuel
+              stripe: red
+              format: "{rate}%"
+              subtitle: "{effective_date} ~ {valid_to}"
+          data_source:
+            static: {}
+      # Row 2 — exchange rate (8 cols) + carrier zone summary (4 cols)
+      - span: 8
+        view:
+          id: dashboard-exchange
+          title: 美元汇率
+          template: MetricsCard
+          metrics:
+            - key: usd
+              label: 中行美元现汇卖出价
+              icon: DollarSign
+              stripe: gold
+              format: "{rate}"
+              subtitle: CNY/USD
+          data_source:
+            static: {}
+      - span: 4
+        view:
+          id: dashboard-zones
+          title: 承运商分区
+          template: MetricsCard
+          metrics:
+            - key: ups_zones
+              label: UPS
+              icon: Truck
+              format: "每月更新"
+            - key: usps_zones
+              label: USPS
+              icon: Truck
+              format: "每月更新"
+            - key: fedex_zones
+              label: FedEx
+              icon: Truck
+              format: "每月更新"
+          data_source:
+            static: {}
+      # Row 3 — automation workflows (full width)
+      - span: 12
+        view:
+          id: dashboard-workflows
+          title: 自动化工作流
+          template: WorkflowLauncher
+          workflows:
+            - id: update-fuel-rates-weekly
+              name: 燃油费率更新
+              description: UPS + FedEx 燃油附加费
+              schedule: 每周日 23:30
+              icon: Fuel
+            - id: update-fuel-rates-monthly
+              name: DHL 燃油更新
+              description: DHL 燃油附加费
+              schedule: 每月最后一天
+              icon: Fuel
+            - id: update-usd-exchange-rate
+              name: 美元汇率更新
+              description: 中行美元现汇卖出价
+              schedule: 每天 09:30 / 10:30
+              icon: RefreshCw
+            - id: update-ups-zones
+              name: UPS 分区更新
+              description: 全美 902 ZIP3
+              schedule: 每月 1 号
+              icon: Truck
+            - id: update-usps-zones
+              name: USPS 分区更新
+              description: 全美 930 ZIP3
+              schedule: 每月 1 号
+              icon: Truck
+            - id: update-fedex-zones
+              name: FedEx 分区更新
+              description: FedEx Ground 分区
+              schedule: 每月 1 号
+              icon: Truck
   - id: config
     title: 系统配置
     template: MeizhengConfig
