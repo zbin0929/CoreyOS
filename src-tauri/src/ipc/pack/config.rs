@@ -29,6 +29,14 @@ use tauri::State;
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
 
+/// IPC mirror of [`crate::pack::manifest::ConfigField`]. Carries the
+/// recursive schema fields added in v0.3.0 (`fields` / `item` /
+/// `showIf` / `preview` / array bounds / width hint) so the
+/// frontend `SchemaConfig` template can render nested objects and
+/// dynamic arrays without a second round-trip.
+///
+/// Old flat-schema Packs serialize identically — every new field
+/// is `default`-initialized.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackConfigSchema {
@@ -45,6 +53,47 @@ pub struct PackConfigSchema {
     pub placeholder: String,
     pub default: serde_json::Value,
     pub options: Vec<String>,
+    /// Sub-schema for `type: nested`. Empty array for scalar fields.
+    pub fields: Vec<PackConfigSchema>,
+    /// Sub-schema for `type: array` items. Empty array for scalar fields.
+    pub item: Vec<PackConfigSchema>,
+    /// Optional showIf expression evaluated by the frontend.
+    pub show_if: String,
+    /// Optional preview / computed template string.
+    pub preview: String,
+    /// Lower bound on array length. 0 = unlimited.
+    pub min_items: u32,
+    /// Upper bound on array length. 0 = unlimited.
+    pub max_items: u32,
+    /// Label for the array "+ Add" button. Empty = frontend default.
+    pub add_label: String,
+    /// Visual width hint: `""` / `"full"` / `"half"` / `"small"`.
+    pub width: String,
+}
+
+fn convert_field(f: &crate::pack::manifest::ConfigField) -> PackConfigSchema {
+    PackConfigSchema {
+        key: f.key.clone(),
+        label: f.label.clone(),
+        field_type: f.field_type.clone(),
+        required: f.required,
+        secret: f.field_type == "secret",
+        description: f.description.clone(),
+        help: f.help.clone(),
+        group: f.group.clone(),
+        validation: f.validation.clone(),
+        placeholder: f.placeholder.clone(),
+        default: serde_yaml::from_value(f.default.clone()).unwrap_or(serde_json::Value::Null),
+        options: f.options.clone(),
+        fields: f.fields.iter().map(convert_field).collect(),
+        item: f.item.iter().map(convert_field).collect(),
+        show_if: f.show_if.clone(),
+        preview: f.preview.clone(),
+        min_items: f.min_items,
+        max_items: f.max_items,
+        add_label: f.add_label.clone(),
+        width: f.width.clone(),
+    }
 }
 
 #[tauri::command]
@@ -65,25 +114,7 @@ pub async fn pack_config_schema(
         message: "pack has no manifest".into(),
     })?;
 
-    let schema = manifest
-        .config_schema
-        .iter()
-        .map(|f| PackConfigSchema {
-            key: f.key.clone(),
-            label: f.label.clone(),
-            field_type: f.field_type.clone(),
-            required: f.required,
-            secret: f.field_type == "secret",
-            description: f.description.clone(),
-            help: f.help.clone(),
-            group: f.group.clone(),
-            validation: f.validation.clone(),
-            placeholder: f.placeholder.clone(),
-            default: serde_yaml::from_value(f.default.clone()).unwrap_or(serde_json::Value::Null),
-            options: f.options.clone(),
-        })
-        .collect();
-
+    let schema = manifest.config_schema.iter().map(convert_field).collect();
     Ok(schema)
 }
 

@@ -292,13 +292,22 @@ pub struct ActionButton {
 /// Pack configuration field. The loader generates a form from
 /// these on first enable; `customer.yaml`'s `packs.config.<id>`
 /// can pre-fill any subset.
+///
+/// **Recursive types** (added 2026-05-17 for v0.3.0 SchemaConfig DSL):
+/// - `type: nested`  + `fields: [...]`         — sub-object with its own schema
+/// - `type: array`   + `item: [...]`           — dynamic list of records
+/// - `type: computed` + `preview: "..."`       — read-only derived value
+/// - any field may declare `show_if: "<expr>"` to gate its rendering
+///
+/// All new fields default to empty / None — old flat manifests stay BC.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfigField {
     pub key: String,
     #[serde(default)]
     pub label: String,
-    /// `secret | string | number | enum | bool | url`. Loader-side enum;
-    /// kept as a String here to avoid breaking on additions.
+    /// `secret | string | number | enum | bool | url | nested | array |
+    /// computed | time | cron | tag`. Loader-side enum; kept as a String
+    /// here to avoid breaking on additions.
     #[serde(rename = "type")]
     pub field_type: String,
     #[serde(default)]
@@ -323,6 +332,33 @@ pub struct ConfigField {
     /// Placeholder text.
     #[serde(default)]
     pub placeholder: String,
+    /// Sub-schema for `type: nested`. Empty for scalar fields.
+    #[serde(default)]
+    pub fields: Vec<ConfigField>,
+    /// Sub-schema for `type: array` items. Empty for scalar fields.
+    #[serde(default)]
+    pub item: Vec<ConfigField>,
+    /// Optional showIf expression (e.g. `"enabled == true"`). The
+    /// expression grammar is intentionally minimal: see frontend
+    /// `evalShowIf` for the exact subset (eq / ne / and / or / not).
+    #[serde(default)]
+    pub show_if: String,
+    /// Preview / computed mustache-style template, e.g.
+    /// `"{value} ÷ 100 = {{value | divide:100}}"`.
+    #[serde(default)]
+    pub preview: String,
+    /// Lower bound on `array` length. 0 = unlimited (default).
+    #[serde(default)]
+    pub min_items: u32,
+    /// Upper bound on `array` length. 0 = unlimited (default).
+    #[serde(default)]
+    pub max_items: u32,
+    /// Label for the array's "+ Add" button. Defaults to "Add" / "添加" on the frontend.
+    #[serde(default)]
+    pub add_label: String,
+    /// Visual width hint: empty / `"full"` / `"half"` / `"small"`.
+    #[serde(default)]
+    pub width: String,
 }
 
 /// A migration step from one Pack version to the next. Run by the
@@ -655,6 +691,105 @@ views:
         match parse("schema_version: : :") {
             ManifestLoadOutcome::Invalid(msg) => assert!(msg.contains("yaml parse error")),
             other => panic!("expected Invalid, got {other:?}"),
+        }
+    }
+
+    /// v0.3.0 SchemaConfig DSL: nested + array + computed + showIf
+    /// must round-trip through serde without breaking flat manifests.
+    #[test]
+    fn recursive_config_schema_parses() {
+        let yaml = r#"
+schema_version: 1
+id: meizheng
+version: "0.1.0"
+config_schema:
+  - key: source
+    label: 数据源
+    type: nested
+    fields:
+      - key: url
+        type: text
+        placeholder: https://www.boc.cn/sourcedb/whpj/
+      - key: rate_type
+        type: text
+  - key: schedules
+    label: 抓取计划
+    type: array
+    add_label: 添加计划
+    min_items: 1
+    max_items: 5
+    item:
+      - key: name
+        type: text
+      - key: cron
+        type: cron
+  - key: divide_by
+    type: number
+    width: small
+    preview: "{value} ÷ 100"
+  - key: advanced_url
+    type: text
+    show_if: "advanced_open == true"
+"#;
+        match parse(yaml) {
+            ManifestLoadOutcome::Loaded(m) => {
+                assert_eq!(m.config_schema.len(), 4);
+
+                let source = &m.config_schema[0];
+                assert_eq!(source.field_type, "nested");
+                assert_eq!(source.fields.len(), 2);
+                assert_eq!(source.fields[0].key, "url");
+
+                let schedules = &m.config_schema[1];
+                assert_eq!(schedules.field_type, "array");
+                assert_eq!(schedules.add_label, "添加计划");
+                assert_eq!(schedules.min_items, 1);
+                assert_eq!(schedules.max_items, 5);
+                assert_eq!(schedules.item.len(), 2);
+                assert_eq!(schedules.item[1].field_type, "cron");
+
+                let divide = &m.config_schema[2];
+                assert_eq!(divide.width, "small");
+                assert_eq!(divide.preview, "{value} ÷ 100");
+
+                let advanced = &m.config_schema[3];
+                assert_eq!(advanced.show_if, "advanced_open == true");
+            }
+            other => panic!("expected Loaded, got {other:?}"),
+        }
+    }
+
+    /// Pre-v0.3.0 flat config_schema (no fields/item/showIf) must
+    /// keep parsing with the new optional fields defaulting to empty.
+    #[test]
+    fn flat_config_schema_stays_backwards_compatible() {
+        let yaml = r#"
+schema_version: 1
+id: legacy
+version: "1.0.0"
+config_schema:
+  - key: token
+    type: secret
+    required: true
+  - key: market
+    type: enum
+    options: [US, EU]
+    default: US
+"#;
+        match parse(yaml) {
+            ManifestLoadOutcome::Loaded(m) => {
+                assert_eq!(m.config_schema.len(), 2);
+                let token = &m.config_schema[0];
+                assert!(token.fields.is_empty());
+                assert!(token.item.is_empty());
+                assert!(token.show_if.is_empty());
+                assert!(token.preview.is_empty());
+                assert_eq!(token.min_items, 0);
+                assert_eq!(token.max_items, 0);
+                assert!(token.add_label.is_empty());
+                assert!(token.width.is_empty());
+            }
+            other => panic!("expected Loaded, got {other:?}"),
         }
     }
 }
