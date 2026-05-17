@@ -1030,6 +1030,16 @@ mod tests {
 
     #[test]
     fn seed_chrome_download_prefs_is_idempotent_and_skips_existing() {
+        // Acquire HOME_LOCK + drive COREY_HERMES_DIR explicitly so we
+        // don't race with sibling tests that also mutate that env var
+        // (downloads_dir_resolves_under_hermes_home etc.). Without this,
+        // `seed_chrome_download_prefs` -> `downloads_dir` -> resolve via
+        // `hermes_data_dir()` can hit a transient Err and silently skip
+        // writing the Preferences file, causing the first assertion to
+        // fail.
+        let _lock = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = std::env::temp_dir().join(format!(
             "caduceus-prefs-{}-{}",
             std::process::id(),
@@ -1039,6 +1049,8 @@ mod tests {
                 .unwrap_or(0)
         ));
         std::fs::create_dir_all(tmp.join("Default")).expect("Default/");
+        let orig = std::env::var_os("COREY_HERMES_DIR");
+        std::env::set_var("COREY_HERMES_DIR", &tmp);
 
         // First call with no existing Preferences → file is created.
         seed_chrome_download_prefs(&tmp);
@@ -1067,6 +1079,11 @@ mod tests {
         let kept = std::fs::read_to_string(&prefs_path).expect("re-read");
         assert_eq!(kept, "sentinel-do-not-touch", "existing prefs must survive");
 
+        if let Some(v) = orig {
+            std::env::set_var("COREY_HERMES_DIR", v);
+        } else {
+            std::env::remove_var("COREY_HERMES_DIR");
+        }
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }
