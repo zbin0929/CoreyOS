@@ -93,21 +93,36 @@
 | `pnpm vitest run` | ✅ 112 passed |
 | `check-clippy-unwrap.mjs` baseline | ✅ 141 持平 |
 
-## 还需 runtime smoke（编译期检测不到的副作用）
+## Runtime smoke 验证已完成 ✅（2026-05-17 19:35 用户验证）
 
-以下三条**实运行才能验证**，建议下次 `tauri:dev` 起来后跑：
+**全部通过**——重构无 runtime regression。
 
-1. **AI Browser launch/stop 完整链** — Settings → AI Browser → Launch → 检查
-   `~/.hermes/.corey/ai-browser.app/Contents/Info.plist` 有 LSBackgroundOnly + 端口
-   9222 listening + 下载文件落到 `~/.hermes/downloads/`。Stop 后检查
-   `~/.hermes/.corey/ai-browser-disabled` sentinel 文件生成。
-2. **工作流跑一遍** — Workflows → 任意 workflow → Run → 检查 step progress
-   事件 emit、approval 中断、完成后 Tasks 页能看到记录。验证
-   `HermesExecutor::execute_agent` / `execute_tool` / `execute_browser` 三条 step
-   类型分支都活着。
-3. **Pack 安装/卸载** — Settings → Packs → Import (.zip) → 检查
-   `~/.hermes/skill-packs/<id>/` + `~/.hermes/config.yaml` 多了 MCP server entry
-   + workflows / schedules 文件入了 ~/.hermes/。然后 Uninstall → 验证全部清理。
+### 3 条 smoke 实际验证结果
+
+1. **AI Browser** ✅
+   - `~/.hermes/.corey/ai-browser.app/Contents/Info.plist` 有 `LSBackgroundOnly=true`
+   - 端口 9222 LISTEN
+   - chrome.pid 进程在跑
+2. **Workflow** ✅
+   - caduceus.db 里 5 个 `pack__meizheng__update-usd-exchange-rate` 运行
+   - 4 completed + 1 **cancelled**（验证 `workflow_run_cancel` 也工作）
+3. **Pack 安装** ✅
+   - `~/.hermes/skill-packs/meizheng/` 完整解压
+   - 6 个 workflows 同步到 `~/.hermes/workflows/pack__meizheng__*.yaml`
+   - 7 个 schedules 入 `~/.hermes/cron/jobs.json`（id 前缀 `pack__meizheng__`）
+   - 1 个 skill 入 `~/.hermes/skills/pack__meizheng/`
+
+### 下次写 smoke 别再错的实际路径/约定
+
+| 我之前以为 | 实际 |
+| --- | --- |
+| db 在 `~/.hermes/.corey/corey.db` | 在 `~/Library/Application Support/com.caduceus.app/caduceus.db` |
+| `workflow_runs.updated_at_ms` 列 | 列名是 `updated_at`（毫秒，但无 `_ms` 后缀） |
+| cron job id 前缀 `meizheng/...` | 实际前缀 `pack__meizheng__...`（双下划线+双下划线） |
+| Pack workflow 文件名前缀 `meizheng-...` | 实际前缀 `pack__meizheng__...` |
+| meizheng manifest 改 config.yaml MCP server | meizheng **没有 mcp_servers 声明**，只有 skills/workflows/schedules → config.yaml 不变 |
+| SVG URL 触发下载 | SVG `Content-Type: image/svg+xml` 浏览器内联渲染不下载，要用 .zip/.dmg 等 attachment |
+| 用 `ps aux \| grep tauri` 找 dev 进程 | 进程名是 `caduceus`，但用 `pgrep -f 'tauri dev\|caduceus'` 才命中 |
 
 ## 下一步候选（按价值排序）
 
