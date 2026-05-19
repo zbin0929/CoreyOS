@@ -231,7 +231,114 @@ idle → listening → thinking → [tool_running] → speaking → idle
 
 ---
 
-## 六、技术债务
+## 六、收音技术（抗噪能力）
+
+### 音频处理管道
+
+```
+麦克风 (cpal)
+    │
+    ▼
+混音到单声道 (stereo → mono)
+    │
+    ▼
+AEC 回声消除 (NlmsFilter) ← TTS 参考信号
+    │
+    ▼
+VAD 语音活动检测 (EnergyVad / SileroVad)
+    │
+    ▼
+语音缓冲 + WAV 编码 → 前端
+```
+
+### VAD 实现对比
+
+| VAD | 原理 | 抗噪能力 | 依赖 |
+|---|---|---|---|
+| **EnergyVad** | 纯能量阈值 (RMS ≥ 0.02) | ⚠️ 差 | 无（默认） |
+| **SileroVad** | 神经网络 ONNX | ✅ 好 | 本地语音包 |
+
+- **EnergyVad**：空调、风扇、键盘声都可能触发
+- **SileroVad**：专门训练识别人声，能区分人声和噪音
+
+### AEC 回声消除
+
+```rust
+// src-tauri/src/talk/aec.rs
+NlmsFilter::new(256, 0.3)  // 256 tap, step_size 0.3
+```
+
+- 消除 AI 自己的 TTS 声音被麦克风捕获
+- **不能**消除环境噪音（空调、电视、其他人说话）
+
+### 抗噪能力总结
+
+| 场景 | 处理方式 | 效果 |
+|---|---|---|
+| AI 自己的声音 | AEC 回声消除 | ✅ 好 |
+| 安静环境 | EnergyVad 阈值 | ✅ 好 |
+| 空调/风扇 | SileroVad 神经网络 | ⚠️ 一般 |
+| 其他人说话 | ❌ 无处理 | ❌ 差 |
+| 电视/音乐 | ❌ 无处理 | ❌ 差 |
+
+### 最佳实践
+
+**用户侧**：
+1. **使用耳机** — 最有效，彻底消除回声
+2. **安静环境** — 关闭空调、电视
+3. **使用 PTT 模式** — 嘈杂环境下最可靠
+4. **确保本地语音包已下载** — 启用 SileroVad
+
+**开发侧**：
+1. 确保 `talk-local` feature 启用
+2. 嘈杂环境可提高 VAD 阈值到 0.6-0.7
+3. 嘈杂时自动建议用户切换 PTT 模式
+
+---
+
+## 七、本地语音包组成
+
+| 组件 | 文件 | 作用 | 大小 |
+|---|---|---|---|
+| **SileroVad** | `silero_vad.onnx` | VAD 语音活动检测 | ~2 MB |
+| **Whisper** | `ggml-base.bin` | STT 语音转文字 | ~150 MB |
+| **sherpa-onnx TTS** | `vits-zh-*.onnx` | TTS 文字转语音 | ~100 MB |
+
+下载路径：Settings → Voice → 下载本地语音包
+
+验证 VAD 类型：
+```bash
+grep "talk.session" ~/.hermes/logs/corey.log | tail -5
+# "Silero VAD loaded" = 神经网络 VAD ✅
+# "using EnergyVad" = 纯能量阈值 ⚠️
+```
+
+---
+
+## 八、代码结构（2026-05-19 拆分后）
+
+| 文件 | 行数 | 职责 |
+|---|---|---|
+| `useTalkMode.ts` | 416 | 主状态机、PTT 流程、Chat 融合 |
+| `useTalkTts.ts` | 270 | 句子级流式 TTS 引擎 |
+| `useTalkAutoMode.ts` | 167 | Auto 模式生命周期管理 |
+| `useTalkReadiness.ts` | ~100 | 配置检查、本地/云端路由 |
+| `talkTypes.ts` | 79 | 类型定义 |
+| `speechCleanup.ts` | ~50 | Markdown 清理 |
+| `TalkModeInline.tsx` | 350 | 内嵌 UI 组件 |
+
+Rust 侧：
+| 文件 | 职责 |
+|---|---|
+| `talk/session.rs` | cpal 音频捕获 + VAD 状态机 |
+| `talk/vad.rs` | EnergyVad + SileroVad 实现 |
+| `talk/aec.rs` | NLMS 回声消除 |
+| `talk/tts.rs` | sherpa-onnx TTS 调用 |
+| `talk/stt.rs` | Whisper STT 调用 |
+
+---
+
+## 九、技术债务
 
 | 项目 | 现状 | 建议 |
 |---|---|---|
@@ -242,7 +349,7 @@ idle → listening → thinking → [tool_running] → speaking → idle
 
 ---
 
-## 七、结论
+## 十、结论
 
 ### 当前状态
 
