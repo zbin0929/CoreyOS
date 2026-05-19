@@ -75,14 +75,20 @@
 ## 健康提示（2026-05-17 校验 · 重构 sprint 后）
 
 - **超长文件 fail 线（≥1500）**：仅 `src-tauri/src/mcp_server/tools.rs` (1724) 一个。属 **AC-1b 稳定 catalog 豁免**（MCP 工具目录，加新工具是 ~30 LOC + 1 branch 的低频操作）。`browser_cdp.rs` 在 2026-05-17 sprint 由 2149 → 1090；`gateway.rs` 由 1850 → 1399（patch_* 退役）已脱离 fail 线。
-- **超长文件 warn 线（800-1500）**：11 个，多数属 AC-1b 稳定 catalog（`workflow/engine/tests.rs` 1236 测试目录、`hermes_memory.rs` 1014 Hermes contract、`db/analytics.rs` 933 schema 锁定、`lib.rs` 920 IPC 注册、`lib/ipc/runtime.ts` 915 IPC 反射、`engine/mod.rs` 863、`channels/mod.rs` 801），或 sprint 拆出的 cohesive 子模块（`workflow/execution.rs` 956 — 含 HermesExecutor + run path）。剩 `features/talk/useTalkMode.ts` 937 高频但 Talk Mode v0.4.0+ 还没上线，无紧迫性。
+- **超长文件 warn 线（800-1500）**：10 个，多数属 AC-1b 稳定 catalog（`workflow/engine/tests.rs` 1236 测试目录、`hermes_memory.rs` 1014 Hermes contract、`db/analytics.rs` 933 schema 锁定、`lib.rs` 917 IPC 注册、`lib/ipc/runtime.ts` 915 IPC 反射、`engine/mod.rs` 863、`channels/mod.rs` 801），或 sprint 拆出的 cohesive 子模块（`workflow/execution.rs` 956 — 含 HermesExecutor + run path）。`features/talk/useTalkMode.ts` 已在 2026-05-19 拆分（937 → 416 + 270 + 167）。
 - **clippy unwrap baseline 546**：基本来自 tests + db 模块；新代码用 `.expect()` 不要 `.unwrap()`，否则越基线 CI 红。
 - **release 不打包 Pack** 已在 v0.2.13 起落地：`tauri.conf.json :: bundle.resources` 不含 `assets/skill-packs/**`。dev 模式 + bundled seed 仍走 `assets/skill-packs/`。
 - **客户 Pack 出基座**（2026-05-17 8c · commit `40e63c0` + `8c0d7d3`）：美正 Pack 从 `src-tauri/assets/skill-packs/meizheng/` 搬到顶层 `packs/meizheng/` 并 gitignored。`src-tauri/assets/skill-packs/` 现在**只有** `cross_border_ecom`（通用骨架）。客户 Pack 分发走私有 zip + Settings → Packs → 导入 zip（`pack_import_zip` IPC）。详见 `packs/README.md`。
 
 ## 最近改动要点（近 30 天）
 
-> 截止 2026-05-17。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)（v0.2.14 之后已补 2026-05-17 "客户 Pack 出基座" 条目；post-tag commit 主要围绕美正 Pack + 重构 sprint）。
+> 截止 2026-05-19。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)。
+
+- **2026-05-19 · Pack 配置迁移 + Talk Mode 拆分（6 commit）**：
+  - **Pack 配置迁移完成**：meizheng Pack 从 legacy `pack_config_get/set` IPC 迁移到 schema-driven `pack_named_config_*` IPC
+  - **删除 ~770 行死代码**：`pack_config_get/set` IPC、`PackConfig.tsx` template、`pack_config_schema` IPC、`PackConfigSchema` struct、`convert_field` 函数
+  - **Talk Mode 拆分**：`useTalkMode.ts` **937 → 416 行**，抽取 `useTalkTts.ts` (270 行) + `useTalkAutoMode.ts` (167 行)
+  - **Workflow 安全加固**：所有 meizheng workflows 加安全约束，禁止 `curl | python3` 管道命令
 
 - **2026-05-17 · P0/P1 重构 sprint（14 commit，未发版）**：把 3 个高频文件按 cohesive 拆子模块：
   - `ipc/browser_cdp.rs` **2149 → 1090（−49%）**，拆 5 子模块（`chromium_bundle` / `cdp_protocol` / `disabled_sentinel` / `lifecycle` / `profile_ops`）
