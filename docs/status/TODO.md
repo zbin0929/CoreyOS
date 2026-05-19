@@ -328,12 +328,12 @@ steps:
 
 | # | 能力 | 版本 | 交付核心 |
 |---|---|---|---|
-| B-1 | BGE-M3 RAG | v0.1.11 | 本地 ONNX 语义检索，详见 [`../plans/v0.1.11-bge-m3-rag.md`](../plans/v0.1.11-bge-m3-rag.md) |
+| B-1 | BGE-M3 RAG | v0.1.11 | 本地 ONNX 语义检索，详见 [`../archive/plans/v0.1.11-bge-m3-rag.md`](../archive/plans/v0.1.11-bge-m3-rag.md) |
 | B-2 | customer.yaml 白标 | v0.2.0 | schema_version=1 + 品牌 / 导航 / pin / preinstall / config |
 | B-3 | Pack 加载器 + 12 视图 | v0.2.0 | manifest + scanner + 模板变量 + MCP 翻译 + 5 阶段数据 wiring + ActionPanel + 升级备份 |
 | B-4 | License features 联动 | v0.2.0 | ed25519 + manifest.license_feature + UI 授权占位 |
 | B-5 | BGE-M3 离线 zip 导入 | v0.2.7 | `scripts/pack-bge-m3-offline.sh` + `release-bge-m3.yml` + Knowledge 导入 UI |
-| B-6 | 用量 / 费用分析仪表盘 | v0.2.0 | Token / 费用 / 30d 趋势 / 延迟 P95 / 错误率 / 预算 / 雷达，详见 [`../plans/v0.2.0-b4-analytics.md`](../plans/v0.2.0-b4-analytics.md) |
+| B-6 | 用量 / 费用分析仪表盘 | v0.2.0 | Token / 费用 / 30d 趋势 / 延迟 P95 / 错误率 / 预算 / 雷达，详见 [`../archive/plans/v0.2.0-b4-analytics.md`](../archive/plans/v0.2.0-b4-analytics.md) |
 | B-7 | 卸载 / 重置 | v0.2.0 | `hermes_data_reset` + `corey_config_reset` + [`../user/uninstall.md`](../user/uninstall.md) |
 | B-8 | Talk Mode v1.3 | v0.2.10 | zipformer STT + silero-vad v5 + Piper/VITS/MeloTTS + 镜像 fallback + cpal 常听 |
 | B-9 | 任务执行体验 | v0.2.6 | `/tasks` + `/approvals` + tray 计数 + 桌面通知 + artifact 原生 save |

@@ -1,6 +1,6 @@
 # 00 · Vision
 
-**Status as of 2026-05-12**: Phase 0–12 all shipped. v0.2.13 released (security hardening + Windows guard fix + CLI resolver fix). Current release: **v0.2.13**. Next: v0.3.0 (cross-border e-commerce Pack). Business model: **B2B custom delivery only** (no SaaS). See `status/TODO.md` for the locked product direction.
+**Status as of 2026-05-17**: Phase 0–12 all shipped. v0.2.14 released (Memory knowledge-graph enhancement + Guard IPC bridge + IM channel approval). Post-tag refactor sprint shrank 3 high-frequency files by 49–64% and split out 6 cohesive submodules; meizheng Pack moved out of the base binary to `packs/` (gitignored). Current release: **v0.2.14**. Next: v0.3.0 (cross-border e-commerce Pack). Business model: **B2B custom delivery only** (no SaaS). See `status/TODO.md` for the locked product direction.
 
 ## One-line
 

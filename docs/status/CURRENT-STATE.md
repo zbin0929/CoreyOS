@@ -15,7 +15,7 @@
 
 - 产品版本：**v0.2.14**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准；最新 tag `8fdde13` 后已累积 **62** 个 post-release commit，包含 P0/P1 重构 sprint + Pack Schema DSL Phase 3a+3b + 美正 5 个 `.tsx` 全删；下一版未定号）
 - 上游 Hermes 版本：**v0.13.0 (2026.5.7)**；参见 [`hermes-deps.md`](./hermes-deps.md)
-- 代码规模：Rust **169** 文件 / TS+TSX **346** 文件（合计 ~111K 行）
+- 代码规模：Rust **177** 文件 / TS+TSX **349** 文件（合计 ~111K 行；sprint 后子模块拆分增加 +8 .rs）
 - 测试：Rust **568** · Vitest **112** · Playwright **38 specs / 77 tests**（2026-05-17 sprint 全绿）
 - 路由：25 个页面
 - IPC 模块：48 个 `.rs` + 5 个子目录（合计 53），约 200+ commands
@@ -75,14 +75,14 @@
 ## 健康提示（2026-05-17 校验 · 重构 sprint 后）
 
 - **超长文件 fail 线（≥1500）**：仅 `src-tauri/src/mcp_server/tools.rs` (1724) 一个。属 **AC-1b 稳定 catalog 豁免**（MCP 工具目录，加新工具是 ~30 LOC + 1 branch 的低频操作）。`browser_cdp.rs` 在 2026-05-17 sprint 由 2149 → 1090；`gateway.rs` 由 1850 → 1399（patch_* 退役）已脱离 fail 线。
-- **超长文件 warn 线（800-1500）**：13 个，全部属 AC-1b 稳定 catalog（`workflow/engine/tests.rs` 1236 测试目录、`hermes_memory.rs` 1014 Hermes contract、`db/analytics.rs` 933 schema 锁定、`lib.rs` 922 IPC 注册、`engine/mod.rs` 863、`channels/mod.rs` 801），或 sprint 拆出的 cohesive 子模块（`workflow/execution.rs` 956 — 含 HermesExecutor + run path）。剩 `features/talk/useTalkMode.ts` 1130 高频但 Talk Mode v0.4.0+ 还没上线，无紧迫性。
+- **超长文件 warn 线（800-1500）**：11 个，多数属 AC-1b 稳定 catalog（`workflow/engine/tests.rs` 1236 测试目录、`hermes_memory.rs` 1014 Hermes contract、`db/analytics.rs` 933 schema 锁定、`lib.rs` 920 IPC 注册、`lib/ipc/runtime.ts` 915 IPC 反射、`engine/mod.rs` 863、`channels/mod.rs` 801），或 sprint 拆出的 cohesive 子模块（`workflow/execution.rs` 956 — 含 HermesExecutor + run path）。剩 `features/talk/useTalkMode.ts` 937 高频但 Talk Mode v0.4.0+ 还没上线，无紧迫性。
 - **clippy unwrap baseline 546**：基本来自 tests + db 模块；新代码用 `.expect()` 不要 `.unwrap()`，否则越基线 CI 红。
 - **release 不打包 Pack** 已在 v0.2.13 起落地：`tauri.conf.json :: bundle.resources` 不含 `assets/skill-packs/**`。dev 模式 + bundled seed 仍走 `assets/skill-packs/`。
 - **客户 Pack 出基座**（2026-05-17 8c · commit `40e63c0` + `8c0d7d3`）：美正 Pack 从 `src-tauri/assets/skill-packs/meizheng/` 搬到顶层 `packs/meizheng/` 并 gitignored。`src-tauri/assets/skill-packs/` 现在**只有** `cross_border_ecom`（通用骨架）。客户 Pack 分发走私有 zip + Settings → Packs → 导入 zip（`pack_import_zip` IPC）。详见 `packs/README.md`。
 
 ## 最近改动要点（近 30 天）
 
-> 截止 2026-05-17。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)（CHANGELOG 在 v0.2.14 之后未补条目，post-tag 19 个 commit 全部围绕美正 Pack）。
+> 截止 2026-05-17。只记**结构性改动**，不记单 bug 修复。细节参见 [`../../CHANGELOG.md`](../../CHANGELOG.md)（v0.2.14 之后已补 2026-05-17 "客户 Pack 出基座" 条目；post-tag commit 主要围绕美正 Pack + 重构 sprint）。
 
 - **2026-05-17 · P0/P1 重构 sprint（14 commit，未发版）**：把 3 个高频文件按 cohesive 拆子模块：
   - `ipc/browser_cdp.rs` **2149 → 1090（−49%）**，拆 5 子模块（`chromium_bundle` / `cdp_protocol` / `disabled_sentinel` / `lifecycle` / `profile_ops`）
