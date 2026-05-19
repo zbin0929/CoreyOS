@@ -39,14 +39,14 @@
 //! backend **once** in that window, and from then on the agent has
 //! permanent session cookies.
 //!
-//! ## Non-goals (for this MVP)
+//! ## Shipped post-MVP / still deferred
 //!
-//! - We don't read Chrome's Cookies sqlite to display "logged in to:
-//!   amazon.com, sellercentral.amazon.com" — Chrome holds an exclusive
-//!   lock on it while the process is alive, and reading via CDP
-//!   requires an authenticated WebSocket. Add in v0.2.13 if customers
-//!   ask "did my login take?".
-//! - No on-update bootstrap. If a customer was on v0.2.10, upgraded to
+//! - **Shipped in v0.2.13**: reading Chrome's Cookies sqlite to surface
+//!   "logged in to: amazon.com, sellercentral.amazon.com" — see
+//!   `profile_ops::list_logged_in_domains` and the `logged_in_domains`
+//!   field on `BrowserCdpStatus`. Only readable when Chrome is NOT
+//!   running (sqlite is exclusively locked while the process is alive).
+//! - **Still deferred**: no on-update bootstrap. If a customer was on v0.2.10, upgraded to
 //!   v0.2.11, and never visits Settings → AI Browser, the agent
 //!   continues to use the headless default. That's intentional —
 //!   activating CDP changes which Chrome the agent drives, and we
@@ -152,6 +152,25 @@ fn port_is_listening(port: u16) -> bool {
     // we know exactly which loopback we want.
     let addr = SocketAddr::from((std::net::Ipv4Addr::new(127, 0, 0, 1), port));
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+}
+
+/// Block until `port` accepts a TCP connection, or `timeout` elapses.
+/// Returns `true` if the port came up in time, `false` on timeout.
+///
+/// Used by all three Chrome-launch paths (`auto_start_if_configured`,
+/// `ensure_running_background`, `launch_sync`) to wait for Chrome's
+/// debug port after spawn. Cold Chrome on macOS typically takes 1-3s;
+/// first-ever launch with a brand-new profile can hit 5-6s, hence the
+/// 8s default at callsites.
+fn wait_for_port(port: u16, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if port_is_listening(port) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    port_is_listening(port)
 }
 
 /// Find a usable Chrome / Chromium executable. Returns `None` when
@@ -365,14 +384,7 @@ pub(crate) fn auto_start_if_configured() -> Result<bool, String> {
     // Chromes never get `Browser.setDownloadBehavior`, defaulting all
     // downloads back to `~/Downloads` (system default) — which is
     // exactly the v0.2.12 demo-day bug we're fixing.
-    let deadline = Instant::now() + Duration::from_secs(8);
-    while Instant::now() < deadline {
-        if port_is_listening(CDP_PORT) {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    if port_is_listening(CDP_PORT) {
+    if wait_for_port(CDP_PORT, Duration::from_secs(8)) {
         // Skip the minimize step when we used the patched bundle —
         // LSBackgroundOnly already prevents the window from showing,
         // and CDP `Browser.setWindowBounds` + osascript fallback would
@@ -455,14 +467,7 @@ pub(crate) fn ensure_running_background(
         spawn_chrome(&chrome, &dir, true)?;
         message.push_str("AI Browser spawned in background mode. ");
 
-        let deadline = Instant::now() + Duration::from_secs(8);
-        while Instant::now() < deadline {
-            if port_is_listening(CDP_PORT) {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        if !port_is_listening(CDP_PORT) {
+        if !wait_for_port(CDP_PORT, Duration::from_secs(8)) {
             return Err(IpcError::Internal {
                 message: format!(
                     "AI Browser was spawned ({}) but didn't open port {CDP_PORT} within 8 seconds.",
@@ -611,14 +616,7 @@ pub(crate) fn launch_sync(
         // Wait up to 8 seconds for the debug port to come up. Cold
         // Chrome on macOS typically takes 1-3 seconds; first-ever
         // launch with the new profile can hit 5-6.
-        let deadline = Instant::now() + Duration::from_secs(8);
-        while Instant::now() < deadline {
-            if port_is_listening(CDP_PORT) {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        if !port_is_listening(CDP_PORT) {
+        if !wait_for_port(CDP_PORT, Duration::from_secs(8)) {
             return Err(IpcError::Internal {
                 message: format!(
                     "{browser_name} was spawned ({}) but didn't open port {CDP_PORT} within 8 seconds. Try again in a moment, or check that no firewall is blocking localhost.",
