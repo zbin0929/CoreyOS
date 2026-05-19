@@ -25,7 +25,6 @@ import { CompositeDashboardTemplate } from '@/features/pack/templates/CompositeD
 import { DataTableTemplate } from '@/features/pack/templates/DataTable';
 import { FormRunnerTemplate } from '@/features/pack/templates/FormRunner';
 import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
-import { PackConfigTemplate } from '@/features/pack/templates/PackConfig';
 import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
 import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
 import { SchemaConfigTemplate } from '@/features/pack/templates/SchemaConfig';
@@ -47,7 +46,6 @@ const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
   DataTable: DataTableTemplate,
   FormRunner: FormRunnerTemplate,
   MetricsCard: MetricsCardTemplate,
-  PackConfig: PackConfigTemplate,
   PivotTable: PivotTableTemplate,
   RadarChart: RadarChartTemplate,
   SchemaConfig: SchemaConfigTemplate,

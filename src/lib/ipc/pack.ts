@@ -126,9 +126,6 @@ export interface PackConfigSchemaField {
   keyLabel: string;
 }
 
-export function packConfigSchema(packId: string): Promise<PackConfigSchemaField[]> {
-  return invoke<PackConfigSchemaField[]>('pack_config_schema', { packId });
-}
 
 export async function packNamedConfigGet(
   packId: string,

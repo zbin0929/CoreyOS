@@ -98,28 +98,6 @@ fn convert_field(f: &crate::pack::ConfigField) -> PackConfigSchema {
     }
 }
 
-#[tauri::command]
-pub async fn pack_config_schema(
-    pack_id: String,
-    state: State<'_, AppState>,
-) -> IpcResult<Vec<PackConfigSchema>> {
-    let registry = state.packs.read();
-    let entry = registry
-        .packs
-        .iter()
-        .find(|e| e.manifest.as_ref().map(|m| &m.id) == Some(&pack_id))
-        .ok_or_else(|| IpcError::Internal {
-            message: format!("pack not found: {pack_id}"),
-        })?;
-
-    let manifest = entry.manifest.as_ref().ok_or_else(|| IpcError::Internal {
-        message: "pack has no manifest".into(),
-    })?;
-
-    let schema = manifest.config_schema.iter().map(convert_field).collect();
-    Ok(schema)
-}
-
 /// Validate a config-file slug supplied by a Pack manifest. Names
 /// must be `[a-z0-9][a-z0-9-]*` to prevent path traversal and to
 /// keep file names predictable across platforms.

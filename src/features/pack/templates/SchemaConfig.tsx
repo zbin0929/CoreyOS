@@ -25,7 +25,6 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
-  packConfigSchema,
   packNamedConfigGet,
   packNamedConfigSet,
   type PackConfigSchemaField,
@@ -543,13 +542,8 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
           setSchema(inlineSchema);
           setConfig(mergeDefaultsIntoData(inlineSchema, data));
         } else {
-          const [s, c] = await Promise.all([
-            packConfigSchema(view.packId),
-            Promise.resolve({}),
-          ]);
-          if (cancelled) return;
-          setSchema(s);
-          setConfig(c);
+          setSchema([]);
+          setConfig({});
         }
       } catch (e) {
         console.error('SchemaConfig load:', e);
