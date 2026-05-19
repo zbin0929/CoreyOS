@@ -16,12 +16,9 @@
 //!      handlers (deleted 2026-05-17 after the meizheng Pack migrated
 //!      to manifest-driven `SchemaConfig` views).
 //!
-//!   3. The two **YAML <-> UI transformers** (`transform_yaml_to_ui`,
-//!      `transform_ui_to_yaml`) that translate between disk format
-//!      (snake_case YAML) and frontend format (camelCase JSON). Used
-//!      by all the per-Pack config handlers.
-//!
-//! Extracted from `mod.rs` 2026-05-17.
+//! Extracted from `mod.rs` 2026-05-17. Legacy `pack_config_get/set`
+//! (with meizheng-specific transform) deprecated 2026-05-19 in favor
+//! of the generic `pack_named_config_*` path.
 
 use std::fs;
 
@@ -123,89 +120,12 @@ pub async fn pack_config_schema(
     Ok(schema)
 }
 
-fn transform_yaml_to_ui(mut value: serde_json::Value) -> serde_json::Value {
-    if let Some(carriers) = value.get_mut("carriers").and_then(|v| v.as_object_mut()) {
-        for carrier in carriers.values_mut() {
-            if let Some(obj) = carrier.as_object_mut() {
-                if let Some(url) = obj.remove("source_url") {
-                    obj.insert("sourceUrl".to_string(), url);
-                }
-                if let Some(schedule) = obj.remove("update_schedule") {
-                    obj.insert("updateFrequency".to_string(), schedule);
-                }
-                // Keep validityDays if present, default to 7
-                if !obj.contains_key("validityDays") && !obj.contains_key("validity_days") {
-                    obj.insert("validityDays".to_string(), serde_json::json!(7));
-                } else if let Some(vd) = obj.remove("validity_days") {
-                    obj.insert("validityDays".to_string(), vd);
-                }
-
-                if let Some(services) = obj.get_mut("services").and_then(|v| v.as_array_mut()) {
-                    for service in services {
-                        if let Some(svc_obj) = service.as_object_mut() {
-                            if let Some(name) = svc_obj.remove("source_name") {
-                                svc_obj.insert("sourceName".to_string(), name);
-                            }
-                            if let Some(apply) = svc_obj.remove("apply_to") {
-                                svc_obj.insert("applyTo".to_string(), apply);
-                            } else {
-                                svc_obj.insert(
-                                    "applyTo".to_string(),
-                                    serde_json::Value::String("default".to_string()),
-                                );
-                            }
-                            if let Some(codes) = svc_obj.remove("service_codes") {
-                                svc_obj.insert("serviceCodes".to_string(), codes);
-                            }
-                            // legacy field: drop silently if present
-                            svc_obj.remove("meizheng_service");
-                        }
-                    }
-                }
-            }
-        }
-    }
-    value
-}
-
-fn transform_ui_to_yaml(mut value: serde_json::Value) -> serde_json::Value {
-    if let Some(carriers) = value.get_mut("carriers").and_then(|v| v.as_object_mut()) {
-        for carrier in carriers.values_mut() {
-            if let Some(obj) = carrier.as_object_mut() {
-                if let Some(url) = obj.remove("sourceUrl") {
-                    obj.insert("source_url".to_string(), url);
-                }
-                if let Some(freq) = obj.remove("updateFrequency") {
-                    obj.insert("update_schedule".to_string(), freq);
-                }
-                // Save validityDays back to YAML as validity_days
-                if let Some(vd) = obj.remove("validityDays") {
-                    obj.insert("validity_days".to_string(), vd);
-                }
-
-                if let Some(services) = obj.get_mut("services").and_then(|v| v.as_array_mut()) {
-                    for service in services {
-                        if let Some(svc_obj) = service.as_object_mut() {
-                            if let Some(name) = svc_obj.remove("sourceName") {
-                                svc_obj.insert("source_name".to_string(), name);
-                            }
-                            if let Some(apply) = svc_obj.remove("applyTo") {
-                                svc_obj.insert("apply_to".to_string(), apply);
-                            }
-                            if let Some(codes) = svc_obj.remove("serviceCodes") {
-                                svc_obj.insert("service_codes".to_string(), codes);
-                            }
-                            // strip legacy field on save too
-                            svc_obj.remove("targetService");
-                        }
-                    }
-                }
-            }
-        }
-    }
-    value
-}
-
+/// **DEPRECATED 2026-05-19**: Meizheng Pack migrated to `pack_named_config_*`
+/// with snake_case schema keys. This IPC is kept for backward compat only;
+/// new Packs should use `pack_named_config_get` + `config_file` in manifest.
+///
+/// Legacy behaviour: reads `fuel-rate-config.yaml` and applies meizheng-
+/// specific `carriers.services.*` field renames (snake_case → camelCase).
 #[tauri::command]
 pub async fn pack_config_get(
     pack_id: String,
@@ -227,7 +147,8 @@ pub async fn pack_config_get(
                 serde_yaml::from_str(&raw).map_err(|e| IpcError::Internal {
                     message: format!("parse YAML config: {e}"),
                 })?;
-            return Ok(transform_yaml_to_ui(value));
+            // Legacy transform removed 2026-05-19; kept as no-op for compat
+            return Ok(value);
         }
 
         let json_path = hermes_dir
@@ -280,7 +201,8 @@ pub async fn pack_config_set(
 
         let yaml_path = config_dir.join("fuel-rate-config.yaml");
         let tmp = yaml_path.with_extension("yaml.tmp");
-        let yaml_config = transform_ui_to_yaml(config);
+        // Legacy transform removed 2026-05-19; kept as no-op for compat
+        let yaml_config = config;
         let body = serde_yaml::to_string(&yaml_config).map_err(|e| IpcError::Internal {
             message: format!("serialize YAML config: {e}"),
         })?;
