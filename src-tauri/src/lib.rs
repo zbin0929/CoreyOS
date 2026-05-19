@@ -313,8 +313,6 @@ pub fn run() {
             ipc::pack::pack_active_souls,
             ipc::pack::pack_set_enabled,
             ipc::pack::pack_config_schema,
-            ipc::pack::pack_config_get,
-            ipc::pack::pack_config_set,
             ipc::pack::pack_named_config_get,
             ipc::pack::pack_named_config_set,
             ipc::pack::pack_workflows_list,

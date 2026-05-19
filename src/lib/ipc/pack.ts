@@ -130,20 +130,7 @@ export function packConfigSchema(packId: string): Promise<PackConfigSchemaField[
   return invoke<PackConfigSchemaField[]>('pack_config_schema', { packId });
 }
 
-export function packConfigGet(packId: string): Promise<Record<string, unknown>> {
-  return invoke<Record<string, unknown>>('pack_config_get', { packId });
-}
-
-export function packConfigSet(packId: string, config: Record<string, unknown>): Promise<void> {
-  return invoke<void>('pack_config_set', { packId, config });
-}
-
-/**
- * Generic per-Pack config file accessor used by the v0.3.0
- * `SchemaConfig` template. Reads `~/.hermes/pack-data/<packId>/config/<configName>.yaml`.
- * `configName` must match `[a-z0-9][a-z0-9-]*` (validated server-side).
- */
-export function packNamedConfigGet(
+export async function packNamedConfigGet(
   packId: string,
   configName: string,
 ): Promise<Record<string, unknown>> {

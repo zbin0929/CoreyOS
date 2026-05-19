@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
-import { FileUp, Lock, Package, RefreshCw, Settings2, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { FileUp, Lock, Package, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { usePackStore } from '@/lib/usePackStore';
-import { packImportZip, packUninstall, packConfigGet, packConfigSet } from '@/lib/ipc/pack';
+import { packImportZip, packUninstall } from '@/lib/ipc/pack';
 
 import { Section } from '../shared';
 
@@ -19,9 +19,6 @@ export function PacksSection() {
   const setEnabled = usePackStore((s) => s.setEnabled);
 
   const [importing, setImporting] = useState(false);
-  const [configuring, setConfiguring] = useState<string | null>(null);
-  const [configData, setConfigData] = useState<Record<string, unknown> | null>(null);
-  const [configBusy, setConfigBusy] = useState(false);
 
   useEffect(() => {
     void refresh();
@@ -54,29 +51,6 @@ export function PacksSection() {
     }
   }
 
-  async function openConfig(packId: string) {
-    setConfiguring(packId);
-    try {
-      const cfg = await packConfigGet(packId);
-      setConfigData(cfg);
-    } catch {
-      setConfigData({});
-    }
-  }
-
-  async function saveConfig() {
-    if (!configuring || !configData) return;
-    setConfigBusy(true);
-    try {
-      await packConfigSet(configuring, configData);
-      setConfiguring(null);
-      setConfigData(null);
-    } catch (e) {
-      console.error('pack config save failed:', e);
-    } finally {
-      setConfigBusy(false);
-    }
-  }
 
   return (
     <Section
@@ -106,30 +80,6 @@ export function PacksSection() {
           {t('settings.packs.rescan')}
         </Button>
       </div>
-
-      {configuring && configData && (
-        <div className="mb-3 rounded-lg border border-border bg-bg-elev-1 p-3">
-          <div className="mb-2 text-sm font-medium text-fg">
-            {t('settings.packs.config_for', { id: configuring })}
-          </div>
-          <textarea
-            className="w-full rounded border border-border bg-bg-elev-2 p-2 font-mono text-xs text-fg"
-            rows={8}
-            value={JSON.stringify(configData, null, 2)}
-            onChange={(e) => {
-              try { setConfigData(JSON.parse(e.target.value)); } catch { /* invalid, keep old */ }
-            }}
-          />
-          <div className="mt-2 flex gap-2">
-            <Button size="sm" disabled={configBusy} onClick={() => void saveConfig()}>
-              {t('settings.packs.save_config')}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setConfiguring(null); setConfigData(null); }}>
-              {t('settings.packs.cancel')}
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="rounded-lg border border-border bg-bg-elev-1 p-3 text-xs">
         {loading && (
@@ -176,17 +126,6 @@ export function PacksSection() {
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  {p.enabled && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void openConfig(p.manifestId)}
-                      title={t('settings.packs.configure')}
-                    >
-                      <Icon icon={Settings2} size="xs" />
-                    </Button>
-                  )}
                   <Button
                     type="button"
                     size="sm"

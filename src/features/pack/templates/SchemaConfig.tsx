@@ -25,9 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
-  packConfigGet,
   packConfigSchema,
-  packConfigSet,
   packNamedConfigGet,
   packNamedConfigSet,
   type PackConfigSchemaField,
@@ -540,14 +538,14 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
           // (which goes through camelCase normalisation).
           const data = useNamedFile && configFile
             ? await packNamedConfigGet(view.packId, configFile)
-            : await packConfigGet(view.packId);
+            : {};
           if (cancelled) return;
           setSchema(inlineSchema);
           setConfig(mergeDefaultsIntoData(inlineSchema, data));
         } else {
           const [s, c] = await Promise.all([
             packConfigSchema(view.packId),
-            packConfigGet(view.packId),
+            Promise.resolve({}),
           ]);
           if (cancelled) return;
           setSchema(s);
@@ -582,7 +580,7 @@ export function SchemaConfigTemplate({ view }: { view: PackView }) {
       if (useNamedFile && configFile) {
         await packNamedConfigSet(view.packId, configFile, config);
       } else {
-        await packConfigSet(view.packId, config);
+        throw new Error('SchemaConfig: no config_file declared, cannot save');
       }
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);

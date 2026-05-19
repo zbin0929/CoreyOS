@@ -14,8 +14,11 @@ import { Save, Eye, EyeOff, AlertCircle, CheckCircle2, ChevronDown, ChevronRight
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { packConfigGet, packConfigSet, packConfigSchema, type PackConfigSchemaField } from '@/lib/ipc/pack';
-import type { PackView } from '@/lib/ipc/pack';
+import {
+  packConfigSchema,
+  type PackConfigSchemaField,
+  type PackView,
+} from '@/lib/ipc/pack';
 
 interface FieldGroup {
   name: string;
@@ -113,7 +116,7 @@ export function PackConfigTemplate({ view }: { view: PackView }) {
       try {
         const [schemaData, configData] = await Promise.all([
           packConfigSchema(packId),
-          packConfigGet(packId),
+          Promise.resolve({}),
         ]);
         setSchema(schemaData);
         setConfig(configData);
@@ -145,7 +148,7 @@ export function PackConfigTemplate({ view }: { view: PackView }) {
     setSaving(true);
     setSaveStatus('saving');
     try {
-      await packConfigSet(packId, config);
+      throw new Error('PackConfig: legacy template, cannot save without config_file');
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (e) {
