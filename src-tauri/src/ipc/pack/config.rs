@@ -1,102 +1,18 @@
 //! Pack runtime configuration IPC surface.
 //!
-//! Three flavours of configuration sit under here:
+//! Provides `pack_named_config_get` / `pack_named_config_set` — schema-driven
+//! reader/writer for any `~/.hermes/pack-data/<id>/config/<name>.yaml` file.
+//! Used by the v0.3.0 `SchemaConfig` template when a view declares
+//! `options.config_file`.
 //!
-//!   1. **Generic** — `pack_config_schema` (declarative spec from
-//!      `manifest.config_schema`) + `pack_config_get` / `pack_config_set`
-//!      (per-Pack `config.yaml` in `~/.hermes/pack-data/<id>/`).
-//!      Drives the "Configure" tab in Settings → Packs and the
-//!      schema-driven `<PackConfig>` template.
-//!
-//!   2. **Generic named-config** (`pack_named_config_*`) — schema-driven
-//!      reader/writer for any `~/.hermes/pack-data/<id>/config/<name>.yaml`
-//!      file. Used by the v0.3.0 `SchemaConfig` template when a view
-//!      declares `options.config_file`. Replaces the previously
-//!      hard-coded `pack_exchange_rate_config_*` / `pack_zone_config_*`
-//!      handlers (deleted 2026-05-17 after the meizheng Pack migrated
-//!      to manifest-driven `SchemaConfig` views).
-//!
-//! Extracted from `mod.rs` 2026-05-17. Legacy `pack_config_get/set`
-//! (with meizheng-specific transform) deprecated 2026-05-19 in favor
-//! of the generic `pack_named_config_*` path.
+//! Extracted from `mod.rs` 2026-05-17. Legacy IPC handlers deleted 2026-05-19.
 
 use std::fs;
 
-use serde::Serialize;
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
 use crate::state::AppState;
-
-/// IPC mirror of [`crate::pack::manifest::ConfigField`]. Carries the
-/// recursive schema fields added in v0.3.0 (`fields` / `item` /
-/// `showIf` / `preview` / array bounds / width hint) so the
-/// frontend `SchemaConfig` template can render nested objects and
-/// dynamic arrays without a second round-trip.
-///
-/// Old flat-schema Packs serialize identically — every new field
-/// is `default`-initialized.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PackConfigSchema {
-    pub key: String,
-    pub label: String,
-    #[serde(rename = "type")]
-    pub field_type: String,
-    pub required: bool,
-    pub secret: bool,
-    pub description: String,
-    pub help: String,
-    pub group: String,
-    pub validation: String,
-    pub placeholder: String,
-    pub default: serde_json::Value,
-    pub options: Vec<String>,
-    /// Sub-schema for `type: nested`. Empty array for scalar fields.
-    pub fields: Vec<PackConfigSchema>,
-    /// Sub-schema for `type: array` items. Empty array for scalar fields.
-    pub item: Vec<PackConfigSchema>,
-    /// Optional showIf expression evaluated by the frontend.
-    pub show_if: String,
-    /// Optional preview / computed template string.
-    pub preview: String,
-    /// Lower bound on array length. 0 = unlimited.
-    pub min_items: u32,
-    /// Upper bound on array length. 0 = unlimited.
-    pub max_items: u32,
-    /// Label for the array "+ Add" button. Empty = frontend default.
-    pub add_label: String,
-    /// Visual width hint: `""` / `"full"` / `"half"` / `"small"`.
-    pub width: String,
-    /// Label for the record key prompt. Empty = frontend default.
-    pub key_label: String,
-}
-
-fn convert_field(f: &crate::pack::ConfigField) -> PackConfigSchema {
-    PackConfigSchema {
-        key: f.key.clone(),
-        label: f.label.clone(),
-        field_type: f.field_type.clone(),
-        required: f.required,
-        secret: f.field_type == "secret",
-        description: f.description.clone(),
-        help: f.help.clone(),
-        group: f.group.clone(),
-        validation: f.validation.clone(),
-        placeholder: f.placeholder.clone(),
-        default: serde_yaml::from_value(f.default.clone()).unwrap_or(serde_json::Value::Null),
-        options: f.options.clone(),
-        fields: f.fields.iter().map(convert_field).collect(),
-        item: f.item.iter().map(convert_field).collect(),
-        show_if: f.show_if.clone(),
-        preview: f.preview.clone(),
-        min_items: f.min_items,
-        max_items: f.max_items,
-        add_label: f.add_label.clone(),
-        width: f.width.clone(),
-        key_label: f.key_label.clone(),
-    }
-}
 
 /// Validate a config-file slug supplied by a Pack manifest. Names
 /// must be `[a-z0-9][a-z0-9-]*` to prevent path traversal and to
