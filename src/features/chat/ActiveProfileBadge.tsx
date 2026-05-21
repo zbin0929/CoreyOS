@@ -7,8 +7,10 @@ import { cn } from '@/lib/cn';
 import {
   hermesProfileActivate,
   hermesProfileList,
+  packProfileMeta,
   ipcErrorMessage,
   type HermesProfileInfo,
+  type PackProfileMeta,
 } from '@/lib/ipc';
 
 /**
@@ -30,6 +32,7 @@ export function ActiveProfileBadge() {
 
   const [open, setOpen] = useState(false);
   const [profiles, setProfiles] = useState<HermesProfileInfo[] | null>(null);
+  const [profileMeta, setProfileMeta] = useState<Map<string, PackProfileMeta>>(new Map());
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,17 +44,24 @@ export function ActiveProfileBadge() {
   const searchRef = useRef<HTMLInputElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  // Fetch profile list on open
+  // Fetch profile list and metadata on open
   useEffect(() => {
     if (!open) return;
     let alive = true;
     setError(null);
     setLoading(true);
-    hermesProfileList()
-      .then((view) => {
+
+    Promise.all([hermesProfileList(), packProfileMeta()])
+      .then(([view, meta]) => {
         if (!alive) return;
         setProfiles(view.profiles);
         setActiveProfile(view.active);
+        // Build a map of profile ID -> metadata for display names
+        const metaMap = new Map<string, PackProfileMeta>();
+        for (const m of meta) {
+          metaMap.set(m.id, m);
+        }
+        setProfileMeta(metaMap);
         setLoading(false);
       })
       .catch((e) => {
@@ -155,7 +165,9 @@ export function ActiveProfileBadge() {
     }
   }
 
-  const displayName = activeProfile ?? 'default';
+  // Get display name from metadata, fallback to ID
+  const getDisplayName = (id: string) => profileMeta.get(id)?.display_name ?? id;
+  const displayName = activeProfile ? getDisplayName(activeProfile) : t('chat_page.profile_default', { defaultValue: '默认' });
 
   return (
     <div ref={rootRef} className="relative">
@@ -179,7 +191,7 @@ export function ActiveProfileBadge() {
         data-testid="chat-profile-picker-trigger"
       >
         <Icon icon={User2} size="xs" className="opacity-60" />
-        <code className="max-w-[120px] truncate font-mono">{displayName}</code>
+        <span className="max-w-[120px] truncate">{displayName}</span>
         <Icon icon={ChevronDown} size="xs" className="opacity-60" />
       </button>
 
@@ -267,7 +279,7 @@ export function ActiveProfileBadge() {
                         isSelected ? 'text-purple-500' : 'opacity-60',
                       )}
                     />
-                    <span className="flex-1 truncate font-mono">{p.name}</span>
+                    <span className="flex-1 truncate">{getDisplayName(p.name)}</span>
                     {isSelected && (
                       <Icon icon={Check} size="xs" className="flex-none text-purple-500" />
                     )}
