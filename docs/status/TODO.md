@@ -1,7 +1,7 @@
 # CoreyOS 全局 TODO
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-17 -->
+<!-- last-verified: 2026-05-22 -->
 <!-- 校验规则：每 30 天一次；超过 500 行需立刻拆分或归档 -->
 
 > ⛔ **2026-05-10 起本文件暂被 [`FOCUS.md`](./FOCUS.md) 覆盖。**
@@ -52,12 +52,12 @@
 
 ---
 
-## 四、P-1 跨境电商 Pack（v0.3.0 · 当前活跃 Pack）
+## 四、P-1 跨境电商 Pack（v0.3.0 · ✅ 已发布 2026-05-22）
 
-- **状态**：v0.2.0 · 3 Skill（ad_analyst / inventory_sentinel / review_monitor）+ 3 Workflow（ad_daily_check / inventory_alert / review_alert）+ 3 demo CSV + `ad-overview` CompositeDashboard view（layout 数组格式正确，3 按钮浮出）· 剩余 6 能力待 SP-API + 真实客户迭代
-- **目标版本**：v0.3.0
-- **交付方式**：一次性全做完 9 能力（不分批）
-- **外部前置**：Amazon SP-API 开发者账号（申请中）
+- **状态**：**v0.5.0** · 18 Skills + 9 Profiles + 5 Workflows + config_schema API 配置（Apify / 卖家精灵）
+- **目标版本**：v0.3.0 ✅ 已发布
+- **交付方式**：corey-packs 仓库独立维护
+- **外部前置**：Amazon SP-API 开发者账号（申请中，不阻塞当前版本）
 - **差异化打法**：本地部署 / 不绑 ERP / 用户可自定义新场景
 
 ### 9 能力矩阵（对标麦多 AI）
@@ -74,30 +74,22 @@
 | 8 | 战场雷达 | Workflow + Browser | Timeline | 🟡 数据源待接 |
 | 9 | 六维诊断 | Skill + 多维评分 | Radar | ✅ |
 
-### 已完成项（仅列仓库中实际存在的文件）
+### v0.5.0 已完成项（2026-05-22）
 
-- `manifest.yaml` v0.2.0（schema_version:1，挂载 soul/3 skills/3 workflows/1 view）
-- `prompts/soul.md` 亚马逊运营顾问人设 + Soul 注入链路 ✅ 2026-05-09
-- **Skills**（均为 YAML frontmatter + Markdown body）：
-  - `skills/ad_analyst.md` SP 广告数据分析师
-  - `skills/inventory_sentinel.md` 库存哨兵（🔴🟡🟢⚫ 四档分级）
-  - `skills/review_monitor.md` 差评监控（Q/L/D/F/S/X 六桶 + P0/P1/P2 + listing_alert 阈值）
-- **Workflows**（均为 2-step agent，id 精确对齐 CompositeDashboard 硬编码按钮）：
-  - `workflows/ad_daily_check.yaml` 广告日巡检
-  - `workflows/inventory_alert.yaml` 库存巡检
-  - `workflows/review_alert.yaml` 差评巡检
-- **Samples**（手造真实格式 + 可触发阈值的故事数据）：
-  - `samples/sp_ad_report_2026-05-08.csv`（7 campaigns）
-  - `samples/fba_inventory_2026-05-08.csv`（10 ASIN · 3 断货 + 3 冗余）
-  - `samples/reviews_2026-05-08.csv`（15 条差评 · B08N 触发 q_ratio_7d 阈值）
-- views: `ad-overview`（CompositeDashboard，nav_section: home，layout 数组格式：顶行 MetricsCard × 1 + 下行 AlertList × 1；3 按钮）
-- 基础设施层（非 Pack 目录内，但支撑上层）：
-  - `resolve_mcp_source` stdio 支持（subprocess + JSON-RPC）
-  - CompositeDashboard DateRange + ActionTrigger + `LayoutCell[]` 渲染
-  - MetricsCard `_delta` 同比 / TrendBadge
-  - Rust guard `bundled_skill_packs_are_wellformed`（soul + skills + workflows）
-  - `COREY_FORCE_RESEED=1` 开发时强刷破坏 `~/.hermes/skill-packs/<id>/` 保护（pack::seed 4 passed）
-  - e2e `pack-soul-inject.spec.ts` 锁死 Soul 注入契约
+- `manifest.yaml` v0.5.0（schema_version:1，18 skills + 9 profiles + 5 workflows + config_schema）
+- `prompts/soul.md` 跨境电商多 Agent 协作人设
+- **9 Profiles**（专家角色）：
+  - 市场规模专家 / 竞品拆解专家 / 盈利评估专家 / 选品侦察专家 / 决策协调者
+  - 广告优化专家 / 库存预警专家 / 差评监控专家 / 数据分析专家
+- **18 Skills**：
+  - 选品决策 6 专家：market-scanner / user-pain-miner / competitor-analyzer / opportunity-spotter / profitability-evaluator / supply-chain-validator / product-decision-suite
+  - 视觉分析 2 个：competitor-visual-analyzer / visual-strategist
+  - 拓品规划 1 个：dtc-product-expansion-html
+  - 日常运营 3 个：ad_analyst / inventory_sentinel / review_monitor
+  - Amazon 数据采集 4 个（需 Apify）：amazon-keyword-search / amazon-product-detail / amazon-reviews / amazon-research
+  - 市场深度调研 1 个（需卖家精灵）：dtc-market-research
+- **config_schema**：apify_enabled + apify_token / sellersprite_enabled + sellersprite_api_key
+- **5 Workflows**：new-product-review / quick-validation / ad_daily_check / inventory_alert / review_alert
 
 ### 剩余未做（按优先级）
 
