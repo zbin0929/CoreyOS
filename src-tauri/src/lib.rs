@@ -201,6 +201,7 @@ pub fn run() {
             ipc::hermes_profiles::hermes_profile_import,
             ipc::hermes_profiles::hermes_profile_import_preview,
             ipc::hermes_profiles::hermes_profile_detail,
+            ipc::hermes_profiles::hermes_profile_active_soul,
             ipc::kanban::kanban_list,
             ipc::kanban::kanban_create,
             ipc::kanban::kanban_complete,

@@ -5,7 +5,6 @@ import { Check, ChevronDown, Loader2, User2 } from 'lucide-react';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import {
-  hermesGatewayRestart,
   hermesProfileActivate,
   hermesProfileList,
   ipcErrorMessage,
@@ -19,8 +18,9 @@ import {
  * ecom-ad-expert, ecom-inventory-expert) during a chat session. The
  * selected profile's SOUL.md is injected into the system prompt.
  *
- * IMPORTANT: Switching profiles requires a gateway restart for the new
- * SOUL to take effect. This component handles that automatically.
+ * HOT-RELOAD: Profile SOUL is read from disk on every chat send via
+ * `hermesProfileActiveSoul()` in `enrichHistory.ts`. No gateway restart
+ * needed — switching profiles takes effect on the next message.
  *
  * Note: This is different from LLM Profiles (which configure model/provider).
  * Hermes Profiles are expert personas with specialized knowledge.
@@ -118,7 +118,7 @@ export function ActiveProfileBadge() {
     el?.scrollIntoView({ block: 'nearest' });
   }, [activeIdx, open]);
 
-  // Select a profile and restart gateway
+  // Select a profile (hot-reload, no gateway restart needed)
   async function selectProfile(name: string) {
     if (name === activeProfile) {
       setOpen(false);
@@ -127,8 +127,7 @@ export function ActiveProfileBadge() {
     setLoading(true);
     try {
       await hermesProfileActivate(name);
-      // Gateway restart is required for the new SOUL to take effect
-      await hermesGatewayRestart();
+      // No gateway restart needed — enrichHistory.ts reads SOUL on every send
       setActiveProfile(name);
       setOpen(false);
       triggerRef.current?.focus();

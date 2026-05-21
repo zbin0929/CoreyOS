@@ -294,3 +294,39 @@ pub async fn hermes_profile_detail(name: String) -> IpcResult<ProfileDetail> {
         skills_count,
     })
 }
+
+/// Get the SOUL content of the currently active Hermes profile.
+/// Returns None if no profile is active or the profile has no SOUL.md.
+/// This is used for hot-reloading profile SOUL without gateway restart.
+#[tauri::command]
+pub async fn hermes_profile_active_soul() -> IpcResult<Option<String>> {
+    use crate::paths::hermes_data_dir;
+    use std::fs;
+
+    let hermes_dir = hermes_data_dir().map_err(|e| IpcError::Internal {
+        message: format!("hermes dir: {e}"),
+    })?;
+
+    // Read active profile name
+    let active_file = hermes_dir.join("active_profile");
+    let active_name = match fs::read_to_string(&active_file) {
+        Ok(content) => {
+            let name = content.lines().next().unwrap_or("").trim();
+            if name.is_empty() || name == "default" {
+                return Ok(None);
+            }
+            name.to_string()
+        }
+        Err(_) => return Ok(None),
+    };
+
+    // Read SOUL.md from the active profile
+    let soul_path = hermes_dir
+        .join("profiles")
+        .join(&active_name)
+        .join("SOUL.md");
+    match fs::read_to_string(&soul_path) {
+        Ok(content) if !content.trim().is_empty() => Ok(Some(content)),
+        _ => Ok(None),
+    }
+}

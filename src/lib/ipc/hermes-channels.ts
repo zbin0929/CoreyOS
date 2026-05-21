@@ -305,3 +305,10 @@ export function hermesProfileDetail(name: string): Promise<ProfileDetail> {
   return invoke<ProfileDetail>('hermes_profile_detail', { name });
 }
 
+/** Get the SOUL content of the currently active Hermes profile.
+ *  Returns null if no profile is active or the profile has no SOUL.md.
+ *  Used for hot-reloading profile SOUL without gateway restart. */
+export function hermesProfileActiveSoul(): Promise<string | null> {
+  return invoke<string | null>('hermes_profile_active_soul');
+}
+

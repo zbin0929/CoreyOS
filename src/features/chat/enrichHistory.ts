@@ -5,6 +5,7 @@ import {
   learningReadLearnings,
   packActiveSouls,
   memoryFactSearch,
+  hermesProfileActiveSoul,
 } from '@/lib/ipc';
 import { buildBaseSoul } from '@/app/baseSoul';
 
@@ -46,6 +47,20 @@ export async function enrichHistoryWithContext(
     }
   } catch {
     // non-critical — proceed without soul injection
+  }
+
+  // Profile SOUL — hot-reloaded from active Hermes profile's SOUL.md.
+  // This allows switching expert profiles without gateway restart.
+  try {
+    const profileSoul = await hermesProfileActiveSoul();
+    if (profileSoul) {
+      enriched.unshift({
+        role: 'system',
+        content: `[Active expert profile]\n${profileSoul}`,
+      });
+    }
+  } catch {
+    // non-critical — proceed without profile soul
   }
 
   try {

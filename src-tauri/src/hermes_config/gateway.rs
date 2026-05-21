@@ -994,44 +994,17 @@ pub fn run_bootstrap_script(resource_dir: &Path) -> io::Result<String> {
 }
 
 /// Inject `HERMES_HOME` into the child process environment so Hermes
-/// reads/writes the correct profile directory.
+/// reads/writes the same data directory Corey resolved (which may differ
+/// from the platform default when the user moved it via Settings).
+/// Hermes natively honours `HERMES_HOME`; without this the gateway
+/// would still use `~/.hermes` even after the user relocated data.
 ///
-/// When an active profile is set (via `~/.hermes/active_profile`), we point
-/// `HERMES_HOME` to `~/.hermes/profiles/<name>/` so Hermes loads that
-/// profile's SOUL.md, skills, and config. Otherwise we use the base
-/// `~/.hermes` directory (the "default" profile).
-///
-/// This is how Hermes determines which profile is active — it reads
-/// `HERMES_HOME` at startup and loads SOUL.md from that directory.
+/// Note: Profile switching is handled by Corey's `enrichHistory.ts` which
+/// reads the active profile's SOUL.md on every chat send. No need to
+/// change HERMES_HOME per profile — that would require gateway restart.
 pub fn inject_hermes_home(cmd: &mut std::process::Command) {
-    if let Ok(base_dir) = crate::paths::hermes_data_dir() {
-        // Check if there's an active profile
-        let home_dir = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(std::path::PathBuf::from);
-
-        let hermes_home = if let Some(home) = home_dir {
-            let active_file = home.join(".hermes/active_profile");
-            if let Ok(content) = std::fs::read_to_string(&active_file) {
-                let profile_name = content.lines().next().unwrap_or("").trim();
-                if !profile_name.is_empty() && profile_name != "default" {
-                    let profile_dir = base_dir.join("profiles").join(profile_name);
-                    if profile_dir.exists() {
-                        profile_dir
-                    } else {
-                        base_dir
-                    }
-                } else {
-                    base_dir
-                }
-            } else {
-                base_dir
-            }
-        } else {
-            base_dir
-        };
-
-        cmd.env("HERMES_HOME", hermes_home);
+    if let Ok(dir) = crate::paths::hermes_data_dir() {
+        cmd.env("HERMES_HOME", dir);
     }
 }
 
