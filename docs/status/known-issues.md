@@ -3,6 +3,45 @@
 > 创建：2026-05-01（从 `docs/status/TODO.md` v1 拆分而来，保留为修复参考）
 > 用途：已修复 Bug 的根因 + 解决方案存档
 
+---
+
+## 2026-05-22 · 首次客户安装失败（P0 阻塞交付）
+
+### 🔴 未修：客户安装需要手动装 Python + Homebrew（P0）
+
+- **时间**：2026-05-22 首次真实客户安装
+- **现象**：客户双击 Corey.dmg 安装后，启动报错 `Bootstrap failed`，需要手动：
+  1. 安装 Xcode Command Line Tools
+  2. 安装 Homebrew
+  3. 配置 PATH
+  4. 安装 Python 3.11
+  5. 创建软链接到 `/usr/local/bin/python3`
+  6. 重启电脑
+- **根因**：
+  1. **Hermes 是纯 Python 项目**，不是二进制，需要 Python 3.11+ 运行时
+  2. **macOS GUI 应用不继承终端 PATH**，只有 `/usr/local/bin` 和 `/usr/bin`
+  3. **Homebrew 安装的 Python 在 `/opt/homebrew/`**，GUI 应用找不到
+  4. **中国大陆网络问题**，GitHub 访问不稳定，bootstrap 下载失败
+- **临时解决**（给当前客户）：
+  ```bash
+  # 1. 安装 Homebrew + Python
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  echo 'eval "$(/opt/homebrew/bin/brew shellenv zsh)"' >> ~/.zprofile
+  eval "$(/opt/homebrew/bin/brew shellenv zsh)"
+  brew install python@3.11
+  
+  # 2. 创建软链接让 GUI 应用能找到
+  sudo mkdir -p /usr/local/bin
+  sudo ln -sf /opt/homebrew/opt/python@3.11/bin/python3.11 /usr/local/bin/python3
+  
+  # 3. 重启电脑，再打开 Corey
+  ```
+- **根本修复**：用 PyInstaller 把 Hermes 打包成独立可执行文件（133 MB），打进 Corey.dmg。已验证可行（见 TODO #13）
+- **工期**：5-7 天（macOS + Windows 双平台）
+- **教训**：**"一键安装"不是口号，是产品底线。** 任何需要客户打开终端的安装流程都是失败的。
+
+---
+
 ## 2026-05-11 ~ 12 · 待修 / 已迁移的问题
 
 ### ✅ 已修复：Corey UI 聊天的审批卡片不触发（P0）

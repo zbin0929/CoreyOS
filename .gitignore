@@ -37,6 +37,10 @@ dist-ssr
 src-tauri/target
 src-tauri/gen/schemas
 
+# Hermes standalone binary (built by CI, too large for git)
+src-tauri/binaries/hermes-standalone
+src-tauri/binaries/hermes-standalone.exe
+
 # Envs
 .env
 .env.*

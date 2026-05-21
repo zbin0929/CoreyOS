@@ -61,6 +61,37 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      # Build hermes-standalone with PyInstaller for one-click install
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build hermes-standalone
+        shell: bash
+        run: |
+          echo "Installing Hermes and PyInstaller..."
+          pip install hermes-agent pyinstaller
+          
+          echo "Finding hermes_cli location..."
+          HERMES_CLI=$(python -c "import hermes_cli; print(hermes_cli.__path__[0])")
+          
+          echo "Building hermes-standalone.exe..."
+          mkdir -p src-tauri/binaries
+          pyinstaller \
+            --onefile \
+            --name hermes-standalone \
+            --distpath src-tauri/binaries \
+            --workpath /tmp/pyinstaller-build \
+            --specpath /tmp/pyinstaller-build \
+            --clean \
+            --noconfirm \
+            "${HERMES_CLI}/main.py"
+          
+          echo "Verifying build..."
+          ls -lh src-tauri/binaries/
+          src-tauri/binaries/hermes-standalone.exe --version
+
       # Builds .msi + NSIS .exe + signed updater .zip + .sig under
       # src-tauri\target\release\bundle\. Uploaded to the existing
       # GitHub Release matching ${{ inputs.release_tag }}.

@@ -1320,18 +1320,30 @@ const BINARY_NAME: &str = "hermes.exe";
 const BINARY_NAME: &str = "hermes";
 
 pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
-    // Hermes is a Python package (`pip install hermes-agent`) and
-    // upstream releases ship source-only — no precompiled binary
-    // we could realistically ship inside the Corey installer.
-    // Earlier drafts of this resolver had a "bundled-with-Corey"
-    // tier that walked `<install_dir>/resources/binaries/`; it
-    // was always a no-op because `src-tauri/binaries/` is empty
-    // and `fetch-hermes-binary.mjs` couldn't find anything to
-    // download. We deleted those branches to stop pretending the
-    // user might have a bundled binary — Hermes onboarding now
-    // routes through Settings → Home install card + the
-    // `hermes_install_preflight` IPC.
-    //
+    // Priority 0: Bundled hermes-standalone (PyInstaller binary).
+    // This is the "one-click install" path — no Python needed.
+    // The binary is bundled in Corey.app/Contents/Resources/ (macOS)
+    // or next to Corey.exe (Windows).
+    #[cfg(not(target_os = "windows"))]
+    const STANDALONE_NAME: &str = "hermes-standalone";
+    #[cfg(target_os = "windows")]
+    const STANDALONE_NAME: &str = "hermes-standalone.exe";
+
+    if let Ok(exe) = std::env::current_exe() {
+        // macOS: Corey.app/Contents/MacOS/Corey → ../Resources/hermes-standalone
+        if let Some(macos_dir) = exe.parent() {
+            let resources = macos_dir.join("../Resources").join(STANDALONE_NAME);
+            if resources.is_file() {
+                return Ok(resources.canonicalize().unwrap_or(resources));
+            }
+            // Windows / dev: same directory as exe
+            let same_dir = macos_dir.join(STANDALONE_NAME);
+            if same_dir.is_file() {
+                return Ok(same_dir);
+            }
+        }
+    }
+
     // 1) $PATH lookup. `which` is portable but we avoid spawning; just walk.
     if let Some(path_env) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path_env) {

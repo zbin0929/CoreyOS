@@ -49,6 +49,7 @@
 | 10 | 本地 opt-in 使用埋点 | 1.5d | `~/.hermes/usage.jsonl` 用户主动导出，产品决策有数据 |
 | 11 | Hermes 版本兼容矩阵 | 1d（首次） | `src-tauri/tests/hermes-compat/` fixture，每个 Hermes 版本存 `config.yaml` 样本 |
 | 12 | 白标客户模式（可选） | 1d | `customer.yaml mode: customer` 隐藏 Terminal/Compare/Logs/MCP/Memory 入口 |
+| 13 | **零依赖安装包（Win+Mac）** | 5-7d | 把 Hermes + Python 运行时打包进安装包，客户双击即用。**macOS**：.dmg 内嵌 Python.framework + Hermes binary；**Windows**：.exe 内嵌 embeddable Python + Hermes.exe。不需要装 Homebrew/Python/uv。当前客户安装失败因为缺 Python 环境。**P0 阻塞客户交付**。 |
 
 ---
 
