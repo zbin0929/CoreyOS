@@ -70,15 +70,20 @@ jobs:
       - name: Build hermes-standalone
         shell: bash
         run: |
+          set -e  # 任何命令失败立即退出
+          
           echo "Installing Hermes and PyInstaller..."
           pip install hermes-agent pyinstaller
           
           echo "Creating entry point script..."
-          cat > /tmp/hermes_entry.py << 'EOF'
+          cat > /tmp/hermes_entry.py << 'ENTRY_EOF'
+          import sys
+          import re
           from hermes_cli.main import main
           if __name__ == "__main__":
-              main()
-          EOF
+              sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+              sys.exit(main())
+          ENTRY_EOF
           
           echo "Building hermes-standalone.exe..."
           mkdir -p src-tauri/binaries
@@ -94,11 +99,20 @@ jobs:
             --collect-all hermes_agent \
             --hidden-import hermes_cli \
             --hidden-import hermes_cli.main \
+            --hidden-import hermes_agent \
             /tmp/hermes_entry.py
           
           echo "Verifying build..."
           ls -lh src-tauri/binaries/
+          
+          # 验证二进制存在且可执行
+          if [ ! -f "src-tauri/binaries/hermes-standalone.exe" ]; then
+            echo "ERROR: hermes-standalone.exe not found!"
+            exit 1
+          fi
+          
           src-tauri/binaries/hermes-standalone.exe --version
+          echo "hermes-standalone build successful!"
 
       # Builds .msi + NSIS .exe + signed updater .zip + .sig under
       # src-tauri\target\release\bundle\. Uploaded to the existing
