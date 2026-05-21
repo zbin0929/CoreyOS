@@ -15,7 +15,7 @@ test.describe('shell', () => {
     // Sidebar is always mounted — check a couple of nav entries by role.
     await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Chat' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'LLMs' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Models' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
   });
 
