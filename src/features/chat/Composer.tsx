@@ -27,6 +27,7 @@ import type { VisionSupport } from '@/lib/modelCapabilities';
 import { TalkModeInline } from '@/features/talk/TalkModeInline';
 
 import { ActiveLLMBadge } from './ActiveLLMBadge';
+import { ActiveProfileBadge } from './ActiveProfileBadge';
 import { TokenUsageBadge } from './TokenUsageBadge';
 import { RoutingHint } from './ChatHelpers';
 import { formatBytes } from './formatBytes';
@@ -163,6 +164,7 @@ export function Composer({
     <div className="border-t border-border/80 bg-bg/80 shadow-[0_-1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm">
       <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 pt-3">
         <ActiveLLMBadge />
+        <ActiveProfileBadge />
         <RoutingHint draft={draft} />
         <TokenUsageBadge />
       </div>
