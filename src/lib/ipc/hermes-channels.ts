@@ -290,3 +290,18 @@ export function packProfileMeta(): Promise<PackProfileMeta[]> {
   return invoke<PackProfileMeta[]>('pack_profile_meta');
 }
 
+// ───────────────────────── Profile detail ─────────────────────────
+
+/** Detailed profile info including SOUL content. */
+export interface ProfileDetail {
+  name: string;
+  soul_content: string | null;
+  model: string | null;
+  skills_count: number;
+}
+
+/** Get detailed info for a profile (SOUL content, model, skills count). */
+export function hermesProfileDetail(name: string): Promise<ProfileDetail> {
+  return invoke<ProfileDetail>('hermes_profile_detail', { name });
+}
+

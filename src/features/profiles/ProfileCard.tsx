@@ -1,20 +1,25 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Download,
   Loader2,
   Pencil,
   Play,
   Trash2,
+  Wand2,
   X,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
-import type { HermesProfileInfo, PackProfileMeta } from '@/lib/ipc';
+import type { HermesProfileInfo, PackProfileMeta, ProfileDetail } from '@/lib/ipc';
+import { hermesProfileDetail } from '@/lib/ipc';
 
 import { inputCls } from './styles';
 import type { RowMode, RowStatus } from './types';
@@ -58,6 +63,29 @@ export function ProfileCard({
   const busy = status.kind === 'busy';
   const isPackProfile = !!meta;
   const displayName = meta?.display_name || profile.name;
+
+  const [expanded, setExpanded] = useState(false);
+  const [detail, setDetail] = useState<ProfileDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const toggleExpand = async () => {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+    setExpanded(true);
+    if (!detail) {
+      setDetailLoading(true);
+      try {
+        const d = await hermesProfileDetail(profile.name);
+        setDetail(d);
+      } catch (e) {
+        console.error('Failed to load profile detail:', e);
+      } finally {
+        setDetailLoading(false);
+      }
+    }
+  };
 
   return (
     <div
@@ -231,6 +259,55 @@ export function ProfileCard({
         <div className="flex items-start gap-1 text-[11px] text-danger">
           <Icon icon={AlertCircle} size="xs" className="mt-0.5 flex-none" />
           <span className="break-all">{status.message}</span>
+        </div>
+      )}
+
+      {/* Expand/collapse button */}
+      <button
+        type="button"
+        onClick={() => void toggleExpand()}
+        className="flex w-full items-center justify-center gap-1 rounded border border-border/50 bg-bg-elev-2/50 py-1 text-xs text-fg-muted hover:bg-bg-elev-2 hover:text-fg"
+      >
+        <Icon icon={expanded ? ChevronUp : ChevronDown} size="xs" />
+        {expanded ? '收起详情' : '查看详情'}
+      </button>
+
+      {/* Expanded detail section */}
+      {expanded && (
+        <div className="rounded border border-border/50 bg-bg-elev-2/30 p-3">
+          {detailLoading ? (
+            <div className="flex items-center gap-2 text-xs text-fg-muted">
+              <Icon icon={Loader2} size="sm" className="animate-spin" />
+              加载中...
+            </div>
+          ) : detail ? (
+            <div className="space-y-3">
+              {/* Model */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-fg-muted">模型:</span>
+                <span className="text-fg">{detail.model || '继承默认'}</span>
+              </div>
+
+              {/* Skills count */}
+              <div className="flex items-center gap-2 text-xs">
+                <Icon icon={Wand2} size="xs" className="text-fg-muted" />
+                <span className="text-fg-muted">技能:</span>
+                <span className="text-fg">{detail.skills_count} 个</span>
+              </div>
+
+              {/* SOUL content */}
+              {detail.soul_content && (
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-fg-muted">身份角色 (SOUL):</div>
+                  <div className="max-h-48 overflow-y-auto rounded bg-bg-elev-1 p-2 text-xs text-fg-subtle">
+                    <pre className="whitespace-pre-wrap font-mono">{detail.soul_content}</pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-fg-muted">无法加载详情</div>
+          )}
         </div>
       )}
     </div>

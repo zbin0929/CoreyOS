@@ -179,7 +179,7 @@ pub async fn pack_profile_meta() -> Result<Vec<ProfileMeta>, String> {
         for entry in registry.packs {
             if let Some(manifest) = entry.manifest {
                 let pack_id = manifest.id.clone();
-                let pack_name = manifest.name.clone();
+                let pack_name = manifest.title.clone();
                 for profile in manifest.profiles.iter() {
                     profiles.push(ProfileMeta {
                         id: profile.id.clone(),

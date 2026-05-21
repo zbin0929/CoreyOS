@@ -223,3 +223,67 @@ pub async fn hermes_profile_import(
         message: format!("profile import: {e}"),
     })
 }
+
+/// Profile detail info including SOUL content.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProfileDetail {
+    pub name: String,
+    pub soul_content: Option<String>,
+    pub model: Option<String>,
+    pub skills_count: usize,
+}
+
+/// Get detailed info for a profile (SOUL content, model, skills count).
+#[tauri::command]
+pub async fn hermes_profile_detail(name: String) -> IpcResult<ProfileDetail> {
+    use std::fs;
+    use crate::paths::hermes_data_dir;
+
+    let hermes_dir = hermes_data_dir().map_err(|e| IpcError::Internal {
+        message: format!("hermes dir: {e}"),
+    })?;
+
+    let profile_dir = hermes_dir.join("profiles").join(&name);
+    if !profile_dir.exists() {
+        return Err(IpcError::NotFound {
+            message: format!("Profile not found: {name}"),
+        });
+    }
+
+    // Read SOUL.md
+    let soul_path = profile_dir.join("SOUL.md");
+    let soul_content = fs::read_to_string(&soul_path).ok();
+
+    // Read model from config.yaml
+    let config_path = profile_dir.join("config.yaml");
+    let model = if config_path.exists() {
+        fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|content| {
+                // Simple extraction: look for "model:" line
+                content.lines()
+                    .find(|line| line.trim().starts_with("model:"))
+                    .map(|line| line.trim().strip_prefix("model:").unwrap_or("").trim().to_string())
+            })
+            .filter(|s| !s.is_empty())
+    } else {
+        None
+    };
+
+    // Count skills
+    let skills_dir = profile_dir.join("skills");
+    let skills_count = if skills_dir.exists() {
+        fs::read_dir(&skills_dir)
+            .map(|entries| entries.filter_map(|e| e.ok()).count())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
+    Ok(ProfileDetail {
+        name,
+        soul_content,
+        model,
+        skills_count,
+    })
+}
