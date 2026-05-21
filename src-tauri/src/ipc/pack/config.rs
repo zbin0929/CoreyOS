@@ -9,9 +9,11 @@
 
 use std::fs;
 
+use serde::Serialize;
 use tauri::State;
 
 use crate::error::{IpcError, IpcResult};
+use crate::pack::manifest::ConfigField;
 use crate::state::AppState;
 
 /// Validate a config-file slug supplied by a Pack manifest. Names
@@ -162,6 +164,169 @@ pub async fn pack_named_config_set(
     .await
     .map_err(|e| IpcError::Internal {
         message: format!("named_config_set join: {e}"),
+    })?
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackConfigSchemaField {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub required: bool,
+    pub secret: bool,
+    pub description: String,
+    pub help: String,
+    pub group: String,
+    pub validation: String,
+    pub placeholder: String,
+    pub default: serde_json::Value,
+    pub options: Vec<String>,
+    pub fields: Vec<PackConfigSchemaField>,
+    pub item: Vec<PackConfigSchemaField>,
+    pub show_if: String,
+    pub preview: String,
+    pub min_items: u32,
+    pub max_items: u32,
+    pub add_label: String,
+    pub width: String,
+    pub key_label: String,
+}
+
+impl From<&ConfigField> for PackConfigSchemaField {
+    fn from(f: &ConfigField) -> Self {
+        let default_json = serde_json::to_value(&f.default).unwrap_or(serde_json::Value::Null);
+        Self {
+            key: f.key.clone(),
+            label: f.label.clone(),
+            field_type: f.field_type.clone(),
+            required: f.required,
+            secret: f.field_type == "secret",
+            description: f.description.clone(),
+            help: f.help.clone(),
+            group: f.group.clone(),
+            validation: f.validation.clone(),
+            placeholder: f.placeholder.clone(),
+            default: default_json,
+            options: f.options.clone(),
+            fields: f.fields.iter().map(PackConfigSchemaField::from).collect(),
+            item: f.item.iter().map(PackConfigSchemaField::from).collect(),
+            show_if: f.show_if.clone(),
+            preview: f.preview.clone(),
+            min_items: f.min_items,
+            max_items: f.max_items,
+            add_label: f.add_label.clone(),
+            width: f.width.clone(),
+            key_label: f.key_label.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackConfigSchema {
+    pub pack_id: String,
+    pub pack_title: String,
+    pub schema: Vec<PackConfigSchemaField>,
+}
+
+#[tauri::command]
+pub async fn pack_config_schema(
+    pack_id: String,
+    state: State<'_, AppState>,
+) -> IpcResult<PackConfigSchema> {
+    let registry = state.packs.read();
+    let entry = registry
+        .packs
+        .iter()
+        .find(|e| {
+            e.manifest
+                .as_deref()
+                .map(|m| m.id == pack_id)
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| IpcError::Internal {
+            message: format!("pack not found: {pack_id}"),
+        })?;
+    let manifest = entry.manifest.as_deref().ok_or_else(|| IpcError::Internal {
+        message: format!("pack has no manifest: {pack_id}"),
+    })?;
+    Ok(PackConfigSchema {
+        pack_id: manifest.id.clone(),
+        pack_title: manifest.title.clone(),
+        schema: manifest
+            .config_schema
+            .iter()
+            .map(PackConfigSchemaField::from)
+            .collect(),
+    })
+}
+
+#[tauri::command]
+pub async fn pack_config_get(
+    pack_id: String,
+    state: State<'_, AppState>,
+) -> IpcResult<serde_json::Value> {
+    let hermes_dir = state.packs.read().hermes_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        let yaml_path = hermes_dir
+            .join("pack-data")
+            .join(&pack_id)
+            .join("config.yaml");
+        if !yaml_path.exists() {
+            return Ok(serde_json::Value::Object(serde_json::Map::new()));
+        }
+        let raw = fs::read_to_string(&yaml_path).map_err(|e| IpcError::Internal {
+            message: format!("read pack config: {e}"),
+        })?;
+        let value: serde_json::Value =
+            serde_yaml::from_str(&raw).map_err(|e| IpcError::Internal {
+                message: format!("parse pack config: {e}"),
+            })?;
+        Ok(value)
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("pack_config_get join: {e}"),
+    })?
+}
+
+#[tauri::command]
+pub async fn pack_config_set(
+    pack_id: String,
+    config: serde_json::Value,
+    state: State<'_, AppState>,
+) -> IpcResult<()> {
+    let hermes_dir = state.packs.read().hermes_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        let pack_data_dir = hermes_dir.join("pack-data").join(&pack_id);
+        fs::create_dir_all(&pack_data_dir).map_err(|e| IpcError::Internal {
+            message: format!("create pack-data dir: {e}"),
+        })?;
+        let yaml_path = pack_data_dir.join("config.yaml");
+        let tmp = yaml_path.with_extension("yaml.tmp");
+        let body = serde_yaml::to_string(&config).map_err(|e| IpcError::Internal {
+            message: format!("serialize pack config: {e}"),
+        })?;
+        fs::write(&tmp, body).map_err(|e| IpcError::Internal {
+            message: format!("write pack config tmp: {e}"),
+        })?;
+        fs::rename(&tmp, &yaml_path).map_err(|e| IpcError::Internal {
+            message: format!("rename pack config: {e}"),
+        })?;
+
+        // Inject env vars and restart gateway so new config takes effect
+        crate::hermes_config::inject_pack_env_vars();
+        if let Err(e) = crate::hermes_config::gateway_restart() {
+            tracing::warn!(pack_id = %pack_id, error = %e, "gateway restart after config save failed");
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| IpcError::Internal {
+        message: format!("pack_config_set join: {e}"),
     })?
 }
 

@@ -526,6 +526,162 @@ fn ensure_api_server_env() {
     }
 }
 
+/// Inject Pack configuration values as environment variables into
+/// `~/.hermes/.env`. Reads all enabled Packs' `config.yaml` files and
+/// maps `type: secret` fields to uppercase env var names. For example,
+/// a Pack with `config_schema: [{key: apify_token, type: secret}]` and
+/// `config.yaml: {apify_token: "abc123"}` will inject `APIFY_TOKEN=abc123`.
+///
+/// Called from `gateway_start()` / `gateway_restart()` so the env vars
+/// are available when Hermes boots. Best-effort: errors are logged but
+/// never propagated.
+pub fn inject_pack_env_vars() {
+    let hermes_dir = match crate::paths::hermes_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let env_path = hermes_dir.join(".env");
+    let packs_dir = hermes_dir.join("packs");
+
+    if !packs_dir.exists() {
+        return;
+    }
+
+    let mut env_vars: Vec<(String, String)> = Vec::new();
+
+    let Ok(entries) = std::fs::read_dir(&packs_dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let pack_dir = entry.path();
+        if !pack_dir.is_dir() {
+            continue;
+        }
+
+        let manifest_path = pack_dir.join("manifest.yaml");
+        if !manifest_path.exists() {
+            continue;
+        }
+
+        let pack_id = pack_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        let config_path = hermes_dir
+            .join("pack-data")
+            .join(&pack_id)
+            .join("config.yaml");
+
+        if !config_path.exists() {
+            continue;
+        }
+
+        let Ok(manifest_raw) = std::fs::read_to_string(&manifest_path) else {
+            continue;
+        };
+        let Ok(config_raw) = std::fs::read_to_string(&config_path) else {
+            continue;
+        };
+
+        let Ok(manifest): Result<serde_yaml::Value, _> = serde_yaml::from_str(&manifest_raw) else {
+            continue;
+        };
+        let Ok(config): Result<serde_yaml::Value, _> = serde_yaml::from_str(&config_raw) else {
+            continue;
+        };
+
+        let Some(schema) = manifest.get("config_schema").and_then(|s| s.as_sequence()) else {
+            continue;
+        };
+
+        for field in schema {
+            let Some(key) = field.get("key").and_then(|k| k.as_str()) else {
+                continue;
+            };
+            let field_type = field
+                .get("type")
+                .and_then(|t| t.as_str())
+                .unwrap_or("string");
+
+            if field_type != "secret" && field_type != "string" {
+                continue;
+            }
+
+            if let Some(value) = config.get(key).and_then(|v| v.as_str()) {
+                if !value.is_empty() {
+                    let env_key = key.to_uppercase();
+                    // Only add if not already present (first pack wins)
+                    if !env_vars.iter().any(|(k, _)| k == &env_key) {
+                        env_vars.push((env_key, value.to_string()));
+                    }
+                }
+            }
+        }
+    }
+
+    if env_vars.is_empty() {
+        return;
+    }
+
+    let raw = std::fs::read_to_string(&env_path).unwrap_or_default();
+    let mut lines: Vec<String> = raw.lines().map(String::from).collect();
+    let mut added = 0;
+
+    for (key, value) in &env_vars {
+        let exists = lines.iter().any(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with('#') {
+                return false;
+            }
+            if let Some(eq) = trimmed.find('=') {
+                trimmed[..eq].trim() == key
+            } else {
+                false
+            }
+        });
+
+        // Quote value if it contains special characters
+        let quoted_value = if value.contains('=') || value.contains('\n') || value.contains('"') || value.contains('\'') || value.contains(' ') {
+            format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+        } else {
+            value.clone()
+        };
+
+        if !exists {
+            lines.push(format!("{key}={quoted_value}"));
+            added += 1;
+        } else {
+            for line in &mut lines {
+                let trimmed = line.trim();
+                if trimmed.starts_with('#') {
+                    continue;
+                }
+                if let Some(eq) = trimmed.find('=') {
+                    if trimmed[..eq].trim() == key {
+                        *line = format!("{key}={quoted_value}");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if added > 0 || !env_vars.is_empty() {
+        let new_content = lines.join("\n") + "\n";
+        match std::fs::write(&env_path, new_content) {
+            Ok(()) => tracing::info!(
+                "injected {} pack env vars into {}",
+                env_vars.len(),
+                env_path.display()
+            ),
+            Err(e) => tracing::warn!("failed to write pack env vars: {e}"),
+        }
+    }
+}
+
 /// Minimum `agent.max_turns` Corey writes into `~/.hermes/config.yaml`
 /// on every gateway start/restart. Hermes' upstream default is 90 — for
 /// "scrape every page, then export" style sessions Corey users routinely
@@ -668,6 +824,7 @@ pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
     ensure_agent_max_turns();
+    inject_pack_env_vars();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);
@@ -711,6 +868,7 @@ pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
     ensure_agent_max_turns();
+    inject_pack_env_vars();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);

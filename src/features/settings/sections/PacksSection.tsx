@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
-import { FileUp, Lock, Package, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { FileUp, Lock, Package, RefreshCw, Settings2, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -9,6 +9,7 @@ import { usePackStore } from '@/lib/usePackStore';
 import { packImportZip, packUninstall } from '@/lib/ipc/pack';
 
 import { Section } from '../shared';
+import { PackConfigPanel } from './PackConfigPanel';
 
 export function PacksSection() {
   const { t } = useTranslation();
@@ -19,6 +20,7 @@ export function PacksSection() {
   const setEnabled = usePackStore((s) => s.setEnabled);
 
   const [importing, setImporting] = useState(false);
+  const [configPackId, setConfigPackId] = useState<string | null>(null);
 
   useEffect(() => {
     void refresh();
@@ -130,6 +132,15 @@ export function PacksSection() {
                     type="button"
                     size="sm"
                     variant="ghost"
+                    onClick={() => setConfigPackId(p.manifestId)}
+                    title={t('settings.packs.configure', { defaultValue: '配置' })}
+                  >
+                    <Icon icon={Settings2} size="sm" className="text-fg-subtle" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
                     disabled={Boolean(p.error) || p.licenseGated}
                     onClick={() => void setEnabled(p.manifestId, !p.enabled)}
                     title={p.enabled ? t('settings.packs.disable') : t('settings.packs.enable')}
@@ -156,6 +167,15 @@ export function PacksSection() {
           </ul>
         )}
       </div>
+
+      {configPackId && (
+        <div className="mt-4 rounded-lg border border-border bg-bg-elev-1 p-4">
+          <PackConfigPanel
+            packId={configPackId}
+            onClose={() => setConfigPackId(null)}
+          />
+        </div>
+      )}
     </Section>
   );
 }

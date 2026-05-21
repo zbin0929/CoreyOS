@@ -26,7 +26,7 @@
 //! 5. 12 view templates wired through the renderer.
 
 pub(crate) mod backup;
-mod manifest;
+pub(crate) mod manifest;
 mod migrations;
 pub mod profiles;
 mod scanner;

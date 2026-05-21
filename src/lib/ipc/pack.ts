@@ -153,3 +153,21 @@ export function packImportZip(zipPath: string): Promise<string> {
 export function packUninstall(packId: string): Promise<void> {
   return invoke<void>('pack_uninstall', { packId });
 }
+
+export interface PackConfigSchema {
+  packId: string;
+  packTitle: string;
+  schema: PackConfigSchemaField[];
+}
+
+export function packConfigSchema(packId: string): Promise<PackConfigSchema> {
+  return invoke<PackConfigSchema>('pack_config_schema', { packId });
+}
+
+export function packConfigGet(packId: string): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('pack_config_get', { packId });
+}
+
+export function packConfigSet(packId: string, config: Record<string, unknown>): Promise<void> {
+  return invoke<void>('pack_config_set', { packId, config });
+}
