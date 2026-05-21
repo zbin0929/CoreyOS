@@ -15,7 +15,7 @@
     "scheduler": "定时任务",
     "channels": "平台通道",
     "models": "大模型",
-    "profiles": "配置集",
+    "profiles": "专家管理",
     "runbooks": "运行手册",
     "budgets": "预算",
     "memory": "长期记忆",

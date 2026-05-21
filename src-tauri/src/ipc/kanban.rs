@@ -149,16 +149,54 @@ pub async fn kanban_show(task_id: String) -> Result<KanbanTask, String> {
     Ok(task)
 }
 
+/// Profile info for assignee selection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileOption {
+    pub id: String,
+    pub name: String,
+}
+
 /// List available profiles (assignees).
-/// Uses the hermes_profiles module for reliable profile listing.
+/// Returns profile ID and display name from Pack manifests.
 #[tauri::command]
-pub async fn kanban_assignees() -> Result<Vec<String>, String> {
+pub async fn kanban_assignees() -> Result<Vec<ProfileOption>, String> {
     use crate::hermes_profiles;
+    use crate::pack::Registry;
+    use crate::paths::hermes_data_dir;
 
     let view = hermes_profiles::list_profiles().map_err(|e| format!("failed to list profiles: {e}"))?;
 
-    let mut profiles: Vec<String> = view.profiles.into_iter().map(|p| p.name).collect();
-    profiles.sort();
+    // Build a map of profile ID -> display name from Pack manifests
+    let mut name_map: HashMap<String, String> = HashMap::new();
+    if let Ok(hermes_dir) = hermes_data_dir() {
+        let registry = Registry::scan(&hermes_dir);
+        for entry in registry.packs {
+            if let Some(manifest) = entry.manifest {
+                for profile in manifest.profiles.iter() {
+                    let display_name = if profile.name.is_empty() {
+                        profile.id.clone()
+                    } else {
+                        profile.name.clone()
+                    };
+                    name_map.insert(profile.id.clone(), display_name);
+                }
+            }
+        }
+    }
+
+    let mut profiles: Vec<ProfileOption> = view
+        .profiles
+        .into_iter()
+        .map(|p| {
+            let display_name = name_map.get(&p.name).cloned().unwrap_or_else(|| p.name.clone());
+            ProfileOption {
+                id: p.name,
+                name: display_name,
+            }
+        })
+        .collect();
+
+    profiles.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(profiles)
 }

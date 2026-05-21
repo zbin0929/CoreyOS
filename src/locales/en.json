@@ -15,7 +15,7 @@
     "scheduler": "Scheduler",
     "channels": "Channels",
     "models": "LLMs",
-    "profiles": "Profiles",
+    "profiles": "Experts",
     "runbooks": "Runbooks",
     "budgets": "Budgets",
     "memory": "Long-term memory",

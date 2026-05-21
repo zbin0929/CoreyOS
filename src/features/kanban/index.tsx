@@ -17,18 +17,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Drawer } from '@/components/ui/drawer';
 import { cn } from '@/lib/cn';
 
-const PROFILE_LABELS: Record<string, string> = {
-  'ecom-market-expert': '市场规模专家',
-  'ecom-competitor-expert': '竞品拆解专家',
-  'ecom-profit-expert': '盈利评估专家',
-  'ecom-synthesizer': '决策协调者',
-  'market-expert': '市场专家',
-  'competitor-expert': '竞品专家',
-  'profit-expert': '盈利专家',
-  'synthesizer': '协调者',
-};
-
-const getProfileLabel = (id: string) => PROFILE_LABELS[id] || id;
+interface ProfileOption {
+  id: string;
+  name: string;
+}
 
 interface KanbanTask {
   id: string;
@@ -98,12 +90,17 @@ const statusConfig: Record<
 export default function KanbanPage() {
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [stats, setStats] = useState<KanbanStats | null>(null);
-  const [assignees, setAssignees] = useState<string[]>([]);
+  const [assignees, setAssignees] = useState<ProfileOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newAssignee, setNewAssignee] = useState('');
   const [newBody, setNewBody] = useState('');
+
+  const getProfileLabel = (id: string) => {
+    const profile = assignees.find((p) => p.id === id);
+    return profile?.name || id;
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -111,7 +108,7 @@ export default function KanbanPage() {
       const [taskList, statData, assigneeList] = await Promise.all([
         invoke<KanbanTask[]>('kanban_list'),
         invoke<KanbanStats>('kanban_stats'),
-        invoke<string[]>('kanban_assignees'),
+        invoke<ProfileOption[]>('kanban_assignees'),
       ]);
       setTasks(taskList);
       setStats(statData);
@@ -166,8 +163,8 @@ export default function KanbanPage() {
   const columns = ['ready', 'running', 'done'];
 
   const assigneeOptions: SelectOption[] = assignees.map((a) => ({
-    value: a,
-    label: getProfileLabel(a),
+    value: a.id,
+    label: a.name,
   }));
 
   return (

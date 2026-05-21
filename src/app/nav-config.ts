@@ -81,6 +81,7 @@ export const NAV: NavEntry[] = [
   { id: 'home', path: '/', labelKey: 'nav.home', icon: Home, group: 'workspace', phase: 0, shortcut: ['mod', '0'] },
   { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'workspace', phase: 9, shortcut: ['mod', '2'] },
   { id: 'kanban', path: '/kanban', labelKey: 'nav.kanban', icon: Users, group: 'workspace', phase: 9 },
+  { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree, group: 'workspace', phase: 9 },
   { id: 'approvals', path: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, group: 'workspace', phase: 9 },
 
 
@@ -119,7 +120,6 @@ export const DEMOTED_ROUTES: DemotedRoute[] = [
   { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot },
   { id: 'scheduler', path: '/scheduler', labelKey: 'nav.scheduler', icon: Clock },
   { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked },
-  { id: 'profiles', path: '/profiles', labelKey: 'nav.profiles', icon: FolderTree },
   { id: 'voice', path: '/voice', labelKey: 'nav.voice', icon: Mic },
   { id: 'compare', path: '/compare', labelKey: 'nav.compare', icon: Columns3 },
   { id: 'terminal', path: '/terminal', labelKey: 'nav.terminal', icon: Terminal },
