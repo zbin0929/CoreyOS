@@ -23,6 +23,7 @@ pub mod hermes_instances;
 pub mod hermes_logs;
 pub mod hermes_memory;
 pub mod hermes_profiles;
+pub mod kanban;
 pub mod knowledge;
 pub mod learning;
 pub mod license;

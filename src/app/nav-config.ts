@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Workflow as WorkflowIcon,
   Settings,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -79,6 +80,7 @@ export const NAV: NavEntry[] = [
   // run a workflow, audit a task, swap a model, glance at home.
   { id: 'home', path: '/', labelKey: 'nav.home', icon: Home, group: 'workspace', phase: 0, shortcut: ['mod', '0'] },
   { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'workspace', phase: 9, shortcut: ['mod', '2'] },
+  { id: 'kanban', path: '/kanban', labelKey: 'nav.kanban', icon: Users, group: 'workspace', phase: 9 },
   { id: 'approvals', path: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, group: 'workspace', phase: 9 },
 
 

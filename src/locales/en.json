@@ -25,6 +25,7 @@
     "workflows": "Workflows",
     "tasks": "Tasks",
     "approvals": "Approvals",
+    "kanban": "Multi-Agent",
     "agents": "Agents",
     "settings": "Settings",
     "section_core": "Core",

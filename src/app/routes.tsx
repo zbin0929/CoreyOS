@@ -58,6 +58,7 @@ const HelpRoute = lazyFeature(() => import('@/features/help'), 'HelpRoute');
 const PackRoute = lazyFeature(() => import('@/features/pack'), 'PackRoute');
 const TasksRoute = lazyFeature(() => import('@/features/tasks'), 'TasksRoute');
 const ApprovalsRoute = lazyFeature(() => import('@/features/approvals'), 'ApprovalsRoute');
+const KanbanRoute = lazy(() => import('@/features/kanban'));
 
 /**
  * Wrap a route component so it renders the
@@ -272,6 +273,12 @@ const approvalsRoute = createRoute({
   component: ApprovalsRoute,
 });
 
+const kanbanRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/kanban',
+  component: KanbanRoute,
+});
+
 const helpRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/help',
@@ -310,6 +317,7 @@ const routeTree = rootRoute.addChildren([
   workflowRoute,
   tasksRoute,
   approvalsRoute,
+  kanbanRoute,
   helpRoute,
   packRoute,
   settingsRoute,

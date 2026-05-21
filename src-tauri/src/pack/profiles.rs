@@ -8,23 +8,23 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use tracing::{info, warn};
 
 use super::manifest::ProfileSpec;
+use crate::hermes_profiles;
 
 /// Create Hermes profiles declared in a Pack manifest.
 ///
 /// For each profile:
-/// 1. Run `hermes profile create <id>` (idempotent)
+/// 1. Create profile via hermes_profiles module
 /// 2. Copy the SOUL.md from Pack to profile dir
 ///
 /// Returns the number of profiles successfully created.
 pub fn install_profiles(
     profiles: &[ProfileSpec],
     pack_dir: &Path,
-    _hermes_dir: &Path,
+    hermes_dir: &Path,
 ) -> Result<usize, String> {
     let mut created = 0;
 
@@ -34,22 +34,22 @@ pub fn install_profiles(
             continue;
         }
 
-        // 1. Create profile (idempotent — Hermes handles existing)
-        let output = Command::new("hermes")
-            .args(["profile", "create", &profile.id])
-            .output()
-            .map_err(|e| format!("failed to run hermes profile create: {e}"))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // "already exists" is not an error
-            if !stderr.contains("already exists") {
-                warn!(
-                    profile_id = %profile.id,
-                    stderr = %stderr,
-                    "hermes profile create failed"
-                );
-                continue;
+        // 1. Create profile (idempotent)
+        match hermes_profiles::create_profile(&profile.id, None) {
+            Ok(_) => {
+                info!(profile_id = %profile.id, "profile created");
+            }
+            Err(e) => {
+                let err_str = e.to_string();
+                // "already exists" is not an error
+                if !err_str.contains("already exists") && !err_str.contains("AlreadyExists") {
+                    warn!(
+                        profile_id = %profile.id,
+                        error = %e,
+                        "hermes profile create failed"
+                    );
+                    continue;
+                }
             }
         }
 
@@ -58,10 +58,7 @@ pub fn install_profiles(
             let soul_src = pack_dir.join(&profile.soul);
             if soul_src.exists() {
                 // Profile dir is ~/.hermes/profiles/<id>/
-                let profile_dir = dirs::home_dir()
-                    .ok_or("no home dir")?
-                    .join(".hermes/profiles")
-                    .join(&profile.id);
+                let profile_dir = hermes_dir.join("profiles").join(&profile.id);
 
                 let soul_dst = profile_dir.join("SOUL.md");
 
@@ -89,7 +86,6 @@ pub fn install_profiles(
         }
 
         created += 1;
-        info!(profile_id = %profile.id, name = %profile.name, "profile created");
     }
 
     Ok(created)
@@ -100,6 +96,7 @@ pub fn install_profiles(
 /// Called when a Pack is disabled or uninstalled.
 ///
 /// Returns the number of profiles successfully deleted.
+#[allow(dead_code)]
 pub fn uninstall_profiles(profiles: &[ProfileSpec]) -> Result<usize, String> {
     let mut deleted = 0;
 
@@ -108,26 +105,23 @@ pub fn uninstall_profiles(profiles: &[ProfileSpec]) -> Result<usize, String> {
             continue;
         }
 
-        let output = Command::new("hermes")
-            .args(["profile", "delete", &profile.id])
-            .output()
-            .map_err(|e| format!("failed to run hermes profile delete: {e}"))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // "not found" is not an error
-            if !stderr.contains("not found") && !stderr.contains("does not exist") {
-                warn!(
-                    profile_id = %profile.id,
-                    stderr = %stderr,
-                    "hermes profile delete failed"
-                );
-                continue;
+        match hermes_profiles::delete_profile(&profile.id, None) {
+            Ok(_) => {
+                deleted += 1;
+                info!(profile_id = %profile.id, "profile deleted");
+            }
+            Err(e) => {
+                let err_str = e.to_string();
+                // "not found" is not an error
+                if !err_str.contains("not found") && !err_str.contains("NotFound") {
+                    warn!(
+                        profile_id = %profile.id,
+                        error = %e,
+                        "hermes profile delete failed"
+                    );
+                }
             }
         }
-
-        deleted += 1;
-        info!(profile_id = %profile.id, "profile deleted");
     }
 
     Ok(deleted)

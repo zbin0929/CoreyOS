@@ -25,6 +25,7 @@
     "workflows": "工作流",
     "tasks": "任务",
     "approvals": "审批",
+    "kanban": "多Agent协作",
     "agents": "Agents",
     "settings": "设置",
     "section_core": "核心",
