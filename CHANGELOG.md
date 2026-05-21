@@ -6,9 +6,9 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
-## 2026-05-22 — v0.3.0 · 跨境电商 Pack v0.5.0 + 基座保密规则
+## 2026-05-22 — v0.3.0 · 跨境电商 Pack v0.5.0 + 一键安装 + 基座保密规则
 
-> 跨境电商 Pack 大升级：从 3 Skills 扩展到 18 Skills，新增 9 个专家 Profiles，支持 API Key 配置（Apify / 卖家精灵）。基座新增系统保密规则，防止 AI 透露 SOUL/Skill 内容。
+> 跨境电商 Pack 大升级：从 3 Skills 扩展到 18 Skills，新增 9 个专家 Profiles，支持 API Key 配置（Apify / 卖家精灵）。**一键安装**：PyInstaller 打包 Hermes 成独立二进制，客户双击即用，无需装 Python/Homebrew。基座新增系统保密规则，防止 AI 透露 SOUL/Skill 内容。
 
 ### Shipped
 
@@ -31,6 +31,13 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 - **Hermes 搜索后端配置**
   - `web.search_backend: duckduckgo`（免费无限次）
+
+- **一键安装**（`src-tauri/src/hermes_config/gateway.rs` + CI workflows）
+  - PyInstaller 打包 Hermes 成独立二进制 `hermes-standalone`（~133 MB）
+  - 内嵌到 `Corey.app/Contents/Resources/`（macOS）或 Corey.exe 同目录（Windows）
+  - `resolve_hermes_binary()` 优先查找内嵌二进制
+  - CI 自动构建：`.github/workflows/release-macos.yml` + `release-windows.yml`
+  - **客户双击即用，无需装 Python/Homebrew/任何东西**
 
 ### 验证
 

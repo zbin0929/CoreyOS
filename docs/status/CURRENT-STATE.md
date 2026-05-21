@@ -42,6 +42,7 @@
 | Memory | MEMORY.md + USER.md 编辑 + holographic 后端 + FTS5 搜索 + Chat 自动 fact 召回 + entity 列表 UI + typed relations 图查询 | ✅ 可用 | 见 `../spec/memory-strategy.md` / `../spec/memory-knowledge-graph.md` |
 | 消息渠道 | Telegram / Discord / Slack / WeCom / WeChat / Feishu / WhatsApp / Signal / DingTalk / Email / SMS / iMessage / Matrix / Mattermost / Webhooks / Home Assistant（16 种） | ✅ 可用 | |
 | License | ed25519 离线签名 + machine ID 绑定 + features 联动 | ✅ 已落地 | `scripts/new-customer.sh` 一键交付 |
+| 一键安装 | PyInstaller 打包 Hermes 成独立二进制，内嵌到安装包 | ✅ 已落地 | 客户双击即用，无需装 Python/Homebrew；macOS ~210MB / Windows ~200MB |
 | 安全防护（L0-L3） | SOUL.md 铁律 + corey-guards 物理拦截 + Hermes DANGEROUS_PATTERNS + 路径沙箱 + **系统保密规则** | ✅ 已落地 | 审批卡片已修复（`/v1/runs` 迁移）；v0.3.0 新增基座保密规则（禁止 AI 透露 SOUL/Skill 内容）|
 | Knowledge | 文档上传 → 分块 → Jaccard/BGE-M3 搜索 → 注入对话 | ✅ 可用 | |
 | 语音 | push-to-talk ASR + TTS（OpenAI / Zhipu / Groq / Edge TTS） | ✅ 可用 | |
@@ -51,12 +52,11 @@
 
 ## 已知关键缺陷（简表）
 
-详见 [`known-issues.md`](./known-issues.md)；以下是截至 2026-05-12 的 P0：
+详见 [`known-issues.md`](./known-issues.md)；以下是截至 2026-05-22 的 P0：
 
-1. **0 真实客户** —— 产品从未在真实 B2B 客户手里跑过完整工作日
-2. **跨境电商 Pack 5/9 能力落地** —— `cross_border_ecom` v0.2.0 已落地 3 Skill + 3 Workflow + demo CSV；剩余 P1/P2 能力阻塞在 SP-API 账号 + 真实客户数据
-3. **Amazon SP-API 开发者账号**申请阻塞 v0.3.0 跨境电商 Pack 的真实数据接入
-4. **Browser 工具脆弱** —— Playwright 子进程在 CI 和 Windows 上不稳定
+1. ~~**客户安装需要手动装 Python**~~ —— ✅ 已修复（v0.3.0 内嵌 hermes-standalone）
+2. **Amazon SP-API 开发者账号**申请阻塞跨境电商 Pack 的真实数据接入
+3. **Browser 工具脆弱** —— Playwright 子进程在 CI 和 Windows 上不稳定
 
 ## 当前商业模式
 

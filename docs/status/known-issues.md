@@ -7,7 +7,7 @@
 
 ## 2026-05-22 · 首次客户安装失败（P0 阻塞交付）
 
-### 🔴 未修：客户安装需要手动装 Python + Homebrew（P0）
+### ✅ 已修复：客户安装需要手动装 Python + Homebrew（P0）
 
 - **时间**：2026-05-22 首次真实客户安装
 - **现象**：客户双击 Corey.dmg 安装后，启动报错 `Bootstrap failed`，需要手动：
@@ -36,8 +36,10 @@
   
   # 3. 重启电脑，再打开 Corey
   ```
-- **根本修复**：用 PyInstaller 把 Hermes 打包成独立可执行文件（133 MB），打进 Corey.dmg。已验证可行（见 TODO #13）
-- **工期**：5-7 天（macOS + Windows 双平台）
+- **根本修复**：✅ 2026-05-22 完成。用 PyInstaller 把 Hermes 打包成独立可执行文件（133 MB），内嵌到安装包。
+  - `resolve_hermes_binary()` 优先查找 `Corey.app/Contents/Resources/hermes-standalone`（macOS）或同目录 `hermes-standalone.exe`（Windows）
+  - CI workflow 自动构建：`.github/workflows/release-macos.yml` + `release-windows.yml`
+  - 客户双击即用，无需装 Python/Homebrew/任何东西
 - **教训**：**"一键安装"不是口号，是产品底线。** 任何需要客户打开终端的安装流程都是失败的。
 
 ---
