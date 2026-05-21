@@ -1331,10 +1331,10 @@ pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
-            // macOS: Corey.app/Contents/MacOS/Corey → ../Resources/hermes-standalone
+            // macOS: Corey.app/Contents/MacOS/Corey → ../Resources/binaries/hermes-standalone
             #[cfg(target_os = "macos")]
             {
-                let resources = exe_dir.join("../Resources").join(STANDALONE_NAME);
+                let resources = exe_dir.join("../Resources/binaries").join(STANDALONE_NAME);
                 if resources.is_file() {
                     if let Ok(canonical) = resources.canonicalize() {
                         return Ok(canonical);
@@ -1343,7 +1343,16 @@ pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
                 }
             }
 
-            // Windows / Linux / dev: same directory as exe
+            // Windows: same directory as exe, in binaries/ subdir
+            #[cfg(target_os = "windows")]
+            {
+                let binaries_dir = exe_dir.join("binaries").join(STANDALONE_NAME);
+                if binaries_dir.is_file() {
+                    return Ok(binaries_dir);
+                }
+            }
+
+            // Fallback: same directory as exe (dev mode)
             let same_dir = exe_dir.join(STANDALONE_NAME);
             if same_dir.is_file() {
                 return Ok(same_dir);
