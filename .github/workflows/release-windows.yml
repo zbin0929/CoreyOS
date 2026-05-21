@@ -73,8 +73,12 @@ jobs:
           echo "Installing Hermes and PyInstaller..."
           pip install hermes-agent pyinstaller
           
-          echo "Finding hermes_cli location..."
-          HERMES_CLI=$(python -c "import hermes_cli; print(hermes_cli.__path__[0])")
+          echo "Creating entry point script..."
+          cat > /tmp/hermes_entry.py << 'EOF'
+          from hermes_cli.main import main
+          if __name__ == "__main__":
+              main()
+          EOF
           
           echo "Building hermes-standalone.exe..."
           mkdir -p src-tauri/binaries
@@ -86,7 +90,11 @@ jobs:
             --specpath /tmp/pyinstaller-build \
             --clean \
             --noconfirm \
-            "${HERMES_CLI}/main.py"
+            --collect-all hermes_cli \
+            --collect-all hermes_agent \
+            --hidden-import hermes_cli \
+            --hidden-import hermes_cli.main \
+            /tmp/hermes_entry.py
           
           echo "Verifying build..."
           ls -lh src-tauri/binaries/

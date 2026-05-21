@@ -1330,14 +1330,21 @@ pub fn resolve_hermes_binary() -> io::Result<PathBuf> {
     const STANDALONE_NAME: &str = "hermes-standalone.exe";
 
     if let Ok(exe) = std::env::current_exe() {
-        // macOS: Corey.app/Contents/MacOS/Corey → ../Resources/hermes-standalone
-        if let Some(macos_dir) = exe.parent() {
-            let resources = macos_dir.join("../Resources").join(STANDALONE_NAME);
-            if resources.is_file() {
-                return Ok(resources.canonicalize().unwrap_or(resources));
+        if let Some(exe_dir) = exe.parent() {
+            // macOS: Corey.app/Contents/MacOS/Corey → ../Resources/hermes-standalone
+            #[cfg(target_os = "macos")]
+            {
+                let resources = exe_dir.join("../Resources").join(STANDALONE_NAME);
+                if resources.is_file() {
+                    if let Ok(canonical) = resources.canonicalize() {
+                        return Ok(canonical);
+                    }
+                    return Ok(resources);
+                }
             }
-            // Windows / dev: same directory as exe
-            let same_dir = macos_dir.join(STANDALONE_NAME);
+
+            // Windows / Linux / dev: same directory as exe
+            let same_dir = exe_dir.join(STANDALONE_NAME);
             if same_dir.is_file() {
                 return Ok(same_dir);
             }
