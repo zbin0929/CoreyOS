@@ -32,11 +32,12 @@ import { useEffect, useState } from 'react';
 
 import { ipcErrorMessage, talkLocalStatus, voiceGetConfig, voiceWarmupMic } from '@/lib/ipc';
 
-import type { TalkReadiness } from './talkTypes';
+import type { MicPermission, TalkReadiness } from './talkTypes';
 
 export interface UseTalkReadinessReturn {
   readiness: TalkReadiness;
   localRoute: { stt: boolean; tts: boolean };
+  initialMicPermission: MicPermission;
 }
 
 export function useTalkReadiness(): UseTalkReadinessReturn {
@@ -50,6 +51,7 @@ export function useTalkReadiness(): UseTalkReadinessReturn {
   // true the talk pipeline routes through `talk_local_*` IPCs
   // instead of the cloud `voice_*` ones — full-offline path.
   const [localRoute, setLocalRoute] = useState({ stt: false, tts: false });
+  const [initialMicPermission, setInitialMicPermission] = useState<MicPermission>('unknown');
 
   // ── Readiness probe ─────────────────────────────────────
   // Talk Mode requires either:
@@ -95,23 +97,22 @@ export function useTalkReadiness(): UseTalkReadinessReturn {
   }, []);
 
   // ── Mic permission warmup (macOS) ───────────────────────
-  // Fire-and-forget on mount: the act of opening cpal *itself*
-  // is what triggers the macOS Privacy dialog, regardless of
-  // whether we wait for samples. Earlier we plumbed the warmup
-  // result into `micPermission` to drive a pre-emptive banner —
-  // that turned out to false-positive on real users (CoreAudio
-  // cold-start can take >500ms to deliver the first callback
-  // even when permission is granted, e.g. coming back from
-  // sleep, switching default device, or first launch after
-  // boot). The dropped reads then made the banner say "denied"
-  // even though the next PTT press recorded fine. Now we keep
-  // the warmup purely as a dialog-trigger and rely on actual
-  // recording outcomes to set `micPermission` — granted on
-  // success, denied on `mic_permission_denied` error. That
-  // matches user mental model ("if it's working, no warning").
+  // Triggers the macOS Privacy dialog on first mount. We now also
+  // capture the result to show an immediate warning if permission
+  // was previously denied — this prevents the confusing "nothing
+  // happens when I press space" experience. The 500ms cold-start
+  // false-positive concern is addressed by only treating 'denied'
+  // as definitive; 'granted' from warmup is ignored (we still
+  // rely on actual recording success to confirm).
   useEffect(() => {
-    void voiceWarmupMic().catch(() => {});
+    voiceWarmupMic()
+      .then((result) => {
+        if (result === 'denied') {
+          setInitialMicPermission('denied');
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  return { readiness, localRoute };
+  return { readiness, localRoute, initialMicPermission };
 }

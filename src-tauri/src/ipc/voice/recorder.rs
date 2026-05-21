@@ -109,10 +109,17 @@ fn record_audio_blocking(secs: u64, active: &AtomicBool) -> Result<Vec<u8>, Stri
         }
     }
 
+    let elapsed_ms = start.elapsed().as_millis();
     drop(stream);
     active.store(false, Ordering::SeqCst);
 
     if all_samples.is_empty() {
+        // If recording was stopped very quickly (< 200ms), it's likely
+        // the user just tapped space instead of holding it. Don't
+        // misdiagnose as permission denied.
+        if elapsed_ms < 200 {
+            return Err("recording_too_short".into());
+        }
         // On macOS, an empty sample buffer almost always means the
         // user has denied (or never granted) microphone permission to
         // the binary that's currently running. CoreAudio doesn't
@@ -200,10 +207,6 @@ pub async fn voice_warmup_mic() -> IpcResult<String> {
     });
     match rx.await {
         Ok(true) => Ok("granted".into()),
-        // Either the warmup thread panicked (rx error) or got 0
-        // samples (returned false). Both surface to the user as
-        // "please grant mic access" — there's no path forward
-        // without it.
         _ => Ok("denied".into()),
     }
 }

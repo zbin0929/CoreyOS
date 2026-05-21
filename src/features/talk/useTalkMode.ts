@@ -48,9 +48,16 @@ export function useTalkMode(): UseTalkModeReturn {
   const [finalTranscript, setFinalTranscript] = useState('');
   const [reply, setReply] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const { readiness, localRoute } = useTalkReadiness();
+  const { readiness, localRoute, initialMicPermission } = useTalkReadiness();
   const [micPermission, setMicPermission] = useState<MicPermission>('unknown');
   const [pendingApproval, setPendingApproval] = useState<ChatApprovalRequest | null>(null);
+
+  // Sync initial mic permission from warmup probe
+  useEffect(() => {
+    if (initialMicPermission === 'denied') {
+      setMicPermission('denied');
+    }
+  }, [initialMicPermission]);
 
   const recordingPromiseRef = useRef<Promise<string> | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
@@ -63,6 +70,7 @@ export function useTalkMode(): UseTalkModeReturn {
   const tts = useTalkTts(localRoute);
 
   useEffect(() => {
+    console.log('[useTalkMode] readiness changed', { ready: readiness.ready, reason: readiness.reason });
     setState((cur) => {
       if (!readiness.ready) return cur === 'unconfigured' ? cur : 'unconfigured';
       return cur === 'unconfigured' ? 'idle' : cur;
@@ -78,6 +86,7 @@ export function useTalkMode(): UseTalkModeReturn {
   }, [tts]);
 
   const cancelInFlight = useCallback(() => {
+    console.log('[useTalkMode] cancelInFlight called', { hasRecording: !!recordingPromiseRef.current });
     if (audioElRef.current) {
       audioElRef.current.pause();
       audioElRef.current.src = '';
@@ -91,26 +100,32 @@ export function useTalkMode(): UseTalkModeReturn {
       streamHandleRef.current = null;
     }
     if (recordingPromiseRef.current) {
+      console.log('[useTalkMode] cancelInFlight: stopping active recording');
       void voiceRecordStop().catch(() => {});
       recordingPromiseRef.current = null;
     }
   }, [tts]);
 
   const pressPtt = useCallback(() => {
-    if (state === 'unconfigured') return;
-    if (state === 'listening' || state === 'thinking') return;
+    const cur = stateRef.current;
+    console.log('[useTalkMode] pressPtt called', { state: cur, ready: readiness.ready });
+    if (cur === 'unconfigured') return;
+    if (cur === 'listening' || cur === 'thinking') return;
     cancelInFlight();
     reset();
+    stateRef.current = 'listening';
     setState('listening');
     recordingPromiseRef.current = voiceRecord(60);
-  }, [cancelInFlight, reset, state]);
+  }, [cancelInFlight, readiness.ready, reset]);
 
   const processWavBase64 = useCallback(
     async (wavBase64: string, preTranscribed?: string) => {
+      console.log('[useTalkMode] processWavBase64 called', { wavLen: wavBase64?.length, preTranscribed });
       setState('thinking');
       tts.reset();
       try {
         if (!wavBase64 && !preTranscribed) {
+          console.warn('[useTalkMode] empty wav + no preTranscribed, going idle');
           setState('idle');
           return;
         }
@@ -288,16 +303,35 @@ export function useTalkMode(): UseTalkModeReturn {
   );
 
   const releasePtt = useCallback(async () => {
-    if (state !== 'listening') return;
+    const curState = stateRef.current;
+    const stack = new Error().stack;
+    console.log('[useTalkMode] releasePtt called', { state: curState, stack });
+    if (curState !== 'listening') {
+      console.warn('[useTalkMode] releasePtt skipped — state is not listening', { state: curState });
+      return;
+    }
     try {
+      console.log('[useTalkMode] stopping recording...');
       await voiceRecordStop();
+      console.log('[useTalkMode] waiting for wav data...');
       const wavBase64 = await (recordingPromiseRef.current ?? Promise.resolve(''));
+      console.log('[useTalkMode] got wav', { length: wavBase64.length });
       recordingPromiseRef.current = null;
       await processWavBase64(wavBase64);
     } catch (e) {
       const msg = ipcErrorMessage(e);
       const isPermission =
         msg.includes('mic_permission_denied') || msg.includes('no_audio_captured');
+      const isTooShort = msg.includes('recording_too_short');
+      
+      if (isTooShort) {
+        // User tapped space instead of holding it — show a hint
+        setError('请按住空格键说话，松开后发送');
+        setState('idle');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+      
       setError(msg);
       setState('error');
       if (isPermission) {
@@ -312,7 +346,7 @@ export function useTalkMode(): UseTalkModeReturn {
         }, 4000);
       }
     }
-  }, [processWavBase64, state]);
+  }, [processWavBase64]);
 
   const openMicSettings = useCallback(async () => {
     try {
@@ -380,11 +414,16 @@ export function useTalkMode(): UseTalkModeReturn {
     }, []),
   });
 
+  // Cleanup on unmount only — use ref to avoid re-running when
+  // cancelInFlight identity changes (which would incorrectly stop
+  // an in-progress recording)
+  const cancelInFlightRef = useRef(cancelInFlight);
+  cancelInFlightRef.current = cancelInFlight;
   useEffect(() => {
     return () => {
-      cancelInFlight();
+      cancelInFlightRef.current();
     };
-  }, [cancelInFlight]);
+  }, []);
 
   useEffect(() => {
     const prev = stateRef.current;

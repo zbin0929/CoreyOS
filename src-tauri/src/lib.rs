@@ -720,6 +720,17 @@ pub fn run() {
                         }
                         Err(e) => tracing::warn!(pack_id = %manifest.id, error = %e, "reconcile: install_schedules failed"),
                     }
+                    // Install Hermes profiles for multi-agent collaboration
+                    if !manifest.profiles.is_empty() {
+                        match pack::install_profiles(&manifest.profiles, &entry.dir_path, &hermes_dir) {
+                            Ok(n) => {
+                                if n > 0 {
+                                    info!(pack_id = %manifest.id, installed = n, "reconcile: pack profiles installed");
+                                }
+                            }
+                            Err(e) => tracing::warn!(pack_id = %manifest.id, error = %e, "reconcile: install_profiles failed"),
+                        }
+                    }
                 }
 
                 app_state.set_packs(registry);

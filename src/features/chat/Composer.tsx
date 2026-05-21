@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useState,
   type ClipboardEvent,
   type DragEvent,
@@ -21,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import type { StagedAttachment } from '@/lib/ipc';
+import { voiceWarmupMic, voiceOpenMicSettings } from '@/lib/ipc';
 import type { VisionSupport } from '@/lib/modelCapabilities';
 import { TalkModeInline } from '@/features/talk/TalkModeInline';
 
@@ -134,6 +136,29 @@ export function Composer({
   // hidden and `<TalkModeInline>` takes its place. Per-session UI
   // state — exiting back to text resets it; we don't persist.
   const [talkMode, setTalkMode] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+
+  // Check mic permission before entering Talk Mode
+  const handleTalkModeClick = useCallback(async () => {
+    setMicError(null);
+    try {
+      const result = await voiceWarmupMic();
+      if (result === 'denied') {
+        setMicError(t('talk.mic_denied_click_to_fix', { defaultValue: '麦克风权限被拒绝，点击此处打开设置' }));
+        return;
+      }
+      setTalkMode(true);
+    } catch {
+      // Warmup failed, but let user try anyway
+      setTalkMode(true);
+    }
+  }, [t]);
+
+  const handleMicErrorClick = useCallback(async () => {
+    await voiceOpenMicSettings();
+    setMicError(null);
+  }, []);
+
   return (
     <div className="border-t border-border/80 bg-bg/80 shadow-[0_-1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm">
       <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 pt-3">
@@ -349,13 +374,22 @@ export function Composer({
             type="button"
             variant="ghost"
             className="h-11 px-3"
-            onClick={() => setTalkMode(true)}
+            onClick={() => void handleTalkModeClick()}
             aria-label={t('chat_page.talk_mode_open', { defaultValue: '语音对话' })}
             title={t('chat_page.talk_mode_open', { defaultValue: '语音对话' })}
             data-testid="chat-talk-mode"
           >
             <Icon icon={Headphones} size="md" className="text-fg-subtle" />
           </Button>
+          {micError && (
+            <button
+              type="button"
+              onClick={() => void handleMicErrorClick()}
+              className="rounded bg-danger/10 px-2 py-1 text-xs text-danger hover:bg-danger/20"
+            >
+              {micError}
+            </button>
+          )}
           {sending ? (
             <Button
               type="submit"

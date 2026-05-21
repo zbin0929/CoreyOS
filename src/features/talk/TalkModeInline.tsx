@@ -70,6 +70,9 @@ export function TalkModeInline({ onExit }: { onExit: () => void }) {
   onExitRef.current = onExit;
   modeRef.current = mode;
 
+  // Track last keydown time to detect auto-repeat (Tauri bug: event.repeat doesn't work)
+  const lastKeyDownTimeRef = useRef<number>(0);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Escape') {
@@ -84,31 +87,52 @@ export function TalkModeInline({ onExit }: { onExit: () => void }) {
         return;
       }
       if (e.code !== 'Space') return;
+      
+      // Tauri WebView bug: event.repeat doesn't work, so we detect
+      // auto-repeat by checking if keydown fires too quickly (< 50ms)
+      const now = Date.now();
+      const timeSinceLastKeyDown = now - lastKeyDownTimeRef.current;
+      lastKeyDownTimeRef.current = now;
+      const isRepeat = e.repeat || timeSinceLastKeyDown < 50;
+      
+      console.log('[TalkInline] Space keydown', { mode: modeRef.current, pressed: pressedRef.current, repeat: e.repeat, isRepeat, timeSinceLastKeyDown });
       if (modeRef.current === 'auto') return;
       if (pressedRef.current) return;
-      if (e.repeat) return;
+      if (isRepeat) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
         return;
       }
       e.preventDefault();
       pressedRef.current = true;
+      console.log('[TalkInline] calling pressPtt');
       pressPttRef.current();
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code !== 'Space') return;
+      console.log('[TalkMode] Space keyup, pressed=' + pressedRef.current);
       if (!pressedRef.current) return;
       pressedRef.current = false;
       e.preventDefault();
+      console.log('[TalkMode] calling releasePtt');
       void releasePttRef.current();
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    console.log('[TalkMode] keyboard listeners registered');
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
   }, []);
+
+  // Prevent space key from triggering any button clicks inside this container
+  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   return (
     <div
@@ -116,6 +140,8 @@ export function TalkModeInline({ onExit }: { onExit: () => void }) {
       data-testid="talk-mode-inline"
       role="region"
       aria-label={t('talk.title', { defaultValue: '语音对话' })}
+      onKeyDown={handleContainerKeyDown}
+      onKeyUp={(e) => e.code === 'Space' && e.preventDefault()}
     >
       {/* Top row: ring + status + exit button */}
       <div className="flex items-center gap-4">
@@ -301,23 +327,91 @@ function CompactRing({
           />
         </>
       )}
-      <button
-        type="button"
-        onMouseDown={interactive ? onPress : undefined}
-        onMouseUp={interactive ? () => void onRelease() : undefined}
-        onTouchStart={interactive ? onPress : undefined}
-        onTouchEnd={interactive ? () => void onRelease() : undefined}
-        className={cn(
-          'relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-colors',
-          colorByState[state],
-          interactive ? '' : 'cursor-default',
-        )}
-        aria-label={`Talk state: ${state}`}
-        data-testid="talk-mic"
-      >
-        <Icon icon={iconByState[state]} size={20} />
-      </button>
+      <RingButton
+        interactive={interactive}
+        onPress={onPress}
+        onRelease={onRelease}
+        className={colorByState[state]}
+        icon={iconByState[state]}
+        state={state}
+      />
     </div>
+  );
+}
+
+/**
+ * PTT button with window-level mouseup listener. The old inline
+ * `onMouseUp` on the button element would miss releases when:
+ * (a) React re-rendered the button mid-press (state change → new DOM)
+ * (b) user moved mouse outside button before releasing
+ * Window listener catches mouseup anywhere, same pattern as keyboard.
+ */
+function RingButton({
+  interactive,
+  onPress,
+  onRelease,
+  className,
+  icon,
+  state,
+}: {
+  interactive: boolean;
+  onPress: () => void;
+  onRelease: () => void;
+  className: string;
+  icon: typeof Mic;
+  state: TalkState;
+}) {
+  const pressedRef = useRef(false);
+  const onReleaseRef = useRef(onRelease);
+  onReleaseRef.current = onRelease;
+
+  useEffect(() => {
+    if (!interactive) return;
+    const onMouseUp = () => {
+      if (!pressedRef.current) return;
+      pressedRef.current = false;
+      console.log('[RingButton] mouseup, calling onRelease');
+      void onReleaseRef.current();
+    };
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchend', onMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchend', onMouseUp);
+    };
+  }, [interactive]);
+
+  const handleMouseDown = () => {
+    console.log('[RingButton] handleMouseDown fired', { interactive });
+    if (!interactive) return;
+    pressedRef.current = true;
+    console.log('[RingButton] mousedown, calling onPress');
+    onPress();
+  };
+
+  // Prevent space key from triggering button click when focused
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleMouseDown}
+      onKeyDown={handleKeyDown}
+      className={cn(
+        'relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-colors',
+        className,
+        interactive ? '' : 'cursor-default',
+      )}
+      aria-label={`Talk state: ${state}`}
+      data-testid="talk-mic"
+    >
+      <Icon icon={icon} size={20} />
+    </button>
   );
 }
 

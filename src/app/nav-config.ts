@@ -79,28 +79,8 @@ export const NAV: NavEntry[] = [
   // run a workflow, audit a task, swap a model, glance at home.
   { id: 'home', path: '/', labelKey: 'nav.home', icon: Home, group: 'workspace', phase: 0, shortcut: ['mod', '0'] },
   { id: 'workflows', path: '/workflows', labelKey: 'nav.workflows', icon: WorkflowIcon, group: 'workspace', phase: 9, shortcut: ['mod', '2'] },
-  { id: 'tasks', path: '/tasks', labelKey: 'nav.tasks', icon: ListChecks, group: 'workspace', phase: 9, shortcut: ['mod', 't'] },
   { id: 'approvals', path: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, group: 'workspace', phase: 9 },
-  { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes, group: 'workspace', phase: 2 },
 
-  // ─── Library ────────────────────────────────────────────────
-  // Read-only / configuration surfaces. Collapsed by default —
-  // most users open them once a week. Per the 2026-05-06 route
-  // audit, agents/scheduler/runbooks/voice/profiles/compare/
-  // terminal already moved to Settings → Advanced.
-  { id: 'skills', path: '/skills', labelKey: 'nav.skills', icon: Wand2, group: 'library', phase: 4, requires: 'skills' },
-  { id: 'knowledge', path: '/knowledge', labelKey: 'nav.knowledge', icon: BookOpen, group: 'library', phase: 7 },
-  { id: 'memory', path: '/memory', labelKey: 'nav.memory', icon: Brain, group: 'library', phase: 7 },
-  { id: 'mcp', path: '/mcp', labelKey: 'nav.mcp', icon: Plug, group: 'library', phase: 7 },
-  { id: 'channels', path: '/channels', labelKey: 'nav.channels', icon: Radio, group: 'library', phase: 3, requires: 'channels' },
-  { id: 'trajectory', path: '/trajectory', labelKey: 'nav.trajectory', icon: GitBranch, group: 'library', phase: 4, requires: 'trajectory_export' },
-  { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank, group: 'library', phase: 4 },
-
-  // ─── Utility ────────────────────────────────────────────────
-  // Passive observability. Always-visible but visually quieter
-  // than Workspace.
-  { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3, group: 'utility', phase: 2, shortcut: ['mod', '3'] },
-  { id: 'logs', path: '/logs', labelKey: 'nav.logs', icon: ScrollText, group: 'utility', phase: 2, shortcut: ['mod', '4'], requires: 'logs' },
 
   // ─── Settings ───────────────────────────────────────────────
   { id: 'settings', path: '/settings', labelKey: 'nav.settings', icon: Settings, group: 'settings', phase: 2, shortcut: ['mod', ','] },
@@ -119,6 +99,21 @@ export interface DemotedRoute {
 }
 
 export const DEMOTED_ROUTES: DemotedRoute[] = [
+  // Former "Workspace" group
+  { id: 'tasks', path: '/tasks', labelKey: 'nav.tasks', icon: ListChecks },
+  { id: 'models', path: '/models', labelKey: 'nav.models', icon: Boxes },
+  // Former "Utility" group
+  { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', icon: BarChart3 },
+  { id: 'logs', path: '/logs', labelKey: 'nav.logs', icon: ScrollText },
+  // Former "Library" group
+  { id: 'skills', path: '/skills', labelKey: 'nav.skills', icon: Wand2 },
+  { id: 'memory', path: '/memory', labelKey: 'nav.memory', icon: Brain },
+  { id: 'mcp', path: '/mcp', labelKey: 'nav.mcp', icon: Plug },
+  { id: 'channels', path: '/channels', labelKey: 'nav.channels', icon: Radio },
+  { id: 'budgets', path: '/budgets', labelKey: 'nav.budgets', icon: PiggyBank },
+  { id: 'trajectory', path: '/trajectory', labelKey: 'nav.trajectory', icon: GitBranch },
+  { id: 'knowledge', path: '/knowledge', labelKey: 'nav.knowledge', icon: BookOpen },
+  // Legacy demoted
   { id: 'agents', path: '/agents', labelKey: 'nav.agents', icon: Bot },
   { id: 'scheduler', path: '/scheduler', labelKey: 'nav.scheduler', icon: Clock },
   { id: 'runbooks', path: '/runbooks', labelKey: 'nav.runbooks', icon: BookMarked },

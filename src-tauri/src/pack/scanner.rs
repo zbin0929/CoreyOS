@@ -68,7 +68,7 @@ pub fn scan_skill_packs_dir(root: &Path) -> Vec<DiscoveredPack> {
         if dir_name.starts_with('.') {
             continue;
         }
-        let metadata = match entry.metadata() {
+        let metadata = match fs::metadata(&path) {
             Ok(m) => m,
             Err(e) => {
                 out.push(DiscoveredPack {

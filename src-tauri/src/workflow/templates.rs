@@ -21,16 +21,7 @@ use super::model::WorkflowDef;
 /// inlined via `include_str!` so they're compiled into the binary
 /// (no `tauri.conf.json` resources entry needed for these).
 pub fn builtin_templates() -> Vec<(&'static str, &'static str)> {
-    vec![
-        (
-            "daily-news-digest.yaml",
-            include_str!("../../assets/default-workflows/daily-news-digest.yaml"),
-        ),
-        (
-            "pdf-summary.yaml",
-            include_str!("../../assets/default-workflows/pdf-summary.yaml"),
-        ),
-    ]
+    vec![]
 }
 
 pub fn ensure_templates() -> anyhow::Result<usize> {

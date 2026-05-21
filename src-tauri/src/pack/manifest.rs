@@ -146,6 +146,12 @@ pub struct PackManifest {
     /// upgrade lands a new manifest with a higher `version`.
     #[serde(default)]
     pub migrations: Vec<Migration>,
+
+    /// Hermes Profiles to create when this Pack is enabled. Each
+    /// profile is an isolated Hermes instance with its own SOUL,
+    /// skills, and memory. Used for multi-agent collaboration.
+    #[serde(default)]
+    pub profiles: Vec<ProfileSpec>,
 }
 
 fn default_schema_version() -> u32 {
@@ -378,6 +384,45 @@ pub struct Migration {
     /// `key -> default_value` to insert when missing.
     #[serde(default)]
     pub config_defaults: BTreeMap<String, serde_yaml::Value>,
+}
+
+/// A Hermes Profile to create when this Pack is enabled. Each
+/// profile is an isolated Hermes instance with its own SOUL,
+/// skills, and memory. Used for multi-agent collaboration via
+/// Hermes Kanban.
+///
+/// Lifecycle:
+/// - Pack enabled  → `hermes profile create <id>` + copy SOUL.md
+/// - Pack disabled → `hermes profile delete <id>`
+///
+/// Profile data lives under `~/.hermes/profiles/<id>/` and is
+/// managed by Hermes, not by Corey. The Pack only provides the
+/// initial SOUL.md template.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileSpec {
+    /// Profile identifier. Prefixed with pack id to avoid collisions
+    /// (e.g., `ecommerce` pack's `market-expert` becomes
+    /// `ecom-market-expert`).
+    pub id: String,
+
+    /// Human display name for the profile.
+    #[serde(default)]
+    pub name: String,
+
+    /// Path to SOUL.md relative to Pack root. Copied to the profile
+    /// on creation.
+    #[serde(default)]
+    pub soul: String,
+
+    /// Default model for this profile. Empty = inherit from default
+    /// profile.
+    #[serde(default)]
+    pub model: String,
+
+    /// Skills to enable for this profile (in addition to bundled).
+    /// Paths relative to Pack root.
+    #[serde(default)]
+    pub skills: Vec<String>,
 }
 
 /// Outcome of attempting to load a manifest.
