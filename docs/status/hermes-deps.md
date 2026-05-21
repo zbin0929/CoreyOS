@@ -1,8 +1,8 @@
 # Hermes Agent 依赖地图
 
-> 版本：v5.0 · 2026-05-12
+> 版本：v5.1 · 2026-05-22
 > 当前 Hermes 最低支持版本：0.10
-> Hermes 最新版本：**0.14.0（远端，待升级）** · 本地运行 0.13.0（2026-05-07）
+> Hermes 最新版本：**0.14.0** · 本地运行 0.14.0（2026-05-16）
 > Hermes 官方文档：https://hermes-agent.nousresearch.com/docs/
 > Hermes GitHub：https://github.com/NousResearch/hermes-agent
 > 用途：Hermes 每次更新时，对照此文档快速定位影响范围

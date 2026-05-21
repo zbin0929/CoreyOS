@@ -42,8 +42,11 @@ use std::path::{Path, PathBuf};
 /// the same wire protocol so no platform-conditional code is needed
 /// here. See `docs/status/hermes-deps.md` § 10 for the full v0.13
 /// impact table.
+///
+/// 2026-05-22: bumped MAX_TESTED to 0.14 after verifying hermes-standalone
+/// v0.14.0 works with Corey (PyInstaller bundle, gateway start, chat).
 const HERMES_MIN_SUPPORTED: (u32, u32) = (0, 10);
-const HERMES_MAX_TESTED: (u32, u32) = (0, 13);
+const HERMES_MAX_TESTED: (u32, u32) = (0, 14);
 
 /// Compatibility verdict between the running Hermes binary and what
 /// Corey was built/tested against. Drives the Home-page banner.
@@ -393,12 +396,12 @@ mod compat_tests {
         assert_eq!(c, HermesCompatibility::Untested);
     }
 
-    /// Anchor the v0.13 bump so a future reckless `MAX_TESTED` rollback
+    /// Anchor the v0.14 bump so a future reckless `MAX_TESTED` rollback
     /// (or accidental clobber) trips this test instead of silently
     /// downgrading users into the "untested" yellow-banner state.
     #[test]
-    fn supported_at_max_tested_v0_13() {
-        let (c, _) = evaluate_compat(0, 13);
+    fn supported_at_max_tested_v0_14() {
+        let (c, _) = evaluate_compat(0, 14);
         assert_eq!(c, HermesCompatibility::Supported);
     }
 }
