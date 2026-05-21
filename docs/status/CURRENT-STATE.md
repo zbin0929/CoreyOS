@@ -1,7 +1,7 @@
 # CURRENT-STATE · 当下事实
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-17 -->
+<!-- last-verified: 2026-05-22 -->
 <!-- 校验规则：每 30 天至少一次。过期后由下一个接触者重新校验或标记为 stale。 -->
 
 > 本文件描述 CoreyOS **当下**是什么样子，不描述计划。
@@ -13,7 +13,7 @@
 
 ## 当前版本
 
-- 产品版本：**v0.2.14**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准；最新 tag `8fdde13` 后已累积 **62** 个 post-release commit，包含 P0/P1 重构 sprint + Pack Schema DSL Phase 3a+3b + 美正 5 个 `.tsx` 全删；下一版未定号）
+- 产品版本：**v0.3.0**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准）
 - 上游 Hermes 版本：**v0.13.0 (2026.5.7)**；参见 [`hermes-deps.md`](./hermes-deps.md)
 - 代码规模：Rust **177** 文件 / TS+TSX **349** 文件（合计 ~111K 行；sprint 后子模块拆分增加 +8 .rs）
 - 测试：Rust **568** · Vitest **112** · Playwright **38 specs / 77 tests**（2026-05-17 sprint 全绿）
@@ -35,14 +35,14 @@
 | Workflow | React Flow DAG + 7 步类型 + 审批 / webhook / AI 生成 | ✅ 可用 | 浏览器自动化步骤待加固 |
 | Talk Mode | zipformer STT + silero-vad + VITS/MeloTTS 进程内合成 | ✅ 可用 | 支持即时打断、语速调节 |
 | RAG | Jaccard 关键词 + BGE-M3 ONNX 本地语义检索 + RRF 融合 | ✅ 可用 | 2.3 GB，支持离线 zip 导入 |
-| Pack 架构 | 白标基座 + skill-packs + pack-data + 12 视图模板 + license features | ✅ 已落地 | `cross_border_ecom` v0.2.0：3 Skill + 3 Workflow + CompositeDashboard；`meizheng` v0.5.0：1 Skill + 6 Workflow + 12 Python 脚本 + 7 cron schedules |
+| Pack 架构 | 白标基座 + skill-packs + pack-data + 12 视图模板 + license features | ✅ 已落地 | `ecommerce` v0.5.0：18 Skills + 9 Profiles + 5 Workflows + config_schema API 配置；`meizheng` v0.5.0：1 Skill + 6 Workflow + 12 Python 脚本 + 7 cron schedules |
 | 企业 RPA Pack | 美正 Pack —— 汇率 + 燃油费率 + UPS/USPS/FedEx 分区自动化 | ✅ 已落地 | API 直写（无浏览器）/ 中文 cron picker UI / `pack_exchange_rate_config_*` + `pack_zone_config_*` IPC |
 | Browser 工具 | Playwright 子进程 + CDP 直连 | ⚠️ 脆弱 | 见 `known-issues.md` |
 | MCP 管理 | stdio + URL 传输 + 桌面原生工具（通知/文件选择器/深链接） | ✅ 可用 | |
 | Memory | MEMORY.md + USER.md 编辑 + holographic 后端 + FTS5 搜索 + Chat 自动 fact 召回 + entity 列表 UI + typed relations 图查询 | ✅ 可用 | 见 `../spec/memory-strategy.md` / `../spec/memory-knowledge-graph.md` |
 | 消息渠道 | Telegram / Discord / Slack / WeCom / WeChat / Feishu / WhatsApp / Signal / DingTalk / Email / SMS / iMessage / Matrix / Mattermost / Webhooks / Home Assistant（16 种） | ✅ 可用 | |
 | License | ed25519 离线签名 + machine ID 绑定 + features 联动 | ✅ 已落地 | `scripts/new-customer.sh` 一键交付 |
-| 安全防护（L0-L3） | SOUL.md 铁律 + corey-guards 物理拦截 + Hermes DANGEROUS_PATTERNS + 路径沙箱 | ✅ 已落地 | 审批卡片已修复（`/v1/runs` 迁移） |
+| 安全防护（L0-L3） | SOUL.md 铁律 + corey-guards 物理拦截 + Hermes DANGEROUS_PATTERNS + 路径沙箱 + **系统保密规则** | ✅ 已落地 | 审批卡片已修复（`/v1/runs` 迁移）；v0.3.0 新增基座保密规则（禁止 AI 透露 SOUL/Skill 内容）|
 | Knowledge | 文档上传 → 分块 → Jaccard/BGE-M3 搜索 → 注入对话 | ✅ 可用 | |
 | 语音 | push-to-talk ASR + TTS（OpenAI / Zhipu / Groq / Edge TTS） | ✅ 可用 | |
 | Trajectory | 会话时间线 + 工具调用树 + 子 agent 委托树 + Token/延迟 | ✅ 可用 | |

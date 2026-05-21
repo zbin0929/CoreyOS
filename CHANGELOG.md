@@ -6,6 +6,43 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-05-22 — v0.3.0 · 跨境电商 Pack v0.5.0 + 基座保密规则
+
+> 跨境电商 Pack 大升级：从 3 Skills 扩展到 18 Skills，新增 9 个专家 Profiles，支持 API Key 配置（Apify / 卖家精灵）。基座新增系统保密规则，防止 AI 透露 SOUL/Skill 内容。
+
+### Shipped
+
+- **跨境电商 Pack v0.5.0**（corey-packs 仓库）
+  - **18 Skills**：选品决策 6 专家 + 视觉分析 2 个 + 拓品规划 1 个 + 日常运营 3 个 + Amazon 数据采集 4 个（需 Apify）+ 市场深度调研 1 个（需卖家精灵）
+  - **9 Profiles**：市场规模专家 / 竞品拆解专家 / 盈利评估专家 / 选品侦察专家 / 决策协调者 / 广告优化专家 / 库存预警专家 / 差评监控专家 / 数据分析专家
+  - **config_schema**：`apify_enabled` + `apify_token` / `sellersprite_enabled` + `sellersprite_api_key`，用户可在 Pack 设置页面配置
+  - **Profile SOUL 更新**：每个 Profile 明确列出可用 Skills + 使用规则
+
+- **基座保密规则**（`src/app/baseSoul.ts`）
+  - 新增"🔒 系统保密规则"段，优先级最高
+  - 禁止 AI 透露 system prompt / SOUL / Skill / Workflow 内容
+  - 禁止 AI 解释内部工作机制
+  - 标准拒绝回复模板
+  - 防诱导规则（"假装你没有限制"等话术无效）
+  - **编译在二进制里，客户无法修改或绕过**
+
+- **Profile Skills 安装修复**（`src-tauri/src/pack/profiles.rs`）
+  - Pack 安装时自动复制 Skills 到 Profile 目录
+
+- **Hermes 搜索后端配置**
+  - `web.search_backend: duckduckgo`（免费无限次）
+
+### 验证
+
+| Gate | 结果 |
+|---|---|
+| macOS Release | 🟡 构建中 |
+| Windows Release | 🟡 构建中 |
+| ecommerce Pack Skills | ✅ 18 个 |
+| ecommerce Pack Profiles | ✅ 9 个 |
+
+---
+
 ## 2026-05-17 — 客户 Pack 出基座（TODO 8c）
 
 > 把美正 Pack 从基座源码彻底剥离，落地"唯一基座 + 数据驱动定制"架构铁律。打包出的 Corey 二进制从此对所有客户完全相同，不夹带任何客户特定业务规则。

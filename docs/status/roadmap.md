@@ -1,7 +1,7 @@
 # Roadmap · 路线图
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-17 -->
+<!-- last-verified: 2026-05-22 -->
 <!-- 校验规则：每月校验；发布新版本时同步 Upcoming 和 In progress 节。 -->
 
 > 本文件描述 CoreyOS **未来计划 + 当下在做**。
@@ -21,7 +21,7 @@
 | 美正 Pack 燃油费率自动化 | v0.2.14 | ✅ 2026-05-15 | 需求 #6：API 直写（非浏览器）· crawl4ai 抓取 UPS/FedEx/DHL · 中文 cron picker UI · 自动审核 · 1.5s/5K tokens |
 | 美正 Pack 多承运商月度分区自动化 | post-v0.2.14 (未发版) | ✅ 2026-05-17 | 需求 #2 + 衍生：UPS/USPS/FedEx 三家 download → transform → upload 全链路；ZoneConfigEditor + carrier-parametric upload + ZIP3→5位邮编 expand/override 拆分；3 条月度 schedule |
 | 美正 Pack USD 汇率自动化 | post-v0.2.14 (未发版) | ✅ 2026-05-17 | 需求 #1：剥离 fuel-rate 配置 → 独立 `exchange-rate-config.yaml` + 独立 IPC + ExchangeRateConfigEditor + 09:30/10:30 双 schedule |
-| Amazon SP-API 开发者账号申请 | v0.3.0 | ⛔ 阻塞中 | 外部审批时效；解阻后推进 9 能力矩阵 P1 批次 |
+| Amazon SP-API 开发者账号申请 | v0.3.1 | ⛔ 阻塞中 | 外部审批时效；解阻后推进 9 能力矩阵 P1 批次 |
 | AI Browser 焦点抢夺根治（自带 Chromium + LSUIElement + ad-hoc 重签） | v0.3.x | 🟡 spike 中 | progress.txt 记录；当前卡在"先验证 LSUIElement 能否隔绝焦点"，验证通过再进入正式集成 |
 
 > 🔁 当下在做应当永远 ≤ 5 条，超出代表注意力分散。
@@ -32,7 +32,7 @@
 
 | 版本 | 计划 | 核心能力 |
 |---|---|---|
-| **v0.3.0** | [`TODO.md`](./TODO.md) § P-1 | 跨境电商 Pack（SP-API 真实数据接入 · MCP 浏览器自动化 · 9 能力矩阵 P1 批次）|
+| **v0.3.0** | ✅ 已发布 2026-05-22 | 跨境电商 Pack v0.5.0（18 Skills + 9 Profiles + config_schema API 配置）+ 基座保密规则（禁止 AI 透露 SOUL/Skill）|
 | **v0.3.1** | 客户反馈驱动 | 9 能力矩阵 P2 + 第一个真实客户运行数据验证 |
 | **v0.3.x** | [`../plans/enterprise-rpa-pack.md`](../plans/enterprise-rpa-pack.md) | 企业 RPA Pack 通用架构（首例：美正）— 混合 runner/end_user 部署 · 无 API 走浏览器自动化 · 分布式锁 · 时间窗 + Owner + Failover 调度 · Pattern A/B/C/D 模板库 |
 | v0.3.2+ | 客户反馈驱动 | 视第一个真实客户的使用数据决定 |
