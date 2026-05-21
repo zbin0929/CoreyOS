@@ -96,7 +96,6 @@ pub fn install_profiles(
 /// Called when a Pack is disabled or uninstalled.
 ///
 /// Returns the number of profiles successfully deleted.
-#[allow(dead_code)]
 pub fn uninstall_profiles(profiles: &[ProfileSpec]) -> Result<usize, String> {
     let mut deleted = 0;
 

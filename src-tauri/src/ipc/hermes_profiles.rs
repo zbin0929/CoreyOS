@@ -236,8 +236,8 @@ pub struct ProfileDetail {
 /// Get detailed info for a profile (SOUL content, model, skills count).
 #[tauri::command]
 pub async fn hermes_profile_detail(name: String) -> IpcResult<ProfileDetail> {
-    use std::fs;
     use crate::paths::hermes_data_dir;
+    use std::fs;
 
     let hermes_dir = hermes_data_dir().map_err(|e| IpcError::Internal {
         message: format!("hermes dir: {e}"),
@@ -261,9 +261,16 @@ pub async fn hermes_profile_detail(name: String) -> IpcResult<ProfileDetail> {
             .ok()
             .and_then(|content| {
                 // Simple extraction: look for "model:" line
-                content.lines()
+                content
+                    .lines()
                     .find(|line| line.trim().starts_with("model:"))
-                    .map(|line| line.trim().strip_prefix("model:").unwrap_or("").trim().to_string())
+                    .map(|line| {
+                        line.trim()
+                            .strip_prefix("model:")
+                            .unwrap_or("")
+                            .trim()
+                            .to_string()
+                    })
             })
             .filter(|s| !s.is_empty())
     } else {

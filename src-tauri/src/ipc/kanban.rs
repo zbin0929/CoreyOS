@@ -207,7 +207,8 @@ pub async fn kanban_assignees() -> Result<Vec<ProfileOption>, String> {
     use crate::pack::Registry;
     use crate::paths::hermes_data_dir;
 
-    let view = hermes_profiles::list_profiles().map_err(|e| format!("failed to list profiles: {e}"))?;
+    let view =
+        hermes_profiles::list_profiles().map_err(|e| format!("failed to list profiles: {e}"))?;
 
     // Build a map of profile ID -> display name from Pack manifests
     let mut name_map: HashMap<String, String> = HashMap::new();
@@ -231,7 +232,10 @@ pub async fn kanban_assignees() -> Result<Vec<ProfileOption>, String> {
         .profiles
         .into_iter()
         .map(|p| {
-            let display_name = name_map.get(&p.name).cloned().unwrap_or_else(|| p.name.clone());
+            let display_name = name_map
+                .get(&p.name)
+                .cloned()
+                .unwrap_or_else(|| p.name.clone());
             ProfileOption {
                 id: p.name,
                 name: display_name,

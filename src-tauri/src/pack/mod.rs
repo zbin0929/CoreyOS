@@ -54,7 +54,7 @@ pub use manifest::{
     load_from_dir, parse, ConfigField, ManifestLoadOutcome, PackManifest, MANIFEST_FILENAME,
 };
 pub use migrations::run_migrations;
-pub use profiles::install_profiles;
+pub use profiles::{install_profiles, uninstall_profiles};
 pub use scanner::scan_skill_packs_dir;
 pub use schedules::{install_schedules, uninstall_schedules};
 pub use seed::ensure_bundled_packs;

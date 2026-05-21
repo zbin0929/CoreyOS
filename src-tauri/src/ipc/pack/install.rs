@@ -1,14 +1,14 @@
 //! Pack install / uninstall lifecycle + the sync helpers that wire
-//! a freshly enabled Pack's MCP servers, workflows, schedules, and
-//! skills into `~/.hermes/`.
+//! a freshly enabled Pack's MCP servers, workflows, schedules, skills,
+//! and profiles into `~/.hermes/`.
 //!
 //! Split out from `mod.rs` 2026-05-17 so the IPC handler catalog in
 //! the parent module doesn't grow past AC-1's monitor threshold as
 //! we add new industry Packs. Each sync helper is independent
 //! (`sync_config_yaml`, `sync_workflows`, `sync_schedules`,
-//! `sync_skills`) — the parent `pack_set_enabled` handler still
-//! lives in `mod.rs` because it orchestrates the call sequence and
-//! is the primary entry point.
+//! `sync_skills`, `sync_profiles`) — the parent `pack_set_enabled`
+//! handler still lives in `mod.rs` because it orchestrates the call
+//! sequence and is the primary entry point.
 //!
 //! Public surface re-exported by `super` (`mod.rs`):
 //!   - [`pack_import_zip`]: zip-file install path (Settings → Packs →
@@ -19,8 +19,8 @@
 //! Internal helpers:
 //!   - `matches_pack_id`: tolerant id comparison (case + suffix).
 //!   - `sync_config_yaml` / `sync_workflows` / `sync_schedules` /
-//!     `sync_skills`: idempotent installers used by `pack_set_enabled`
-//!     in `mod.rs` and by `pack_import_zip` here.
+//!     `sync_skills` / `sync_profiles`: idempotent installers used by
+//!     `pack_set_enabled` in `mod.rs` and by `pack_import_zip` here.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -31,9 +31,9 @@ use tauri::State;
 use crate::error::{IpcError, IpcResult};
 use crate::hermes_config;
 use crate::pack::{
-    disable_updates, enable_updates, install_schedules, install_skills, install_workflows,
-    uninstall_schedules, uninstall_skills, uninstall_workflows, PackManifest, RegistryEntry,
-    TemplateContext,
+    disable_updates, enable_updates, install_profiles, install_schedules, install_skills,
+    install_workflows, uninstall_profiles, uninstall_schedules, uninstall_skills,
+    uninstall_workflows, PackManifest, RegistryEntry, TemplateContext,
 };
 use crate::state::AppState;
 
@@ -267,6 +267,39 @@ pub(super) fn sync_skills(
             message: format!("uninstall pack skills: {e}"),
         })?;
         tracing::info!(pack_id, "pack skills uninstalled");
+    }
+    Ok(())
+}
+
+pub(super) fn sync_profiles(
+    manifest: &Option<Arc<PackManifest>>,
+    enabled: bool,
+    hermes_dir: &std::path::Path,
+    pack_dir: Option<&std::path::Path>,
+) -> IpcResult<()> {
+    let Some(manifest) = manifest else {
+        return Ok(());
+    };
+    if manifest.profiles.is_empty() {
+        return Ok(());
+    }
+    let pack_id = &manifest.id;
+
+    if enabled {
+        let Some(pack_dir) = pack_dir else {
+            return Ok(());
+        };
+        let n = install_profiles(&manifest.profiles, pack_dir, hermes_dir).map_err(|e| {
+            IpcError::Internal {
+                message: format!("install pack profiles: {e}"),
+            }
+        })?;
+        tracing::info!(pack_id, installed = n, "pack profiles installed");
+    } else {
+        let removed = uninstall_profiles(&manifest.profiles).map_err(|e| IpcError::Internal {
+            message: format!("uninstall pack profiles: {e}"),
+        })?;
+        tracing::info!(pack_id, removed, "pack profiles uninstalled");
     }
     Ok(())
 }
