@@ -17,6 +17,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Drawer } from '@/components/ui/drawer';
 import { cn } from '@/lib/cn';
 
+const PROFILE_LABELS: Record<string, string> = {
+  'ecom-market-expert': '市场规模专家',
+  'ecom-competitor-expert': '竞品拆解专家',
+  'ecom-profit-expert': '盈利评估专家',
+  'ecom-synthesizer': '决策协调者',
+  'market-expert': '市场专家',
+  'competitor-expert': '竞品专家',
+  'profit-expert': '盈利专家',
+  'synthesizer': '协调者',
+};
+
+const getProfileLabel = (id: string) => PROFILE_LABELS[id] || id;
+
 interface KanbanTask {
   id: string;
   title: string;
@@ -154,7 +167,7 @@ export default function KanbanPage() {
 
   const assigneeOptions: SelectOption[] = assignees.map((a) => ({
     value: a,
-    label: a,
+    label: getProfileLabel(a),
   }));
 
   return (
@@ -300,7 +313,7 @@ export default function KanbanPage() {
                                   : 'border-border bg-bg-elev-2'
                               )}
                             >
-                              {task.assignee}
+                              {getProfileLabel(task.assignee)}
                             </span>
                           )}
                           <span>{formatTime(task.created_at)}</span>
