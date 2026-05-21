@@ -206,6 +206,7 @@ pub fn run() {
             ipc::kanban::kanban_show,
             ipc::kanban::kanban_assignees,
             ipc::kanban::kanban_stats,
+            ipc::kanban::pack_profile_meta,
             ipc::runbooks::runbook_list,
             ipc::runbooks::runbook_upsert,
             ipc::runbooks::runbook_delete,

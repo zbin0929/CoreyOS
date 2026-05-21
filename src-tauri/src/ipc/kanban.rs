@@ -156,6 +156,49 @@ pub struct ProfileOption {
     pub name: String,
 }
 
+/// Extended profile metadata from Pack manifests.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileMeta {
+    pub id: String,
+    pub display_name: String,
+    pub pack_id: Option<String>,
+    pub pack_name: Option<String>,
+}
+
+/// Get profile metadata from all Pack manifests.
+/// Returns a map of profile ID -> metadata for UI display.
+#[tauri::command]
+pub async fn pack_profile_meta() -> Result<Vec<ProfileMeta>, String> {
+    use crate::pack::Registry;
+    use crate::paths::hermes_data_dir;
+
+    let mut profiles = Vec::new();
+
+    if let Ok(hermes_dir) = hermes_data_dir() {
+        let registry = Registry::scan(&hermes_dir);
+        for entry in registry.packs {
+            if let Some(manifest) = entry.manifest {
+                let pack_id = manifest.id.clone();
+                let pack_name = manifest.name.clone();
+                for profile in manifest.profiles.iter() {
+                    profiles.push(ProfileMeta {
+                        id: profile.id.clone(),
+                        display_name: if profile.name.is_empty() {
+                            profile.id.clone()
+                        } else {
+                            profile.name.clone()
+                        },
+                        pack_id: Some(pack_id.clone()),
+                        pack_name: Some(pack_name.clone()),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(profiles)
+}
+
 /// List available profiles (assignees).
 /// Returns profile ID and display name from Pack manifests.
 #[tauri::command]

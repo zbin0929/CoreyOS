@@ -27,6 +27,8 @@ import {
   hermesProfileList,
   hermesProfileRename,
   ipcErrorMessage,
+  packProfileMeta,
+  type PackProfileMeta,
 } from '@/lib/ipc';
 
 import { ActivateModal } from './ActivateModal';
@@ -77,11 +79,20 @@ export function ProfilesRoute() {
   // (not per-card) because the confirm dialog spans profiles (shows
   // `from → to`) and because the gateway-restart opt-in is global.
   const [activateMode, setActivateMode] = useState<ActivateMode>({ kind: 'idle' });
+  const [profileMeta, setProfileMeta] = useState<Record<string, PackProfileMeta>>({});
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const view = await hermesProfileList();
+      const [view, metaList] = await Promise.all([
+        hermesProfileList(),
+        packProfileMeta(),
+      ]);
+      const metaMap: Record<string, PackProfileMeta> = {};
+      for (const m of metaList) {
+        metaMap[m.id] = m;
+      }
+      setProfileMeta(metaMap);
       setState({ kind: 'loaded', view });
     } catch (e) {
       setState({ kind: 'error', message: ipcErrorMessage(e) });
@@ -449,6 +460,7 @@ export function ProfilesRoute() {
               <ProfileCard
                 key={p.name}
                 profile={p}
+                meta={profileMeta[p.name]}
                 mode={rowMode[p.name] ?? { kind: 'view' }}
                 status={rowStatus[p.name] ?? { kind: 'idle' }}
                 onModeChange={(m) => setMode(p.name, m)}

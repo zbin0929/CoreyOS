@@ -14,13 +14,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
-import type { HermesProfileInfo } from '@/lib/ipc';
+import type { HermesProfileInfo, PackProfileMeta } from '@/lib/ipc';
 
 import { inputCls } from './styles';
 import type { RowMode, RowStatus } from './types';
 
 interface CardProps {
   profile: HermesProfileInfo;
+  meta?: PackProfileMeta;
   mode: RowMode;
   status: RowStatus;
   onModeChange: (mode: RowMode) => void;
@@ -43,6 +44,7 @@ interface CardProps {
  */
 export function ProfileCard({
   profile,
+  meta,
   mode,
   status,
   onModeChange,
@@ -54,6 +56,8 @@ export function ProfileCard({
 }: CardProps) {
   const { t } = useTranslation();
   const busy = status.kind === 'busy';
+  const isPackProfile = !!meta;
+  const displayName = meta?.display_name || profile.name;
 
   return (
     <div
@@ -62,18 +66,28 @@ export function ProfileCard({
         'flex flex-col gap-3 rounded-md border bg-bg-elev-1 p-3 transition-colors',
         profile.is_active
           ? 'border-gold-500/60 bg-gold-500/5'
-          : 'border-border',
+          : isPackProfile
+            ? 'border-purple-500/30 bg-purple-500/5'
+            : 'border-border',
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="break-all text-sm font-medium text-fg">
-              {profile.name}
+              {displayName}
             </span>
+            {displayName !== profile.name && (
+              <span className="text-xs text-fg-muted">({profile.name})</span>
+            )}
             {profile.is_active && (
               <span className="rounded-full border border-gold-500/60 bg-gold-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-gold-500">
                 {t('profiles.active')}
+              </span>
+            )}
+            {isPackProfile && (
+              <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-500">
+                {meta.pack_name || meta.pack_id}
               </span>
             )}
           </div>

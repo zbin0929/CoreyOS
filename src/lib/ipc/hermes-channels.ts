@@ -275,3 +275,18 @@ export function hermesProfileImport(args: {
   });
 }
 
+// ───────────────────────── Pack profile metadata ─────────────────────────
+
+/** Profile metadata from Pack manifests. */
+export interface PackProfileMeta {
+  id: string;
+  display_name: string;
+  pack_id: string | null;
+  pack_name: string | null;
+}
+
+/** Get profile metadata from all Pack manifests for UI display. */
+export function packProfileMeta(): Promise<PackProfileMeta[]> {
+  return invoke<PackProfileMeta[]>('pack_profile_meta');
+}
+
