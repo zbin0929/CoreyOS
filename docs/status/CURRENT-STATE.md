@@ -14,14 +14,14 @@
 ## 当前版本
 
 - 产品版本：**v0.3.0**（以 `package.json` / `Cargo.toml` / `tauri.conf.json` 为准）
-- 上游 Hermes 版本：**v0.13.0 (2026.5.7)**；参见 [`hermes-deps.md`](./hermes-deps.md)
-- 代码规模：Rust **177** 文件 / TS+TSX **349** 文件（合计 ~111K 行；sprint 后子模块拆分增加 +8 .rs）
-- 测试：Rust **568** · Vitest **112** · Playwright **38 specs / 77 tests**（2026-05-17 sprint 全绿）
-- 路由：25 个页面
-- IPC 模块：48 个 `.rs` + 5 个子目录（合计 53），约 200+ commands
-- E2E 覆盖：38 个 spec 文件
+- 上游 Hermes 版本：**v0.14.0 (2026.5.16)**；参见 [`hermes-deps.md`](./hermes-deps.md)
+- 代码规模：Rust **179** 文件 / TS+TSX **352** 文件（合计 ~113K 行）
+- 测试：Rust **568** · Vitest **112** · Playwright **39 specs**
+- 路由：26 个页面
+- IPC 模块：50 个 `.rs` + 6 个子目录（合计 56），约 210+ commands
+- E2E 覆盖：39 个 spec 文件
 - clippy unwrap baseline：**546**（`scripts/clippy-unwrap-baseline.txt`）
-- 文件长度告警阈：≥ 800 行 warn，≥ 1500 行 fail；当前 **12 个文件越警戒线，1 个越 fail 线**（仅 `mcp_server/tools.rs` 1724 行，属 AC-1b 稳定 catalog 豁免，参见下"健康提示"）
+- 文件长度告警阈：≥ 800 行 warn，≥ 1500 行 fail；当前 **11 个文件越警戒线，2 个越 fail 线**（`mcp_server/tools.rs` 1724 行 + `hermes_config/gateway.rs` 1422 行，均属 AC-1b 稳定 catalog 豁免）
 
 > 🔁 校验提醒：数字随代码变动，至少每月核对一次。
 
@@ -72,10 +72,20 @@
 
 > 🔁 校验提醒：每次发布前抽测一次。
 
-## 健康提示（2026-05-17 校验 · 重构 sprint 后）
+## 健康提示（2026-05-22 校验）
 
-- **超长文件 fail 线（≥1500）**：仅 `src-tauri/src/mcp_server/tools.rs` (1724) 一个。属 **AC-1b 稳定 catalog 豁免**（MCP 工具目录，加新工具是 ~30 LOC + 1 branch 的低频操作）。`browser_cdp.rs` 在 2026-05-17 sprint 由 2149 → 1090；`gateway.rs` 由 1850 → 1399（patch_* 退役）已脱离 fail 线。
-- **超长文件 warn 线（800-1500）**：10 个，多数属 AC-1b 稳定 catalog（`workflow/engine/tests.rs` 1236 测试目录、`hermes_memory.rs` 1014 Hermes contract、`db/analytics.rs` 933 schema 锁定、`lib.rs` 917 IPC 注册、`lib/ipc/runtime.ts` 915 IPC 反射、`engine/mod.rs` 863、`channels/mod.rs` 801），或 sprint 拆出的 cohesive 子模块（`workflow/execution.rs` 956 — 含 HermesExecutor + run path）。`features/talk/useTalkMode.ts` 已在 2026-05-19 拆分（937 → 416 + 270 + 167）。
+- **超长文件 fail 线（≥1500）**：2 个 —— `mcp_server/tools.rs` (1724) + `hermes_config/gateway.rs` (1422)。均属 **AC-1b 稳定 catalog 豁免**（MCP 工具目录 / Hermes Gateway 管理，低频操作）。`browser_cdp.rs` 在 2026-05-17 sprint 由 2149 → 1088。
+- **超长文件 warn 线（800-1500）**：9 个，多数属 AC-1b 稳定 catalog：
+  - `workflow/engine/tests.rs` (1236) — 测试目录
+  - `browser_cdp.rs` (1088) — 已拆 5 子模块
+  - `hermes_memory.rs` (1014) — Hermes contract
+  - `workflow/execution.rs` (956) — HermesExecutor + run path
+  - `lib.rs` (937) — IPC 注册表
+  - `db/analytics.rs` (933) — schema 锁定
+  - `workflow/engine/mod.rs` (863) — 执行引擎核心
+  - `pack/manifest.rs` (844) — Pack schema
+  - `channels/mod.rs` (801) — 消息渠道
+- **前端超长文件**：`lib/ipc/runtime.ts` (915) + `features/tasks/index.tsx` (791) + `stores/chat.ts` (700) — 均为稳定模块
 - **clippy unwrap baseline 546**：基本来自 tests + db 模块；新代码用 `.expect()` 不要 `.unwrap()`，否则越基线 CI 红。
 - **release 不打包 Pack** 已在 v0.2.13 起落地：`tauri.conf.json :: bundle.resources` 不含 `assets/skill-packs/**`。dev 模式 + bundled seed 仍走 `assets/skill-packs/`。
 - **客户 Pack 出基座**（2026-05-17 8c · commit `40e63c0` + `8c0d7d3`）：美正 Pack 从 `src-tauri/assets/skill-packs/meizheng/` 搬到顶层 `packs/meizheng/` 并 gitignored。`src-tauri/assets/skill-packs/` 现在**只有** `cross_border_ecom`（通用骨架）。客户 Pack 分发走私有 zip + Settings → Packs → 导入 zip（`pack_import_zip` IPC）。详见 `packs/README.md`。

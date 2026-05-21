@@ -1,14 +1,14 @@
 # CoreyOS 全局 TODO
 
 <!-- type: status -->
-<!-- last-verified: 2026-05-22 -->
+<!-- last-verified: 2026-05-22 02:52 UTC+8 -->
 <!-- 校验规则：每 30 天一次；超过 500 行需立刻拆分或归档 -->
 
 > ⛔ **2026-05-10 起本文件暂被 [`FOCUS.md`](./FOCUS.md) 覆盖。**
 > 在拿到第 1 个真实付费客户之前，不参考下文 30 条，只看 FOCUS.md 的 3 件事。
 > 拿到客户、跑完一轮反馈之后，回头基于真实数据重写本文件。
 >
-> **当下状态**：v0.2.14 · 基座 12 项（B-1~B-12）全部 ✅ · 美正 Pack 6 个需求中 4 个已交付（#1 USD 汇率 ✅ · #2 UPS 分区 ✅ · USPS 分区 ✅ · FedEx 分区 ✅ · #6 燃油费率 ✅）；剩余 #3 财务发票 / #4 领星费用 / #5 一件代发待客户对齐启动
+> **当下状态**：v0.3.0 · 基座 12 项（B-1~B-12）全部 ✅ · 美正 Pack 6 个需求中 4 个已交付（#1 USD 汇率 ✅ · #2 UPS 分区 ✅ · USPS 分区 ✅ · FedEx 分区 ✅ · #6 燃油费率 ✅）；剩余 #3 财务发票 / #4 领星费用 / #5 一件代发待客户对齐启动
 > **铁律**：0 修改 Hermes Agent 代码 / trait 表面。Hermes 升级只换 binary。
 > **当前阻塞**：P-1 的 Amazon SP-API 开发者账号（审核 1-2 周）。不阻塞 demo 交付（先用报表上传方案）。
 > **关联文档**：[`CURRENT-STATE.md`](./CURRENT-STATE.md) · [`roadmap.md`](./roadmap.md) · [`known-issues.md`](./known-issues.md) · [`../spec/architecture.md`](../spec/architecture.md) § Pack Architecture

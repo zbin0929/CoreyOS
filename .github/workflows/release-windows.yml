@@ -76,7 +76,9 @@ jobs:
           pip install hermes-agent pyinstaller
           
           echo "Creating entry point script..."
-          cat > /tmp/hermes_entry.py << 'ENTRY_EOF'
+          # Windows Git Bash 用 $TEMP 而不是 /tmp
+          TMPDIR="${TEMP:-/tmp}"
+          cat > "$TMPDIR/hermes_entry.py" << 'ENTRY_EOF'
           import sys
           import re
           from hermes_cli.main import main
@@ -91,8 +93,8 @@ jobs:
             --onefile \
             --name hermes-standalone \
             --distpath src-tauri/binaries \
-            --workpath /tmp/pyinstaller-build \
-            --specpath /tmp/pyinstaller-build \
+            --workpath "$TMPDIR/pyinstaller-build" \
+            --specpath "$TMPDIR/pyinstaller-build" \
             --clean \
             --noconfirm \
             --collect-all hermes_cli \
@@ -100,7 +102,7 @@ jobs:
             --hidden-import hermes_cli \
             --hidden-import hermes_cli.main \
             --hidden-import hermes_agent \
-            /tmp/hermes_entry.py
+            "$TMPDIR/hermes_entry.py"
           
           echo "Verifying build..."
           ls -lh src-tauri/binaries/
