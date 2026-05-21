@@ -209,7 +209,9 @@ export default function KanbanPage() {
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>
               取消
             </Button>
-            <Button onClick={handleCreate}>创建</Button>
+            <Button onClick={handleCreate} disabled={!newTitle.trim()}>
+              创建
+            </Button>
           </div>
         </div>
       </Drawer>

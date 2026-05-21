@@ -2,9 +2,17 @@
 //!
 //! Wraps `hermes kanban` CLI commands to provide a UI for managing
 //! multi-agent collaboration tasks.
+//!
+//! Cross-platform: uses `resolve_hermes_binary()` which handles
+//! macOS/Windows/Linux differences. No shell invocation — all args
+//! passed via `Command::args()` to avoid injection.
+
+use std::collections::HashMap;
+use std::process::Command;
 
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+
+use crate::hermes_config::gateway::resolve_hermes_binary;
 
 /// A Kanban task from `hermes kanban list --json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,7 +33,9 @@ pub struct KanbanTask {
 /// List all Kanban tasks.
 #[tauri::command]
 pub async fn kanban_list() -> Result<Vec<KanbanTask>, String> {
-    let output = Command::new("hermes")
+    let binary = resolve_hermes_binary().map_err(|e| format!("hermes not found: {e}"))?;
+
+    let output = Command::new(&binary)
         .args(["kanban", "list", "--json"])
         .output()
         .map_err(|e| format!("failed to run hermes kanban list: {e}"))?;
@@ -49,6 +59,13 @@ pub async fn kanban_create(
     assignee: Option<String>,
     body: Option<String>,
 ) -> Result<String, String> {
+    // Validate title
+    if title.trim().is_empty() {
+        return Err("任务标题不能为空".to_string());
+    }
+
+    let binary = resolve_hermes_binary().map_err(|e| format!("hermes not found: {e}"))?;
+
     let mut args = vec!["kanban", "create", &title];
 
     let assignee_str;
@@ -58,7 +75,7 @@ pub async fn kanban_create(
         args.push(&assignee_str);
     }
 
-    let output = Command::new("hermes")
+    let output = Command::new(&binary)
         .args(&args)
         .output()
         .map_err(|e| format!("failed to run hermes kanban create: {e}"))?;
@@ -73,7 +90,7 @@ pub async fn kanban_create(
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Extract task ID from "Created t_XXXXXXXX"
         if let Some(id) = stdout.split_whitespace().nth(1) {
-            let _ = Command::new("hermes")
+            let _ = Command::new(&binary)
                 .args(["kanban", "comment", id, &b])
                 .output();
         }
@@ -86,6 +103,8 @@ pub async fn kanban_create(
 /// Complete a Kanban task.
 #[tauri::command]
 pub async fn kanban_complete(task_id: String, result: Option<String>) -> Result<(), String> {
+    let binary = resolve_hermes_binary().map_err(|e| format!("hermes not found: {e}"))?;
+
     let mut args = vec!["kanban", "complete", &task_id];
 
     let result_str;
@@ -95,7 +114,7 @@ pub async fn kanban_complete(task_id: String, result: Option<String>) -> Result<
         args.push(&result_str);
     }
 
-    let output = Command::new("hermes")
+    let output = Command::new(&binary)
         .args(&args)
         .output()
         .map_err(|e| format!("failed to run hermes kanban complete: {e}"))?;
@@ -111,7 +130,9 @@ pub async fn kanban_complete(task_id: String, result: Option<String>) -> Result<
 /// Get task details.
 #[tauri::command]
 pub async fn kanban_show(task_id: String) -> Result<KanbanTask, String> {
-    let output = Command::new("hermes")
+    let binary = resolve_hermes_binary().map_err(|e| format!("hermes not found: {e}"))?;
+
+    let output = Command::new(&binary)
         .args(["kanban", "show", &task_id, "--json"])
         .output()
         .map_err(|e| format!("failed to run hermes kanban show: {e}"))?;
@@ -129,36 +150,20 @@ pub async fn kanban_show(task_id: String) -> Result<KanbanTask, String> {
 }
 
 /// List available profiles (assignees).
+/// Uses the hermes_profiles module for reliable profile listing.
 #[tauri::command]
 pub async fn kanban_assignees() -> Result<Vec<String>, String> {
-    let output = Command::new("hermes")
-        .args(["profile", "list"])
-        .output()
-        .map_err(|e| format!("failed to run hermes profile list: {e}"))?;
+    use crate::hermes_profiles;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("hermes profile list failed: {stderr}"));
-    }
+    let view = hermes_profiles::list_profiles().map_err(|e| format!("failed to list profiles: {e}"))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut profiles = Vec::new();
-
-    for line in stdout.lines().skip(3) {
-        // Skip header lines
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 1 {
-            let name = parts[0].trim_start_matches('◆').trim();
-            if !name.is_empty() && name != "Profile" {
-                profiles.push(name.to_string());
-            }
-        }
-    }
+    let mut profiles: Vec<String> = view.profiles.into_iter().map(|p| p.name).collect();
+    profiles.sort();
 
     Ok(profiles)
 }
 
-/// Kanban stats.
+/// Kanban stats (frontend-facing).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KanbanStats {
     pub triage: i32,
@@ -169,10 +174,18 @@ pub struct KanbanStats {
     pub done: i32,
 }
 
+/// Raw JSON from `hermes kanban stats --json`.
+#[derive(Debug, Deserialize)]
+struct KanbanStatsRaw {
+    by_status: HashMap<String, i32>,
+}
+
 #[tauri::command]
 pub async fn kanban_stats() -> Result<KanbanStats, String> {
-    let output = Command::new("hermes")
-        .args(["kanban", "stats"])
+    let binary = resolve_hermes_binary().map_err(|e| format!("hermes not found: {e}"))?;
+
+    let output = Command::new(&binary)
+        .args(["kanban", "stats", "--json"])
         .output()
         .map_err(|e| format!("failed to run hermes kanban stats: {e}"))?;
 
@@ -182,30 +195,17 @@ pub async fn kanban_stats() -> Result<KanbanStats, String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut stats = KanbanStats {
-        triage: 0,
-        todo: 0,
-        ready: 0,
-        running: 0,
-        blocked: 0,
-        done: 0,
-    };
+    let raw: KanbanStatsRaw =
+        serde_json::from_str(&stdout).map_err(|e| format!("failed to parse kanban stats: {e}"))?;
 
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            let count: i32 = parts[1].parse().unwrap_or(0);
-            match parts[0] {
-                "triage" => stats.triage = count,
-                "todo" => stats.todo = count,
-                "ready" => stats.ready = count,
-                "running" => stats.running = count,
-                "blocked" => stats.blocked = count,
-                "done" => stats.done = count,
-                _ => {}
-            }
-        }
-    }
+    let stats = KanbanStats {
+        triage: *raw.by_status.get("triage").unwrap_or(&0),
+        todo: *raw.by_status.get("todo").unwrap_or(&0),
+        ready: *raw.by_status.get("ready").unwrap_or(&0),
+        running: *raw.by_status.get("running").unwrap_or(&0),
+        blocked: *raw.by_status.get("blocked").unwrap_or(&0),
+        done: *raw.by_status.get("done").unwrap_or(&0),
+    };
 
     Ok(stats)
 }
