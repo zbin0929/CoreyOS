@@ -42,37 +42,43 @@ interface KanbanStats {
 
 const statusConfig: Record<
   string,
-  { label: string; color: string; icon: React.ReactNode }
+  { label: string; color: string; iconClass: string; Icon: typeof RefreshCw }
 > = {
   triage: {
     label: '待分类',
     color: 'bg-bg-elev-2',
-    icon: <AlertCircle className="h-4 w-4 text-fg-muted" />,
+    iconClass: 'text-fg-muted',
+    Icon: AlertCircle,
   },
   todo: {
     label: '待办',
     color: 'bg-bg-elev-2',
-    icon: <Clock className="h-4 w-4 text-blue-500" />,
+    iconClass: 'text-blue-500',
+    Icon: Clock,
   },
   ready: {
     label: '就绪',
     color: 'bg-bg-elev-2',
-    icon: <Play className="h-4 w-4 text-yellow-500" />,
+    iconClass: 'text-yellow-500',
+    Icon: Play,
   },
   running: {
     label: '执行中',
     color: 'bg-bg-elev-2',
-    icon: <RefreshCw className="h-4 w-4 text-purple-500 animate-spin" />,
+    iconClass: 'text-purple-500',
+    Icon: RefreshCw,
   },
   blocked: {
     label: '阻塞',
     color: 'bg-bg-elev-2',
-    icon: <AlertCircle className="h-4 w-4 text-danger" />,
+    iconClass: 'text-danger',
+    Icon: AlertCircle,
   },
   done: {
     label: '完成',
     color: 'bg-bg-elev-2',
-    icon: <CheckCircle2 className="h-4 w-4 text-green-500" />,
+    iconClass: 'text-green-500',
+    Icon: CheckCircle2,
   },
 };
 
@@ -218,17 +224,20 @@ export default function KanbanPage() {
 
       {stats && (
         <div className="grid grid-cols-6 gap-4 border-b border-border px-6 py-4">
-          {Object.entries(statusConfig).map(([key, config]) => (
-            <Card key={key} className="p-3">
-              <div className="flex items-center gap-2">
-                {config.icon}
-                <span className="text-sm font-medium text-fg">{config.label}</span>
-              </div>
-              <div className="mt-1 text-2xl font-bold text-fg">
-                {stats[key as keyof KanbanStats]}
-              </div>
-            </Card>
-          ))}
+          {Object.entries(statusConfig).map(([key, config]) => {
+            const IconComp = config.Icon;
+            return (
+              <Card key={key} className="p-3">
+                <div className="flex items-center gap-2">
+                  <IconComp className={cn('h-4 w-4', config.iconClass)} />
+                  <span className="text-sm font-medium text-fg">{config.label}</span>
+                </div>
+                <div className="mt-1 text-2xl font-bold text-fg">
+                  {stats[key as keyof KanbanStats]}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -245,15 +254,18 @@ export default function KanbanPage() {
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-6">
-            {columns.map((col) => (
-              <div key={col} className="space-y-4">
-                <div className="flex items-center gap-2">
-                  {statusConfig[col]?.icon}
-                  <h2 className="font-semibold text-fg">{statusConfig[col]?.label}</h2>
-                  <span className="rounded bg-bg-elev-2 px-2 py-0.5 text-xs text-fg-muted">
-                    {tasks.filter((t) => t.status === col).length}
-                  </span>
-                </div>
+            {columns.map((col) => {
+              const colConfig = statusConfig[col];
+              const ColIcon = colConfig?.Icon;
+              return (
+                <div key={col} className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    {ColIcon && <ColIcon className={cn('h-4 w-4', colConfig.iconClass)} />}
+                    <h2 className="font-semibold text-fg">{colConfig?.label}</h2>
+                    <span className="rounded bg-bg-elev-2 px-2 py-0.5 text-xs text-fg-muted">
+                      {tasks.filter((t) => t.status === col).length}
+                    </span>
+                  </div>
                 <div className="space-y-3">
                   {tasks
                     .filter((t) => t.status === col)
@@ -300,9 +312,10 @@ export default function KanbanPage() {
                         )}
                       </Card>
                     ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
