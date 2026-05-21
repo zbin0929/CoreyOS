@@ -99,9 +99,11 @@ jobs:
             --noconfirm \
             --collect-all hermes_cli \
             --collect-all hermes_agent \
+            --collect-all aiohttp \
             --hidden-import hermes_cli \
             --hidden-import hermes_cli.main \
             --hidden-import hermes_agent \
+            --hidden-import aiohttp \
             "$TMPDIR/hermes_entry.py"
           
           echo "Verifying build..."
