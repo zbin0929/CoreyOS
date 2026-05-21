@@ -245,7 +245,7 @@ pub async fn hermes_profile_detail(name: String) -> IpcResult<ProfileDetail> {
 
     let profile_dir = hermes_dir.join("profiles").join(&name);
     if !profile_dir.exists() {
-        return Err(IpcError::NotFound {
+        return Err(IpcError::Internal {
             message: format!("Profile not found: {name}"),
         });
     }
