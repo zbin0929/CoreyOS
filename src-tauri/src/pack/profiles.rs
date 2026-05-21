@@ -53,13 +53,13 @@ pub fn install_profiles(
             }
         }
 
+        // Profile dir is ~/.hermes/profiles/<id>/
+        let profile_dir = hermes_dir.join("profiles").join(&profile.id);
+
         // 2. Copy SOUL.md if specified
         if !profile.soul.is_empty() {
             let soul_src = pack_dir.join(&profile.soul);
             if soul_src.exists() {
-                // Profile dir is ~/.hermes/profiles/<id>/
-                let profile_dir = hermes_dir.join("profiles").join(&profile.id);
-
                 let soul_dst = profile_dir.join("SOUL.md");
 
                 if let Err(e) = fs::copy(&soul_src, &soul_dst) {
@@ -81,6 +81,44 @@ pub fn install_profiles(
                     profile_id = %profile.id,
                     path = %soul_src.display(),
                     "SOUL.md not found in pack"
+                );
+            }
+        }
+
+        // 3. Copy skills if specified
+        if !profile.skills.is_empty() {
+            let skills_dst = profile_dir.join("skills");
+            if let Err(e) = fs::create_dir_all(&skills_dst) {
+                warn!(
+                    profile_id = %profile.id,
+                    error = %e,
+                    "failed to create skills dir"
+                );
+            } else {
+                for skill_path in &profile.skills {
+                    let skill_src = pack_dir.join(skill_path);
+                    if skill_src.exists() {
+                        // Use skill filename as destination
+                        let skill_name = skill_src
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("SKILL.md");
+                        let skill_file_dst = skills_dst.join(skill_name);
+
+                        if let Err(e) = fs::copy(&skill_src, &skill_file_dst) {
+                            warn!(
+                                profile_id = %profile.id,
+                                src = %skill_src.display(),
+                                error = %e,
+                                "failed to copy skill"
+                            );
+                        }
+                    }
+                }
+                info!(
+                    profile_id = %profile.id,
+                    count = profile.skills.len(),
+                    "skills installed"
                 );
             }
         }
