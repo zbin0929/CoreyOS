@@ -57,37 +57,51 @@ pub fn key_belongs_to_pack(key: &str, pack_id: &str) -> bool {
 /// Translate one Pack MCP spec into the JSON value Hermes expects
 /// under `mcp_servers.<key>`.
 ///
-/// Hermes schema (verified against the
-/// hermes-agent docs):
+/// Hermes schema (verified against the hermes-agent docs):
 ///
 /// ```yaml
 /// mcp_servers:
 ///   <key>:
-///     command: "<argv[0]>"          # stdio
-///     args:    [<argv[1]>, ...]     # stdio
-///     env:     { K: V, ... }        # stdio + http
+///     # stdio transport:
+///     command: "<argv[0]>"
+///     args:    [<argv[1]>, ...]
+///     env:     { K: V, ... }
+///     # streamableHttp / url transport:
+///     url: "https://..."
+///     headers: { K: V, ... }
 /// ```
-///
-/// `transport` other than `"stdio"` is not yet supported; the
-/// stage 3b scope is precompiled-binary stdio MCPs (per the iron
-/// rule from the Pack architecture decision: ship binaries inside
-/// the Pack folder).
 pub fn spec_to_hermes_entry(spec: &McpServerSpec, ctx: &TemplateContext) -> serde_json::Value {
-    let argv: Vec<String> = spec.command.iter().map(|s| resolve(s, ctx)).collect();
-    let env = resolve_env(&spec.env, ctx);
-
-    let command = argv.first().cloned().unwrap_or_default();
-    let args: Vec<serde_json::Value> = argv
-        .iter()
-        .skip(1)
-        .map(|a| serde_json::Value::String(a.clone()))
-        .collect();
-
     let mut entry = serde_json::Map::new();
-    entry.insert("command".to_string(), serde_json::Value::String(command));
-    if !args.is_empty() {
-        entry.insert("args".to_string(), serde_json::Value::Array(args));
+
+    match spec.transport.as_str() {
+        "streamableHttp" | "url" => {
+            let resolved_url = resolve(&spec.url, ctx);
+            entry.insert("url".to_string(), serde_json::Value::String(resolved_url));
+
+            if !spec.headers.is_empty() {
+                let mut hdr_map = serde_json::Map::new();
+                for (k, v) in &spec.headers {
+                    hdr_map.insert(k.clone(), serde_json::Value::String(resolve(v, ctx)));
+                }
+                entry.insert("headers".to_string(), serde_json::Value::Object(hdr_map));
+            }
+        }
+        _ => {
+            let argv: Vec<String> = spec.command.iter().map(|s| resolve(s, ctx)).collect();
+            let command = argv.first().cloned().unwrap_or_default();
+            let args: Vec<serde_json::Value> = argv
+                .iter()
+                .skip(1)
+                .map(|a| serde_json::Value::String(a.clone()))
+                .collect();
+            entry.insert("command".to_string(), serde_json::Value::String(command));
+            if !args.is_empty() {
+                entry.insert("args".to_string(), serde_json::Value::Array(args));
+            }
+        }
     }
+
+    let env = resolve_env(&spec.env, ctx);
     if !env.is_empty() {
         let mut env_map = serde_json::Map::new();
         for (k, v) in env {
@@ -205,6 +219,8 @@ mod tests {
             id: "srv".to_string(),
             transport: "stdio".to_string(),
             command: argv(&["./mcp/srv/server-${platform}", "--data", "${pack_data_dir}"]),
+            url: String::new(),
+            headers: BTreeMap::new(),
             env: BTreeMap::new(),
             auto_start: true,
             timeout_ms: 30_000,
@@ -228,6 +244,8 @@ mod tests {
             id: "srv".to_string(),
             transport: "stdio".to_string(),
             command: argv(&["./bin"]),
+            url: String::new(),
+            headers: BTreeMap::new(),
             env: BTreeMap::new(),
             auto_start: true,
             timeout_ms: 30_000,
@@ -248,6 +266,8 @@ mod tests {
             id: "srv".to_string(),
             transport: "stdio".to_string(),
             command: argv(&["./bin"]),
+            url: String::new(),
+            headers: BTreeMap::new(),
             env,
             auto_start: true,
             timeout_ms: 30_000,

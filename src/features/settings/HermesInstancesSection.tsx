@@ -62,16 +62,20 @@ export function HermesInstancesSection() {
   const autoProbedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!rows) return;
-    let i = 0;
-    for (const r of rows) {
-      if (autoProbedRef.current.has(r.id)) continue;
-      autoProbedRef.current.add(r.id);
-      const delay = i * 150;
-      i += 1;
-      window.setTimeout(() => {
-        void testInstance(r);
-      }, delay);
-    }
+    // Delay auto-probe to avoid blocking page render
+    const timeoutId = window.setTimeout(() => {
+      let i = 0;
+      for (const r of rows) {
+        if (autoProbedRef.current.has(r.id)) continue;
+        autoProbedRef.current.add(r.id);
+        const delay = i * 200;
+        i += 1;
+        window.setTimeout(() => {
+          void testInstance(r);
+        }, delay);
+      }
+    }, 500); // Wait 500ms after page render before starting probes
+    return () => window.clearTimeout(timeoutId);
   }, [rows]);
 
   const editingRow = editingId

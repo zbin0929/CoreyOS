@@ -541,7 +541,7 @@ pub fn inject_pack_env_vars() {
         Err(_) => return,
     };
     let env_path = hermes_dir.join(".env");
-    let packs_dir = hermes_dir.join("packs");
+    let packs_dir = hermes_dir.join(crate::pack::SKILL_PACKS_DIRNAME);
 
     if !packs_dir.exists() {
         return;
@@ -644,7 +644,12 @@ pub fn inject_pack_env_vars() {
         });
 
         // Quote value if it contains special characters
-        let quoted_value = if value.contains('=') || value.contains('\n') || value.contains('"') || value.contains('\'') || value.contains(' ') {
+        let quoted_value = if value.contains('=')
+            || value.contains('\n')
+            || value.contains('"')
+            || value.contains('\'')
+            || value.contains(' ')
+        {
             format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
         } else {
             value.clone()
@@ -679,6 +684,122 @@ pub fn inject_pack_env_vars() {
             ),
             Err(e) => tracing::warn!("failed to write pack env vars: {e}"),
         }
+    }
+}
+
+/// Inject Pack MCP servers into `~/.hermes/config.yaml`'s `mcp_servers:` map.
+///
+/// Reads all enabled Packs' manifests for `mcp_servers:` declarations and
+/// combines them with the Pack's user config (for template variable
+/// resolution like `${pack_config.sellersprite_api_key}`). Entries are
+/// written with the `pack__<pack_id>__<server_id>` prefix.
+///
+/// Called from `gateway_start()` / `gateway_restart()` after
+/// `inject_pack_env_vars`. Best-effort: errors are logged but never
+/// propagated.
+pub fn inject_pack_mcp_servers() {
+    let hermes_dir = match crate::paths::hermes_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    let packs_dir = hermes_dir.join(crate::pack::SKILL_PACKS_DIRNAME);
+    if !packs_dir.exists() {
+        return;
+    }
+
+    let Ok(entries) = std::fs::read_dir(&packs_dir) else {
+        return;
+    };
+
+    let mut all_updates: std::collections::HashMap<String, serde_json::Value> =
+        std::collections::HashMap::new();
+
+    for entry in entries.flatten() {
+        let pack_dir = entry.path();
+        if !pack_dir.is_dir() {
+            continue;
+        }
+
+        let manifest_path = pack_dir.join("manifest.yaml");
+        if !manifest_path.exists() {
+            continue;
+        }
+
+        let pack_id = pack_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        let Ok(manifest_raw) = std::fs::read_to_string(&manifest_path) else {
+            continue;
+        };
+
+        let manifest = match crate::pack::manifest::parse(&manifest_raw) {
+            crate::pack::manifest::ManifestLoadOutcome::Loaded(m) => *m,
+            _ => continue,
+        };
+
+        if manifest.mcp_servers.is_empty() {
+            continue;
+        }
+
+        let config_path = hermes_dir
+            .join("pack-data")
+            .join(&pack_id)
+            .join("config.yaml");
+
+        let pack_config: std::collections::BTreeMap<String, String> =
+            if let Ok(raw) = std::fs::read_to_string(&config_path) {
+                if let Ok(val) = serde_yaml::from_str::<serde_yaml::Value>(&raw) {
+                    val.as_mapping()
+                        .map(|m| {
+                            m.iter()
+                                .filter_map(|(k, v)| {
+                                    let key = k.as_str()?.to_string();
+                                    let value = v.as_str()?.to_string();
+                                    Some((key, value))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                } else {
+                    std::collections::BTreeMap::new()
+                }
+            } else {
+                std::collections::BTreeMap::new()
+            };
+
+        let ctx = crate::pack::TemplateContext {
+            platform: crate::pack::current_platform().to_string(),
+            pack_dir: pack_dir.clone(),
+            pack_data_dir: hermes_dir.join("pack-data").join(&pack_id),
+            pack_config,
+        };
+
+        let updates = crate::pack::enable_updates(&manifest, &ctx);
+        for (key, value) in updates {
+            if let Some(url_val) = value.as_object().and_then(|o| o.get("url")) {
+                if let Some(url_str) = url_val.as_str() {
+                    if url_str.is_empty() || url_str.contains("${pack_config.") {
+                        continue;
+                    }
+                }
+            }
+            all_updates.insert(key, value);
+        }
+    }
+
+    if all_updates.is_empty() {
+        return;
+    }
+
+    match crate::hermes_config::write_channel_yaml_fields("mcp_servers", &all_updates, None) {
+        Ok(()) => tracing::info!(
+            count = all_updates.len(),
+            "injected pack MCP servers into config.yaml"
+        ),
+        Err(e) => tracing::warn!(error = %e, "failed to inject pack MCP servers"),
     }
 }
 
@@ -825,6 +946,7 @@ pub fn gateway_start() -> io::Result<String> {
     ensure_api_server_env();
     ensure_agent_max_turns();
     inject_pack_env_vars();
+    inject_pack_mcp_servers();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);
@@ -869,6 +991,7 @@ pub fn gateway_restart() -> io::Result<String> {
     ensure_api_server_env();
     ensure_agent_max_turns();
     inject_pack_env_vars();
+    inject_pack_mcp_servers();
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);

@@ -28,6 +28,13 @@ export interface HomeWidgetSpec {
 
 export const HOME_WIDGETS: HomeWidgetSpec[] = [
   {
+    id: 'pack_home_views',
+    labelKey: 'home.widget_pack_views',
+    span: 'full',
+    defaultVisible: true,
+    Component: PackHomeWidgetsList,
+  },
+  {
     id: 'metrics_today',
     labelKey: 'home.widget_metrics_today',
     span: 'full',
@@ -61,13 +68,6 @@ export const HOME_WIDGETS: HomeWidgetSpec[] = [
     span: 'wide',
     defaultVisible: false,
     Component: RecentWorkflowsWidget,
-  },
-  {
-    id: 'pack_home_views',
-    labelKey: 'home.widget_pack_views',
-    span: 'wide',
-    defaultVisible: true,
-    Component: PackHomeWidgetsList,
   },
   {
     id: 'quick_actions',

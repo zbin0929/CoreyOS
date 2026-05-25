@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@/app/shell/PageHeader';
 import { InfoHint } from '@/components/ui/info-hint';
-import { HermesInstancesSection } from '@/features/settings';
+import { HermesInstancesSection } from '@/features/settings/HermesInstancesSection';
 
 /**
  * T8 — the Agents page. Previously this lived inside Settings as the

@@ -181,8 +181,9 @@ pub struct McpServerSpec {
     /// Stable server id, used to address it from views and skills.
     pub id: String,
 
-    /// Transport. Currently only `stdio` is supported; sse/ws will
-    /// be added when a real Pack needs them.
+    /// Transport type: `stdio` (default, local binary) or
+    /// `streamableHttp` / `url` (remote HTTP MCP server like
+    /// sellersprite).
     #[serde(default = "default_mcp_transport")]
     #[serde(rename = "type")]
     pub transport: String,
@@ -191,7 +192,20 @@ pub struct McpServerSpec {
     /// `${platform}` template variables (resolved by the loader to
     /// the current OS / arch matching the precompiled binary
     /// shipped under `mcp/<id>/`).
+    /// Empty for remote transports (`streamableHttp`/`url`).
+    #[serde(default)]
     pub command: Vec<String>,
+
+    /// Remote MCP endpoint URL. Only used when transport is
+    /// `streamableHttp` or `url`. May contain `${pack_config.<key>}`
+    /// template variables (e.g. for secret-key query params).
+    #[serde(default)]
+    pub url: String,
+
+    /// HTTP headers for remote MCP requests. Values may reference
+    /// `${pack_config.<key>}` templates for injecting API keys.
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
 
     /// Environment overrides passed to the subprocess. Values may
     /// reference `${pack_data_dir}` and `${pack_config.<key>}`

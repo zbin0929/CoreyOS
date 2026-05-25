@@ -1,26 +1,50 @@
-import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { type ComponentType, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowRight, Package } from 'lucide-react';
+import { Maximize2 } from 'lucide-react';
 
 import { Icon } from '@/components/ui/icon';
-import { Button } from '@/components/ui/button';
-import { lucideByName } from '@/lib/lucide-map';
+import { type PackView } from '@/lib/ipc/pack';
 import { usePackStore } from '@/lib/usePackStore';
+import { AlertListTemplate } from '@/features/pack/templates/AlertList';
+import { CompositeDashboardTemplate } from '@/features/pack/templates/CompositeDashboard';
+import { DataTableTemplate } from '@/features/pack/templates/DataTable';
+import { FormRunnerTemplate } from '@/features/pack/templates/FormRunner';
+import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
+import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
+import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
+import { SchemaConfigTemplate } from '@/features/pack/templates/SchemaConfig';
+import { SkillPaletteTemplate } from '@/features/pack/templates/SkillPalette';
+import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
+import { TimelineTemplate } from '@/features/pack/templates/Timeline';
+import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
+import { WorkflowLauncherTemplate } from '@/features/pack/templates/WorkflowLauncher';
 
-import { EmptyHint, WidgetCard } from './shared';
+interface TemplateProps {
+  view: PackView;
+}
+
+const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
+  AlertList: AlertListTemplate,
+  CompositeDashboard: CompositeDashboardTemplate,
+  DataTable: DataTableTemplate,
+  FormRunner: FormRunnerTemplate,
+  MetricsCard: MetricsCardTemplate,
+  PivotTable: PivotTableTemplate,
+  RadarChart: RadarChartTemplate,
+  SchemaConfig: SchemaConfigTemplate,
+  SkillPalette: SkillPaletteTemplate,
+  TimeSeriesChart: TimeSeriesChartTemplate,
+  Timeline: TimelineTemplate,
+  TrendsMatrix: TrendsMatrixTemplate,
+  WorkflowLauncher: WorkflowLauncherTemplate,
+};
 
 /**
- * Aggregator widget for any Pack view that opted into Home by
- * declaring `nav_section: home` in its manifest. Renders a single
- * card listing the views — clicking jumps to `/pack/<packId>/<viewId>`.
- *
- * The widget itself only renders when at least one such view exists,
- * so the catalog can leave it permanently visible without polluting
- * Home for users who haven't installed any home-aware Packs.
+ * Pack dashboard widget — renders Pack views inline on the Home page.
+ * Views with `nav_section: home` are rendered directly using their
+ * template, so the user sees data at a glance without clicking through.
  */
 export function PackHomeWidgetsList() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const views = usePackStore((s) => s.views);
   const refresh = usePackStore((s) => s.refresh);
@@ -33,55 +57,35 @@ export function PackHomeWidgetsList() {
   if (homeViews.length === 0) return null;
 
   return (
-    <WidgetCard
-      id="pack_home_views"
-      title={t('home.widget_pack_views', { defaultValue: 'Pack 首页视图' })}
-      action={
-        <Button
-          size="xs"
-          variant="ghost"
-          onClick={() => void navigate({ to: '/settings', hash: 'settings-packs' })}
-        >
-          {t('home.view_all')}
-          <Icon icon={ArrowRight} size="xs" />
-        </Button>
-      }
-    >
-      {homeViews.length === 0 ? (
-        <EmptyHint
-          icon={Package}
-          text={t('home.widget_pack_views_empty', {
-            defaultValue: '尚无 Pack 注册首页视图',
-          })}
-        />
-      ) : (
-        <ul className="flex flex-col gap-0.5">
-          {homeViews.map((v) => {
-            const Ico = lucideByName(v.icon);
-            return (
-              <li key={`${v.packId}-${v.viewId}`}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void navigate({ to: `/pack/${v.packId}/${v.viewId}` })
-                  }
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition hover:bg-bg-elev-2"
-                >
-                  <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-gold-500/10 text-gold-500">
-                    <Icon icon={Ico} size="xs" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-fg">
-                    {v.title || v.viewId}
-                  </span>
-                  <span className="text-[10px] text-fg-subtle">
-                    {v.packTitle || v.packId}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </WidgetCard>
+    <div className="flex flex-col gap-4">
+      {homeViews.map((v) => {
+        const Template = TEMPLATES[v.template];
+        if (!Template) return null;
+        return (
+          <section
+            key={`${v.packId}-${v.viewId}`}
+            className="relative rounded-2xl border border-[var(--glass-border)] p-4 shadow-[var(--shadow-1)] transition-all duration-200 hover:border-[var(--glass-border-hover)]"
+            style={{ background: 'var(--gradient-card)' }}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold tracking-tight text-fg">
+                {v.title || v.viewId}
+              </h2>
+              <button
+                type="button"
+                onClick={() =>
+                  void navigate({ to: `/pack/${v.packId}/${v.viewId}` })
+                }
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-fg-subtle transition hover:bg-bg-elev-2 hover:text-fg"
+                title="展开全屏"
+              >
+                <Icon icon={Maximize2} size="xs" />
+              </button>
+            </div>
+            <Template view={v} />
+          </section>
+        );
+      })}
+    </div>
   );
 }

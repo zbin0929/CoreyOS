@@ -251,3 +251,71 @@ fn line_matches_key_handles_whitespace_and_comments() {
     ));
     assert!(!line_matches_key("other line", "OPENAI_API_KEY"));
 }
+
+#[test]
+fn inject_pack_env_vars_and_mcp_servers_integration() {
+    let _lock = _home_lock();
+    let tmp = std::env::temp_dir().join("corey-inject-test");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).expect("create tmp");
+
+    std::env::set_var("COREY_HERMES_DIR", tmp.to_str().expect("utf8"));
+
+    let packs_dir = tmp.join("skill-packs").join("ecommerce");
+    std::fs::create_dir_all(&packs_dir).expect("create packs dir");
+    let manifest = r#"
+schema_version: 1
+id: ecommerce
+version: "1.0.0"
+config_schema:
+  - key: apify_token
+    type: secret
+  - key: sellersprite_api_key
+    type: secret
+mcp_servers:
+  - id: sellersprite
+    type: streamableHttp
+    url: "https://mcp.sellersprite.com/mcp"
+    headers:
+      secret-key: "${pack_config.sellersprite_api_key}"
+"#;
+    std::fs::write(packs_dir.join("manifest.yaml"), manifest).expect("write manifest");
+
+    let config_dir = tmp.join("pack-data").join("ecommerce");
+    std::fs::create_dir_all(&config_dir).expect("create config dir");
+    let config = "apify_token: apify_api_xyz123\nsellersprite_api_key: sk_seller_abc\n";
+    std::fs::write(config_dir.join("config.yaml"), config).expect("write config");
+
+    std::fs::write(tmp.join(".env"), "").expect("create .env");
+    std::fs::write(tmp.join("config.yaml"), "").expect("create config.yaml");
+
+    super::gateway::inject_pack_env_vars();
+    super::gateway::inject_pack_mcp_servers();
+
+    let env_content = std::fs::read_to_string(tmp.join(".env")).expect("read .env");
+    assert!(
+        env_content.contains("APIFY_TOKEN=apify_api_xyz123"),
+        "APIFY_TOKEN not found in .env: {env_content}"
+    );
+    assert!(
+        env_content.contains("SELLERSPRITE_API_KEY=sk_seller_abc"),
+        "SELLERSPRITE_API_KEY not found in .env: {env_content}"
+    );
+
+    let cfg_content = std::fs::read_to_string(tmp.join("config.yaml")).expect("read config.yaml");
+    assert!(
+        cfg_content.contains("pack__ecommerce__sellersprite"),
+        "MCP server key not found in config.yaml: {cfg_content}"
+    );
+    assert!(
+        cfg_content.contains("https://mcp.sellersprite.com/mcp"),
+        "MCP URL not found in config.yaml: {cfg_content}"
+    );
+    assert!(
+        cfg_content.contains("sk_seller_abc"),
+        "Secret key not resolved in config.yaml: {cfg_content}"
+    );
+
+    std::env::remove_var("COREY_HERMES_DIR");
+    let _ = std::fs::remove_dir_all(&tmp);
+}

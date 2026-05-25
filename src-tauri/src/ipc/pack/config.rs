@@ -249,9 +249,12 @@ pub async fn pack_config_schema(
         .ok_or_else(|| IpcError::Internal {
             message: format!("pack not found: {pack_id}"),
         })?;
-    let manifest = entry.manifest.as_deref().ok_or_else(|| IpcError::Internal {
-        message: format!("pack has no manifest: {pack_id}"),
-    })?;
+    let manifest = entry
+        .manifest
+        .as_deref()
+        .ok_or_else(|| IpcError::Internal {
+            message: format!("pack has no manifest: {pack_id}"),
+        })?;
     Ok(PackConfigSchema {
         pack_id: manifest.id.clone(),
         pack_title: manifest.title.clone(),
@@ -316,8 +319,8 @@ pub async fn pack_config_set(
             message: format!("rename pack config: {e}"),
         })?;
 
-        // Inject env vars and restart gateway so new config takes effect
         crate::hermes_config::inject_pack_env_vars();
+        crate::hermes_config::inject_pack_mcp_servers();
         if let Err(e) = crate::hermes_config::gateway_restart() {
             tracing::warn!(pack_id = %pack_id, error = %e, "gateway restart after config save failed");
         }
