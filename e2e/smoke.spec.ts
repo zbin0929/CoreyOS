@@ -13,28 +13,27 @@ test.describe('shell', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: /CoreyOS/i })).toBeVisible();
     // Sidebar is always mounted — check a couple of nav entries by role.
-    await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Chat' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Models' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Home|首页/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Workflows|工作流/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Settings|设置/ })).toBeVisible();
   });
 
   test('can navigate to chat and back', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: 'Chat' }).click();
+    await page.getByRole('link', { name: /Chat|对话/ }).click();
     await expect(page).toHaveURL(/\/chat$/);
     // SessionsPanel header is chat-specific.
-    await expect(page.getByText('Sessions', { exact: true })).toBeVisible();
-    await page.getByRole('link', { name: 'Home' }).click();
+    await expect(page.getByText(/Sessions|会话/).first()).toBeVisible();
+    await page.getByRole('link', { name: /Home|首页/ }).click();
     await expect(page).toHaveURL(/\/$/);
   });
 
   test('command palette opens with the shortcut button', async ({ page }) => {
     await page.goto('/');
     // Clicking the topbar trigger is more reliable than synthesising ⌘K.
-    await page.getByRole('button', { name: /Open command palette/i }).click();
+    await page.getByRole('button', { name: /Open command palette|打开命令面板/i }).click();
     // Palette is a plain overlay — identify it by the cmdk input inside.
-    const input = page.getByPlaceholder('Type a command or search…').last();
+    const input = page.getByPlaceholder(/Type a command or search…|输入命令或搜索…/).last();
     await expect(input).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(input).toBeHidden();
@@ -46,7 +45,7 @@ test.describe('shell', () => {
     const before = await root.getAttribute('data-theme');
     // Use the toolbar button instead of the shortcut — click is less flaky
     // than synthesised Meta-combos under Playwright on macOS.
-    await page.getByRole('button', { name: /Toggle theme/i }).click();
+    await page.getByRole('button', { name: /Toggle theme|切换主题/i }).click();
     const expected = before === 'dark' ? 'light' : 'dark';
     await expect(root).toHaveAttribute('data-theme', expected);
   });
