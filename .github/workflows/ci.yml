@@ -153,6 +153,13 @@ jobs:
           mkdir -p dist
           echo '<!doctype html><title>ci stub</title>' > dist/index.html
 
+      - name: Stub hermes-standalone binary for tauri resource glob
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/hermes-standalone
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
