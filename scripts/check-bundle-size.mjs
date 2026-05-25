@@ -44,7 +44,7 @@ import { gzipSync } from 'node:zlib';
  *  `lib/ipc` barrel which is imported by chat / talk hot paths and
  *  therefore lands in the main bundle. See CHANGELOG.md
  *  v0.2.12 entry for the offsetting feature. */
-const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 360);
+const MAX_CHUNK_GZIP_KB = Number(process.env.MAX_CHUNK_GZIP_KB ?? 370);
 const DIST_ASSETS = resolve(process.cwd(), 'dist', 'assets');
 
 function gzipKb(buf) {

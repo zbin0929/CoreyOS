@@ -1,42 +1,29 @@
-import { type ComponentType, useEffect } from 'react';
+import { type ComponentType, lazy, Suspense, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Maximize2 } from 'lucide-react';
 
 import { Icon } from '@/components/ui/icon';
 import { type PackView } from '@/lib/ipc/pack';
 import { usePackStore } from '@/lib/usePackStore';
-import { AlertListTemplate } from '@/features/pack/templates/AlertList';
-import { CompositeDashboardTemplate } from '@/features/pack/templates/CompositeDashboard';
-import { DataTableTemplate } from '@/features/pack/templates/DataTable';
-import { FormRunnerTemplate } from '@/features/pack/templates/FormRunner';
-import { MetricsCardTemplate } from '@/features/pack/templates/MetricsCard';
-import { PivotTableTemplate } from '@/features/pack/templates/PivotTable';
-import { RadarChartTemplate } from '@/features/pack/templates/RadarChart';
-import { SchemaConfigTemplate } from '@/features/pack/templates/SchemaConfig';
-import { SkillPaletteTemplate } from '@/features/pack/templates/SkillPalette';
-import { TimeSeriesChartTemplate } from '@/features/pack/templates/TimeSeriesChart';
-import { TimelineTemplate } from '@/features/pack/templates/Timeline';
-import { TrendsMatrixTemplate } from '@/features/pack/templates/TrendsMatrix';
-import { WorkflowLauncherTemplate } from '@/features/pack/templates/WorkflowLauncher';
 
 interface TemplateProps {
   view: PackView;
 }
 
 const TEMPLATES: Record<string, ComponentType<TemplateProps>> = {
-  AlertList: AlertListTemplate,
-  CompositeDashboard: CompositeDashboardTemplate,
-  DataTable: DataTableTemplate,
-  FormRunner: FormRunnerTemplate,
-  MetricsCard: MetricsCardTemplate,
-  PivotTable: PivotTableTemplate,
-  RadarChart: RadarChartTemplate,
-  SchemaConfig: SchemaConfigTemplate,
-  SkillPalette: SkillPaletteTemplate,
-  TimeSeriesChart: TimeSeriesChartTemplate,
-  Timeline: TimelineTemplate,
-  TrendsMatrix: TrendsMatrixTemplate,
-  WorkflowLauncher: WorkflowLauncherTemplate,
+  AlertList: lazy(() => import('@/features/pack/templates/AlertList').then((m) => ({ default: m.AlertListTemplate }))),
+  CompositeDashboard: lazy(() => import('@/features/pack/templates/CompositeDashboard').then((m) => ({ default: m.CompositeDashboardTemplate }))),
+  DataTable: lazy(() => import('@/features/pack/templates/DataTable').then((m) => ({ default: m.DataTableTemplate }))),
+  FormRunner: lazy(() => import('@/features/pack/templates/FormRunner').then((m) => ({ default: m.FormRunnerTemplate }))),
+  MetricsCard: lazy(() => import('@/features/pack/templates/MetricsCard').then((m) => ({ default: m.MetricsCardTemplate }))),
+  PivotTable: lazy(() => import('@/features/pack/templates/PivotTable').then((m) => ({ default: m.PivotTableTemplate }))),
+  RadarChart: lazy(() => import('@/features/pack/templates/RadarChart').then((m) => ({ default: m.RadarChartTemplate }))),
+  SchemaConfig: lazy(() => import('@/features/pack/templates/SchemaConfig').then((m) => ({ default: m.SchemaConfigTemplate }))),
+  SkillPalette: lazy(() => import('@/features/pack/templates/SkillPalette').then((m) => ({ default: m.SkillPaletteTemplate }))),
+  TimeSeriesChart: lazy(() => import('@/features/pack/templates/TimeSeriesChart').then((m) => ({ default: m.TimeSeriesChartTemplate }))),
+  Timeline: lazy(() => import('@/features/pack/templates/Timeline').then((m) => ({ default: m.TimelineTemplate }))),
+  TrendsMatrix: lazy(() => import('@/features/pack/templates/TrendsMatrix').then((m) => ({ default: m.TrendsMatrixTemplate }))),
+  WorkflowLauncher: lazy(() => import('@/features/pack/templates/WorkflowLauncher').then((m) => ({ default: m.WorkflowLauncherTemplate }))),
 };
 
 /**
@@ -82,7 +69,9 @@ export function PackHomeWidgetsList() {
                 <Icon icon={Maximize2} size="xs" />
               </button>
             </div>
-            <Template view={v} />
+            <Suspense fallback={null}>
+              <Template view={v} />
+            </Suspense>
           </section>
         );
       })}
