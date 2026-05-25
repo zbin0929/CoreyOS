@@ -24,7 +24,12 @@ test.describe('logs (changelog)', () => {
         ];
       }
     });
-    await page.getByRole('link', { name: /Logs|日志/ }).click();
+    await page.evaluate(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      window.history.pushState({}, '', '/logs');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await page.waitForURL('**/logs');
     await page.getByTestId('logs-tab-changelog').click();
     await expect(
       page.getByText(/deepseek-reasoner/).first(),

@@ -692,6 +692,10 @@ export const tauriMockInitScript = /* js */ `
         return null;
       }
 
+      case 'pack_profile_meta': {
+        return [];
+      }
+
       case 'hermes_profile_list': {
         return {
           root: state.profilesRoot,

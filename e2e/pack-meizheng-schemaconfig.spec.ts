@@ -93,6 +93,7 @@ const SYSTEM_CONFIG_VIEW = makeView({
   title: '系统配置',
   template: 'SchemaConfig',
   options: {
+    config_file: 'fuel-rate-config',
     schema: [
       {
         key: 'carriers',
@@ -201,8 +202,8 @@ test.describe('meizheng SchemaConfig render', () => {
       page,
       'config',
       [SYSTEM_CONFIG_VIEW],
-      { carriers: { ups } },
       {},
+      { carriers: { ups } },
     );
 
     // The view title only renders after `pack_views_list` resolves +
