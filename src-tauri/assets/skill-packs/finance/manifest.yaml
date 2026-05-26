@@ -1,0 +1,11 @@
+schema_version: 1
+id: finance
+version: "1.0.0"
+title: 财务工具
+description: 通用财务对账工具包，支持两表互核、单表校验、系统数据对比，处理大规模Excel数据
+author: CoreyOS
+icon: ""
+
+skills:
+  - skills/financial_reconciliation/SKILL.md
+  - skills/financial_reconciliation/scripts/reconcile.py
