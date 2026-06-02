@@ -174,7 +174,7 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
                 Push-Location $HermesDir
                 git pull 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
                 if (Test-Path (Join-Path $HermesDir "venv\Scripts\python.exe")) {
-                    uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
+                    uv pip install -e ".[messaging]" --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
                 }
                 Pop-Location
             }
@@ -201,7 +201,7 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
             Push-Location $HermesDir
             git pull 2>&1 | ForEach-Object { Write-Log 'GIT' $_ }
             if (Test-Path (Join-Path $HermesDir "venv\Scripts\python.exe")) {
-                uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
+                uv pip install -e ".[messaging]" --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
             }
             Pop-Location
         } catch {
@@ -287,8 +287,8 @@ if (Get-Command hermes -ErrorAction SilentlyContinue) {
     try {
         Info "Running: uv venv venv --python 3.11 --clear"
         uv venv venv --python 3.11 --clear 2>&1 | ForEach-Object { Write-Log 'VENV' $_ }
-        Info "Running: uv pip install -e . --index-url https://pypi.tuna.tsinghua.edu.cn/simple"
-        uv pip install -e "." --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
+        Info "Running: uv pip install -e .[messaging] --index-url https://pypi.tuna.tsinghua.edu.cn/simple"
+        uv pip install -e ".[messaging]" --index-url "https://pypi.tuna.tsinghua.edu.cn/simple" --python (Join-Path $HermesDir "venv\Scripts\python.exe") 2>&1 | ForEach-Object { Write-Log 'PIP' $_ }
         if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
             Pop-Location
             Fail "uv pip install exited with code $LASTEXITCODE"
