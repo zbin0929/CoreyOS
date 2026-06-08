@@ -81,7 +81,14 @@ jobs:
           set -e  # 任何命令失败立即退出
           
           echo "Installing Hermes and PyInstaller..."
-          pip install hermes-agent pyinstaller
+          # aiohttp is a lazy/optional dep since Hermes v0.14.0, so it is NOT
+          # pulled in by `pip install hermes-agent`. The gateway's api_server
+          # adapter (Corey's /v1/runs SSE) hard-requires it — install it
+          # explicitly so PyInstaller's --collect-all aiohttp has something to
+          # bundle, otherwise the standalone binary ships without it and the
+          # gateway boots with "aiohttp not installed / no adapter for api_server".
+          pip install hermes-agent aiohttp pyinstaller
+          python -c "import aiohttp; print('aiohttp', aiohttp.__version__, 'present for bundling')"
           
           echo "Creating entry point script..."
           cat > /tmp/hermes_entry.py << 'ENTRY_EOF'
