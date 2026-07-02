@@ -1353,6 +1353,40 @@ pub fn inject_hermes_home(cmd: &mut std::process::Command) {
     }
 }
 
+/// Inject `API_SERVER_ENABLED` and `API_SERVER_KEY` from `~/.hermes/.env`
+/// into the gateway child process environment.
+///
+/// Hermes loads `.env` via `python-dotenv` at runtime, but PyInstaller
+/// onefile binaries don't always resolve the `.env` path correctly
+/// (the temp `_MEI*` extraction dir shadows `HERMES_HOME`). By injecting
+/// these two vars explicitly we guarantee the API server starts
+/// regardless of whether dotenv finds the file.
+pub fn inject_api_server_env(cmd: &mut std::process::Command) {
+    let env_path = match crate::paths::hermes_data_dir() {
+        Ok(d) => d.join(".env"),
+        Err(_) => return,
+    };
+    let raw = match std::fs::read_to_string(&env_path) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') || trimmed.is_empty() {
+            continue;
+        }
+        if let Some(eq) = trimmed.find('=') {
+            let name = trimmed[..eq].trim();
+            if name == "API_SERVER_ENABLED" || name == "API_SERVER_KEY" {
+                let val = trimmed[eq + 1..].trim().trim_matches('"');
+                if !val.is_empty() {
+                    cmd.env(name, val);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(target_os = "windows")]
 pub fn suppress_window(cmd: &mut std::process::Command) {
     use std::os::windows::process::CommandExt;
@@ -1367,6 +1401,7 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
     let mut cmd = std::process::Command::new(binary);
     cmd.args(args);
     inject_hermes_home(&mut cmd);
+    inject_api_server_env(&mut cmd);
     suppress_window(&mut cmd);
     cmd.output()
 }
@@ -1526,6 +1561,7 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
         run_cmd.current_dir(dir);
     }
     inject_hermes_home(&mut run_cmd);
+    inject_api_server_env(&mut run_cmd);
 
     let hermes_home_val = crate::paths::hermes_data_dir()
         .ok()
@@ -1672,6 +1708,7 @@ fn spawn_detached_gateway_run_darwin(binary: &Path) -> io::Result<String> {
         .stdout(out_file)
         .stderr(err_file);
     inject_hermes_home(&mut cmd);
+    inject_api_server_env(&mut cmd);
 
     let hermes_home_val = crate::paths::hermes_data_dir()
         .ok()
