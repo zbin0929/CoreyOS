@@ -548,7 +548,10 @@ fn ensure_api_server_env() {
         .open(&env_path)
     {
         Ok(mut f) => match std::io::Write::write_all(&mut f, append.as_bytes()) {
-            Ok(()) => tracing::info!("ensured API_SERVER_ENABLED + API_SERVER_KEY in {}", env_path.display()),
+            Ok(()) => tracing::info!(
+                "ensured API_SERVER_ENABLED + API_SERVER_KEY in {}",
+                env_path.display()
+            ),
             Err(e) => tracing::warn!("failed to write API_SERVER env: {e}"),
         },
         Err(e) => tracing::warn!("failed to open {}: {e}", env_path.display()),
