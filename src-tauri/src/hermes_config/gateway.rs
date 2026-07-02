@@ -1005,6 +1005,10 @@ pub fn gateway_start() -> io::Result<String> {
         return windows_gateway_spawn(&binary);
     }
 
+    if cfg!(target_os = "macos") {
+        return spawn_detached_gateway_run_darwin(&binary);
+    }
+
     let output = run_hermes(&binary, &["gateway", "start"])?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -1048,6 +1052,10 @@ pub fn gateway_restart() -> io::Result<String> {
 
     if cfg!(target_os = "windows") {
         return windows_gateway_spawn(&binary);
+    }
+
+    if cfg!(target_os = "macos") {
+        return spawn_detached_gateway_run_darwin(&binary);
     }
 
     let output = run_hermes(&binary, &["gateway", "restart"])?;
@@ -1568,7 +1576,12 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
 
     std::thread::sleep(std::time::Duration::from_secs(8));
 
-    let listening = check_port_8642();
+    let listening = {
+        use std::net::TcpStream;
+        use std::time::Duration;
+        TcpStream::connect_timeout(&"127.0.0.1:8642".parse().unwrap(), Duration::from_secs(2))
+            .is_ok()
+    };
 
     // 2026-05-11 retirement — see gateway_start() for rationale. Health
     // check no longer triggers Hermes-source patching.
@@ -1612,6 +1625,141 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
 
 #[cfg(not(target_os = "windows"))]
 fn windows_gateway_spawn(_binary: &PathBuf) -> io::Result<String> {
+    unreachable!()
+}
+
+/// macOS: spawn a detached `gateway run --replace` process.
+///
+/// Hermes v0.16+ changed `gateway start` on macOS to use a launchd
+/// agent model (writes `~/Library/LaunchAgents/ai.hermes.gateway.plist`,
+/// then expects launchd to supervise `gateway run`). The generated
+/// plist is incompatible with PyInstaller onefile binaries:
+///   - `VIRTUAL_ENV` points to a temp `_MEI*` dir that's deleted on exit
+///   - `-m hermes_cli.main` is passed as an argv flag to the frozen
+///     entry point, which doesn't understand Python's `-m`
+///
+/// Rather than fight launchd, Corey spawns `gateway run --replace`
+/// directly as a detached child — the same approach used on Windows.
+/// `--replace` makes Hermes kill any prior gateway process before
+/// starting, so this works for both start and restart flows.
+///
+/// We also remove any stale plist so launchd's `KeepAlive=true`
+/// doesn't respawn a broken process behind our backs.
+#[cfg(target_os = "macos")]
+fn spawn_detached_gateway_run_darwin(binary: &Path) -> io::Result<String> {
+    use std::process::Stdio;
+
+    if let Ok(home) = std::env::var("HOME") {
+        let plist = PathBuf::from(home)
+            .join("Library")
+            .join("LaunchAgents")
+            .join("ai.hermes.gateway.plist");
+        if plist.exists() {
+            match std::fs::remove_file(&plist) {
+                Ok(()) => tracing::info!("removed stale launchd plist"),
+                Err(e) => tracing::warn!("cannot remove stale plist {}: {e}", plist.display()),
+            }
+        }
+    }
+
+    let log_dir = crate::paths::hermes_data_dir()
+        .map(|d| d.join("logs"))
+        .unwrap_or_else(|_| PathBuf::from("logs"));
+    let _ = std::fs::create_dir_all(&log_dir);
+
+    let gw_out_log = log_dir.join("gateway-stdout.log");
+    let gw_err_log = log_dir.join("gateway-stderr.log");
+    let gw_log = log_dir.join("gateway-start.log");
+
+    let out_file = std::fs::File::create(&gw_out_log)
+        .map_err(|e| io::Error::other(format!("create {}: {e}", gw_out_log.display())))?;
+    let err_file = std::fs::File::create(&gw_err_log)
+        .map_err(|e| io::Error::other(format!("create {}: {e}", gw_err_log.display())))?;
+
+    let mut cmd = std::process::Command::new(binary);
+    cmd.args(["gateway", "run", "--replace"])
+        .stdin(Stdio::null())
+        .stdout(out_file)
+        .stderr(err_file);
+    inject_hermes_home(&mut cmd);
+
+    let hermes_home_val = crate::paths::hermes_data_dir()
+        .ok()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let _ = std::fs::write(
+        &gw_log,
+        format!(
+            "[{}] spawning detached 'gateway run --replace'\n  binary={}\n  HERMES_HOME={}\n  stdout={}\n  stderr={}\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+            binary.display(),
+            hermes_home_val,
+            gw_out_log.display(),
+            gw_err_log.display(),
+        ),
+    );
+
+    let child = cmd.spawn().map_err(|e| {
+        let _ = std::fs::write(
+            &gw_log,
+            format!(
+                "[{}] SPAWN FAILED: {e}\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            ),
+        );
+        io::Error::other(format!("gateway spawn: {e}"))
+    })?;
+    let pid = child.id();
+    tracing::info!("gateway spawned as detached process (pid {pid})");
+
+    std::thread::sleep(std::time::Duration::from_secs(8));
+
+    let listening = {
+        use std::net::TcpStream;
+        use std::time::Duration;
+        TcpStream::connect_timeout(&"127.0.0.1:8642".parse().unwrap(), Duration::from_secs(2))
+            .is_ok()
+    };
+
+    if listening {
+        tracing::info!("gateway API server confirmed listening on 127.0.0.1:8642");
+        let _ = std::fs::write(
+            &gw_log,
+            format!(
+                "[{}] gateway listening on :8642 (pid {pid})\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            ),
+        );
+        Ok(format!(
+            "gateway started (pid {pid}), API server on :8642, log: {}",
+            gw_log.display()
+        ))
+    } else {
+        let err_content = std::fs::read_to_string(&gw_err_log).unwrap_or_default();
+        let out_content = std::fs::read_to_string(&gw_out_log).unwrap_or_default();
+        tracing::warn!(
+            "gateway spawned (pid {pid}) but port 8642 not yet listening — stdout={} bytes, stderr={} bytes",
+            out_content.len(),
+            err_content.len()
+        );
+        let _ = std::fs::write(
+            &gw_log,
+            format!(
+                "[{}] gateway NOT listening after 8s (pid {pid})\n  stderr tail: {}\n  stdout tail: {}\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                &err_content[err_content.len().saturating_sub(500)..],
+                &out_content[out_content.len().saturating_sub(500)..],
+            ),
+        );
+        Ok(format!(
+            "gateway started (pid {pid}), still initializing, log: {}",
+            gw_log.display()
+        ))
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn spawn_detached_gateway_run_darwin(_binary: &Path) -> io::Result<String> {
     unreachable!()
 }
 
