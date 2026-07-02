@@ -45,8 +45,17 @@ use std::path::{Path, PathBuf};
 ///
 /// 2026-05-22: bumped MAX_TESTED to 0.14 after verifying hermes-standalone
 /// v0.14.0 works with Corey (PyInstaller bundle, gateway start, chat).
+///
+/// 2026-07-02: bumped MAX_TESTED to 0.18 after fixing two breakages
+/// introduced upstream: (1) PyInstaller bundle missing openai SDK
+/// (fixed in bundle-hermes.sh via `--collect-all openai`), (2) Hermes
+/// v0.16.0 made `API_SERVER_KEY` mandatory even on loopback (fixed in
+/// `ensure_api_server_env` which now auto-generates a token, plus
+/// `config.rs` which reads it back for the gateway client). Verified
+/// end-to-end: standalone `gateway run` → `/health` 200 → `/v1/models`
+/// → `/v1/runs` POST 202.
 const HERMES_MIN_SUPPORTED: (u32, u32) = (0, 10);
-const HERMES_MAX_TESTED: (u32, u32) = (0, 14);
+const HERMES_MAX_TESTED: (u32, u32) = (0, 18);
 
 /// Compatibility verdict between the running Hermes binary and what
 /// Corey was built/tested against. Drives the Home-page banner.
@@ -396,12 +405,12 @@ mod compat_tests {
         assert_eq!(c, HermesCompatibility::Untested);
     }
 
-    /// Anchor the v0.14 bump so a future reckless `MAX_TESTED` rollback
+    /// Anchor the v0.18 bump so a future reckless `MAX_TESTED` rollback
     /// (or accidental clobber) trips this test instead of silently
     /// downgrading users into the "untested" yellow-banner state.
     #[test]
-    fn supported_at_max_tested_v0_14() {
-        let (c, _) = evaluate_compat(0, 14);
+    fn supported_at_max_tested_v0_18() {
+        let (c, _) = evaluate_compat(0, 18);
         assert_eq!(c, HermesCompatibility::Supported);
     }
 }
@@ -486,6 +495,12 @@ mod gateway_pid_tests {
 /// does NOT enable the API server by default — it only runs messaging
 /// platforms + cron. Corey needs the API server for `/health` probes and
 /// chat. Best-effort: errors are logged, never propagated.
+///
+/// Since Hermes v0.16.0 the API server refuses to start without
+/// `API_SERVER_KEY`, even on loopback. When Corey doesn't find one in
+/// `.env` it generates a random token and writes it back so the gateway
+/// can boot. The same value is also mirrored into `gateway.json` so the
+/// Rust gateway client sends matching credentials.
 fn ensure_api_server_env() {
     let env_path = match crate::paths::hermes_data_dir() {
         Ok(d) => d.join(".env"),
@@ -494,24 +509,38 @@ fn ensure_api_server_env() {
 
     let raw = std::fs::read_to_string(&env_path).unwrap_or_default();
 
+    let mut has_enabled = false;
+    let mut has_key = false;
     for line in raw.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
         if let Some(eq) = trimmed.find('=') {
-            let key = trimmed[..eq].trim();
-            if key == "API_SERVER_ENABLED" {
-                return;
+            let name = trimmed[..eq].trim();
+            if name == "API_SERVER_ENABLED" {
+                has_enabled = true;
+            } else if name == "API_SERVER_KEY" {
+                has_key = true;
             }
         }
     }
 
-    let append = if raw.is_empty() || raw.ends_with('\n') {
-        "API_SERVER_ENABLED=true\n".to_string()
-    } else {
-        "\nAPI_SERVER_ENABLED=true\n".to_string()
-    };
+    if has_enabled && has_key {
+        return;
+    }
+
+    let generated_key = format!("corey_{}", random_hex_token(32));
+    let mut append = String::new();
+    if !raw.is_empty() && !raw.ends_with('\n') {
+        append.push('\n');
+    }
+    if !has_enabled {
+        append.push_str("API_SERVER_ENABLED=true\n");
+    }
+    if !has_key {
+        append.push_str(&format!("API_SERVER_KEY={generated_key}\n"));
+    }
 
     match std::fs::OpenOptions::new()
         .create(true)
@@ -519,11 +548,32 @@ fn ensure_api_server_env() {
         .open(&env_path)
     {
         Ok(mut f) => match std::io::Write::write_all(&mut f, append.as_bytes()) {
-            Ok(()) => tracing::info!("ensured API_SERVER_ENABLED=true in {}", env_path.display()),
-            Err(e) => tracing::warn!("failed to write API_SERVER_ENABLED: {e}"),
+            Ok(()) => tracing::info!("ensured API_SERVER_ENABLED + API_SERVER_KEY in {}", env_path.display()),
+            Err(e) => tracing::warn!("failed to write API_SERVER env: {e}"),
         },
         Err(e) => tracing::warn!("failed to open {}: {e}", env_path.display()),
     }
+}
+
+/// Best-effort cryptographically-random hex string of `n_bytes` bytes.
+/// Falls back to a timestamp-based value if the OS RNG is unavailable
+/// (extremely unlikely; the fallback only guards against a broken
+/// `/dev/urandom` on a misconfigured host).
+fn random_hex_token(n_bytes: usize) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let mut buf = vec![0u8; n_bytes];
+    let ok = std::fs::File::open("/dev/urandom")
+        .and_then(|mut f| std::io::Read::read_exact(&mut f, &mut buf))
+        .is_ok();
+    if !ok {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let s = format!("{now:064x}");
+        return s.chars().take(n_bytes * 2).collect();
+    }
+    buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Inject Pack configuration values as environment variables into

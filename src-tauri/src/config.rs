@@ -71,7 +71,7 @@ impl GatewayConfig {
     /// file is missing or malformed.
     pub fn load_or_default(config_dir: &Path) -> Self {
         let path = config_dir.join(FILE_NAME);
-        match fs::read_to_string(&path) {
+        let mut cfg = match fs::read_to_string(&path) {
             Ok(raw) => match serde_json::from_str::<Self>(&raw) {
                 Ok(cfg) => cfg,
                 Err(e) => {
@@ -84,7 +84,11 @@ impl GatewayConfig {
                 }
             },
             Err(_) => Self::defaults_with_env(),
+        };
+        if cfg.api_key.as_deref().filter(|s| !s.is_empty()).is_none() {
+            cfg.api_key = read_api_server_key_from_hermes_env();
         }
+        cfg
     }
 
     /// Atomic write to `<dir>/gateway.json`. Creates the directory if absent.
@@ -98,6 +102,29 @@ impl GatewayConfig {
         fs::rename(&tmp_path, &final_path)?;
         Ok(final_path)
     }
+}
+
+/// Read `API_SERVER_KEY` from `~/.hermes/.env` so the gateway client
+/// authenticates against Hermes v0.16+ which made the key mandatory
+/// even on loopback. Returns `None` on any failure (best-effort).
+fn read_api_server_key_from_hermes_env() -> Option<String> {
+    let env_path = crate::paths::hermes_data_dir().ok()?.join(".env");
+    let raw = fs::read_to_string(&env_path).ok()?;
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') || trimmed.is_empty() {
+            continue;
+        }
+        if let Some(eq) = trimmed.find('=') {
+            if trimmed[..eq].trim() == "API_SERVER_KEY" {
+                let val = trimmed[eq + 1..].trim().trim_matches('"');
+                if !val.is_empty() {
+                    return Some(val.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

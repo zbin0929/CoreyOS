@@ -39,6 +39,12 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 # 打包
+#
+# PyInstaller 默认只做静态 import 分析；Hermes 和 openai SDK 大量使用
+# 延迟导入（函数内 / 运行时拼接模块路径），静态分析抓不到 → 打出来的
+# 二进制运行时报 `OpenAI SDK: Not installed`、Gateway 启动即崩。
+# 修复方式：对 Hermes pyproject.toml [project.dependencies] 里的每一个
+# 核心包显式 --collect-all（子模块 + 数据文件 + 元数据）。
 echo "Building hermes-standalone with PyInstaller..."
 cd "$HERMES_DIR"
 
@@ -50,7 +56,31 @@ cd "$HERMES_DIR"
     --specpath "$OUTPUT_DIR/build" \
     --clean \
     --noconfirm \
-    hermes_cli/main.py 2>&1 | tail -20
+    --collect-all openai \
+    --collect-all httpx \
+    --collect-all rich \
+    --collect-all tenacity \
+    --collect-all yaml \
+    --collect-all ruamel.yaml \
+    --collect-all requests \
+    --collect-all jinja2 \
+    --collect-all pydantic \
+    --collect-all pydantic_core \
+    --collect-all prompt_toolkit \
+    --collect-all croniter \
+    --collect-all jwt \
+    --collect-all psutil \
+    --collect-all dotenv \
+    --collect-all fire \
+    --collect-all uuid \
+    --collect-all certifi \
+    --collect-all packaging \
+    --collect-all markdown \
+    --collect-all urllib3 \
+    --collect-all cryptography \
+    --hidden-import hermes_cli \
+    --hidden-import hermes_constants \
+    hermes_cli/main.py 2>&1 | tail -30
 
 # 验证
 BINARY="$OUTPUT_DIR/hermes-standalone"

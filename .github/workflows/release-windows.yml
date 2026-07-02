@@ -107,6 +107,27 @@ jobs:
             --collect-all hermes_cli \
             --collect-all hermes_agent \
             --collect-all aiohttp \
+            --collect-all openai \
+            --collect-all httpx \
+            --collect-all rich \
+            --collect-all tenacity \
+            --collect-all yaml \
+            --collect-all ruamel.yaml \
+            --collect-all requests \
+            --collect-all jinja2 \
+            --collect-all pydantic \
+            --collect-all pydantic_core \
+            --collect-all prompt_toolkit \
+            --collect-all croniter \
+            --collect-all jwt \
+            --collect-all psutil \
+            --collect-all dotenv \
+            --collect-all fire \
+            --collect-all certifi \
+            --collect-all packaging \
+            --collect-all markdown \
+            --collect-all urllib3 \
+            --collect-all cryptography \
             --hidden-import hermes_cli \
             --hidden-import hermes_cli.main \
             --hidden-import hermes_agent \
