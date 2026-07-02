@@ -1459,16 +1459,6 @@ pub fn hermes_update_check() -> HermesUpdateCheck {
 }
 
 #[cfg(target_os = "windows")]
-fn check_port_8642() -> bool {
-    use std::net::TcpStream;
-    TcpStream::connect_timeout(
-        &"127.0.0.1:8642".parse().unwrap(),
-        std::time::Duration::from_secs(2),
-    )
-    .is_ok()
-}
-
-#[cfg(target_os = "windows")]
 fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     use std::os::windows::process::CommandExt;
     use std::process::Stdio;
