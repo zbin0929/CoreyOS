@@ -1353,14 +1353,20 @@ pub fn inject_hermes_home(cmd: &mut std::process::Command) {
     }
 }
 
-/// Inject `API_SERVER_ENABLED` and `API_SERVER_KEY` from `~/.hermes/.env`
-/// into the gateway child process environment.
+/// Inject the variables declared in `~/.hermes/.env` into the gateway
+/// child process environment.
 ///
 /// Hermes loads `.env` via `python-dotenv` at runtime, but PyInstaller
-/// onefile binaries don't always resolve the `.env` path correctly
-/// (the temp `_MEI*` extraction dir shadows `HERMES_HOME`). By injecting
-/// these two vars explicitly we guarantee the API server starts
-/// regardless of whether dotenv finds the file.
+/// onefile binaries don't reliably resolve the `.env` path (the temp
+/// `_MEI*` extraction dir shadows `HERMES_HOME`), so dotenv can silently
+/// load nothing. We therefore forward the file's contents ourselves.
+///
+/// History: this used to forward ONLY `API_SERVER_ENABLED` +
+/// `API_SERVER_KEY`, which fixed the gateway-auth 401 but left the
+/// *provider* keys (`DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, …) missing — the
+/// bundled gateway then reported "No inference provider configured" even
+/// though the key was sitting in `.env`. Forward every declared var so the
+/// child sees exactly what dotenv would have loaded.
 pub fn inject_api_server_env(cmd: &mut std::process::Command) {
     let env_path = match crate::paths::hermes_data_dir() {
         Ok(d) => d.join(".env"),
@@ -1375,15 +1381,87 @@ pub fn inject_api_server_env(cmd: &mut std::process::Command) {
         if trimmed.starts_with('#') || trimmed.is_empty() {
             continue;
         }
-        if let Some(eq) = trimmed.find('=') {
-            let name = trimmed[..eq].trim();
-            if name == "API_SERVER_ENABLED" || name == "API_SERVER_KEY" {
-                let val = trimmed[eq + 1..].trim().trim_matches('"');
-                if !val.is_empty() {
-                    cmd.env(name, val);
-                }
+        let body = trimmed.strip_prefix("export ").unwrap_or(trimmed);
+        if let Some(eq) = body.find('=') {
+            let name = body[..eq].trim();
+            if name.is_empty() {
+                continue;
+            }
+            let val = body[eq + 1..].trim().trim_matches('"');
+            if !val.is_empty() {
+                cmd.env(name, val);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod inject_env_tests {
+    use super::*;
+
+    #[test]
+    fn forwards_all_env_vars_including_provider_keys() {
+        let _lock = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let tmp = std::env::temp_dir().join(format!(
+            "caduceus-inject-env-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&tmp).expect("create tempdir");
+        std::fs::write(
+            tmp.join(".env"),
+            "# comment line\nAPI_SERVER_KEY=abc123\nDEEPSEEK_API_KEY=\"sk-deep\"\nexport OPENAI_API_KEY=sk-open\nEMPTY_VAL=\n",
+        )
+        .expect("write .env");
+
+        let orig = std::env::var_os("COREY_HERMES_DIR");
+        std::env::set_var("COREY_HERMES_DIR", &tmp);
+
+        let mut cmd = std::process::Command::new("true");
+        inject_api_server_env(&mut cmd);
+
+        let envs: std::collections::HashMap<String, Option<String>> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|s| s.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        if let Some(v) = orig {
+            std::env::set_var("COREY_HERMES_DIR", v);
+        } else {
+            std::env::remove_var("COREY_HERMES_DIR");
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        assert_eq!(
+            envs.get("API_SERVER_KEY"),
+            Some(&Some("abc123".to_string())),
+            "API_SERVER_KEY still forwarded"
+        );
+        assert_eq!(
+            envs.get("DEEPSEEK_API_KEY"),
+            Some(&Some("sk-deep".to_string())),
+            "provider key forwarded with quotes stripped"
+        );
+        assert_eq!(
+            envs.get("OPENAI_API_KEY"),
+            Some(&Some("sk-open".to_string())),
+            "export-prefixed var forwarded"
+        );
+        assert!(
+            !envs.contains_key("# comment line"),
+            "comment lines skipped"
+        );
+        assert!(!envs.contains_key("EMPTY_VAL"), "empty values skipped");
     }
 }
 

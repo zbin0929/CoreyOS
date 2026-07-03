@@ -6,6 +6,25 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-07-03 — v0.3.12 · 修复网关拿不到 provider key（"No inference provider configured"）
+
+> 客户干净重装后聊天报 `No inference provider configured`,但 `~/.hermes/.env` 里 `DEEPSEEK_API_KEY` 明明存在、`config.yaml` 的 model 段也正确。根因:打包的 onefile `hermes-standalone` 里 python-dotenv 常读不到 `.env`(PyInstaller 的 `_MEI*` 临时解包目录遮蔽了 `HERMES_HOME`),Corey 为此手动注入 `.env` 变量到网关子进程 —— 但只注入了 `API_SERVER_ENABLED` / `API_SERVER_KEY` 两个,**漏了 `DEEPSEEK_API_KEY` 等 provider key**,于是网关鉴权能过、却找不到任何推理 provider。
+
+### Fixed
+
+- **`inject_api_server_env` 现在转发 `~/.hermes/.env` 里的全部变量**,不再只转发两个 `API_SERVER_*`(`src-tauri/src/hermes_config/gateway.rs`)。三个网关启动路径(`run_hermes` / macOS `spawn_detached_gateway_run_darwin` / Windows spawn)全部受益,兼容 `export FOO=bar` 写法与带引号的值。
+- 新增回归测试 `forwards_all_env_vars_including_provider_keys`:验证 `DEEPSEEK_API_KEY`、`export OPENAI_API_KEY` 被转发,注释行与空值被跳过。
+
+### 排查过程(供追溯)
+
+同一位客户先后暴露了 4 个独立问题,逐一定位:
+1. `Unauthorized: gateway rejected credentials` → v0.3.11 已修(`.env` 成为本地网关 `API_SERVER_KEY` 唯一真源)。
+2. `Upstream error 500: Error -3 while decompressing data: incorrect header check` → 下载损坏的 `hermes-standalone`(PyInstaller 归档解压失败),干净重装解决。
+3. DeepSeek 超长任务流中途断流(`Stream stale` / `ReadTimeout`)→ DeepSeek 上游特性,建议 flash 模型 + 压上下文。
+4. `No inference provider configured` → 本次修复。
+
+---
+
 ## 2026-07-03 — v0.3.11 · 修复本地网关 401（API_SERVER_KEY 不同步）
 
 > 客户升级 Hermes 到 0.18.0 后聊天报 `Unauthorized: gateway rejected credentials — check API_SERVER_KEY`。根因：本地托管网关用 `~/.hermes/.env` 里的 `API_SERVER_KEY` 鉴权，但 Corey 只在 `gateway.json` 的 key 为空时才回退读取 `.env`；当 `gateway.json` 存了一个**过期非空**的 key（升级/历史遗留）时，Corey 一直发旧 key，重启也无法自愈，导致每次聊天 401。
