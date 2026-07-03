@@ -73,6 +73,58 @@ fn profiles_root(home: &Path) -> PathBuf {
     home.join(".hermes/profiles")
 }
 
+/// Header prepended to every Corey-managed profile `config.yaml`.
+const PROFILE_HEADER: &str = "# Hermes profile · managed by Corey\n";
+
+/// A `model` node is "usable" only if it names a non-empty default
+/// model — either directly as a scalar string (`model: deepseek-v4-pro`)
+/// or via `model.default`. The empty-string form (`model: ''`) that
+/// Hermes writes when it expands a modelless profile is treated as
+/// UNusable: it's exactly what makes the gateway POST an empty model
+/// name and the upstream 400 with "you passed .".
+fn model_is_usable(model: &serde_yaml::Value) -> bool {
+    match model {
+        serde_yaml::Value::String(s) => !s.trim().is_empty(),
+        serde_yaml::Value::Mapping(_) => matches!(
+            model.get("default"),
+            Some(serde_yaml::Value::String(s)) if !s.trim().is_empty()
+        ),
+        _ => false,
+    }
+}
+
+/// Extract a usable `model:` value from the root `~/.hermes/config.yaml`,
+/// if one exists. `None` when the root config is missing, unparseable,
+/// or its own model is empty.
+fn root_model_value(home: &Path) -> Option<serde_yaml::Value> {
+    let raw = fs::read_to_string(home.join(".hermes/config.yaml")).ok()?;
+    let value: serde_yaml::Value = serde_yaml::from_str(&raw).ok()?;
+    let model = value.get("model")?;
+    model_is_usable(model).then(|| model.clone())
+}
+
+/// Build the seed `config.yaml` body for a freshly-created profile.
+///
+/// A new profile must carry a `model:` section or the gateway POSTs an
+/// empty model name and the upstream provider 400s. We inherit the root
+/// config's `model:` block so the profile works out of the box. If the
+/// root config is missing/unparseable or has no usable `model:`, we fall
+/// back to the historical `{}` sentinel.
+fn seed_config_from_root(home: &Path) -> String {
+    const FALLBACK: &str = "# Hermes profile · managed by Corey\n{}\n";
+
+    let Some(model) = root_model_value(home) else {
+        return FALLBACK.to_string();
+    };
+
+    let mut seed = serde_yaml::Mapping::new();
+    seed.insert(serde_yaml::Value::String("model".to_string()), model);
+    match serde_yaml::to_string(&serde_yaml::Value::Mapping(seed)) {
+        Ok(body) => format!("{PROFILE_HEADER}{body}"),
+        Err(_) => FALLBACK.to_string(),
+    }
+}
+
 fn active_pointer(home: &Path) -> PathBuf {
     // Hermes's own file; we only read it. If Hermes changes the name
     // we'll surface the fallback (first profile) and log-forget.
@@ -206,13 +258,14 @@ pub fn create_profile_at(
         ));
     }
     fs::create_dir_all(&dir)?;
-    // Seed config.yaml. An empty file would work for Hermes (parsers
-    // tolerate empties) but writing the `{}` sentinel makes the intent
-    // visible to anyone `cat`ing the file.
-    fs::write(
-        dir.join("config.yaml"),
-        "# Hermes profile · managed by Corey\n{}\n",
-    )?;
+    // Seed config.yaml. Hermes treats an active profile's config as the
+    // full config (it does NOT merge over the root), so an empty `{}`
+    // seed leaves the profile with no `model:` — the gateway then POSTs
+    // an empty model name and the upstream 400s with "The supported API
+    // model names are ... but you passed ." We inherit the root config's
+    // `model:` section so a fresh profile is usable immediately; the
+    // user can still edit it afterwards.
+    fs::write(dir.join("config.yaml"), seed_config_from_root(home))?;
 
     if let Some(p) = changelog_path {
         let _ = changelog::append(
@@ -230,6 +283,78 @@ pub fn create_profile_at(
         is_active: read_active(home).as_deref() == Some(name),
         updated_at: now_ms(),
     })
+}
+
+/// Repair profiles whose `config.yaml` has no usable `model:`.
+///
+/// Regression backfill. Two broken shapes are covered:
+///   1. The `{}` sentinel (profiles created before the seed fix, or by a
+///      Pack install path) — no `model:` key at all.
+///   2. `model: ''` — Hermes rewrites a modelless profile into a full
+///      default config the first time it's *used*, leaving the model as
+///      an empty string. This shape is a full config we must NOT clobber
+///      (it may carry Pack-injected `mcp_servers:` etc.).
+///
+/// Either way the gateway POSTs an empty model name and the upstream
+/// 400s ("The supported API model names are ... but you passed ."). We
+/// set `model:` from the root config **in place** — merging into the
+/// existing document so full configs keep every other key — so existing
+/// broken profiles self-heal on the next gateway start.
+///
+/// Best-effort and idempotent: profiles that already have a usable model
+/// are left untouched, and if the root config has no usable model we do
+/// nothing. Returns the number of profiles repaired.
+pub fn repair_profiles_missing_model_at(home: &Path) -> io::Result<usize> {
+    // Nothing to inherit from → nothing to repair.
+    let Some(root_model) = root_model_value(home) else {
+        return Ok(0);
+    };
+
+    let root = profiles_root(home);
+    let read = match fs::read_dir(&root) {
+        Ok(r) => r,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e),
+    };
+
+    let mut repaired = 0usize;
+    for entry in read {
+        let entry = entry?;
+        if !entry.metadata()?.is_dir() {
+            continue;
+        }
+        let cfg = entry.path().join("config.yaml");
+
+        // Parse the existing doc; a missing/garbage/empty file becomes an
+        // empty mapping so we still seed a model into it.
+        let mut value = fs::read_to_string(&cfg)
+            .ok()
+            .and_then(|raw| serde_yaml::from_str::<serde_yaml::Value>(&raw).ok())
+            .filter(|v| !v.is_null())
+            .unwrap_or_else(|| serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
+
+        if value.get("model").is_some_and(model_is_usable) {
+            continue;
+        }
+
+        // Merge the model in place when the doc is a mapping (preserves
+        // every other key). If it's somehow not a mapping, replace it
+        // wholesale with the minimal seed.
+        let body = if let Some(map) = value.as_mapping_mut() {
+            map.insert(
+                serde_yaml::Value::String("model".to_string()),
+                root_model.clone(),
+            );
+            let yaml = serde_yaml::to_string(&value).map_err(io::Error::other)?;
+            format!("{PROFILE_HEADER}{yaml}")
+        } else {
+            seed_config_from_root(home)
+        };
+
+        fs_atomic::atomic_write(&cfg, body.as_bytes(), None)?;
+        repaired += 1;
+    }
+    Ok(repaired)
 }
 
 /// Rename a profile directory. Refuses to clobber an existing target.
@@ -449,6 +574,9 @@ pub fn list_profiles() -> io::Result<ProfilesView> {
 }
 pub fn create_profile(name: &str, changelog_path: Option<&Path>) -> io::Result<ProfileInfo> {
     create_profile_at(&home_dir(None), name, changelog_path)
+}
+pub fn repair_profiles_missing_model() -> io::Result<usize> {
+    repair_profiles_missing_model_at(&home_dir(None))
 }
 pub fn rename_profile(from: &str, to: &str, changelog_path: Option<&Path>) -> io::Result<()> {
     rename_profile_at(&home_dir(None), from, to, changelog_path)

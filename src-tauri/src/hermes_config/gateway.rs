@@ -992,12 +992,27 @@ mod ensure_agent_max_turns_tests {
     }
 }
 
+/// Best-effort self-heal for profiles whose `config.yaml` lost its
+/// `model:` section (the `{}` sentinel bug). Runs before every gateway
+/// start/restart — and therefore on boot, since Corey auto-starts the
+/// gateway — so customers with already-broken profiles recover without
+/// any manual step. Errors are logged, never propagated: a heal failure
+/// must not block the gateway from starting.
+fn heal_profiles_missing_model() {
+    match crate::hermes_profiles::repair_profiles_missing_model() {
+        Ok(0) => {}
+        Ok(n) => tracing::info!("repaired {n} profile(s) missing a model section"),
+        Err(e) => tracing::warn!(error = %e, "profile model self-heal skipped"),
+    }
+}
+
 /// gateway" affordance when the binary is present but no process is
 /// listening on 127.0.0.1:8642 yet.
 pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
     ensure_agent_max_turns();
+    heal_profiles_missing_model();
     inject_pack_env_vars();
     inject_pack_mcp_servers();
 
@@ -1047,6 +1062,7 @@ pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
     ensure_agent_max_turns();
+    heal_profiles_missing_model();
     inject_pack_env_vars();
     inject_pack_mcp_servers();
 
@@ -1683,8 +1699,11 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     let listening = {
         use std::net::TcpStream;
         use std::time::Duration;
-        TcpStream::connect_timeout(&"127.0.0.1:8642".parse().unwrap(), Duration::from_secs(2))
-            .is_ok()
+        TcpStream::connect_timeout(
+            &"127.0.0.1:8642".parse().expect("valid loopback addr"),
+            Duration::from_secs(2),
+        )
+        .is_ok()
     };
 
     // 2026-05-11 retirement — see gateway_start() for rationale. Health
@@ -1822,8 +1841,11 @@ fn spawn_detached_gateway_run_darwin(binary: &Path) -> io::Result<String> {
     let listening = {
         use std::net::TcpStream;
         use std::time::Duration;
-        TcpStream::connect_timeout(&"127.0.0.1:8642".parse().unwrap(), Duration::from_secs(2))
-            .is_ok()
+        TcpStream::connect_timeout(
+            &"127.0.0.1:8642".parse().expect("valid loopback addr"),
+            Duration::from_secs(2),
+        )
+        .is_ok()
     };
 
     if listening {

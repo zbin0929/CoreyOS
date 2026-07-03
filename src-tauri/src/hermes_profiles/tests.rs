@@ -84,6 +84,156 @@ fn create_profile_roundtrips_and_seeds_config() {
 }
 
 #[test]
+fn create_profile_inherits_root_model_section() {
+    let h = TempHome::new();
+    fs::write(
+        h.path().join(".hermes/config.yaml"),
+        "model:\n  default: deepseek-v4-pro\n  temperature: 0.7\nother: keep\n",
+    )
+    .expect("seed root config");
+
+    create_profile_at(h.path(), "beta", None).expect("create profile");
+
+    let cfg = fs::read_to_string(h.path().join(".hermes/profiles/beta/config.yaml"))
+        .expect("read seed config");
+    let value: serde_yaml::Value = serde_yaml::from_str(&cfg).expect("parse seed yaml");
+    assert_eq!(
+        value["model"]["default"].as_str(),
+        Some("deepseek-v4-pro"),
+        "profile must inherit root model.default"
+    );
+    assert!(
+        value.get("other").is_none(),
+        "only the model section is inherited"
+    );
+}
+
+#[test]
+fn create_profile_falls_back_when_root_has_no_model() {
+    let h = TempHome::new();
+    fs::write(h.path().join(".hermes/config.yaml"), "approvals: {}\n")
+        .expect("seed modelless root config");
+
+    create_profile_at(h.path(), "gamma", None).expect("create profile");
+
+    let cfg = fs::read_to_string(h.path().join(".hermes/profiles/gamma/config.yaml"))
+        .expect("read seed config");
+    assert!(
+        cfg.contains("{}"),
+        "no root model → historical {{}} sentinel"
+    );
+}
+
+#[test]
+fn repair_backfills_modelless_profiles_and_preserves_good_ones() {
+    let h = TempHome::new();
+    fs::write(
+        h.path().join(".hermes/config.yaml"),
+        "model:\n  default: deepseek-v4-pro\n  provider: deepseek\n",
+    )
+    .expect("seed root config");
+
+    // Two broken profiles (the `{}` sentinel) + one already-good one.
+    for name in ["broken-a", "broken-b"] {
+        let dir = h.path().join(".hermes/profiles").join(name);
+        fs::create_dir_all(&dir).expect("mkdir");
+        fs::write(dir.join("config.yaml"), "# managed by Corey\n{}\n").expect("seed broken");
+    }
+    let good = h.path().join(".hermes/profiles/good");
+    fs::create_dir_all(&good).expect("mkdir good");
+    fs::write(good.join("config.yaml"), "model:\n  default: keep-me\n").expect("seed good");
+
+    let repaired = repair_profiles_missing_model_at(h.path()).expect("repair");
+    assert_eq!(repaired, 2, "only the two modelless profiles are repaired");
+
+    for name in ["broken-a", "broken-b"] {
+        let cfg = fs::read_to_string(
+            h.path()
+                .join(".hermes/profiles")
+                .join(name)
+                .join("config.yaml"),
+        )
+        .expect("read repaired");
+        let v: serde_yaml::Value = serde_yaml::from_str(&cfg).expect("parse");
+        assert_eq!(v["model"]["default"].as_str(), Some("deepseek-v4-pro"));
+    }
+
+    // The good profile's custom model must survive untouched.
+    let good_cfg = fs::read_to_string(good.join("config.yaml")).expect("read good");
+    let gv: serde_yaml::Value = serde_yaml::from_str(&good_cfg).expect("parse good");
+    assert_eq!(gv["model"]["default"].as_str(), Some("keep-me"));
+
+    // Idempotent: a second pass repairs nothing.
+    assert_eq!(
+        repair_profiles_missing_model_at(h.path()).expect("repair2"),
+        0
+    );
+}
+
+#[test]
+fn repair_fixes_empty_string_model_and_preserves_other_keys() {
+    let h = TempHome::new();
+    fs::write(
+        h.path().join(".hermes/config.yaml"),
+        "model:\n  default: deepseek-v4-pro\n  provider: deepseek\n",
+    )
+    .expect("seed root config");
+
+    // The shape Hermes writes after it expands a modelless profile on
+    // first use: a full-ish config with an EMPTY string model plus a
+    // Pack-injected MCP server that MUST survive the repair.
+    let dir = h.path().join(".hermes/profiles/market");
+    fs::create_dir_all(&dir).expect("mkdir");
+    fs::write(
+        dir.join("config.yaml"),
+        "model: ''\nproviders: {}\nmcp_servers:\n  sellersprite:\n    url: https://mcp.example/x\n    enabled: true\n",
+    )
+    .expect("seed empty-string-model profile");
+
+    let repaired = repair_profiles_missing_model_at(h.path()).expect("repair");
+    assert_eq!(repaired, 1, "the empty-string-model profile is repaired");
+
+    let raw = fs::read_to_string(dir.join("config.yaml")).expect("read repaired");
+    let v: serde_yaml::Value = serde_yaml::from_str(&raw).expect("parse");
+    assert_eq!(
+        v["model"]["default"].as_str(),
+        Some("deepseek-v4-pro"),
+        "empty string model is replaced with the root model"
+    );
+    // The Pack MCP server (and everything else) must be preserved.
+    assert_eq!(
+        v["mcp_servers"]["sellersprite"]["enabled"].as_bool(),
+        Some(true),
+        "in-place merge must not drop other keys"
+    );
+    assert_eq!(
+        v["mcp_servers"]["sellersprite"]["url"].as_str(),
+        Some("https://mcp.example/x")
+    );
+
+    // Idempotent: now that the model is usable, a second pass is a no-op.
+    assert_eq!(
+        repair_profiles_missing_model_at(h.path()).expect("repair2"),
+        0
+    );
+}
+
+#[test]
+fn repair_is_noop_when_root_has_no_model() {
+    let h = TempHome::new();
+    fs::write(h.path().join(".hermes/config.yaml"), "approvals: {}\n").expect("seed root");
+    let dir = h.path().join(".hermes/profiles/x");
+    fs::create_dir_all(&dir).expect("mkdir");
+    fs::write(dir.join("config.yaml"), "{}\n").expect("seed");
+
+    assert_eq!(
+        repair_profiles_missing_model_at(h.path()).expect("repair"),
+        0,
+        "no root model → nothing to backfill"
+    );
+}
+
+#[test]
 fn create_profile_rejects_duplicate() {
     let h = TempHome::new();
     h.seed("dup");

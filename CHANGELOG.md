@@ -6,6 +6,30 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-07-03 — v0.3.13 · 修复 profile 无 model 导致发消息 400（"you passed ."）
+
+> 客户启用「专家」(Pack 生成的 `ecom-*` profile) 后发消息一直报 `Upstream error 500: HTTP 400: The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed .`（model 为空）。根因：`create_profile_at` 把新 profile 的 `config.yaml` 写成空的 `{}`，而 Hermes 把激活 profile 的 config 当作**完整配置**（不与根配置合并），于是 profile 没有 `model:`，网关 POST 空 model → 上游 400。更隐蔽的第二形态：profile 被**实际使用过**后，Hermes 会把它展开成完整默认配置但 `model: ''`（空字符串），这种全量配置里还可能带 Pack 注入的 `mcp_servers:`，不能整份覆盖。
+
+### Fixed
+
+- **`create_profile_at` 现在从根 `config.yaml` 继承 `model:` 段**写入新 profile，而非空 `{}`（`src-tauri/src/hermes_profiles/mod.rs`）。根配置无可用 model 时回退到 `{}` 兜底。
+- **新增网关启动自愈 `repair_profiles_missing_model`**：网关每次 start/restart（含开机自动启动）前扫描所有 profile，把「无 model」与「`model: ''` 空字符串」两种坏形态都补上。全量配置采用**原地合并**（只改 `model` 键，保留 `mcp_servers` 等其余键），`{}` 形态则整份 seed。已有可用 model 的 profile 不动，幂等。
+- **Corey 开机自动启动网关**：`.setup()` 探测 `127.0.0.1:8642`，未监听才 `gateway_start()`，用户不再需要每次手点「启动」（`src-tauri/src/lib.rs`）。
+- 新增应急脚本 `scripts/fix-profile-model.sh`（macOS/Linux）与 `.ps1`（Windows），供已部署客户在不出新包的情况下即时修复两种坏形态。
+
+### Tests
+
+- `create_profile_inherits_root_model_section` / `create_profile_falls_back_when_root_has_no_model`
+- `repair_backfills_modelless_profiles_and_preserves_good_ones`（`{}` 形态 + 幂等 + 不动已有 model）
+- `repair_fixes_empty_string_model_and_preserves_other_keys`（`model: ''` 形态 + 原地合并保留 `mcp_servers`）
+- `repair_is_noop_when_root_has_no_model`
+
+### 排查过程（供追溯）
+
+坏形态一开始只表现为 `{}`，手动脚本修好 8/9 个 profile 后仍报同样的错——第 9 个 `ecom-market-expert` 因为被用过已展开成 `model: ''`（空字符串），既不是 `{}` 也非 null，绕过了首版只认 `{}` 的检测逻辑。本次把检测收敛为「model.default 或 model 标量为非空字符串才算可用」，并对全量配置改用原地合并以免丢失 Pack 注入的 MCP 配置。
+
+---
+
 ## 2026-07-03 — v0.3.12 · 修复网关拿不到 provider key（"No inference provider configured"）
 
 > 客户干净重装后聊天报 `No inference provider configured`,但 `~/.hermes/.env` 里 `DEEPSEEK_API_KEY` 明明存在、`config.yaml` 的 model 段也正确。根因:打包的 onefile `hermes-standalone` 里 python-dotenv 常读不到 `.env`(PyInstaller 的 `_MEI*` 临时解包目录遮蔽了 `HERMES_HOME`),Corey 为此手动注入 `.env` 变量到网关子进程 —— 但只注入了 `API_SERVER_ENABLED` / `API_SERVER_KEY` 两个,**漏了 `DEEPSEEK_API_KEY` 等 provider key**,于是网关鉴权能过、却找不到任何推理 provider。

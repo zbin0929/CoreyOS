@@ -919,6 +919,33 @@ pub fn run() {
                 }
             });
 
+            // Auto-launch the Hermes gateway if it isn't already
+            // listening. Corey previously only probed /health and left
+            // the user to click "启动" on every cold boot — the gateway
+            // has no launchd/systemd supervisor (see
+            // `spawn_detached_gateway_run_darwin`), so a fresh launch
+            // never had a listener. Probe :8642 first so we don't fight
+            // an already-running gateway (e.g. a manual `hermes gateway
+            // run` in a terminal), then spawn on a blocking task so the
+            // Hermes cold-start (~8s) never delays the main window.
+            tauri::async_runtime::spawn_blocking(|| {
+                use std::net::TcpStream;
+                use std::time::Duration;
+                let already_listening = TcpStream::connect_timeout(
+                    &"127.0.0.1:8642".parse().expect("valid loopback addr"),
+                    Duration::from_millis(500),
+                )
+                .is_ok();
+                if already_listening {
+                    info!("Hermes gateway already listening on :8642, skipping auto-start");
+                    return;
+                }
+                match crate::hermes_config::gateway_start() {
+                    Ok(msg) => info!("Hermes gateway auto-started: {msg}"),
+                    Err(e) => tracing::warn!(error = %e, "Hermes gateway auto-start skipped"),
+                }
+            });
+
             Ok(())
         })
         .build(tauri::generate_context!())
