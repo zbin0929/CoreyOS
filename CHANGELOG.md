@@ -6,6 +6,22 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-07-03 — v0.3.11 · 修复本地网关 401（API_SERVER_KEY 不同步）
+
+> 客户升级 Hermes 到 0.18.0 后聊天报 `Unauthorized: gateway rejected credentials — check API_SERVER_KEY`。根因：本地托管网关用 `~/.hermes/.env` 里的 `API_SERVER_KEY` 鉴权，但 Corey 只在 `gateway.json` 的 key 为空时才回退读取 `.env`；当 `gateway.json` 存了一个**过期非空**的 key（升级/历史遗留）时，Corey 一直发旧 key，重启也无法自愈，导致每次聊天 401。
+
+### Fixed
+
+- **`.env` 成为本地网关 key 的唯一真源**（`src-tauri/src/config.rs`）
+  - 新增 `is_local_gateway()` + `effective_api_key()`：当 `base_url` 指向本地回环网关时，`~/.hermes/.env` 的 `API_SERVER_KEY` **覆盖** `gateway.json` 中的存储值；远程网关仍以存储 key 为准。
+- **所有本地网关 adapter 构建点统一走 `effective_api_key()`**
+  - `build_hermes_adapter` 与启动时的 profile 注册（此前硬编码 `None`）（`src-tauri/src/lib.rs`）
+  - `config_set`（保存设置）此前会用表单里的空/旧值覆盖内存 key，现改用 `effective_api_key()`（`src-tauri/src/ipc/config.rs`）
+  - 运行时 profile 注册同样改用 `effective_api_key()`（`src-tauri/src/ipc/llm_profiles.rs`）
+- 新增回归测试：`is_local_gateway_matches_loopback_only`、`effective_api_key_prefers_env_for_local_gateway`
+
+---
+
 ## 2026-05-22 — v0.3.0 · 跨境电商 Pack v0.5.0 + 一键安装 + 基座保密规则
 
 > 跨境电商 Pack 大升级：从 3 Skills 扩展到 18 Skills，新增 9 个专家 Profiles，支持 API Key 配置（Apify / 卖家精灵）。**一键安装**：PyInstaller 打包 Hermes 成独立二进制，客户双击即用，无需装 Python/Homebrew。基座新增系统保密规则，防止 AI 透露 SOUL/Skill 内容。

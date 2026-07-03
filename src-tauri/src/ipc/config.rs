@@ -86,9 +86,15 @@ pub async fn config_set(state: State<'_, AppState>, config: GatewayConfigDto) ->
     };
 
     // 1. Build. Propagates AdapterError → IpcError via `?`.
+    //
+    // Use `effective_api_key()` so the local managed gateway always
+    // authenticates with the authoritative `~/.hermes/.env` key rather
+    // than whatever the Settings form submitted (which may be blank or a
+    // stale value). Without this, saving Settings silently dropped the
+    // key and every subsequent chat 401'd until the next app restart.
     let adapter = HermesAdapter::new_live(
         new_cfg.base_url.clone(),
-        new_cfg.api_key.clone(),
+        new_cfg.effective_api_key(),
         new_cfg.default_model.clone(),
     )?;
 

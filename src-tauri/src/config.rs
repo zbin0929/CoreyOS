@@ -85,10 +85,36 @@ impl GatewayConfig {
             },
             Err(_) => Self::defaults_with_env(),
         };
-        if cfg.api_key.as_deref().filter(|s| !s.is_empty()).is_none() {
+        // For the local managed gateway, ~/.hermes/.env is the source of
+        // truth for API_SERVER_KEY — that's the value the gateway process
+        // actually authenticates with (Corey injects it into the child on
+        // start). A key stored in gateway.json can go stale after a Hermes
+        // upgrade regenerates .env, producing a silent 401. So when the
+        // base_url points at the local loopback gateway and .env carries a
+        // key, it wins over whatever gateway.json holds.
+        if is_local_gateway(&cfg.base_url) {
+            if let Some(env_key) = read_api_server_key_from_hermes_env() {
+                cfg.api_key = Some(env_key);
+            }
+        } else if cfg.api_key.as_deref().filter(|s| !s.is_empty()).is_none() {
             cfg.api_key = read_api_server_key_from_hermes_env();
         }
         cfg
+    }
+
+    /// The API key the gateway client should actually send.
+    ///
+    /// For the local managed gateway the authoritative key lives in
+    /// `~/.hermes/.env` (that's what the gateway process runs with), so we
+    /// always resolve it fresh and let it win over the stored/None value.
+    /// For remote gateways the stored `api_key` is authoritative.
+    pub fn effective_api_key(&self) -> Option<String> {
+        if is_local_gateway(&self.base_url) {
+            if let Some(env_key) = read_api_server_key_from_hermes_env() {
+                return Some(env_key);
+            }
+        }
+        self.api_key.clone().filter(|s| !s.is_empty())
     }
 
     /// Atomic write to `<dir>/gateway.json`. Creates the directory if absent.
@@ -102,6 +128,30 @@ impl GatewayConfig {
         fs::rename(&tmp_path, &final_path)?;
         Ok(final_path)
     }
+}
+
+/// `true` when `base_url` points at the local Corey-managed Hermes
+/// gateway (loopback host). For these the `~/.hermes/.env` key is
+/// authoritative; for remote gateways the stored key wins.
+fn is_local_gateway(base_url: &str) -> bool {
+    let authority = base_url
+        .split("://")
+        .nth(1)
+        .unwrap_or(base_url)
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .rsplit('@')
+        .next()
+        .unwrap_or("");
+    // Bracketed IPv6 (`[::1]:8642`) keeps the brackets; everything else
+    // splits the host off the `:port` suffix at the first colon.
+    let host = if let Some(rest) = authority.strip_prefix('[') {
+        rest.split(']').next().unwrap_or("")
+    } else {
+        authority.split(':').next().unwrap_or("")
+    };
+    matches!(host, "127.0.0.1" | "localhost" | "::1" | "0.0.0.0")
 }
 
 /// Read `API_SERVER_KEY` from `~/.hermes/.env` so the gateway client
@@ -166,6 +216,59 @@ mod tests {
         std::env::remove_var("HERMES_GATEWAY_URL");
         let loaded = GatewayConfig::load_or_default(&tmp);
         assert_eq!(loaded.base_url, DEFAULT_BASE_URL);
+    }
+
+    #[test]
+    fn is_local_gateway_matches_loopback_only() {
+        assert!(is_local_gateway("http://127.0.0.1:8642"));
+        assert!(is_local_gateway("http://localhost:8642/v1"));
+        assert!(is_local_gateway("http://[::1]:8642"));
+        assert!(!is_local_gateway("https://api.openai.com/v1"));
+        assert!(!is_local_gateway("https://open.bigmodel.cn/api/paas/v4"));
+    }
+
+    /// Regression for the "gateway rejected credentials — check
+    /// API_SERVER_KEY" 401: for the local managed gateway the
+    /// `~/.hermes/.env` key must win over a stale `gateway.json` key,
+    /// while remote gateways keep their stored key.
+    #[test]
+    fn effective_api_key_prefers_env_for_local_gateway() {
+        let _lock = crate::skills::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let tmp = tempfile_dir();
+        std::fs::write(tmp.join(".env"), "API_SERVER_KEY=corey_from_env\n")
+            .expect("seed .env with API_SERVER_KEY");
+        let orig = std::env::var_os("COREY_HERMES_DIR");
+        std::env::set_var("COREY_HERMES_DIR", &tmp);
+
+        // Local gateway with a STALE stored key → .env wins.
+        let local = GatewayConfig {
+            base_url: "http://127.0.0.1:8642".into(),
+            api_key: Some("corey_stale".into()),
+            default_model: None,
+            label: None,
+        };
+        assert_eq!(
+            local.effective_api_key().as_deref(),
+            Some("corey_from_env"),
+            "local gateway must use the .env key, not the stale stored key"
+        );
+
+        // Remote gateway → stored key is authoritative, .env ignored.
+        let remote = GatewayConfig {
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: Some("sk-remote".into()),
+            default_model: None,
+            label: None,
+        };
+        assert_eq!(remote.effective_api_key().as_deref(), Some("sk-remote"));
+
+        if let Some(v) = orig {
+            std::env::set_var("COREY_HERMES_DIR", v);
+        } else {
+            std::env::remove_var("COREY_HERMES_DIR");
+        }
     }
 
     /// Cheap unique tempdir without pulling in the `tempfile` crate.

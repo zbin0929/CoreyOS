@@ -71,7 +71,7 @@ use crate::state::AppState;
 fn build_hermes_adapter(cfg: &GatewayConfig) -> Arc<HermesAdapter> {
     match HermesAdapter::new_live(
         cfg.base_url.clone(),
-        cfg.api_key.clone(),
+        cfg.effective_api_key(),
         cfg.default_model.clone(),
     ) {
         Ok(adapter) => {
@@ -481,7 +481,7 @@ pub fn run() {
             for profile in llm_profiles::load(&config_dir) {
                 match HermesAdapter::new_live(
                     cfg.base_url.clone(),
-                    None,
+                    cfg.effective_api_key(),
                     Some(profile.model.clone()),
                 ) {
                     Ok(adapter) => {

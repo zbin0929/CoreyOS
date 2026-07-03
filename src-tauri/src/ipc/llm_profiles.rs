@@ -270,15 +270,16 @@ pub async fn llm_profile_ensure_adapter(
     // `~/.hermes/config.yaml :: model.{provider,base_url}` plus
     // `~/.hermes/.env :: HERMES_MODEL`, both of which
     // `corey_set_default_llm` keeps in sync.
-    let gateway_base_url = state
-        .config
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .base_url
-        .clone();
+    let (gateway_base_url, gateway_api_key) = {
+        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
+        (cfg.base_url.clone(), cfg.effective_api_key())
+    };
 
-    let adapter =
-        HermesAdapter::new_live(gateway_base_url.clone(), None, Some(profile.model.clone()))?;
+    let adapter = HermesAdapter::new_live(
+        gateway_base_url.clone(),
+        gateway_api_key,
+        Some(profile.model.clone()),
+    )?;
 
     let adapter_id = profile_adapter_id(&profile.id);
     let label = if profile.label.trim().is_empty() {
