@@ -558,6 +558,47 @@ fn ensure_api_server_env() {
     }
 }
 
+/// `launchctl bootout` the legacy `ai.hermes.gateway` KeepAlive service
+/// that older Corey installers (pre-2026-05) registered via plist.
+/// Without this step the launchd service keeps respawning a stale
+/// standalone (often a damaged binary) that fights `--replace` wars with
+/// the gateway Corey spawns here. macOS-only; no-op elsewhere.
+///
+/// Best-effort: `bootout` returns non-zero when the service is not
+/// registered, which is the common case — we swallow those errors.
+fn bootout_legacy_launchd_gateway() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let uid = match std::process::Command::new("id")
+        .arg("-u")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_owned())
+    {
+        Some(u) => u,
+        None => return,
+    };
+    let target = format!("gui/{uid}/ai.hermes.gateway");
+    match std::process::Command::new("launchctl")
+        .args(["bootout", &target])
+        .output()
+    {
+        Ok(o) if o.status.success() => {
+            tracing::info!("booted out legacy launchd service {target}");
+        }
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            let combined = format!("{}{}", String::from_utf8_lossy(&o.stdout), stderr);
+            if !combined.contains("Could not find") && !combined.contains("No such process") {
+                tracing::debug!("launchctl bootout {target} -> non-fatal: {combined}");
+            }
+        }
+        Err(e) => tracing::debug!("launchctl bootout {target} spawn failed: {e}"),
+    }
+}
+
 /// Best-effort cryptographically-random hex string of `n_bytes` bytes.
 /// Falls back to a timestamp-based value if the OS RNG is unavailable
 /// (extremely unlikely; the fallback only guards against a broken
@@ -1011,6 +1052,7 @@ fn heal_profiles_missing_model() {
 pub fn gateway_start() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
+    bootout_legacy_launchd_gateway();
     ensure_agent_max_turns();
     heal_profiles_missing_model();
     inject_pack_env_vars();
@@ -1061,6 +1103,7 @@ pub fn gateway_start() -> io::Result<String> {
 pub fn gateway_restart() -> io::Result<String> {
     let binary = resolve_hermes_binary()?;
     ensure_api_server_env();
+    bootout_legacy_launchd_gateway();
     ensure_agent_max_turns();
     heal_profiles_missing_model();
     inject_pack_env_vars();

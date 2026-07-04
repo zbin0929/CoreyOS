@@ -80,6 +80,9 @@ cd "$HERMES_DIR"
     --collect-all cryptography \
     --hidden-import hermes_cli \
     --hidden-import hermes_constants \
+    --collect-submodules tools \
+    --collect-submodules agent \
+    --collect-submodules gateway \
     hermes_cli/main.py 2>&1 | tail -30
 
 # 验证

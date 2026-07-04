@@ -6,6 +6,23 @@ Format: `## YYYY-MM-DD — <title>` → `### Shipped` / `### Fixed` / `### Defer
 
 ---
 
+## 2026-07-04 — v0.3.14 · 修复 Hermes 升级后审批按钮无反应 + launchd 残留打架 + standalone 缺包
+
+> Hermes v0.16+ 把 `API_SERVER_KEY` 校验扩展到 loopback（v0.18 强化），Corey 网关 adapter 的 4 处调用早已加 `bearer_auth`，但审批响应 IPC `hermes_approval_respond` 漏改，导致点击「同意/拒绝」按钮时 POST `/v1/runs/{run_id}/approval` 直接被网关 401 挡掉，前端 `catch {}` 静默吞错，用户看到的现象就是「按钮点了没反应」。与此同时，旧版安装器（pre-2026-05）注册的 launchd service `ai.hermes.gateway` 持续 KeepAlive 拉起损坏的 standalone，跟新版 Corey 自己 spawn 的 gateway 反复 `--replace` 打架；而 standalone 损坏的根因是 PyInstaller 漏打包 `tools/` 子目录（`tools.delegate_tool` 解压失败）。
+
+### Fixed
+
+- **审批响应 IPC 加 `bearer_auth`**：`hermes_approval_respond` 现在用 `cfg.effective_api_key()` 取本地 key，POST 时带 `Authorization: Bearer …`，与 gateway adapter 其它 4 处调用一致。curl 实测无 Bearer 返回 401、带 Bearer 返回 200（404 仅因测试用的 run_id 不存在）（`src-tauri/src/ipc/chat.rs`）。
+- **`gateway_start` / `gateway_restart` 启动前 `launchctl bootout` 残留的 `ai.hermes.gateway` service**：新增 `bootout_legacy_launchd_gateway()`，best-effort，失败（service 不存在）静默吞掉。解决旧安装版留下的 KeepAlive service 拉起损坏 standalone、跟新 gateway 打 `--replace` 战的回归（`src-tauri/src/hermes_config/gateway.rs`）。
+- **`bundle-hermes.sh` 加 `--collect-submodules tools/agent/gateway`**：修复 PyInstaller 打包 standalone 时漏掉 `tools/` 子目录，导致运行时 `tools.delegate_tool` 解压失败（`zlib.error: Error -3 while decompressing data: incorrect header check`）。需下次 release CI 重跑才生效（`scripts/bundle-hermes.sh`）。
+
+### Notes
+
+- **QQAdapter.connect() 签名变更**（Hermes v0.18 上游破坏性）不在本次修复范围。临时绕过：在 `~/.hermes/.env` 把 `QQ_APP_ID` / `QQ_CLIENT_SECRET` / `QQ_SANDBOX` 注释掉，gateway 就不启 qqbot 平台，不影响 chat / 审批。
+- dev 模式 0 字节 `hermes-standalone` 占位文件检测未恢复（上次回滚），用户跑 dev 建议 `export PATH=~/.local/bin:$PATH` 让 dev 版直接用 venv hermes。
+
+---
+
 ## 2026-07-03 — v0.3.13 · 修复 profile 无 model 导致发消息 400（"you passed ."）
 
 > 客户启用「专家」(Pack 生成的 `ecom-*` profile) 后发消息一直报 `Upstream error 500: HTTP 400: The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed .`（model 为空）。根因：`create_profile_at` 把新 profile 的 `config.yaml` 写成空的 `{}`，而 Hermes 把激活 profile 的 config 当作**完整配置**（不与根配置合并），于是 profile 没有 `model:`，网关 POST 空 model → 上游 400。更隐蔽的第二形态：profile 被**实际使用过**后，Hermes 会把它展开成完整默认配置但 `model: ''`（空字符串），这种全量配置里还可能带 Pack 注入的 `mcp_servers:`，不能整份覆盖。

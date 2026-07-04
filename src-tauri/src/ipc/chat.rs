@@ -256,9 +256,15 @@ pub async fn hermes_approval_respond(
     state: State<'_, AppState>,
     args: ApprovalRespondArgs,
 ) -> IpcResult<serde_json::Value> {
-    let base_url = {
+    // Pull both base_url AND api_key. Hermes v0.16+ made
+    // `API_SERVER_KEY` mandatory on every endpoint — including
+    // `/v1/runs/{run_id}/approval` (api_server.py::_handle_run_approval
+    // calls `_check_auth`). Without the Bearer header the POST 401s,
+    // the IPC rejects, and ApprovalCard.tsx silently swallows the
+    // error in its `catch {}`, so every button looks dead.
+    let (base_url, api_key) = {
         let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
-        cfg.base_url.clone()
+        (cfg.base_url.clone(), cfg.effective_api_key())
     };
     // `base_url` is whatever the gateway adapter is pointing at — could
     // be `http://127.0.0.1:8642` or `http://127.0.0.1:8642/v1`. Strip
@@ -269,14 +275,15 @@ pub async fn hermes_approval_respond(
         .trim_end_matches('/');
     let url = format!("{trimmed}/v1/runs/{}/approval", args.run_id);
     let client = reqwest::Client::new();
-    let resp = client
+    let mut req = client
         .post(&url)
-        .json(&serde_json::json!({"choice": args.choice}))
-        .send()
-        .await
-        .map_err(|e| IpcError::Internal {
-            message: format!("approval respond: {e}"),
-        })?;
+        .json(&serde_json::json!({"choice": args.choice}));
+    if let Some(key) = api_key {
+        req = req.bearer_auth(&key);
+    }
+    let resp = req.send().await.map_err(|e| IpcError::Internal {
+        message: format!("approval respond: {e}"),
+    })?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
