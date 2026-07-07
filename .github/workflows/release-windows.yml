@@ -132,6 +132,9 @@ jobs:
             --hidden-import hermes_cli.main \
             --hidden-import hermes_agent \
             --hidden-import aiohttp \
+            --collect-submodules tools \
+            --collect-submodules agent \
+            --collect-submodules gateway \
             "$TMPDIR/hermes_entry.py"
           
           echo "Verifying build..."
