@@ -1454,6 +1454,29 @@ pub fn inject_api_server_env(cmd: &mut std::process::Command) {
     }
 }
 
+/// Remove inherited SSL/CA environment variables before spawning
+/// hermes-standalone.
+///
+/// PyInstaller onefile binaries extract resources to a per-process
+/// `_MEIxxxxxx` temp dir, which `certifi` reads at startup to locate
+/// `cacert.pem`. If the parent process (Tauri/Corey, or a prior Hermes
+/// invocation) leaves `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` pointing
+/// at an already-deleted `_MEI*` path, OpenAI/httpx fail with:
+///   "SSL_CERT_FILE points to a missing CA bundle: .../T/_MEI.../certifi/cacert.pem"
+///
+/// Stripping these vars lets the child resolve `certifi.where()` against
+/// its own current `_MEI*` dir. Apply to every Hermes spawn site.
+pub fn scrub_ssl_cert_env(cmd: &mut std::process::Command) {
+    for var in [
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+    ] {
+        cmd.env_remove(var);
+    }
+}
+
 #[cfg(test)]
 mod inject_env_tests {
     use super::*;
@@ -1522,6 +1545,45 @@ mod inject_env_tests {
         );
         assert!(!envs.contains_key("EMPTY_VAL"), "empty values skipped");
     }
+
+    /// `Command::get_envs()` represents an `env_remove` as the key mapped
+    /// to `None` (c.f. `env(k, v)` which maps to `Some(v)`). We assert
+    /// all four CA-related vars are marked for removal so hermes-standalone
+    /// can't inherit a stale `_MEI*` path from the parent process.
+    #[test]
+    fn scrub_ssl_cert_env_marks_all_ca_vars_for_removal() {
+        let mut cmd = std::process::Command::new("true");
+        cmd.env("SSL_CERT_FILE", "/tmp/_MEIxxxx/cacert.pem")
+            .env("REQUESTS_CA_BUNDLE", "/tmp/_MEIxxxx/cacert.pem")
+            .env("CURL_CA_BUNDLE", "/tmp/_MEIxxxx/cacert.pem")
+            .env("SSL_CERT_DIR", "/tmp/_MEIxxxx");
+
+        scrub_ssl_cert_env(&mut cmd);
+
+        let envs: std::collections::HashMap<String, Option<String>> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|s| s.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        for var in [
+            "SSL_CERT_FILE",
+            "SSL_CERT_DIR",
+            "REQUESTS_CA_BUNDLE",
+            "CURL_CA_BUNDLE",
+        ] {
+            assert_eq!(
+                envs.get(var),
+                Some(&None),
+                "{var} should be marked for removal (None), got {:?}",
+                envs.get(var)
+            );
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -1539,6 +1601,7 @@ fn run_hermes(binary: &PathBuf, args: &[&str]) -> io::Result<std::process::Outpu
     cmd.args(args);
     inject_hermes_home(&mut cmd);
     inject_api_server_env(&mut cmd);
+    scrub_ssl_cert_env(&mut cmd);
     suppress_window(&mut cmd);
     cmd.output()
 }
@@ -1699,6 +1762,7 @@ fn windows_gateway_spawn(binary: &PathBuf) -> io::Result<String> {
     }
     inject_hermes_home(&mut run_cmd);
     inject_api_server_env(&mut run_cmd);
+    scrub_ssl_cert_env(&mut run_cmd);
 
     let hermes_home_val = crate::paths::hermes_data_dir()
         .ok()
@@ -1849,6 +1913,7 @@ fn spawn_detached_gateway_run_darwin(binary: &Path) -> io::Result<String> {
         .stderr(err_file);
     inject_hermes_home(&mut cmd);
     inject_api_server_env(&mut cmd);
+    scrub_ssl_cert_env(&mut cmd);
 
     let hermes_home_val = crate::paths::hermes_data_dir()
         .ok()

@@ -18,6 +18,13 @@ HERMES_DIR="$HOME/.hermes/hermes-agent"
 VENV_PIP="$HERMES_DIR/venv/bin/pip3"
 VENV_PYINSTALLER="$HERMES_DIR/venv/bin/pyinstaller"
 
+# Runtime hook: scrubs stale SSL_CERT_FILE / REQUESTS_CA_BUNDLE left
+# behind by a prior PyInstaller `_MEI*` dir. Resolves the "SSL_CERT_FILE
+# points to a missing CA bundle" 500 on user machines where Corey/Tauri
+# inherited a stale var. Hook lives next to this script.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_HOOK="$SCRIPT_DIR/hermes-runtime-hook.py"
+
 echo "=== Hermes Standalone Builder ==="
 echo "Hermes source: $HERMES_DIR"
 echo "Output: $OUTPUT_DIR"
@@ -80,6 +87,7 @@ cd "$HERMES_DIR"
     --collect-all cryptography \
     --hidden-import hermes_cli \
     --hidden-import hermes_constants \
+    --runtime-hook "$RUNTIME_HOOK" \
     --collect-submodules tools \
     --collect-submodules agent \
     --collect-submodules gateway \

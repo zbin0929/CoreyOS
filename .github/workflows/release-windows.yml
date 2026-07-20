@@ -132,6 +132,7 @@ jobs:
             --hidden-import hermes_cli.main \
             --hidden-import hermes_agent \
             --hidden-import aiohttp \
+            --runtime-hook scripts/hermes-runtime-hook.py \
             --collect-submodules tools \
             --collect-submodules agent \
             --collect-submodules gateway \
