@@ -82,6 +82,9 @@ jobs:
           pip install hermes-agent aiohttp pyinstaller
           python -c "import aiohttp; print('aiohttp', aiohttp.__version__, 'present for bundling')"
           
+          echo "Patching ssl_guard.py for stale CA auto-heal..."
+          python scripts/patch-hermes-ssl-guard.py || echo "WARN: ssl_guard patch failed"
+          
           echo "Creating entry point script..."
           # Windows Git Bash 用 $TEMP 而不是 /tmp
           TMPDIR="${TEMP:-/tmp}"

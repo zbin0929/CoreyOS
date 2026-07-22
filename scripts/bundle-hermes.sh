@@ -45,6 +45,13 @@ fi
 # 创建输出目录
 mkdir -p "$OUTPUT_DIR"
 
+# Patch Hermes ssl_guard.py to auto-heal stale CA bundle paths.
+# Must run BEFORE pyinstaller so the fix is compiled into the binary.
+echo "Patching ssl_guard.py..."
+"$HERMES_DIR/venv/bin/python" "$SCRIPT_DIR/patch-hermes-ssl-guard.py" || {
+    echo "⚠ ssl_guard patch failed — binary may still crash on stale SSL_CERT_FILE"
+}
+
 # 打包
 #
 # PyInstaller 默认只做静态 import 分析；Hermes 和 openai SDK 大量使用
