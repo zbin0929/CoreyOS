@@ -73,5 +73,14 @@ try:
         os.environ["SSL_CERT_FILE"] = _cacert
         os.environ["REQUESTS_CA_BUNDLE"] = _cacert
         os.environ["CURL_CA_BUNDLE"] = _cacert
+
+        # Monkeypatch certifi.where() to return the persistent copy. Hermes
+        # validates `certifi.where()` DIRECTLY (agent.ssl_guard.verify_ca_bundle,
+        # called per OpenAI client init) and also feeds it into ssl contexts
+        # (hermes_cli/auth.py, gateway/platforms/weixin.py). Setting only the
+        # env vars is not enough: those call sites read the temp `_MEI*` path
+        # regardless, and raise once the OS cleans that dir under a long-running
+        # gateway. Redirecting `where()` covers every consumer in one place.
+        certifi.where = lambda _p=_cacert: _p
 except Exception:
     pass

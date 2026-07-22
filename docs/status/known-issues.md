@@ -13,9 +13,10 @@
 - **现象**：客户机器上 OpenAI 客户端初始化 500，报 `SSL_CERT_FILE points to a missing CA bundle: /var/folders/.../T/_MEIVOXEuW/certifi/cacert.pem`。重启 Corey 后短暂恢复，过几天又复发。
 - **根因**：`hermes-standalone` 是 PyInstaller onefile，启动解压到临时 `_MEI*` 目录，`certifi.where()` 指向其中的 `cacert.pem`。gateway 是**长期驻留**进程，macOS 会定期清理 `/var/folders/.../T/` 下长时间未访问的临时项（Windows 清理工具同理）→ **进程还活着但 `_MEI*` 被系统删掉** → `SSL_CERT_FILE` 悬空 → 500。
 - **为什么之前三层修复不够**：Corey Rust `scrub_ssl_cert_env`（`gateway.rs`，env_remove 继承变量）、`hermes-runtime-hook.py`（pop 后重新指向 `certifi.where()`）、`patch-hermes-ssl-guard.py`（pop 失效变量）——三层都只是"删掉"或"指回当前 `_MEI` 临时路径"，**没有一层把 CA bundle 落到不会被清理的持久位置**。
-- **修复**：`scripts/hermes-runtime-hook.py` 改为把 cacert.pem **原子拷贝**到 `HERMES_HOME/ca/cacert.pem` 持久目录，`SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` / `CURL_CA_BUNDLE` 指向持久副本（size 变化时刷新，`try/except` 兜底回退临时路径，绝不 raise）。彻底不依赖 `_MEI*` 存活，子进程继承也安全。
-- **验证**：本地用失效 `SSL_CERT_FILE=/var/folders/.../_MEIDEAD/...` 启动新构建二进制 → 自动生成 `~/.hermes/ca/cacert.pem`（236KB，certifi 完整根证书）→ 删掉 `_MEI` 仍有效 ✅
-- **交付**：commit `4950857`，`v0.3.17` 标签已移到含修复的 commit 并强推 origin。runtime hook 是**编译进二进制**的，客户需拿到重打包的 `hermes-standalone`：走 `release-macos.yml`（第 144 行 `--runtime-hook scripts/hermes-runtime-hook.py`）自动更新即可；应急可手动替换 `Corey.app/Contents/Resources/binaries/hermes-standalone`。
+- **第一版修复不完整（4950857，已被取代）**：只把 `SSL_CERT_FILE` 等环境变量指向持久副本。但 `agent/ssl_guard.py:verify_ca_bundle()`（`agent/agent_init.py:982` 每次 OpenAI client 初始化都调）在校验完环境变量后，**还会无条件校验 `certifi.where()` 本身**（`ca_bundle = str(certifi.where())`），而 `certifi.where()` 永远返回临时 `_MEI*` 路径。`hermes_cli/auth.py:4689`、`gateway/platforms/weixin.py:134` 也直接用 `certifi.where()`。所以只改环境变量不够，长跑后照样炸（报错 label 会从 `SSL_CERT_FILE` 变成 `certifi`）。
+- **完整修复**：`scripts/hermes-runtime-hook.py` — (1) 把 cacert.pem **原子拷贝**到 `HERMES_HOME/ca/cacert.pem` 持久目录；(2) `SSL_CERT_FILE`/`REQUESTS_CA_BUNDLE`/`CURL_CA_BUNDLE` 指向持久副本；(3) **猴补丁 `certifi.where`** 返回持久路径，一处覆盖所有调用点（`verify_ca_bundle`、`_ensure_ssl_certs`、`auth.py`、`weixin.py`、openai/httpx）。size 变化才刷新，全程 `try/except`，绝不 raise。
+- **验证**：(a) 用 venv Python monkeypatch `certifi.where` 后 `verify_ca_bundle_with_fallback()` 通过；(b) 冻结二进制带失效 `SSL_CERT_FILE=/var/folders/.../_MEIDEAD/...` 跑 `hermes doctor` → `✓ SSL CA certificate bundle is valid` + 生成 `HERMES_HOME/ca/cacert.pem`（236KB）✅
+- **交付**：runtime hook 是**编译进二进制**的，客户必须拿到重打包的 `hermes-standalone`（`release-macos.yml` 第 144 行 `--runtime-hook scripts/hermes-runtime-hook.py`）。⚠️ **仅装新版还不够**：已在跑的旧 gateway 进程必须被杀掉重启（`gateway run --replace`）才会加载新二进制——排查客户问题时先确认 `ps` 里跑的是不是新二进制。应急可手动替换 `Corey.app/Contents/Resources/binaries/hermes-standalone`。
 
 ---
 
