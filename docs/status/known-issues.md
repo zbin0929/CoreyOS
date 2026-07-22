@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-07-22 · 长跑 gateway 的 SSL_CERT_FILE 指向被清理的临时目录（P0 客户线上）
+
+### ✅ 已修复：`SSL_CERT_FILE points to a missing CA bundle: .../_MEIVOXEuW/certifi/cacert.pem`
+
+- **时间**：2026-07-22 客户线上报错（`Upstream error 500: Failed to initialize OpenAI client`）
+- **现象**：客户机器上 OpenAI 客户端初始化 500，报 `SSL_CERT_FILE points to a missing CA bundle: /var/folders/.../T/_MEIVOXEuW/certifi/cacert.pem`。重启 Corey 后短暂恢复，过几天又复发。
+- **根因**：`hermes-standalone` 是 PyInstaller onefile，启动解压到临时 `_MEI*` 目录，`certifi.where()` 指向其中的 `cacert.pem`。gateway 是**长期驻留**进程，macOS 会定期清理 `/var/folders/.../T/` 下长时间未访问的临时项（Windows 清理工具同理）→ **进程还活着但 `_MEI*` 被系统删掉** → `SSL_CERT_FILE` 悬空 → 500。
+- **为什么之前三层修复不够**：Corey Rust `scrub_ssl_cert_env`（`gateway.rs`，env_remove 继承变量）、`hermes-runtime-hook.py`（pop 后重新指向 `certifi.where()`）、`patch-hermes-ssl-guard.py`（pop 失效变量）——三层都只是"删掉"或"指回当前 `_MEI` 临时路径"，**没有一层把 CA bundle 落到不会被清理的持久位置**。
+- **修复**：`scripts/hermes-runtime-hook.py` 改为把 cacert.pem **原子拷贝**到 `HERMES_HOME/ca/cacert.pem` 持久目录，`SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` / `CURL_CA_BUNDLE` 指向持久副本（size 变化时刷新，`try/except` 兜底回退临时路径，绝不 raise）。彻底不依赖 `_MEI*` 存活，子进程继承也安全。
+- **验证**：本地用失效 `SSL_CERT_FILE=/var/folders/.../_MEIDEAD/...` 启动新构建二进制 → 自动生成 `~/.hermes/ca/cacert.pem`（236KB，certifi 完整根证书）→ 删掉 `_MEI` 仍有效 ✅
+- **交付**：commit `4950857`，`v0.3.17` 标签已移到含修复的 commit 并强推 origin。runtime hook 是**编译进二进制**的，客户需拿到重打包的 `hermes-standalone`：走 `release-macos.yml`（第 144 行 `--runtime-hook scripts/hermes-runtime-hook.py`）自动更新即可；应急可手动替换 `Corey.app/Contents/Resources/binaries/hermes-standalone`。
+
+---
+
 ## 2026-05-22 · 首次客户安装失败（P0 阻塞交付）
 
 ### ✅ 已修复：客户安装需要手动装 Python + Homebrew（P0）
