@@ -54,8 +54,17 @@ use std::path::{Path, PathBuf};
 /// `config.rs` which reads it back for the gateway client). Verified
 /// end-to-end: standalone `gateway run` → `/health` 200 → `/v1/models`
 /// → `/v1/runs` POST 202.
+///
+/// 2026-07-28: bumped MAX_TESTED to 0.19. Core API surface unchanged
+/// (`/health`, `/v1/runs` SSE, `/v1/models`, config.yaml existing keys).
+/// New: ssl_guard.py certifi check now fails with "certifi points to a
+/// missing CA bundle" label (vs "SSL_CERT_FILE" in earlier versions) —
+/// root cause unchanged (PyInstaller _MEI* temp-dir cleanup). Fixed via
+/// `ensure_ssl_guard_patched()` in `gateway_start/restart` which patches
+/// ssl_guard.py to redirect certifi.where() to the persistent
+/// HERMES_HOME/ca/cacert.pem on every gateway boot (idempotent).
 const HERMES_MIN_SUPPORTED: (u32, u32) = (0, 10);
-const HERMES_MAX_TESTED: (u32, u32) = (0, 18);
+const HERMES_MAX_TESTED: (u32, u32) = (0, 19);
 
 /// Compatibility verdict between the running Hermes binary and what
 /// Corey was built/tested against. Drives the Home-page banner.
@@ -405,12 +414,12 @@ mod compat_tests {
         assert_eq!(c, HermesCompatibility::Untested);
     }
 
-    /// Anchor the v0.18 bump so a future reckless `MAX_TESTED` rollback
+    /// Anchor the v0.19 bump so a future reckless `MAX_TESTED` rollback
     /// (or accidental clobber) trips this test instead of silently
     /// downgrading users into the "untested" yellow-banner state.
     #[test]
-    fn supported_at_max_tested_v0_18() {
-        let (c, _) = evaluate_compat(0, 18);
+    fn supported_at_max_tested_v0_19() {
+        let (c, _) = evaluate_compat(0, 19);
         assert_eq!(c, HermesCompatibility::Supported);
     }
 }
@@ -1033,6 +1042,129 @@ mod ensure_agent_max_turns_tests {
     }
 }
 
+/// Idempotently patch `agent/ssl_guard.py` inside the installed
+/// hermes-agent package so that `certifi.where()` is redirected to the
+/// persistent CA bundle under `HERMES_HOME/ca/cacert.pem` before the
+/// existing `_validate_bundle_path("certifi", …)` call fires.
+///
+/// # Why this is needed
+///
+/// `ssl_guard.verify_ca_bundle()` (called on every OpenAI client init)
+/// unconditionally checks `certifi.where()`, which inside a PyInstaller
+/// onefile binary resolves to a path inside the per-process `_MEI*`
+/// temp dir.  macOS periodically cleans stale temp dirs — once the dir
+/// is gone, the check raises `SSLConfigurationError: certifi points to
+/// a missing CA bundle` and every chat request returns HTTP 500.
+///
+/// The runtime hook (`scripts/hermes-runtime-hook.py`) monkeypatches
+/// `certifi.where` *inside the frozen binary*, but `hermes-agent`
+/// (pip-installed) runs in a separate process/venv — the hook doesn't
+/// reach it.  We therefore patch the source file directly, which
+/// survives across long-running gateway processes and is immune to
+/// macOS temp-dir cleanup.
+///
+/// # Idempotency
+///
+/// The patch inserts a `# corey-patched: certifi-redirect` marker line.
+/// If that line is already present we skip the write (safe to call on
+/// every gateway start).  When hermes is upgraded the new `ssl_guard.py`
+/// overwrites the patched file → next gateway start re-applies.
+///
+/// Best-effort: all errors are logged and never propagated so a patch
+/// failure never blocks the gateway from starting.
+fn ensure_ssl_guard_patched() {
+    const MARKER: &str = "# corey-patched: certifi-redirect";
+    const ANCHOR: &str =
+        "    ca_bundle = str(certifi.where())\n    _validate_bundle_path(\"certifi\", ca_bundle";
+
+    let ssl_guard_path = match find_hermes_ssl_guard() {
+        Some(p) => p,
+        None => {
+            tracing::debug!("ensure_ssl_guard_patched: ssl_guard.py not found — skipping");
+            return;
+        }
+    };
+
+    let src = match std::fs::read_to_string(&ssl_guard_path) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                path = %ssl_guard_path.display(),
+                "ensure_ssl_guard_patched: read failed"
+            );
+            return;
+        }
+    };
+
+    if src.contains(MARKER) {
+        tracing::debug!("ensure_ssl_guard_patched: already patched — skipping");
+        return;
+    }
+
+    if !src.contains(ANCHOR) {
+        tracing::warn!(
+            path = %ssl_guard_path.display(),
+            "ensure_ssl_guard_patched: anchor not found — hermes ssl_guard.py may have been \
+             restructured; patch skipped (check patch-hermes-ssl-guard.py for the new shape)"
+        );
+        return;
+    }
+
+    let patch = "    ".to_string()
+        + MARKER + "\n"
+        + "    # Redirect certifi.where() to the persistent CA bundle so the\n"
+        + "    # _MEI* temp dir being cleaned by macOS never causes a 500 error.\n"
+        + "    _hermes_home = __import__('os').environ.get('HERMES_HOME') or str(__import__('pathlib').Path.home() / '.hermes')\n"
+        + "    _persistent_ca = __import__('pathlib').Path(_hermes_home) / 'ca' / 'cacert.pem'\n"
+        + "    if _persistent_ca.is_file():\n"
+        + "        ca_bundle = str(_persistent_ca)\n"
+        + "    else:\n"
+        + "        ca_bundle = str(certifi.where())\n";
+
+    let patched = src.replacen(
+        ANCHOR,
+        &format!("{patch}    _validate_bundle_path(\"certifi\", ca_bundle"),
+        1,
+    );
+
+    if patched == src {
+        tracing::warn!("ensure_ssl_guard_patched: replacen produced identical content — skipping");
+        return;
+    }
+
+    match crate::fs_atomic::atomic_write(&ssl_guard_path, patched.as_bytes(), None) {
+        Ok(()) => tracing::info!(
+            path = %ssl_guard_path.display(),
+            "ensure_ssl_guard_patched: ssl_guard.py patched successfully"
+        ),
+        Err(e) => tracing::warn!(
+            error = %e,
+            path = %ssl_guard_path.display(),
+            "ensure_ssl_guard_patched: write failed"
+        ),
+    }
+}
+
+/// Locate `agent/ssl_guard.py` inside the installed hermes-agent package.
+/// Tries the canonical pip-editable layout first (`hermes-agent/agent/`),
+/// then falls back to walking `site-packages`.  Returns `None` when hermes
+/// is not installed or is a frozen standalone binary (in that case the
+/// runtime hook covers the monkeypatch).
+fn find_hermes_ssl_guard() -> Option<std::path::PathBuf> {
+    let hermes_dir = crate::paths::hermes_data_dir().ok()?;
+
+    let candidate = hermes_dir
+        .join("hermes-agent")
+        .join("agent")
+        .join("ssl_guard.py");
+    if candidate.is_file() {
+        return Some(candidate);
+    }
+
+    None
+}
+
 /// Best-effort self-heal for profiles whose `config.yaml` lost its
 /// `model:` section (the `{}` sentinel bug). Runs before every gateway
 /// start/restart — and therefore on boot, since Corey auto-starts the
@@ -1054,6 +1186,7 @@ pub fn gateway_start() -> io::Result<String> {
     ensure_api_server_env();
     bootout_legacy_launchd_gateway();
     ensure_agent_max_turns();
+    ensure_ssl_guard_patched();
     heal_profiles_missing_model();
     inject_pack_env_vars();
     inject_pack_mcp_servers();
@@ -1105,6 +1238,7 @@ pub fn gateway_restart() -> io::Result<String> {
     ensure_api_server_env();
     bootout_legacy_launchd_gateway();
     ensure_agent_max_turns();
+    ensure_ssl_guard_patched();
     heal_profiles_missing_model();
     inject_pack_env_vars();
     inject_pack_mcp_servers();
