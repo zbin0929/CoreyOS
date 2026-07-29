@@ -1042,37 +1042,84 @@ mod ensure_agent_max_turns_tests {
     }
 }
 
-/// Idempotently patch `agent/ssl_guard.py` inside the installed
-/// hermes-agent package so that `certifi.where()` is redirected to the
-/// persistent CA bundle under `HERMES_HOME/ca/cacert.pem` before the
-/// existing `_validate_bundle_path("certifi", …)` call fires.
+/// Ensure Hermes' SSL guard check never blocks a long-running gateway.
 ///
-/// # Why this is needed
+/// Two complementary layers:
 ///
-/// `ssl_guard.verify_ca_bundle()` (called on every OpenAI client init)
-/// unconditionally checks `certifi.where()`, which inside a PyInstaller
-/// onefile binary resolves to a path inside the per-process `_MEI*`
-/// temp dir.  macOS periodically cleans stale temp dirs — once the dir
-/// is gone, the check raises `SSLConfigurationError: certifi points to
-/// a missing CA bundle` and every chat request returns HTTP 500.
+/// **Layer 1 — `HERMES_SKIP_SSL_GUARD=1` in `.env`** (covers both the
+/// PyInstaller standalone and pip-installed hermes):
+/// `ssl_guard.verify_ca_bundle()` checks this env var at the very top
+/// and returns immediately when set.  The actual TLS connections are
+/// unaffected — CPython's `ssl` module and `httpx`/`openai` use the
+/// system trust store or the env-var bundle; the guard is a *startup
+/// pre-flight check* that is redundant when Corey already manages the
+/// CA bundle path via the runtime hook.
 ///
-/// The runtime hook (`scripts/hermes-runtime-hook.py`) monkeypatches
-/// `certifi.where` *inside the frozen binary*, but `hermes-agent`
-/// (pip-installed) runs in a separate process/venv — the hook doesn't
-/// reach it.  We therefore patch the source file directly, which
-/// survives across long-running gateway processes and is immune to
-/// macOS temp-dir cleanup.
+/// **Layer 2 — source patch on pip-installed `ssl_guard.py`** (belt +
+/// suspenders for pip hermes, where Layer 1 may not propagate if the
+/// user starts hermes outside of Corey):
+/// Redirects `certifi.where()` to `HERMES_HOME/ca/cacert.pem` so the
+/// check passes even after the `_MEI*` temp dir is cleaned.
 ///
-/// # Idempotency
-///
-/// The patch inserts a `# corey-patched: certifi-redirect` marker line.
-/// If that line is already present we skip the write (safe to call on
-/// every gateway start).  When hermes is upgraded the new `ssl_guard.py`
-/// overwrites the patched file → next gateway start re-applies.
-///
-/// Best-effort: all errors are logged and never propagated so a patch
-/// failure never blocks the gateway from starting.
+/// Both layers are idempotent and best-effort — errors are logged but
+/// never block the gateway from starting.
 fn ensure_ssl_guard_patched() {
+    // --- Layer 1: write HERMES_SKIP_SSL_GUARD=1 into ~/.hermes/.env ---
+    ensure_skip_ssl_guard_env();
+
+    // --- Layer 2: patch pip hermes-agent ssl_guard.py ---
+    patch_pip_ssl_guard();
+}
+
+/// Write `HERMES_SKIP_SSL_GUARD=1` into `~/.hermes/.env` if not already
+/// present. Idempotent. Best-effort.
+fn ensure_skip_ssl_guard_env() {
+    let env_path = match crate::paths::hermes_data_dir() {
+        Ok(d) => d.join(".env"),
+        Err(_) => return,
+    };
+
+    let raw = std::fs::read_to_string(&env_path).unwrap_or_default();
+
+    // Already set — nothing to do.
+    if raw.lines().any(|l| {
+        let t = l.trim();
+        !t.starts_with('#')
+            && t.starts_with("HERMES_SKIP_SSL_GUARD")
+            && t.contains('=')
+            && t.split('=')
+                .nth(1)
+                .map(|v| v.trim() == "1")
+                .unwrap_or(false)
+    }) {
+        return;
+    }
+
+    let mut append = String::new();
+    if !raw.is_empty() && !raw.ends_with('\n') {
+        append.push('\n');
+    }
+    append.push_str("HERMES_SKIP_SSL_GUARD=1\n");
+
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&env_path)
+    {
+        Ok(mut f) => match std::io::Write::write_all(&mut f, append.as_bytes()) {
+            Ok(()) => tracing::info!(
+                "ensure_skip_ssl_guard_env: wrote HERMES_SKIP_SSL_GUARD=1 to {}",
+                env_path.display()
+            ),
+            Err(e) => tracing::warn!(error = %e, "ensure_skip_ssl_guard_env: write failed"),
+        },
+        Err(e) => tracing::warn!(error = %e, "ensure_skip_ssl_guard_env: open failed"),
+    }
+}
+
+/// Patch pip-installed `~/.hermes/hermes-agent/agent/ssl_guard.py` to
+/// redirect `certifi.where()` to the persistent CA bundle. Idempotent.
+fn patch_pip_ssl_guard() {
     const MARKER: &str = "# corey-patched: certifi-redirect";
     const ANCHOR: &str =
         "    ca_bundle = str(certifi.where())\n    _validate_bundle_path(\"certifi\", ca_bundle";
@@ -1080,7 +1127,7 @@ fn ensure_ssl_guard_patched() {
     let ssl_guard_path = match find_hermes_ssl_guard() {
         Some(p) => p,
         None => {
-            tracing::debug!("ensure_ssl_guard_patched: ssl_guard.py not found — skipping");
+            tracing::debug!("patch_pip_ssl_guard: ssl_guard.py not found — skipping");
             return;
         }
     };
@@ -1091,22 +1138,21 @@ fn ensure_ssl_guard_patched() {
             tracing::warn!(
                 error = %e,
                 path = %ssl_guard_path.display(),
-                "ensure_ssl_guard_patched: read failed"
+                "patch_pip_ssl_guard: read failed"
             );
             return;
         }
     };
 
     if src.contains(MARKER) {
-        tracing::debug!("ensure_ssl_guard_patched: already patched — skipping");
+        tracing::debug!("patch_pip_ssl_guard: already patched — skipping");
         return;
     }
 
     if !src.contains(ANCHOR) {
         tracing::warn!(
             path = %ssl_guard_path.display(),
-            "ensure_ssl_guard_patched: anchor not found — hermes ssl_guard.py may have been \
-             restructured; patch skipped (check patch-hermes-ssl-guard.py for the new shape)"
+            "patch_pip_ssl_guard: anchor not found — ssl_guard.py restructured; skipping"
         );
         return;
     }
@@ -1129,19 +1175,19 @@ fn ensure_ssl_guard_patched() {
     );
 
     if patched == src {
-        tracing::warn!("ensure_ssl_guard_patched: replacen produced identical content — skipping");
+        tracing::warn!("patch_pip_ssl_guard: replacen produced no change — skipping");
         return;
     }
 
     match crate::fs_atomic::atomic_write(&ssl_guard_path, patched.as_bytes(), None) {
         Ok(()) => tracing::info!(
             path = %ssl_guard_path.display(),
-            "ensure_ssl_guard_patched: ssl_guard.py patched successfully"
+            "patch_pip_ssl_guard: ssl_guard.py patched successfully"
         ),
         Err(e) => tracing::warn!(
             error = %e,
             path = %ssl_guard_path.display(),
-            "ensure_ssl_guard_patched: write failed"
+            "patch_pip_ssl_guard: write failed"
         ),
     }
 }
